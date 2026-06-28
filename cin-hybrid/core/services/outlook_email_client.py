@@ -1,82 +1,78 @@
-import requests
 from core.utils.logger import log
+import requests
+import os
+import base64
 
 
 class OutlookEmailClient:
     """
-    Real Outlook email client using Microsoft Graph API.
-    Requires:
-    - Azure App Registration
-    - Client ID
-    - Tenant ID
-    - Client Secret (for client credential flow)
+    Real Outlook Graph email client.
+    HybridOps expects: send_packet(packet)
     """
 
-    def __init__(self, client_id: str, tenant_id: str, client_secret: str):
-        self.client_id = client_id
-        self.tenant_id = tenant_id
-        self.client_secret = client_secret
-        self.token = None
+    def __init__(self, graph_token: str, from_address: str):
+        self.graph_token = graph_token
+        self.from_address = from_address
 
         log("OutlookEmailClient initialized")
 
-    def _get_token(self):
-        """
-        OAuth2 client credential flow.
-        Retrieves a bearer token for Microsoft Graph.
-        """
-        log("OutlookEmailClient: requesting OAuth token")
-
-        url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
-        data = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "scope": "https://graph.microsoft.com/.default",
-            "grant_type": "client_credentials",
+    def _headers(self):
+        return {
+            "Authorization": f"Bearer {self.graph_token}",
+            "Content-Type": "application/json"
         }
 
-        response = requests.post(url, data=data)
-        response.raise_for_status()
-
-        token = response.json()["access_token"]
-        self.token = token
-        return token
-
-    def send_email(self, to: str, subject: str, body: str):
+    def send_packet(self, packet: dict):
         """
-        Sends an email using Microsoft Graph API.
-        Matches HybridOps's expected interface.
+        HybridOps entrypoint.
+        Sends the final packet PDF via Outlook Graph.
         """
-        log("OutlookEmailClient.send_email called")
 
-        if not self.token:
-            self._get_token()
+        vendor_id = packet.get("vendor_id")
+        pdf_path = packet.get("pdf_path")
 
-        url = "https://graph.microsoft.com/v1.0/users/jax1313@outlook.com/sendMail"
+        if not pdf_path or not os.path.exists(pdf_path):
+            raise RuntimeError(f"Packet PDF not found: {pdf_path}")
 
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
+        subject = f"Completed Packet Submission - {vendor_id}"
+        body = f"Attached is the completed, signed packet for vendor {vendor_id}."
 
-        payload = {
+        # Read PDF and encode
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+
+        pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+        message = {
             "message": {
                 "subject": subject,
                 "body": {
                     "contentType": "Text",
-                    "content": body,
+                    "content": body
                 },
                 "toRecipients": [
-                    {"emailAddress": {"address": to}}
+                    {"emailAddress": {"address": self.from_address}}
                 ],
+                "attachments": [
+                    {
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        "name": os.path.basename(pdf_path),
+                        "contentBytes": pdf_b64
+                    }
+                ]
             },
-            "saveToSentItems": "true",
+            "saveToSentItems": "true"
         }
 
-        response = requests.post(url, headers=headers, json=payload)
+        url = f"https://graph.microsoft.com/v1.0/users/{self.from_address}/sendMail"
 
-        if response.status_code in (200, 202):
-            log("OutlookEmailClient: email sent successfully")
-        else:
-            log(f"OutlookEmailClient: email send failed: {response.text}")
-            response.raise_for_status()
+        log(f"Submitting packet for vendor {vendor_id} via Outlook Graph")
+
+        resp = requests.post(url, headers=self._headers(), json=message)
+
+        if resp.status_code not in (200, 202):
+            log(f"Packet submission failed: {resp.status_code} {resp.text}")
+            raise RuntimeError("Failed to submit packet via Outlook Graph")
+
+        log("Packet submitted successfully")
+        return True
