@@ -17,3 +17,11 @@ def get_logger(name: str = "cin_hybrid", level: int = logging.INFO) -> logging.L
         logger.setLevel(level)
         logger.propagate = False
     return logger
+
+
+_default = get_logger()
+
+
+def log(message: str, level: int = logging.INFO) -> None:
+    """Module-level convenience logger used across CIN-Hybrid."""
+    _default.log(level, message)

@@ -19,18 +19,12 @@ class CINRouter:
         """Register an engine under `name` (overwrites any existing entry)."""
         self._engines[name] = engine
 
-    def dispatch(self, event: Any) -> Any:
-        """Dispatch `event` to its target engine's `handle` method.
+    def dispatch(self, engine: str, action: str, payload: dict | None = None) -> Any:
+        """Dispatch an action to a registered engine.
 
-        The target engine name is read from `event["engine"]` (dict) or
-        `event.engine` (object).
+        Looks up the engine by name and calls its `handle(action, payload)`.
         """
-        if isinstance(event, dict):
-            name = event.get("engine")
-        else:
-            name = getattr(event, "engine", None)
-
-        engine = self._engines.get(name)
-        if engine is None:
-            raise KeyError(f"No engine registered for {name!r}")
-        return engine.handle(event)
+        target = self._engines.get(engine)
+        if target is None:
+            raise KeyError(f"No engine registered for {engine!r}")
+        return target.handle(action, payload or {})
