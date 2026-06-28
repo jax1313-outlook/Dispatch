@@ -1,0 +1,10 @@
+{
+  "solicitation_number": "GS-35F-26-CLOUD-0117",
+  "title": "Secure Cloud Hosting and CUI Data Management",
+  "agency": "Department of State",
+  "naics_text": "Primary NAICS 518210 - Data Processing, Hosting, and Related Services",
+  "description": "8(a) set-aside. Contractor must safeguard Controlled Unclassified Information (CUI) in accordance with DFARS 252.204-7012 and implement NIST SP 800-171 controls, with the hosting environment meeting NIST SP 800-53 and FedRAMP Moderate authorization. A current System Security Plan (SSP) and Plan of Action and Milestones (POA&M) are required at award. Items subject to ITAR must be handled by U.S. persons only. Available under GSA SIN 518210C.",
+  "estimated_value": 7350000,
+  "response_date": "2026-08-15",
+  "notes": "FISMA compliance applies to all hosted systems."
+}

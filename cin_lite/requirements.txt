@@ -1,0 +1,5 @@
+# Optional. The Phase-1 pipeline runs on the Python stdlib alone.
+# Install this only to enable the Claude-backed summarization agent
+# (cin_lite/agents/summarizer.py). Without it, the pipeline falls back
+# to a deterministic summary.
+anthropic>=0.40
