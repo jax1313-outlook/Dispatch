@@ -1,97 +1,25 @@
-from core.agents.hybrid_lifecycle_controller import HybridLifecycleController
-from core.utils.logger import log
+from core.intel.intelligence_api import get_intelligence
+from core.intel.intelligence_owner import IntelligenceOwner
+
 
 class HybridOps:
-    """
-    Operational engine for packet generation, correction, signature,
-    and final submission. Now wired to HybridLifecycleController.
-    """
+    def __init__(self, data_client):
+        self.data_client = data_client
 
-    def __init__(
-        self,
-        data_source_client,
-        email_client,
-        packet_builder,
-        pdf_edit_bridge=None,
-    ):
-        self.data_source_client = data_source_client
-        self.email_client = email_client
-        self.packet_builder = packet_builder
-        self.pdf_edit_bridge = pdf_edit_bridge
+        # Phase-4 → Phase-3 wiring point
+        self.intelligence_orchestrator = None
 
-        # NEW: lifecycle controller
-        self.lifecycle = HybridLifecycleController()
-
-        log("HybridOps initialized with lifecycle controller")
-
-    def run_for_opportunity(self, vendor_id: str):
+    def attach_intelligence_orchestrator(self, orchestrator: IntelligenceOwner):
         """
-        Full operational workflow:
-        - Load vendor
-        - Build packet
-        - Pause for review
+        Attach the Phase-3 IntelligenceOwner (HybridOrchestrator).
         """
+        self.intelligence_orchestrator = orchestrator
 
-        vendor = self.data_source_client.load_vendor(vendor_id)
-        packet = {
-            "vendor_id": vendor_id,
-            "vendor": vendor,
-            "status": "loaded",
-            "version": 1,
-        }
+    def get_vendor_intelligence(self, vendor_id: str) -> dict:
+        """
+        Retrieve unified CIN intelligence for a vendor via the orchestrator.
+        """
+        if not self.intelligence_orchestrator:
+            raise RuntimeError("HybridOps: intelligence orchestrator not attached")
 
-        self.lifecycle.on_loaded()
-
-        packet = self.packet_builder.build(packet)
-        packet["status"] = "generated"
-
-        self.lifecycle.on_generated()
-
-        packet["status"] = "awaiting_review"
-        self.lifecycle.on_review()
-
-        return packet
-
-    def send_packet_to_docusign(self, packet, signer_email, signer_name):
-        if not self.pdf_edit_bridge:
-            raise RuntimeError("DocuSignBridge not configured")
-
-        self.lifecycle.on_external_edit_requested()
-
-        packet = self.pdf_edit_bridge.send_to_docusign(
-            packet,
-            signer_email=signer_email,
-            signer_name=signer_name,
-        )
-
-        self.lifecycle.on_external_edit_in_progress()
-
-        return packet
-
-    def wait_for_docusign(self, packet):
-        if not self.pdf_edit_bridge:
-            raise RuntimeError("DocuSignBridge not configured")
-
-        packet = self.pdf_edit_bridge.wait_for_completion(packet)
-
-        self.lifecycle.on_external_edit_completed()
-
-        return packet
-
-    def retrieve_signed_packet(self, packet):
-        if not self.pdf_edit_bridge:
-            raise RuntimeError("DocuSignBridge not configured")
-
-        packet = self.pdf_edit_bridge.retrieve_from_docusign(packet)
-
-        self.lifecycle.on_external_edit_completed()
-
-        return packet
-
-    def submit_packet(self, packet):
-        packet["status"] = "submitted"
-        self.email_client.send_packet(packet)
-
-        self.lifecycle.on_submitted()
-
-        return packet
+        return get_intelligence(self.intelligence_orchestrator, vendor_id)
