@@ -1,148 +1,107 @@
 from core.utils.logger import log
-from core.intel.hybrid_intelligence import HybridIntelligence
-
 
 class HybridOps:
     """
-    HybridOps: operational engine for Hybrid (your definition).
-    - pulls vendor data (from sources you wire in)
-    - runs HybridIntelligence
-    - prepares application packet skeletons
-    - triggers notification + next-step actions (to be extended)
+    Operational engine for packet generation, correction, signature,
+    and final submission. Now includes DocuSignBridge as the fourth
+    real service client.
     """
 
-    def __init__(self, data_source_client=None, email_client=None, packet_builder=None):
-        """
-        data_source_client: abstraction over SAM.gov / vendor site / local data
-        email_client: abstraction over your email notification system
-        packet_builder: abstraction over application packet assembly
-        """
-        self.intel = HybridIntelligence()
+    def __init__(
+        self,
+        data_source_client,
+        email_client,
+        packet_builder,
+        pdf_edit_bridge=None,   # NEW
+    ):
         self.data_source_client = data_source_client
         self.email_client = email_client
         self.packet_builder = packet_builder
+        self.pdf_edit_bridge = pdf_edit_bridge
 
-    def fetch_vendor_profile(self, vendor_id: str) -> dict:
+        log("HybridOps initialized with data, email, packet, and DocuSign services")
+
+    def run_for_opportunity(self, vendor_id: str):
         """
-        Pulls raw vendor data from your chosen source.
-        For now, this is a stub you can wire to:
-        - SAM.gov API
-        - scraped vendor site
-        - local JSON/YAML
+        Full operational workflow:
+        - Load vendor
+        - Build packet
+        - Pause for review
+        - Optional DocuSign correction/signature loop
+        - Final submission
         """
-        log(f"HybridOps.fetch_vendor_profile: vendor_id={vendor_id}")
 
-        if not self.data_source_client:
-            # Temporary stub: replace with real data source
-            return {
-                "vendor_id": vendor_id,
-                "name": "Example Vendor",
-                "sam_status": "active",
-                "naics": ["541512"],
-                "cage": "EX123",
-                "duns": "000000000",
-                "contracts_history": [],
-                "cyber_posture": {},
-                "contacts": [],
-            }
-
-        return self.data_source_client.get_vendor_profile(vendor_id)
-
-    def build_intel_for_vendor(self, vendor_id: str) -> dict:
-        """
-        Full chain:
-        - fetch vendor profile
-        - run HybridIntelligence
-        - return unified intelligence product
-        """
-        log(f"HybridOps.build_intel_for_vendor: vendor_id={vendor_id}")
-
-        vendor_profile = self.fetch_vendor_profile(vendor_id)
-        intel_product = self.intel.build(vendor_profile)
-
-        return {
-            "vendor_profile": vendor_profile,
-            "intel": intel_product,
-        }
-
-    def prepare_application_packet(self, vendor_id: str, opportunity_id: str) -> dict:
-        """
-        Prepares a skeleton application packet (minus signatures).
-        For now:
-        - builds intel
-        - returns a structured packet dict
-        Later:
-        - integrate packet_builder to generate PDFs/forms.
-        """
-        log(
-            f"HybridOps.prepare_application_packet: "
-            f"vendor_id={vendor_id}, opportunity_id={opportunity_id}"
-        )
-
-        intel_bundle = self.build_intel_for_vendor(vendor_id)
-        vendor_profile = intel_bundle["vendor_profile"]
-        intel = intel_bundle["intel"]
-
+        # 1. Load vendor
+        vendor = self.data_source_client.load_vendor(vendor_id)
         packet = {
             "vendor_id": vendor_id,
-            "opportunity_id": opportunity_id,
-            "vendor_profile": vendor_profile,
-            "intel": intel,
-            "forms": [],          # to be populated by packet_builder
-            "attachments": [],    # docs, certifications, etc.
-            "status": "draft",
+            "vendor": vendor,
+            "status": "loaded",
+            "version": 1,
         }
+        log(f"Vendor loaded: {vendor_id}")
 
-        if self.packet_builder:
-            packet = self.packet_builder.build(packet)
+        # 2. Build packet PDF
+        packet = self.packet_builder.build(packet)
+        packet["status"] = "generated"
+        log(f"Packet generated for vendor {vendor_id}")
+
+        # 3. Pause for human review
+        packet["status"] = "awaiting_review"
+        log("Packet awaiting human review")
 
         return packet
 
-    def notify_next_steps(self, packet: dict, recipient_email: str) -> None:
+    def send_packet_to_docusign(self, packet, signer_email, signer_name):
         """
-        Sends a simple notification about next steps for a packet.
-        For now:
-        - logs the action
-        - if email_client exists, sends a basic message
+        Trigger the external edit + signature loop.
         """
-        log(
-            f"HybridOps.notify_next_steps: "
-            f"packet_opportunity={packet.get('opportunity_id')}, "
-            f"recipient={recipient_email}"
+        if not self.pdf_edit_bridge:
+            raise RuntimeError("DocuSignBridge not configured")
+
+        packet["status"] = "awaiting_external_edit"
+        log("Packet paused for external edit/signature")
+
+        # 4. Send to DocuSign
+        packet = self.pdf_edit_bridge.send_to_docusign(
+            packet,
+            signer_email=signer_email,
+            signer_name=signer_name,
         )
+        log("Packet sent to DocuSign")
 
-        if not self.email_client:
-            # Stub: you can wire this to your real email system later.
-            log("HybridOps.notify_next_steps: email_client not configured, skipping send")
-            return
+        return packet
 
-        subject = f"Hybrid packet ready: {packet.get('opportunity_id')}"
-        body = (
-            f"Hybrid has prepared a draft application packet.\n\n"
-            f"Vendor: {packet.get('vendor_id')}\n"
-            f"Opportunity: {packet.get('opportunity_id')}\n"
-            f"Status: {packet.get('status')}\n\n"
-            f"Next steps: review, add signatures, and submit."
-        )
-
-        self.email_client.send_email(
-            to=recipient_email,
-            subject=subject,
-            body=body,
-        )
-
-    def run_for_opportunity(self, vendor_id: str, opportunity_id: str, recipient_email: str):
+    def wait_for_docusign(self, packet):
         """
-        High-level operational entrypoint:
-        - build intel
-        - prepare packet
-        - notify next steps
-        - return packet
+        Poll DocuSign until envelope is completed.
         """
-        log(
-            f"HybridOps.run_for_opportunity: "
-            f"vendor_id={vendor_id}, opportunity_id={opportunity_id}"
-        )
+        if not self.pdf_edit_bridge:
+            raise RuntimeError("DocuSignBridge not configured")
 
-        packet = self.prepare_application_packet(vendor_id, opportunity_id)
-        self.notify_next_steps(packet, recipient_email)
+        packet = self.pdf_edit_bridge.wait_for_completion(packet)
+        log("DocuSign envelope completed")
+
+        return packet
+
+    def retrieve_signed_packet(self, packet):
+        """
+        Pull corrected + signed PDF back into HybridOps.
+        """
+        if not self.pdf_edit_bridge:
+            raise RuntimeError("DocuSignBridge not configured")
+
+        packet = self.pdf_edit_bridge.retrieve_from_docusign(packet)
+        log("Corrected + signed packet retrieved")
+
+        return packet
+
+    def submit_packet(self, packet):
+        """
+        Final submission via OutlookEmailClient.
+        """
+        packet["status"] = "submitted"
+        self.email_client.send_packet(packet)
+        log("Packet submitted")
+
+        return packet
