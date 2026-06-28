@@ -1,34 +1,49 @@
-from core.utils.logger import log
+from core.intel.intelligence_owner import IntelligenceOwner
 from core.agents.hybrid_lifecycle import HybridLifecycle
+from core.agents.hybrid_summary import HybridSummary
+from core.intel.hybrid_intelligence import HybridIntelligence
+from core.utils.logger import log
 
-class HybridOrchestrator:
+
+class HybridOrchestrator(IntelligenceOwner):
     """
-    Orchestrates Phase-3 intelligence engines and now optionally
-    reports operational lifecycle state from HybridLifecycleController.
+    Sole owner of CIN-Hybrid intelligence.
+    No other class may produce unified intelligence output.
     """
 
     def __init__(self, data_client, lifecycle_controller=None):
         self.data_client = data_client
         self.lifecycle = HybridLifecycle(data_client)
-
-        # NEW: optional operational lifecycle controller
         self.lifecycle_controller = lifecycle_controller
 
-        log("HybridOrchestrator initialized")
+        # Hard-wire ownership
+        self._intelligence_owner = True
 
-    def run(self, vendor_id: str) -> dict:
+        log("HybridOrchestrator initialized as IntelligenceOwner")
+
+    def run_intelligence(self, vendor_id: str) -> dict:
         """
-        Runs the Phase-3 engine pipeline and returns a unified dict.
-        Optionally includes operational lifecycle state.
+        Full intelligence pipeline:
+        - run engines
+        - build summary
+        - build intelligence
+        - attach optional ops lifecycle state
         """
 
-        log(f"HybridOrchestrator running for vendor {vendor_id}")
+        if not self._intelligence_owner:
+            raise RuntimeError("Intelligence ownership violation")
 
-        # Phase-3 engine runner (unchanged)
+        log(f"HybridOrchestrator (IntelligenceOwner) running for vendor {vendor_id}")
+
         raw_result = self.lifecycle.run(vendor_id).to_dict()
+        summary = HybridSummary().build(raw_result)
+        intelligence_dict = HybridIntelligence().build(summary)
 
-        # NEW: include operational lifecycle state if available
         if self.lifecycle_controller:
-            raw_result["ops_lifecycle_state"] = self.lifecycle_controller.state
+            intelligence_dict["ops_lifecycle_state"] = self.lifecycle_controller.state
 
-        return raw_result
+        return intelligence_dict
+
+    # Alias for compatibility
+    def run(self, vendor_id: str) -> dict:
+        return self.run_intelligence(vendor_id)
