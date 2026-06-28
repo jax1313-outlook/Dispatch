@@ -1,30 +1,29 @@
-"""Engine registry and dispatch for the CIN-Hybrid system.
-
-Engines register themselves by name; the router dispatches each event to the
-engine named on the event. Each engine is expected to expose `handle(event)`.
-"""
-
-from __future__ import annotations
-
-from typing import Any
-
+from core.utils.logger import log
 
 class CINRouter:
-    """Routes events to registered engines by name."""
+    def __init__(self):
+        self.engines = {}
 
-    def __init__(self) -> None:
-        self._engines: dict[str, Any] = {}
-
-    def register_engine(self, name: str, engine: Any) -> None:
-        """Register an engine under `name` (overwrites any existing entry)."""
-        self._engines[name] = engine
-
-    def dispatch(self, engine: str, action: str, payload: dict | None = None) -> Any:
-        """Dispatch an action to a registered engine.
-
-        Looks up the engine by name and calls its `handle(action, payload)`.
+    def register_engine(self, name: str, engine):
         """
-        target = self._engines.get(engine)
-        if target is None:
-            raise KeyError(f"No engine registered for {engine!r}")
-        return target.handle(action, payload or {})
+        Register an engine under a name.
+        Example: router.register_engine("gov", GovEngine())
+        """
+        self.engines[name] = engine
+        log(f"Router: registered engine '{name}'")
+
+    def dispatch(self, engine_name: str, action: str, payload: dict):
+        """
+        Dispatch a request to the correct engine and action.
+        """
+        if engine_name not in self.engines:
+            raise ValueError(f"Engine '{engine_name}' not registered")
+
+        engine = self.engines[engine_name]
+
+        if not hasattr(engine, action):
+            raise ValueError(f"Engine '{engine_name}' has no action '{action}'")
+
+        log(f"Router: dispatching to {engine_name}.{action}")
+        method = getattr(engine, action)
+        return method(payload)
