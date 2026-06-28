@@ -1,16 +1,15 @@
 from core.utils.logger import log
+from core.agents.sam_ingestion_engine import SAMIngestionEngine
+from core.agents.vendor_network_engine import VendorNetworkEngine
+from core.agents.cyber_compliance_engine import CyberComplianceEngine
 
 class CINRouter:
-    def __init__(self):
-        self.engines = {}
-
-    def register_engine(self, name: str, engine):
-        """
-        Register an engine under a name.
-        Example: router.register_engine("gov", GovEngine())
-        """
-        self.engines[name] = engine
-        log(f"Router: registered engine '{name}'")
+    def __init__(self, data_client):
+        self.engines = {
+            "sam": SAMIngestionEngine(data_client),
+            "vendor": VendorNetworkEngine(data_client),
+            "cyber": CyberComplianceEngine(data_client),
+        }
 
     def dispatch(self, engine_name: str, action: str, payload: dict):
         """
