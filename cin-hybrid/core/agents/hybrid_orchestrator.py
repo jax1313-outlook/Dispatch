@@ -1,32 +1,34 @@
 from core.utils.logger import log
 from core.agents.hybrid_lifecycle import HybridLifecycle
-from core.agents.hybrid_summary import HybridSummary
-from core.intel.hybrid_intelligence import HybridIntelligence
-
 
 class HybridOrchestrator:
     """
-    Phase 4: Orchestrator with intelligence layer.
-    - lifecycle (Phase 3)
-    - summary (Phase 3)
-    - intelligence (Phase 4)
+    Orchestrates Phase-3 intelligence engines and now optionally
+    reports operational lifecycle state from HybridLifecycleController.
     """
 
-    def __init__(self, data_client):
+    def __init__(self, data_client, lifecycle_controller=None):
+        self.data_client = data_client
         self.lifecycle = HybridLifecycle(data_client)
-        self.summary = HybridSummary()
-        self.intel = HybridIntelligence()
+
+        # NEW: optional operational lifecycle controller
+        self.lifecycle_controller = lifecycle_controller
+
+        log("HybridOrchestrator initialized")
 
     def run(self, vendor_id: str) -> dict:
-        log(f"HybridOrchestrator: run vendor_id={vendor_id}")
+        """
+        Runs the Phase-3 engine pipeline and returns a unified dict.
+        Optionally includes operational lifecycle state.
+        """
 
-        # Phase 3: lifecycle → raw result dict
+        log(f"HybridOrchestrator running for vendor {vendor_id}")
+
+        # Phase-3 engine runner (unchanged)
         raw_result = self.lifecycle.run(vendor_id).to_dict()
 
-        # Phase 3: summary
-        summary = self.summary.build(raw_result)
+        # NEW: include operational lifecycle state if available
+        if self.lifecycle_controller:
+            raw_result["ops_lifecycle_state"] = self.lifecycle_controller.state
 
-        # Phase 4: intelligence
-        intelligence = self.intel.build(summary)
-
-        return intelligence
+        return raw_result
