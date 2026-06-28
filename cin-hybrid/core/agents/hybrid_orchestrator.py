@@ -1,34 +1,28 @@
-from core.agents.cin_router import CINRouter
 from core.utils.logger import log
-from core.utils.config_loader import load_config
+from core.agents.hybrid_lifecycle import HybridLifecycle
+from core.agents.hybrid_summary import HybridSummary
+
 
 class HybridOrchestrator:
-    def __init__(self, config_path="config.yaml"):
-        self.config = load_config(config_path)
-        self.router = CINRouter()
+    """
+    Phase 3: Minimal orchestrator for Hybrid.
+    - constructs HybridLifecycle
+    - constructs HybridSummary
+    - exposes run(vendor_id)
+    - returns unified summary dict
+    """
 
-    def register_engines(self, engines: dict):
-        """
-        engines: {"gov": GovEngine(), "tell": TellEngine(), ...}
-        """
-        for name, engine in engines.items():
-            self.router.register_engine(name, engine)
-            log(f"Registered engine: {name}")
+    def __init__(self, data_client):
+        self.lifecycle = HybridLifecycle(data_client)
+        self.summary = HybridSummary()
 
-    def run(self, task: dict):
-        """
-        task: {"engine": "gov", "action": "analyze", "payload": {...}}
-        """
-        engine = task.get("engine")
-        action = task.get("action")
-        payload = task.get("payload", {})
+    def run(self, vendor_id: str) -> dict:
+        log(f"HybridOrchestrator: run vendor_id={vendor_id}")
 
-        log(f"Routing task → engine={engine}, action={action}")
-        return self.router.dispatch(engine, action, payload)
+        # Phase 3: run lifecycle → raw result dict
+        raw_result = self.lifecycle.run(vendor_id).to_dict()
 
-    def route(self, engine: str, action: str, payload: dict):
-        """
-        Direct routing without full task dict.
-        """
-        log(f"Direct route → engine={engine}, action={action}")
-        return self.router.dispatch(engine, action, payload)
+        # Phase 3: build unified summary
+        unified = self.summary.build(raw_result)
+
+        return unified
