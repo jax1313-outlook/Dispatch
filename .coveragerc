@@ -1,5 +1,5 @@
 [run]
-source = cin_lite
+source = cin_lite, l2_cos
 branch = False
 
 [report]

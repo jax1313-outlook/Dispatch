@@ -1,0 +1,19 @@
+{
+  "load_id": "LB-100001",
+  "origin": "Riverside, CA",
+  "destination": "Dallas, TX",
+  "origin_state": "CA",
+  "destination_state": "TX",
+  "miles": 1435,
+  "deadhead_miles": 40,
+  "equipment_type": "Dry Van",
+  "rate_total": 3157.0,
+  "rate_per_mile": 2.2,
+  "weight_lbs": 42000,
+  "pickup_facility_id": "FAC-001",
+  "delivery_facility_id": "FAC-002",
+  "broker_id": "BRK-001",
+  "pickup_date": "2026-08-01",
+  "delivery_date": "2026-08-03",
+  "notes": "Standard dry van run on a preferred lane"
+}

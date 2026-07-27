@@ -42,6 +42,7 @@ jobs:
         run: |
           python -m pytest \
             --cov=cin_lite \
+            --cov=l2_cos \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml \

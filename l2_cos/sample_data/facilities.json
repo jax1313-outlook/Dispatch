@@ -1,0 +1,37 @@
+[
+  {
+    "facility_id": "FAC-001",
+    "name": "Riverside Distribution Center",
+    "address": "1400 Dock Rd, Riverside, CA",
+    "gate_location": "Gate 4, west side",
+    "dock_specs": "12 dock doors, 53' trailers only",
+    "check_in_procedure": "Check in at guard shack with BOL and driver ID",
+    "security_requirements": "TWIC card required",
+    "historical_problems": [
+      "frequent detention over 2 hours",
+      "gate closes early on Fridays"
+    ]
+  },
+  {
+    "facility_id": "FAC-002",
+    "name": "Dallas Regional Hub",
+    "address": "800 Freight Way, Dallas, TX",
+    "gate_location": "Main gate",
+    "dock_specs": "20 dock doors",
+    "check_in_procedure": "Check in via kiosk, appointment required",
+    "security_requirements": null,
+    "historical_problems": []
+  },
+  {
+    "facility_id": "FAC-003",
+    "name": "Miami Port Annex",
+    "address": "22 Harbor Blvd, Miami, FL",
+    "gate_location": "Gate 2",
+    "dock_specs": "6 dock doors, tight yard",
+    "check_in_procedure": "Photo ID plus TSA-issued badge required",
+    "security_requirements": "TSA badge required",
+    "historical_problems": [
+      "narrow yard, frequent trailer damage reports"
+    ]
+  }
+]

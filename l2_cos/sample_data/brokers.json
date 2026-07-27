@@ -1,0 +1,24 @@
+[
+  {
+    "broker_id": "BRK-001",
+    "company_name": "Acme Logistics",
+    "contact_name": "Pat Rivera",
+    "contact_email": "pat.rivera@acmelogistics.example",
+    "contact_phone": "555-010-1234",
+    "payment_terms": "Net 30",
+    "preferred_lanes": ["CA-TX", "CA-AZ"],
+    "historical_rates": {"CA-TX": 2.15, "CA-AZ": 1.95},
+    "communication_notes": ["Prefers email over phone", "Fast to confirm rate cons"]
+  },
+  {
+    "broker_id": "BRK-002",
+    "company_name": "Slowpay Freight Brokers",
+    "contact_name": null,
+    "contact_email": null,
+    "contact_phone": null,
+    "payment_terms": "Net 90",
+    "preferred_lanes": ["TX-FL"],
+    "historical_rates": {"TX-FL": 1.80},
+    "communication_notes": []
+  }
+]

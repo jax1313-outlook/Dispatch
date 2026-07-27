@@ -1,0 +1,19 @@
+{
+  "load_id": "LB-100002",
+  "origin": "Dallas, TX",
+  "destination": "Miami, FL",
+  "origin_state": "TX",
+  "destination_state": "FL",
+  "miles": 1300,
+  "deadhead_miles": 500,
+  "equipment_type": "Step Deck",
+  "rate_total": 1196.0,
+  "rate_per_mile": 0.92,
+  "weight_lbs": 38000,
+  "pickup_facility_id": "FAC-002",
+  "delivery_facility_id": "FAC-003",
+  "broker_id": "BRK-002",
+  "pickup_date": "2026-08-05",
+  "delivery_date": "2026-08-07",
+  "notes": "New broker relationship, high deadhead reposition"
+}

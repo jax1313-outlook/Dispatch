@@ -28,14 +28,35 @@ python -m cin_lite.run                              # interactive
 
 ```bash
 pip install pytest pytest-cov
-python -m pytest --cov=cin_lite --cov-report=term-missing --cov-fail-under=90
+python -m pytest --cov=cin_lite --cov=l2_cos --cov-report=term-missing --cov-fail-under=90
 ```
 
 CI runs the suite with coverage on every push and pull request across Python
 3.11–3.13 (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
+## L2-COS (Dispatch)
+
+`l2_cos/` is a clone-and-repurpose of the cin_lite pipeline (Rule 15: reuse
+the deterministic rule-module pattern rather than redesigning it) for freight
+dispatch instead of federal contracts:
+
+```
+acquire (load board) -> look up Location/Broker intelligence (capture once)
+        -> process (6 dispatch rule modules) -> dispatch control email
+        -> human confirms stage -> archive + advance the 11-stage lifecycle
+        -> publisher workflow once Intelligence Score >= 90
+```
+
+```bash
+python -m l2_cos.run --action BOOKED   # non-interactive demo
+python -m l2_cos.run                    # interactive
+```
+
+See **[l2_cos/README.md](l2_cos/README.md)** for the full layer-by-layer guide.
+
 ## Documentation
 
 - **[cin_lite/README.md](cin_lite/README.md)** — full layer-by-layer guide
   (acquisition, rules, agents, control email, archive, proposal workflow).
+- **[l2_cos/README.md](l2_cos/README.md)** — L2-COS Dispatch layer-by-layer guide.
 - **[CLAUDE.md](CLAUDE.md)** — architecture and constraints (authoritative spec).

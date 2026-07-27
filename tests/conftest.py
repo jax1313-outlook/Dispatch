@@ -34,6 +34,8 @@ _ENV_VARS = [
     "CIN_LITE_EMAIL_FROM",
     "CIN_LITE_EMAIL_REVIEWER",
     "CIN_LITE_EMAIL_DOMAIN",
+    "L2_COS_LOAD_BOARD_URL",
+    "L2_COS_LOAD_BOARD_API_KEY",
 ]
 
 
@@ -48,10 +50,12 @@ def _scrub_env(monkeypatch):
 def tmp_archive(tmp_path, monkeypatch):
     """Redirect every archive + email write into a per-test tmp directory."""
     from cin_lite import archive, email_delivery
+    from l2_cos import archive as l2_cos_archive
 
     root = tmp_path / "Archive"
     monkeypatch.setattr(archive, "ARCHIVE_ROOT", root)
     monkeypatch.setattr(email_delivery, "_OUTBOX", root / "Outbox")
+    monkeypatch.setattr(l2_cos_archive, "ARCHIVE_ROOT", tmp_path / "L2COSArchive")
     return root
 
 
@@ -158,3 +162,78 @@ def install_anthropic(monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     return _install
+
+
+# --------------------------------------------------------------------------- L2-COS
+
+@pytest.fixture
+def clean_broker():
+    from l2_cos.models.intelligence import BrokerIntelligence
+
+    return BrokerIntelligence(
+        broker_id="BRK-001",
+        company_name="Acme Logistics",
+        contact_name="Pat Rivera",
+        contact_email="pat.rivera@acmelogistics.example",
+        contact_phone="555-010-1234",
+        payment_terms="Net 30",
+        preferred_lanes=["CA-TX", "CA-AZ"],
+        historical_rates={"CA-TX": 2.15, "CA-AZ": 1.95},
+        communication_notes=["Prefers email over phone"],
+    )
+
+
+@pytest.fixture
+def risky_broker():
+    from l2_cos.models.intelligence import BrokerIntelligence
+
+    return BrokerIntelligence(
+        broker_id="BRK-002",
+        company_name="Slowpay Freight Brokers",
+        payment_terms="Net 90",
+        preferred_lanes=["TX-FL"],
+        historical_rates={"TX-FL": 1.80},
+    )
+
+
+@pytest.fixture
+def clean_facility():
+    from l2_cos.models.intelligence import LocationIntelligence
+
+    return LocationIntelligence(facility_id="FAC-001", name="Riverside DC", address="1 Dock Rd, Riverside, CA")
+
+
+@pytest.fixture
+def clean_load() -> dict:
+    """A load that matches the broker's preferred lane and rate history
+    exactly (see `clean_broker`)."""
+    return {
+        "load_id": "LB-100001",
+        "origin_state": "CA",
+        "destination_state": "TX",
+        "miles": 1435,
+        "deadhead_miles": 40,
+        "equipment_type": "Dry Van",
+        "rate_per_mile": 2.2,
+        "pickup_facility_id": "FAC-001",
+        "delivery_facility_id": "FAC-002",
+        "broker_id": "BRK-001",
+    }
+
+
+@pytest.fixture
+def risky_load() -> dict:
+    """A load that trips every rule module's negative branch (see
+    `risky_broker`)."""
+    return {
+        "load_id": "LB-100002",
+        "origin_state": "TX",
+        "destination_state": "FL",
+        "miles": 1300,
+        "deadhead_miles": 500,
+        "equipment_type": "Step Deck",
+        "rate_per_mile": 0.92,
+        "pickup_facility_id": "FAC-002",
+        "delivery_facility_id": "FAC-003",
+        "broker_id": "BRK-002",
+    }
