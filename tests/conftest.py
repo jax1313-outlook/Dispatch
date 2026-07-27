@@ -234,6 +234,17 @@ def clean_load() -> dict:
 
 
 @pytest.fixture
+def seeded_l2_cos_archive():
+    """Run the full l2_cos pipeline against the bundled sample loads so the
+    Operations Portal (l2_cos/ui) has real Processed/Intelligence/Dispatch/
+    Publisher records to read. Returns the sorted list of load_ids."""
+    from l2_cos import archive, run
+
+    run.run(action_override="BOOKED")
+    return sorted(p.stem for p in (archive.ARCHIVE_ROOT / "Processed").glob("*.json"))
+
+
+@pytest.fixture
 def risky_load() -> dict:
     """A load that trips every rule module's negative branch (see
     `risky_broker`)."""

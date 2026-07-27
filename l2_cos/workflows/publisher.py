@@ -15,6 +15,8 @@ going out the door with a broken packet.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from l2_cos import email_delivery
 from l2_cos.models.intelligence import PUBLISH_THRESHOLD, BrokerIntelligence, InquiryArtifacts
 from l2_cos.models.state import Load
@@ -79,10 +81,18 @@ def trigger(
 
     Declines to send (`sent: False`) without emailing anything if the
     artifacts packet is incomplete.
+
+    Every result — sent or declined — is stamped with `load_id` and
+    `entered_at` (UTC ISO 8601): the moment this load entered the publisher
+    workflow's evaluation, which the Operations Portal's sandbox tracking
+    (l2_cos/ui/sandbox.py) uses as the start of its hold-period countdown.
     """
+    entered_at = datetime.now(timezone.utc).isoformat()
     artifacts = build_artifacts(carrier_documents)
     if not artifacts.is_complete():
         return {
+            "load_id": load.load_id,
+            "entered_at": entered_at,
             "sent": False,
             "reason": f"inquiry artifacts incomplete: {', '.join(_missing_labels(artifacts))}",
             "artifacts": artifacts.model_dump(),
@@ -93,6 +103,8 @@ def trigger(
     email_status = email_delivery.send(subject, body, to, fallback_id=f"{load.load_id}-inquiry")
 
     return {
+        "load_id": load.load_id,
+        "entered_at": entered_at,
         "sent": True,
         "email_status": email_status,
         "artifacts": artifacts.model_dump(),

@@ -1,3 +1,10 @@
 # L2-COS (Dispatch) models — Pydantic entities for the state model lock and
 # the operational intelligence libraries.
 pydantic>=2
+
+# Operations Portal (l2_cos/ui) — FastAPI/HTML, chosen over a heavier UI
+# framework to stay lightweight and unit-testable via TestClient.
+fastapi>=0.100
+httpx>=0.24        # required by fastapi.testclient.TestClient
+python-multipart>=0.0.6   # required for Form() parsing (lifecycle advance)
+uvicorn>=0.23       # only needed to actually run the portal, not for tests

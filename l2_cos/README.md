@@ -92,6 +92,55 @@ Because this fires automatically, `email_delivery.py` has an explicit
 fallback even if SMTP is fully configured — the safety net for test/staging
 runs, on top of the ordinary "SMTP not configured -> fallback" behavior.
 
+## Operations Portal (`ui/`)
+
+A FastAPI/HTML dashboard over the Archive — chosen over a heavier framework
+(e.g. Streamlit) to stay lightweight and fully unit-testable via
+`TestClient`, per CLAUDE.md's "must remain lightweight" constraint. All
+business logic lives in plain functions (`ui/cards.py`, `ui/sandbox.py`,
+`ui/repository.py`); `ui/app.py` only wires FastAPI routes to them and
+`ui/render.py` renders stdlib HTML (no template engine, no JS framework).
+
+```bash
+pip install -r l2_cos/requirements.txt
+uvicorn l2_cos.ui.app:app --reload
+```
+
+**Cards** (`GET /`) list every load currently in the Archive:
+
+- `✅ HIGH VALUE MATCH | Score ##` badge once `overall_score >= PUBLISH_THRESHOLD`.
+- 🟥 red indicator whenever the Location or Broker Intelligence Libraries
+  carry a flag worth investigating (facility `historical_problems` /
+  `security_requirements`, or a `broker_risk` flag like slow payment
+  terms); 🟩 otherwise. Red means investigate, not reject.
+
+**Workflow hierarchy** — clicking a card opens:
+
+- **Brief** (`/loads/{id}/brief`) — quick decision support: score, pickup/
+  delivery, rate, deadhead.
+- **Draft** (`/loads/{id}/draft`) — deeper analysis: every rule module's
+  score/flags and the full lifecycle history.
+- **Source** (`/loads/{id}/source`) — the raw acquired load JSON, i.e. the
+  underlying system of record (the Archive, never the portal itself, holds
+  the truth).
+- **Lifecycle** (`/loads/{id}/lifecycle`, `POST /loads/{id}/advance`) —
+  manual stage progression through the 11-stage lock, reusing
+  `control.available_actions`/`resolve` so illegal transitions still 400.
+
+**Library and alert views**:
+
+- `GET /locations` — Location Intelligence Library (facility profiles,
+  historical problems, security requirements).
+- `GET /brokers` — Broker Intelligence Library (contacts, payment terms,
+  historical RPM by lane).
+- `GET /publisher` — Publisher Alerts & Sandbox Tracking. **Assumption:**
+  the ~3-hour hold period wasn't part of the four System Rules established
+  elsewhere in this project; `ui/sandbox.py` implements it as a documented,
+  configurable constant (`SANDBOX_HOLD_HOURS`) that starts counting down
+  from each `Archive/Publisher/<id>.json` record's `entered_at` timestamp,
+  flagging entries `active` / `expiring_soon` (within `EXPIRING_SOON_MINUTES`)
+  / `expired`.
+
 ## Add a rule
 
 Create `rules/your_rule.py` exposing `NAME`, `VERSION`, and
@@ -127,7 +176,11 @@ Coverage: all six rule modules (positive + negative + determinism), the
 intelligence-library loader, the load-board adapter (success, HTTP error
 fallback, network error fallback), the control layer (action set, email
 rendering, illegal-transition rejection), the archive layer (ID format,
-all six artifact writers), and a full end-to-end `run.py` walk. Fixtures
-(`tests/conftest.py`) provide a clean and a risky load/broker pair; every
-test redirects archive writes to a tmp dir, so the suite is offline,
+all artifact writers), the publisher/auto-contact workflow (sent/declined,
+dry-run), and the Operations Portal (card/badge/red-flag logic, sandbox
+expiry, the Archive read layer, HTML rendering, and every FastAPI route via
+`TestClient`, including 404/400 error paths). Fixtures (`tests/conftest.py`)
+provide a clean and a risky load/broker pair plus a `seeded_l2_cos_archive`
+fixture that runs the full pipeline into a tmp Archive for the portal tests;
+every test redirects archive writes to a tmp dir, so the suite is offline,
 deterministic, and side-effect-free.
