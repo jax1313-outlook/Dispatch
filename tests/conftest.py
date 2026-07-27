@@ -36,6 +36,14 @@ _ENV_VARS = [
     "CIN_LITE_EMAIL_DOMAIN",
     "L2_COS_LOAD_BOARD_URL",
     "L2_COS_LOAD_BOARD_API_KEY",
+    "L2_COS_SMTP_HOST",
+    "L2_COS_SMTP_PORT",
+    "L2_COS_SMTP_USER",
+    "L2_COS_SMTP_PASSWORD",
+    "L2_COS_SMTP_STARTTLS",
+    "L2_COS_EMAIL_FROM",
+    "L2_COS_EMAIL_DOMAIN",
+    "L2_COS_EMAIL_DRY_RUN",
 ]
 
 
@@ -51,11 +59,15 @@ def tmp_archive(tmp_path, monkeypatch):
     """Redirect every archive + email write into a per-test tmp directory."""
     from cin_lite import archive, email_delivery
     from l2_cos import archive as l2_cos_archive
+    from l2_cos import email_delivery as l2_cos_email_delivery
 
     root = tmp_path / "Archive"
     monkeypatch.setattr(archive, "ARCHIVE_ROOT", root)
     monkeypatch.setattr(email_delivery, "_OUTBOX", root / "Outbox")
-    monkeypatch.setattr(l2_cos_archive, "ARCHIVE_ROOT", tmp_path / "L2COSArchive")
+
+    l2_cos_root = tmp_path / "L2COSArchive"
+    monkeypatch.setattr(l2_cos_archive, "ARCHIVE_ROOT", l2_cos_root)
+    monkeypatch.setattr(l2_cos_email_delivery, "_OUTBOX", l2_cos_root / "Outbox")
     return root
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from l2_cos.models.intelligence import BrokerIntelligence, LocationIntelligence
+from l2_cos.models.intelligence import BrokerIntelligence, InquiryArtifacts, LocationIntelligence
 
 SAMPLE_DIR = Path(__file__).resolve().parent / "sample_data"
 
@@ -33,3 +33,14 @@ def load_brokers(path: Path | None = None) -> dict[str, BrokerIntelligence]:
         return {}
     records = json.loads(path.read_text(encoding="utf-8"))
     return {r["broker_id"]: BrokerIntelligence(**r) for r in records}
+
+
+def load_carrier_documents(path: Path | None = None) -> InquiryArtifacts:
+    """The carrier's on-file inquiry-artifact packet (System Rule 4):
+    captured once here and reused for every publisher-triggered inquiry,
+    rather than re-assembled per load."""
+    path = path or SAMPLE_DIR / "carrier_documents.json"
+    if not path.exists():
+        return InquiryArtifacts()
+    record = json.loads(path.read_text(encoding="utf-8"))
+    return InquiryArtifacts(**record)

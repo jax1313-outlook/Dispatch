@@ -29,8 +29,8 @@ import urllib.request
 from pathlib import Path
 
 SAMPLE_DIR = Path(__file__).resolve().parent / "sample_data"
-# Facility/broker libraries live alongside load samples but aren't loads themselves.
-_EXCLUDED_SAMPLE_FILES = {"facilities.json", "brokers.json"}
+# Intelligence-library files live alongside load samples but aren't loads themselves.
+_EXCLUDED_SAMPLE_FILES = {"facilities.json", "brokers.json", "carrier_documents.json"}
 
 
 def acquire() -> list[dict]:

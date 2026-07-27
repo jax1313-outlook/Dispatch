@@ -1,0 +1,9 @@
+{
+  "business_card": true,
+  "w9": true,
+  "insurance": true,
+  "authority": true,
+  "rate_sheet": true,
+  "terms": true,
+  "rate_confirmation_package": true
+}

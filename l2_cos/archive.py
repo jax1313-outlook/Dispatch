@@ -20,7 +20,7 @@ from l2_cos.models.intelligence import BrokerIntelligence, LocationIntelligence
 from l2_cos.models.state import Load
 
 ARCHIVE_ROOT = Path(__file__).resolve().parent / "Archive"
-_SUBDIRS = ("Raw", "Processed", "Intelligence", "Dispatch", "Locations", "Brokers")
+_SUBDIRS = ("Raw", "Processed", "Intelligence", "Dispatch", "Locations", "Brokers", "Publisher")
 
 
 def _utc_now() -> str:
@@ -87,3 +87,10 @@ def store_broker(broker: BrokerIntelligence) -> Path:
     """Persist one Broker Intelligence Library entry (capture once)."""
     ensure_tree()
     return _write_json("Brokers", broker.broker_id, json.loads(broker.model_dump_json()))
+
+
+def store_inquiry(load_id: str, result: dict) -> Path:
+    """Persist the publisher/auto-contact workflow's result: whether the
+    inquiry was sent, the artifacts packet, and the email delivery status."""
+    ensure_tree()
+    return _write_json("Publisher", load_id, result)

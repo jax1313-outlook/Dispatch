@@ -5,12 +5,17 @@ Cloned from cin_lite/run.py (Rule 15). Runs the full pipeline end-to-end:
     acquire -> look up Location/Broker intelligence (capture once, Rule 14)
             -> process (rule modules) -> render dispatch control email
             -> collect action -> archive + advance lifecycle stage
-            -> flag publisher eligibility (Intelligence Score >= 90, Rule 4)
+            -> [if Intelligence Score >= 90] publisher/auto-contact workflow
 
 Run from the project root:
 
     python -m l2_cos.run                       # interactive decision per load
     python -m l2_cos.run --action hold_for_review   # non-interactive (same action for all)
+
+The publisher/auto-contact step (System Rule 4) fires on its own — it is
+not gated by the human `--action`/interactive decision above. Set
+`L2_COS_EMAIL_DRY_RUN=1` to force its outbound email to the safe `.eml`
+fallback regardless of SMTP configuration (see l2_cos/email_delivery.py).
 """
 
 from __future__ import annotations
@@ -18,8 +23,8 @@ from __future__ import annotations
 import argparse
 
 from l2_cos import acquisition, archive, control, intelligence_store, processing
-from l2_cos.models.intelligence import PUBLISH_THRESHOLD
 from l2_cos.models.state import Load
+from l2_cos.workflows import publisher
 
 
 def run(action_override: str | None) -> None:
@@ -30,6 +35,7 @@ def run(action_override: str | None) -> None:
 
     facilities = intelligence_store.load_facilities()
     brokers = intelligence_store.load_brokers()
+    carrier_documents = intelligence_store.load_carrier_documents()
 
     print(f"Acquired {len(loads)} load(s).\n")
 
@@ -68,8 +74,14 @@ def run(action_override: str | None) -> None:
         archive.record_dispatch(load)
 
         print(f"\n-> {load.load_id}: stage {load.stage.value}")
-        if score >= PUBLISH_THRESHOLD:
-            print(f"   publisher-eligible (score {score} >= {PUBLISH_THRESHOLD})")
+
+        if publisher.is_triggered(score):
+            result = publisher.trigger(load, raw_load, broker, carrier_documents)
+            archive.store_inquiry(load.load_id, result)
+            if result["sent"]:
+                print(f"   publisher: {result['email_status']}")
+            else:
+                print(f"   publisher: declined to send ({result['reason']})")
         print()
 
 

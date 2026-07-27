@@ -44,7 +44,7 @@ dispatch instead of federal contracts:
 acquire (load board) -> look up Location/Broker intelligence (capture once)
         -> process (6 dispatch rule modules) -> dispatch control email
         -> human confirms stage -> archive + advance the 11-stage lifecycle
-        -> publisher workflow once Intelligence Score >= 90
+        -> [if Intelligence Score >= 90] publisher/auto-contact workflow
 ```
 
 ```bash

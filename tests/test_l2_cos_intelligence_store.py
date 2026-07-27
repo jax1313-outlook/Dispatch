@@ -29,6 +29,12 @@ def test_load_brokers_missing_file_returns_empty(tmp_path):
     assert intelligence_store.load_brokers(tmp_path / "nope.json") == {}
 
 
+def test_load_carrier_documents_missing_file_returns_all_missing(tmp_path):
+    artifacts = intelligence_store.load_carrier_documents(tmp_path / "nope.json")
+    assert not artifacts.is_complete()
+    assert artifacts.business_card is False
+
+
 def test_load_facilities_custom_path(tmp_path):
     path = tmp_path / "custom_facilities.json"
     path.write_text(
