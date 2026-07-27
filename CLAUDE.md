@@ -4,9 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository is in the **planning stage**. The authoritative specification is
-`Final_Architecture_for_Hybrid_CIN-Lite_System (1).docx` — read it before generating code.
-There is no application code yet; the sections below describe the architecture all code must follow.
+Two systems now live in this repository:
+
+- **`cin_lite/`** — the CIN-Lite pipeline described below, fully implemented with a deterministic
+  test suite (see `cin_lite/README.md`).
+- **`l2_cos/`** — a clone-and-repurpose of the cin_lite pipeline for freight dispatch instead of
+  federal contracts, including an Operations Portal UI (see `l2_cos/README.md` and the "L2-COS
+  (Dispatch)" section below).
+
+The authoritative specification for **cin_lite** is
+`Final_Architecture_for_Hybrid_CIN-Lite_System (1).docx` — read it before changing that
+subsystem's architecture. The sections below, through "Rules for code generation," describe
+cin_lite specifically; see "L2-COS (Dispatch)" at the end of this file for the second system.
 
 ## What this is
 
@@ -86,3 +95,52 @@ Each contract gets a unique ID and a full metadata bundle. Folder layout:
 - Use modular rule files (one concern per module).
 - Keep email control logic clean and deterministic.
 - Support future expansion.
+
+## L2-COS (Dispatch)
+
+A clone-and-repurpose of the cin_lite pipeline (`l2_cos/`) for freight dispatch. Same five-layer
+shape (acquisition → processing/rules → control → archive → automation) as cin_lite above, plus:
+
+- **State model lock** — `Load.stage` (`l2_cos/models/state.py`) is one of 11 stages: Available →
+  Booked → Planned → En Route → At Pickup → Loaded → In Transit → At Delivery → Delivered →
+  Invoiced → Closed. Transitions are forward-only, one stage at a time; `Load.advance()` raises on
+  any skip or reversal.
+- **Operational Intelligence Libraries** — `LocationIntelligence` and `BrokerIntelligence`
+  (`l2_cos/models/intelligence.py`) are captured once (`l2_cos/intelligence_store.py`) and reused
+  across the rule modules, the publisher workflow, and the dashboard, rather than re-derived per
+  load.
+- **Publisher / auto-contact workflow** (`l2_cos/workflows/publisher.py`) — the one workflow that
+  fires without a human decision gate: once a load's overall rule-module score reaches
+  `PUBLISH_THRESHOLD` (90), it emails the broker automatically if the carrier's `InquiryArtifacts`
+  packet is complete.
+- **Sandbox hold duration** — `SANDBOX_HOLD_HOURS = 3` (`l2_cos/ui/sandbox.py`) is the default hold
+  period the Operations Portal uses to track a published load before flagging it
+  `expiring_soon` / `expired`. It's a configurable constant, not a fixed architectural invariant —
+  change it in that one file if the real operating hold period differs.
+
+### Operations Portal (local UI)
+
+A FastAPI/HTML dashboard (`l2_cos/ui/`) over the Archive (the system of record): Cards — with the
+`✅ HIGH VALUE MATCH | Score ##` badge and a 🟥/🟩 risk indicator driven by the two Intelligence
+Libraries — link through to a Brief, Draft, and raw Source per load, plus Location/Broker library
+views, Publisher Alerts & Sandbox Tracking, and manual Lifecycle stage controls.
+
+Run it locally:
+
+```bash
+pip install -r l2_cos/requirements.txt
+uvicorn l2_cos.ui.app:app --reload
+```
+
+Then open <http://127.0.0.1:8000/>. `--reload` is for local development only. There is no
+authentication layer yet — do not expose this beyond localhost without adding one, since the
+Lifecycle controls can advance a load's stage with no login required.
+
+### Tests
+
+```bash
+pip install pytest pytest-cov
+python -m pytest --cov=cin_lite --cov=l2_cos --cov-report=term-missing --cov-fail-under=90
+```
+
+See `l2_cos/README.md` for the full layer-by-layer guide.
