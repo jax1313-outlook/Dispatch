@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from cin_lite.agents.base import BaseAgent
+from cin_lite.agents.base import BaseAgent, PermissionDeniedError
 
 
 class ConcreteAgent(BaseAgent):
     NAME = "test-agent"
     VERSION = "0.1.0"
+    ROLE = "processing"
+    ACTION = "summarize"
 
     def __init__(self):
         self.initialized = False
@@ -20,7 +22,7 @@ class ConcreteAgent(BaseAgent):
         self.initialized = True
         self.config = config
 
-    def execute(self, payload):
+    def _execute(self, payload):
         self.last_payload = payload
         return {"ok": True}
 

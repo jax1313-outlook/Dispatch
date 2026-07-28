@@ -90,6 +90,8 @@ class ProposalWriterAgent(BaseAgent):
 
     NAME = "proposal-writer"
     VERSION = "1.0.0"
+    ROLE = "publishing"
+    ACTION = "draft"
 
     def initialize(self, config: dict[str, Any]) -> None:
         self._model = config.get("model", MODEL)
@@ -109,7 +111,7 @@ class ProposalWriterAgent(BaseAgent):
             logger.warning("%s: anthropic SDK not installed; using deterministic fallback",
                            self.NAME)
 
-    def execute(self, payload: dict[str, Any]) -> str:
+    def _execute(self, payload: dict[str, Any]) -> str:
         contract = payload["contract"]
         intelligence = payload["intelligence"]
         brief = payload["brief"]

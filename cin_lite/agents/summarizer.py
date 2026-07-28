@@ -62,6 +62,8 @@ class SummarizerAgent(BaseAgent):
 
     NAME = "summarizer"
     VERSION = "1.0.0"
+    ROLE = "processing"
+    ACTION = "summarize"
 
     def initialize(self, config: dict[str, Any]) -> None:
         self._model = config.get("model", MODEL)
@@ -81,7 +83,7 @@ class SummarizerAgent(BaseAgent):
             logger.warning("%s: anthropic SDK not installed; using deterministic fallback",
                            self.NAME)
 
-    def execute(self, payload: dict[str, Any]) -> str:
+    def _execute(self, payload: dict[str, Any]) -> str:
         contract = payload["contract"]
         intelligence = payload["intelligence"]
         flags = payload["flags"]

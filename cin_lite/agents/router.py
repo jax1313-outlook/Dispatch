@@ -146,6 +146,8 @@ class RouterAgent(BaseAgent):
 
     NAME = "router"
     VERSION = "1.0.0"
+    ROLE = "routing"
+    ACTION = "route"
 
     def initialize(self, config: dict[str, Any]) -> None:
         self._model = config.get("model", MODEL)
@@ -165,7 +167,7 @@ class RouterAgent(BaseAgent):
             logger.warning("%s: anthropic SDK not installed; using deterministic fallback",
                            self.NAME)
 
-    def execute(self, payload: dict[str, Any]) -> dict:
+    def _execute(self, payload: dict[str, Any]) -> dict:
         contract = payload["contract"]
         intelligence = payload["intelligence"]
         summary = payload["summary"]

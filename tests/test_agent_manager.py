@@ -11,6 +11,8 @@ from cin_lite.agents.manager import AgentManager
 class StubAgent(BaseAgent):
     NAME = "stub"
     VERSION = "0.1.0"
+    ROLE = "processing"
+    ACTION = "analyze"
 
     def __init__(self):
         self.init_config = None
@@ -20,7 +22,7 @@ class StubAgent(BaseAgent):
     def initialize(self, config):
         self.init_config = config
 
-    def execute(self, payload):
+    def _execute(self, payload):
         self.last_payload = payload
         return {"agent": self.NAME, "ok": True}
 
