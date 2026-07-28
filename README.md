@@ -16,26 +16,41 @@ acquire (SAM.gov) -> process (9 rule modules) -> summarize + recommend route
 
 ## Quick start
 
+```bash
+pip install .                              # core (deterministic mode)
+pip install ".[claude]"                    # with Claude AI support
+
+cin-lite --health                          # verify installation
+cin-lite --action approve_proposal         # non-interactive demo
+cin-lite                                   # interactive mode
+cin-lite --metrics                         # view pipeline metrics
+```
+
 Runs with zero setup on bundled sample data; configure environment variables to
 switch on the real integrations (each falls back gracefully when unconfigured).
-
-```bash
-python -m cin_lite.run --action approve_proposal   # non-interactive demo
-python -m cin_lite.run                              # interactive
-```
 
 ## Tests
 
 ```bash
-pip install pytest pytest-cov
+pip install ".[dev]"
 python -m pytest --cov=cin_lite --cov-report=term-missing --cov-fail-under=90
 ```
 
-CI runs the suite with coverage on every push and pull request across Python
-3.11–3.13 (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
+280 tests, 100% code coverage. CI runs the suite on every push and pull request
+across Python 3.11–3.13 (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
+
+## Docker
+
+```bash
+docker build -t cin-lite .
+docker run cin-lite --health
+docker run cin-lite --action approve_proposal
+```
 
 ## Documentation
 
-- **[cin_lite/README.md](cin_lite/README.md)** — full layer-by-layer guide
-  (acquisition, rules, agents, control email, archive, proposal workflow).
+- **[User Guide](docs/user-guide.md)** — installation, configuration, rule modules, archive structure, proposal workflow, troubleshooting.
+- **[Deployment Guide](docs/deployment.md)** — pip, Docker, Docker Compose, cron, systemd, environment variables reference, security.
+- **[Operations Guide](docs/operations.md)** — monitoring, logging, health checks, metrics, scalability, backup/recovery, incident response.
+- **[cin_lite/README.md](cin_lite/README.md)** — layer-by-layer technical reference.
 - **[CLAUDE.md](CLAUDE.md)** — architecture and constraints (authoritative spec).
