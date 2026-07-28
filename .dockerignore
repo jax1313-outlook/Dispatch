@@ -1,0 +1,16 @@
+.git/
+.github/
+.pytest_cache/
+.coverage
+.coveragerc
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+htmlcov/
+coverage.xml
+tests/
+logs/
+cin_lite/Archive/
+.claude/
+*.docx

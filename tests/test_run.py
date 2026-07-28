@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sys
 
+import pytest
+
 from cin_lite import run
 
 
@@ -40,3 +42,20 @@ def test_main_with_action(capsys, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["run", "--action", "reject"])
     run.main()
     assert "Acquired" in capsys.readouterr().out
+
+
+def test_main_health(capsys, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["run", "--health"])
+    with pytest.raises(SystemExit) as exc_info:
+        run.main()
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "CIN-Lite Health Check" in out
+    assert "HEALTHY" in out
+
+
+def test_main_metrics(capsys, monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "argv", ["run", "--metrics"])
+    run.main()
+    out = capsys.readouterr().out
+    assert "Pipeline Metrics Summary" in out or "No pipeline runs" in out
