@@ -17,11 +17,13 @@ Configuration (environment):
 from __future__ import annotations
 
 import json
+import logging
 import os
-import sys
 from typing import Any
 
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 400
@@ -68,21 +70,27 @@ class SummarizerAgent(BaseAgent):
 
         api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
+            logger.info("%s initialized (deterministic mode — no API key)", self.NAME)
             return
 
         try:
             import anthropic
             self._client = anthropic.Anthropic()
+            logger.info("%s initialized (Claude mode, model=%s)", self.NAME, self._model)
         except ImportError:
-            print("cin_lite: `anthropic` not installed; using deterministic summary.",
-                  file=sys.stderr)
+            logger.warning("%s: anthropic SDK not installed; using deterministic fallback",
+                           self.NAME)
 
     def execute(self, payload: dict[str, Any]) -> str:
         contract = payload["contract"]
         intelligence = payload["intelligence"]
         flags = payload["flags"]
 
+        logger.debug("%s executing for contract %s", self.NAME,
+                     contract.get("solicitation_number"))
+
         if self._client is None:
+            logger.debug("%s using deterministic summary", self.NAME)
             return _deterministic_summary(contract, flags)
 
         msg_payload = {
@@ -107,12 +115,12 @@ class SummarizerAgent(BaseAgent):
             text = "".join(b.text for b in response.content if b.type == "text").strip()
             return text or _deterministic_summary(contract, flags)
         except Exception as exc:
-            print(f"cin_lite: summarization agent failed ({exc}); using deterministic summary.",
-                  file=sys.stderr)
+            logger.error("%s failed (%s); using deterministic fallback", self.NAME, exc)
             return _deterministic_summary(contract, flags)
 
     def shutdown(self) -> None:
         self._client = None
+        logger.info("%s shut down", self.NAME)
 
 
 def summarize(contract: dict, intelligence: dict, flags: list[str]) -> str:

@@ -18,12 +18,14 @@ something invalid, so the pipeline runs end-to-end offline.
 from __future__ import annotations
 
 import json
+import logging
 import os
-import sys
 from typing import Any
 
 from cin_lite.control import ACTIONS
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 500
@@ -152,14 +154,16 @@ class RouterAgent(BaseAgent):
 
         api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
+            logger.info("%s initialized (deterministic mode — no API key)", self.NAME)
             return
 
         try:
             import anthropic
             self._client = anthropic.Anthropic()
+            logger.info("%s initialized (Claude mode, model=%s)", self.NAME, self._model)
         except ImportError:
-            print("cin_lite: `anthropic` not installed; using deterministic routing.",
-                  file=sys.stderr)
+            logger.warning("%s: anthropic SDK not installed; using deterministic fallback",
+                           self.NAME)
 
     def execute(self, payload: dict[str, Any]) -> dict:
         contract = payload["contract"]
@@ -167,7 +171,11 @@ class RouterAgent(BaseAgent):
         summary = payload["summary"]
         flags = payload["flags"]
 
+        logger.debug("%s executing for contract %s", self.NAME,
+                     contract.get("solicitation_number"))
+
         if self._client is None:
+            logger.debug("%s using deterministic decision", self.NAME)
             return _deterministic_decision(intelligence, flags)
 
         msg_payload = {
@@ -196,16 +204,16 @@ class RouterAgent(BaseAgent):
             if _valid(decision):
                 decision["recipient"] = _RECIPIENTS.get(decision["action"], decision["recipient"])
                 return decision
-            print("cin_lite: routing agent returned an invalid decision; using deterministic routing.",
-                  file=sys.stderr)
+            logger.warning("%s returned an invalid decision; using deterministic fallback",
+                           self.NAME)
         except Exception as exc:
-            print(f"cin_lite: routing agent failed ({exc}); using deterministic routing.",
-                  file=sys.stderr)
+            logger.error("%s failed (%s); using deterministic fallback", self.NAME, exc)
 
         return _deterministic_decision(intelligence, flags)
 
     def shutdown(self) -> None:
         self._client = None
+        logger.info("%s shut down", self.NAME)
 
 
 def decide(contract: dict, intelligence: dict, summary: str, flags: list[str]) -> dict:
