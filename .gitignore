@@ -14,5 +14,10 @@ htmlcov/
 cin_lite/Archive/
 logs/
 
+# Build / packaging artifacts
+*.egg-info/
+dist/
+build/
+
 # Claude agent workspace
 .claude/
