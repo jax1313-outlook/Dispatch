@@ -11,6 +11,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+from typing import Any
+
+from .base import BaseAgent
 
 MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 900
@@ -80,42 +83,80 @@ def _deterministic_outline(contract: dict, intelligence: dict, brief: dict) -> s
     return "\n".join(lines)
 
 
+class ProposalWriterAgent(BaseAgent):
+    """Claude-backed proposal-outline drafter with deterministic fallback."""
+
+    NAME = "proposal-writer"
+    VERSION = "1.0.0"
+
+    def initialize(self, config: dict[str, Any]) -> None:
+        self._model = config.get("model", MODEL)
+        self._max_tokens = config.get("max_tokens", MAX_TOKENS)
+        self._client = None
+
+        api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return
+
+        try:
+            import anthropic
+            self._client = anthropic.Anthropic()
+        except ImportError:
+            print("cin_lite: `anthropic` not installed; using deterministic outline.",
+                  file=sys.stderr)
+
+    def execute(self, payload: dict[str, Any]) -> str:
+        contract = payload["contract"]
+        intelligence = payload["intelligence"]
+        brief = payload["brief"]
+        summary = payload["summary"]
+
+        if self._client is None:
+            return _deterministic_outline(contract, intelligence, brief)
+
+        msg_payload = {
+            "contract": {
+                k: contract.get(k)
+                for k in ("title", "agency", "solicitation_number", "response_date")
+            },
+            "summary": summary,
+            "brief": brief,
+            "intelligence": intelligence,
+        }
+        try:
+            response = self._client.messages.create(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                system=_SYSTEM,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Draft the proposal outline.\n\n"
+                        + json.dumps(msg_payload, indent=2),
+                    }
+                ],
+            )
+            text = "".join(b.text for b in response.content if b.type == "text").strip()
+            return text or _deterministic_outline(contract, intelligence, brief)
+        except Exception as exc:
+            print(f"cin_lite: proposal agent failed ({exc}); using deterministic outline.",
+                  file=sys.stderr)
+            return _deterministic_outline(contract, intelligence, brief)
+
+    def shutdown(self) -> None:
+        self._client = None
+
+
 def draft_outline(contract: dict, intelligence: dict, brief: dict, summary: str) -> str:
     """Return a Markdown proposal outline, Claude-generated when possible."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return _deterministic_outline(contract, intelligence, brief)
-
+    agent = ProposalWriterAgent()
+    agent.initialize({})
     try:
-        import anthropic
-    except ImportError:
-        print("cin_lite: `anthropic` not installed; using deterministic outline.", file=sys.stderr)
-        return _deterministic_outline(contract, intelligence, brief)
-
-    payload = {
-        "contract": {
-            k: contract.get(k)
-            for k in ("title", "agency", "solicitation_number", "response_date")
-        },
-        "summary": summary,
-        "brief": brief,
-        "intelligence": intelligence,
-    }
-    try:
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=_SYSTEM,
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Draft the proposal outline.\n\n" + json.dumps(payload, indent=2),
-                }
-            ],
-        )
-        text = "".join(b.text for b in response.content if b.type == "text").strip()
-        return text or _deterministic_outline(contract, intelligence, brief)
-    except Exception as exc:  # never break the workflow on a draft
-        print(f"cin_lite: proposal agent failed ({exc}); using deterministic outline.",
-              file=sys.stderr)
-        return _deterministic_outline(contract, intelligence, brief)
+        return agent.execute({
+            "contract": contract,
+            "intelligence": intelligence,
+            "brief": brief,
+            "summary": summary,
+        })
+    finally:
+        agent.shutdown()

@@ -20,15 +20,16 @@ from __future__ import annotations
 import json
 import os
 import sys
+from typing import Any
 
 from cin_lite.control import ACTIONS
+from .base import BaseAgent
 
 MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 500
 
 PRIORITIES = ("low", "medium", "high", "urgent")
 
-# Where each action routes its contract for human follow-up.
 _RECIPIENTS = {
     "approve_proposal": "proposal-team",
     "approve_archive": "archive-system",
@@ -83,8 +84,6 @@ def _facts(intelligence: dict, flags: list[str]) -> dict:
         "has_set_aside": "set_aside_present" in flags,
         "cyber_present": "cyber_requirements_present" in flags,
         "cyber_high": "cmmc_level_2_or_higher" in flags or "sensitive_data_handling" in flags,
-        # Out-of-band values are real anomalies worth human review. A missing value
-        # is expected for most solicitations, so it's informational only.
         "value_anomaly": any(f in flags for f in ("value_below_band", "value_above_band")),
         "value_missing": "value_missing" in flags,
         "value_round": "suspiciously_round" in flags,
@@ -140,49 +139,85 @@ def _valid(decision: object) -> bool:
     )
 
 
+class RouterAgent(BaseAgent):
+    """Claude-backed routing-decision with deterministic fallback."""
+
+    NAME = "router"
+    VERSION = "1.0.0"
+
+    def initialize(self, config: dict[str, Any]) -> None:
+        self._model = config.get("model", MODEL)
+        self._max_tokens = config.get("max_tokens", MAX_TOKENS)
+        self._client = None
+
+        api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return
+
+        try:
+            import anthropic
+            self._client = anthropic.Anthropic()
+        except ImportError:
+            print("cin_lite: `anthropic` not installed; using deterministic routing.",
+                  file=sys.stderr)
+
+    def execute(self, payload: dict[str, Any]) -> dict:
+        contract = payload["contract"]
+        intelligence = payload["intelligence"]
+        summary = payload["summary"]
+        flags = payload["flags"]
+
+        if self._client is None:
+            return _deterministic_decision(intelligence, flags)
+
+        msg_payload = {
+            "contract": {k: contract.get(k) for k in _CONTRACT_FIELDS},
+            "summary": summary,
+            "intelligence": intelligence,
+            "flags": flags,
+        }
+
+        try:
+            response = self._client.messages.create(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                system=_SYSTEM,
+                output_config={"format": {"type": "json_schema", "schema": _SCHEMA}},
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Recommend a routing action for this contract.\n\n"
+                        + json.dumps(msg_payload, indent=2),
+                    }
+                ],
+            )
+            text = next((b.text for b in response.content if b.type == "text"), "")
+            decision = json.loads(text)
+            if _valid(decision):
+                decision["recipient"] = _RECIPIENTS.get(decision["action"], decision["recipient"])
+                return decision
+            print("cin_lite: routing agent returned an invalid decision; using deterministic routing.",
+                  file=sys.stderr)
+        except Exception as exc:
+            print(f"cin_lite: routing agent failed ({exc}); using deterministic routing.",
+                  file=sys.stderr)
+
+        return _deterministic_decision(intelligence, flags)
+
+    def shutdown(self) -> None:
+        self._client = None
+
+
 def decide(contract: dict, intelligence: dict, summary: str, flags: list[str]) -> dict:
     """Return a routing_decision dict, Claude-generated when possible."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return _deterministic_decision(intelligence, flags)
-
+    agent = RouterAgent()
+    agent.initialize({})
     try:
-        import anthropic
-    except ImportError:
-        print("cin_lite: `anthropic` not installed; using deterministic routing.", file=sys.stderr)
-        return _deterministic_decision(intelligence, flags)
-
-    payload = {
-        "contract": {k: contract.get(k) for k in _CONTRACT_FIELDS},
-        "summary": summary,
-        "intelligence": intelligence,
-        "flags": flags,
-    }
-
-    try:
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=_SYSTEM,
-            output_config={"format": {"type": "json_schema", "schema": _SCHEMA}},
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Recommend a routing action for this contract.\n\n"
-                    + json.dumps(payload, indent=2),
-                }
-            ],
-        )
-        text = next((b.text for b in response.content if b.type == "text"), "")
-        decision = json.loads(text)
-        if _valid(decision):
-            # Normalize recipient to the canonical queue for the chosen action.
-            decision["recipient"] = _RECIPIENTS.get(decision["action"], decision["recipient"])
-            return decision
-        print("cin_lite: routing agent returned an invalid decision; using deterministic routing.",
-              file=sys.stderr)
-    except Exception as exc:  # never break the pipeline on a recommendation
-        print(f"cin_lite: routing agent failed ({exc}); using deterministic routing.",
-              file=sys.stderr)
-
-    return _deterministic_decision(intelligence, flags)
+        return agent.execute({
+            "contract": contract,
+            "intelligence": intelligence,
+            "summary": summary,
+            "flags": flags,
+        })
+    finally:
+        agent.shutdown()

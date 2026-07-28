@@ -19,8 +19,10 @@ from __future__ import annotations
 import json
 import os
 import sys
+from typing import Any
 
-# Default to the latest, most capable Claude model. Override via CIN_LITE_MODEL.
+from .base import BaseAgent
+
 MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 400
 
@@ -34,7 +36,6 @@ _SYSTEM = (
     "details beyond the provided data. Output only the summary, no preamble."
 )
 
-# Only these contract fields are sent to the model.
 _CONTRACT_FIELDS = (
     "title",
     "agency",
@@ -54,40 +55,75 @@ def _deterministic_summary(contract: dict, flags: list[str]) -> str:
     )
 
 
+class SummarizerAgent(BaseAgent):
+    """Claude-backed summarization with deterministic fallback."""
+
+    NAME = "summarizer"
+    VERSION = "1.0.0"
+
+    def initialize(self, config: dict[str, Any]) -> None:
+        self._model = config.get("model", MODEL)
+        self._max_tokens = config.get("max_tokens", MAX_TOKENS)
+        self._client = None
+
+        api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return
+
+        try:
+            import anthropic
+            self._client = anthropic.Anthropic()
+        except ImportError:
+            print("cin_lite: `anthropic` not installed; using deterministic summary.",
+                  file=sys.stderr)
+
+    def execute(self, payload: dict[str, Any]) -> str:
+        contract = payload["contract"]
+        intelligence = payload["intelligence"]
+        flags = payload["flags"]
+
+        if self._client is None:
+            return _deterministic_summary(contract, flags)
+
+        msg_payload = {
+            "contract": {k: contract.get(k) for k in _CONTRACT_FIELDS},
+            "intelligence": intelligence,
+            "flags": flags,
+        }
+
+        try:
+            response = self._client.messages.create(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                system=_SYSTEM,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Summarize this contract for the reviewer.\n\n"
+                        + json.dumps(msg_payload, indent=2),
+                    }
+                ],
+            )
+            text = "".join(b.text for b in response.content if b.type == "text").strip()
+            return text or _deterministic_summary(contract, flags)
+        except Exception as exc:
+            print(f"cin_lite: summarization agent failed ({exc}); using deterministic summary.",
+                  file=sys.stderr)
+            return _deterministic_summary(contract, flags)
+
+    def shutdown(self) -> None:
+        self._client = None
+
+
 def summarize(contract: dict, intelligence: dict, flags: list[str]) -> str:
     """Return a human-readable summary, Claude-generated when possible."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return _deterministic_summary(contract, flags)
-
+    agent = SummarizerAgent()
+    agent.initialize({})
     try:
-        import anthropic
-    except ImportError:
-        print("cin_lite: `anthropic` not installed; using deterministic summary.", file=sys.stderr)
-        return _deterministic_summary(contract, flags)
-
-    payload = {
-        "contract": {k: contract.get(k) for k in _CONTRACT_FIELDS},
-        "intelligence": intelligence,
-        "flags": flags,
-    }
-
-    try:
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=_SYSTEM,
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Summarize this contract for the reviewer.\n\n"
-                    + json.dumps(payload, indent=2),
-                }
-            ],
-        )
-        text = "".join(b.text for b in response.content if b.type == "text").strip()
-        return text or _deterministic_summary(contract, flags)
-    except Exception as exc:  # never break the human-in-the-loop pipeline on a summary
-        print(f"cin_lite: summarization agent failed ({exc}); using deterministic summary.",
-              file=sys.stderr)
-        return _deterministic_summary(contract, flags)
+        return agent.execute({
+            "contract": contract,
+            "intelligence": intelligence,
+            "flags": flags,
+        })
+    finally:
+        agent.shutdown()
