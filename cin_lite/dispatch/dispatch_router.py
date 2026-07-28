@@ -14,13 +14,12 @@ or invalid data) is always rejected. Viable loads are routed by score:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from .load_calculator import LoadResult, calculate_load
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from .load_calculator import LoadResult, calculate_load
 
 DISPATCH_ACTIONS = ("accept", "reject", "flag_review")
 DISPATCH_PRIORITIES = ("low", "medium", "high")
@@ -56,13 +55,15 @@ def dispatch_load(load: dict) -> DispatchDecision:
     """Route a load opportunity based on its calculated score and viability."""
     result = calculate_load(load)
 
-    logger.debug("dispatch_load scored %d (viable=%s, flags=%s)",
-                 result.score, result.viable, result.flags)
+    logger.debug("dispatch_load scored {score} (viable={viable}, rpm={rpm}, miles={miles}, flags={flags})",
+                 score=result.score, viable=result.viable, rpm=result.rate_per_mile,
+                 miles=result.breakdown.get("miles"), flags=result.flags)
 
     if not result.viable:
         reasons = [_REJECTION_REASONS[f] for f in result.flags if f in _REJECTION_REASONS]
         reason = "; ".join(reasons) or "load failed viability checks"
-        logger.info("dispatch_load rejecting: %s", reason)
+        logger.info("dispatch_load rejecting (score={score}): {reason}",
+                    score=result.score, reason=reason)
         return DispatchDecision(
             action="reject",
             priority="low",
@@ -73,7 +74,8 @@ def dispatch_load(load: dict) -> DispatchDecision:
         )
 
     if result.score >= _ACCEPT_HIGH_THRESHOLD:
-        logger.info("dispatch_load accepting (high priority, score=%d)", result.score)
+        logger.info("dispatch_load accepting (high priority, score={score}, rpm={rpm})",
+                    score=result.score, rpm=result.rate_per_mile)
         return DispatchDecision(
             action="accept",
             priority="high",
@@ -84,7 +86,8 @@ def dispatch_load(load: dict) -> DispatchDecision:
         )
 
     if result.score >= _ACCEPT_THRESHOLD:
-        logger.info("dispatch_load accepting (medium priority, score=%d)", result.score)
+        logger.info("dispatch_load accepting (medium priority, score={score}, rpm={rpm})",
+                    score=result.score, rpm=result.rate_per_mile)
         return DispatchDecision(
             action="accept",
             priority="medium",
@@ -94,7 +97,8 @@ def dispatch_load(load: dict) -> DispatchDecision:
             load_result=result.to_json(),
         )
 
-    logger.info("dispatch_load flagging for review (score=%d)", result.score)
+    logger.info("dispatch_load flagging for review (score={score}, rpm={rpm})",
+                score=result.score, rpm=result.rate_per_mile)
     return DispatchDecision(
         action="flag_review",
         priority="low",

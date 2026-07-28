@@ -9,10 +9,12 @@ Guarantees deterministic, side-effect-free tests:
 
 from __future__ import annotations
 
+import logging
 import sys
 import types
 
 import pytest
+from loguru import logger as _loguru_logger
 
 from cin_lite import acquisition, processing
 
@@ -35,6 +37,28 @@ _ENV_VARS = [
     "CIN_LITE_EMAIL_REVIEWER",
     "CIN_LITE_EMAIL_DOMAIN",
 ]
+
+
+class _PropagateHandler(logging.Handler):
+    """Forward loguru records to stdlib logging so caplog captures them."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        logging.getLogger(record.name).handle(record)
+
+
+@pytest.fixture(autouse=True)
+def _loguru_to_caplog():
+    """Replace loguru's default stderr sink with a stdlib propagation sink."""
+    from cin_lite import log_config
+    log_config._configured = False
+
+    _loguru_logger.remove()
+    handler_id = _loguru_logger.add(_PropagateHandler(), format="{message}", level=0)
+    yield
+    try:
+        _loguru_logger.remove(handler_id)
+    except ValueError:
+        pass
 
 
 @pytest.fixture(autouse=True)

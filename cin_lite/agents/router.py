@@ -18,14 +18,13 @@ something invalid, so the pipeline runs end-to-end offline.
 from __future__ import annotations
 
 import json
-import logging
 import os
 from typing import Any
 
+from loguru import logger
+
 from cin_lite.control import ACTIONS
 from .base import BaseAgent
-
-logger = logging.getLogger(__name__)
 
 MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 500
@@ -156,16 +155,17 @@ class RouterAgent(BaseAgent):
 
         api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            logger.info("%s initialized (deterministic mode — no API key)", self.NAME)
+            logger.info("{agent} initialized (deterministic mode — no API key)", agent=self.NAME)
             return
 
         try:
             import anthropic
             self._client = anthropic.Anthropic()
-            logger.info("%s initialized (Claude mode, model=%s)", self.NAME, self._model)
+            logger.info("{agent} initialized (Claude mode, model={model})",
+                        agent=self.NAME, model=self._model)
         except ImportError:
-            logger.warning("%s: anthropic SDK not installed; using deterministic fallback",
-                           self.NAME)
+            logger.warning("{agent}: anthropic SDK not installed; using deterministic fallback",
+                           agent=self.NAME)
 
     def _execute(self, payload: dict[str, Any]) -> dict:
         contract = payload["contract"]
@@ -173,11 +173,11 @@ class RouterAgent(BaseAgent):
         summary = payload["summary"]
         flags = payload["flags"]
 
-        logger.debug("%s executing for contract %s", self.NAME,
-                     contract.get("solicitation_number"))
+        logger.debug("{agent} executing for contract {solicitation}",
+                     agent=self.NAME, solicitation=contract.get("solicitation_number"))
 
         if self._client is None:
-            logger.debug("%s using deterministic decision", self.NAME)
+            logger.debug("{agent} using deterministic decision", agent=self.NAME)
             return _deterministic_decision(intelligence, flags)
 
         msg_payload = {
@@ -206,16 +206,17 @@ class RouterAgent(BaseAgent):
             if _valid(decision):
                 decision["recipient"] = _RECIPIENTS.get(decision["action"], decision["recipient"])
                 return decision
-            logger.warning("%s returned an invalid decision; using deterministic fallback",
-                           self.NAME)
+            logger.warning("{agent} returned an invalid decision; using deterministic fallback",
+                           agent=self.NAME)
         except Exception as exc:
-            logger.error("%s failed (%s); using deterministic fallback", self.NAME, exc)
+            logger.error("{agent} failed ({exc}); using deterministic fallback",
+                         agent=self.NAME, exc=exc)
 
         return _deterministic_decision(intelligence, flags)
 
     def shutdown(self) -> None:
         self._client = None
-        logger.info("%s shut down", self.NAME)
+        logger.info("{agent} shut down", agent=self.NAME)
 
 
 def decide(contract: dict, intelligence: dict, summary: str, flags: list[str]) -> dict:

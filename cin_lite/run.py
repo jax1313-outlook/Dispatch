@@ -18,6 +18,7 @@ import argparse
 from datetime import datetime, timezone
 
 from cin_lite import acquisition, processing, archive, control, email_delivery
+from cin_lite.log_config import configure as configure_logging
 from cin_lite.agents.summarizer import SummarizerAgent
 from cin_lite.agents.router import RouterAgent
 from cin_lite.agents.manager import AgentManager
@@ -101,6 +102,7 @@ def main() -> None:
             print(f"{key:<16} {label}  ->  {route}")
         return
 
+    configure_logging()
     run(args.action)
 
 

@@ -3,3 +3,4 @@
 # (cin_lite/agents/summarizer.py). Without it, the pipeline falls back
 # to a deterministic summary.
 anthropic>=0.40
+loguru>=0.7

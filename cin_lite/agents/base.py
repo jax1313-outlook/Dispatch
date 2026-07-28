@@ -13,13 +13,12 @@ with their core logic.
 
 from __future__ import annotations
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
-from .roles import permissions_for
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from .roles import permissions_for
 
 
 class PermissionDeniedError(Exception):
@@ -62,7 +61,8 @@ class BaseAgent(ABC):
         """
         action = payload.get("action", self.ACTION)
         if action and not self.check_permission(action):
-            logger.warning("%s denied action '%s' (role=%s)", self.NAME, action, self.ROLE)
+            logger.warning("{name} denied action '{action}' (role={role})",
+                          name=self.NAME, action=action, role=self.ROLE)
             raise PermissionDeniedError(self.NAME, self.ROLE, action)
         return self._execute(payload)
 
