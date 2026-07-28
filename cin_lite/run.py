@@ -18,7 +18,9 @@ import argparse
 from datetime import datetime, timezone
 
 from cin_lite import acquisition, processing, archive, control, email_delivery
-from cin_lite.agents import summarizer, router
+from cin_lite.agents.summarizer import SummarizerAgent
+from cin_lite.agents.router import RouterAgent
+from cin_lite.agents.manager import AgentManager
 from cin_lite.workflows import proposal
 
 
@@ -30,41 +32,56 @@ def run(action_override: str | None) -> None:
 
     print(f"Acquired {len(contracts)} contract(s).\n")
 
-    for contract in contracts:
-        contract["_acquired_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with AgentManager() as mgr:
+        mgr.register(SummarizerAgent())
+        mgr.register(RouterAgent())
+        mgr.initialize_all({})
 
-        intelligence = processing.process(contract)
-        flags = processing.all_flags(intelligence)
-        summary = summarizer.summarize(contract, intelligence, flags)
-        decision = router.decide(contract, intelligence, summary, flags)
+        for contract in contracts:
+            contract["_acquired_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        email = control.render_email(contract, intelligence, summary, flags, decision)
-        print(email)
+            intelligence = processing.process(contract)
+            flags = processing.all_flags(intelligence)
 
-        action = control.collect(default=action_override, recommended=decision["action"])
-        label, route = control.resolve(action)
+            summary = mgr.execute("summarizer", {
+                "contract": contract,
+                "intelligence": intelligence,
+                "flags": flags,
+            })
+            decision = mgr.execute("router", {
+                "contract": contract,
+                "intelligence": intelligence,
+                "summary": summary,
+                "flags": flags,
+            })
 
-        metadata = archive.store(contract, intelligence, summary)
-        routing_path = archive.record_routing(
-            metadata["contract_id"], action, route, metadata, decision
-        )
-        email_status = email_delivery.deliver_decision(
-            contract, metadata["contract_id"], summary, decision, action, route, flags
-        )
+            email = control.render_email(contract, intelligence, summary, flags, decision)
+            print(email)
 
-        print(f"\n-> {metadata['contract_id']}: {label} -> routed to {route}")
-        print(f"   archived under {archive.ARCHIVE_ROOT}")
-        print(f"   routing record: {routing_path}")
-        print(f"   email: {email_status}")
+            action = control.collect(default=action_override, recommended=decision["action"])
+            label, route = control.resolve(action)
 
-        if proposal.is_triggered(action):
-            result = proposal.trigger(
-                contract, metadata["contract_id"], intelligence, decision, summary, flags
+            metadata = archive.store(contract, intelligence, summary)
+            routing_path = archive.record_routing(
+                metadata["contract_id"], action, route, metadata, decision
             )
-            print(f"   proposal triggered: {result['proposal_id']}")
-            print(f"     outline: {result['outline_path']}")
-            print(f"     kickoff email: {result['email_status']}")
-        print()
+            email_status = email_delivery.deliver_decision(
+                contract, metadata["contract_id"], summary, decision, action, route, flags
+            )
+
+            print(f"\n-> {metadata['contract_id']}: {label} -> routed to {route}")
+            print(f"   archived under {archive.ARCHIVE_ROOT}")
+            print(f"   routing record: {routing_path}")
+            print(f"   email: {email_status}")
+
+            if proposal.is_triggered(action):
+                result = proposal.trigger(
+                    contract, metadata["contract_id"], intelligence, decision, summary, flags
+                )
+                print(f"   proposal triggered: {result['proposal_id']}")
+                print(f"     outline: {result['outline_path']}")
+                print(f"     kickoff email: {result['email_status']}")
+            print()
 
 
 def main() -> None:
