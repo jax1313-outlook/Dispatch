@@ -35,6 +35,14 @@ from pathlib import Path
 SAMPLE_DIR = Path(__file__).resolve().parent / "sample_data"
 SAM_SEARCH_URL = "https://api.sam.gov/opportunities/v2/search"
 _DESCRIPTION_CAP = 4000
+_ALLOWED_SCHEMES = frozenset({"https", "http"})
+
+
+def _validate_url_scheme(url: str) -> None:
+    """Reject URLs whose scheme is not in the allowlist (B310 mitigation)."""
+    scheme = urllib.parse.urlparse(url).scheme
+    if scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(f"URL scheme {scheme!r} not allowed; expected one of {_ALLOWED_SCHEMES}")
 
 
 def acquire() -> list[dict]:
@@ -62,9 +70,10 @@ def _acquire_local() -> list[dict]:
 # --------------------------------------------------------------------------- SAM.gov
 
 def _http_get(url: str, params: dict) -> bytes:
+    _validate_url_scheme(url)
     query = urllib.parse.urlencode({k: v for k, v in params.items() if v not in (None, "")})
     req = urllib.request.Request(f"{url}?{query}", headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
         return resp.read()
 
 
@@ -121,11 +130,15 @@ def _strip_html(text: str) -> str:
 def _fetch_description(opp: dict, api_key: str) -> str:
     """Best-effort fetch of the full description text (a URL in the SAM record)."""
     url = opp.get("description")
-    if not isinstance(url, str) or not url.startswith("http"):
-        return _strip_html(url) if isinstance(url, str) else ""
+    if not isinstance(url, str):
+        return ""
+    try:
+        _validate_url_scheme(url)
+    except ValueError:
+        return _strip_html(url)
     try:
         sep = "&" if "?" in url else "?"
-        with urllib.request.urlopen(f"{url}{sep}api_key={api_key}", timeout=30) as resp:
+        with urllib.request.urlopen(f"{url}{sep}api_key={api_key}", timeout=30) as resp:  # nosec B310
             raw = resp.read().decode(errors="replace")
         try:
             parsed = json.loads(raw)
