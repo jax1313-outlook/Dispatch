@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Library — L2-COS Portal{% endblock %}
+{% block page_title %}Library{% endblock %}
+
+{% block body %}
+<p class="section-note">Library stores approved current reusable knowledge and production parts. Library is not temporary workspace.</p>
+
+{% for section in sections %}
+<section class="card-section">
+    <h2>{{ section.name }}</h2>
+    {% if section.entries %}
+    <div class="library-grid">
+        {% for item in section.entries %}
+        <div class="library-item">
+            <span class="library-icon">&#128196;</span>
+            <span class="library-name">{{ item.name }}</span>
+            <span class="status-tag status-placeholder">{{ item.status }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% elif section.fields %}
+    <div class="library-grid">
+        {% for field in section.fields %}
+        <div class="library-item">
+            <span class="library-icon">&#128205;</span>
+            <span class="library-name">{{ field }}</span>
+            <span class="status-tag status-placeholder">placeholder</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No items yet. This section will store approved reusable {{ section.name|lower }} data.</p>
+    </div>
+    {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

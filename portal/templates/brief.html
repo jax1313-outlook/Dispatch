@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Brief — {{ entry.title }} — L2-COS Portal{% endblock %}
+{% block page_title %}Brief: {{ entry.title }}{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('pages.dispatch') if entry.source_type == 'dispatch' else url_for('pages.sam') }}" class="btn btn-sm">Back</a>
+{% endblock %}
+
+{% block body %}
+{% set vis = card_visual(entry.score, entry.decision) %}
+{% set cd = entry.card_data %}
+
+<div class="brief-container">
+    <div class="brief-header {{ vis.css }}">
+        <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
+        {% if entry.score is not none %}
+        <span class="card-score">Score {{ format_score(entry.score) }}</span>
+        {% elif entry.decision and entry.decision.priority %}
+        <span class="card-score">Priority: {{ entry.decision.priority }}</span>
+        {% endif %}
+        <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+    </div>
+
+    <section class="brief-section">
+        <h3>Card Details</h3>
+        <div class="brief-fields">
+        {% if entry.source_type == 'dispatch' %}
+            <div><strong>Load ID:</strong> {{ cd.load_id or entry.source_id }}</div>
+            <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
+            <div><strong>Destination:</strong> {{ cd.destination or 'Unknown' }}</div>
+            <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
+            <div><strong>Broker Email:</strong> {{ cd.broker_email or 'Unknown' }}</div>
+            <div><strong>Broker Phone:</strong> {{ cd.broker_phone or 'Unknown' }}</div>
+            <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}</div>
+            <div><strong>RPM:</strong> {{ '$%s'|format(cd.rpm) if cd.rpm else 'Unknown' }}</div>
+            <div><strong>Distance:</strong> {{ '%s miles'|format(cd.distance_miles) if cd.distance_miles else 'Unknown' }}</div>
+            <div><strong>Pickup:</strong> {{ cd.pickup_window or 'Unknown' }}</div>
+            <div><strong>Delivery:</strong> {{ cd.delivery_window or 'Unknown' }}</div>
+            <div><strong>Equipment:</strong> {{ cd.equipment_required or 'Unknown' }}
+                {% if cd.equipment_match == 'match' %}<span class="equip-ok">&#10003; Match</span>
+                {% elif cd.equipment_match == 'mismatch' %}<span class="equip-bad">&#10007; Mismatch</span>
+                {% endif %}
+            </div>
+            <div><strong>Weight:</strong> {{ '%s lbs'|format(cd.weight_lbs|int) if cd.weight_lbs else 'Unknown' }}</div>
+            {% if cd.source_link %}
+            <div><strong>Source:</strong> <a href="{{ cd.source_link }}" target="_blank" rel="noopener">{{ cd.source_link }}</a></div>
+            {% else %}
+            <div><strong>Source:</strong> Unknown</div>
+            {% endif %}
+            <div><strong>Detention History:</strong> {{ cd.detention_history or 'Unknown' }}</div>
+            <div><strong>Location Intel:</strong> {{ cd.location_intelligence or 'Unknown' }}</div>
+            <div><strong>Broker Intel:</strong> {{ cd.broker_intelligence or 'Unknown' }}</div>
+            <div><strong>Notes:</strong> {{ cd.notes or 'None' }}</div>
+        {% else %}
+            <div><strong>Solicitation:</strong> {{ cd.solicitation_number or 'Unknown' }}</div>
+            <div><strong>Agency:</strong> {{ cd.agency or 'Unknown' }}</div>
+            <div><strong>Est. Value:</strong> {{ '$%s'|format(cd.estimated_value|int) if cd.estimated_value else 'Unknown' }}</div>
+            <div><strong>Response Date:</strong> {{ cd.response_date or 'Unknown' }}</div>
+            <div><strong>NAICS:</strong> {{ cd.naics_text or 'Unknown' }}</div>
+            <div><strong>Set-Aside:</strong> {{ cd.notes or 'Unknown' }}</div>
+            {% if cd._sam_ui_link %}
+            <div><strong>Source:</strong> <a href="{{ cd._sam_ui_link }}" target="_blank" rel="noopener">View on SAM.gov</a></div>
+            {% elif cd._source_file %}
+            <div><strong>Source:</strong> {{ cd._source_file }}</div>
+            {% endif %}
+            {% if cd.description %}
+            <div class="full-width"><strong>Description:</strong> {{ cd.description[:500] }}{% if cd.description|length > 500 %}...{% endif %}</div>
+            {% endif %}
+        {% endif %}
+        </div>
+    </section>
+
+    {% if entry.summary %}
+    <section class="brief-section">
+        <h3>Summary</h3>
+        <p>{{ entry.summary }}</p>
+    </section>
+    {% endif %}
+
+    {% if entry.decision %}
+    <section class="brief-section">
+        <h3>Routing Recommendation</h3>
+        <div class="brief-fields">
+            <div><strong>Action:</strong> {{ entry.decision.action|replace('_', ' ')|title }}</div>
+            <div><strong>Priority:</strong> {{ entry.decision.priority }}</div>
+            <div><strong>Reason:</strong> {{ entry.decision.reason }}</div>
+            <div><strong>Recipient:</strong> {{ entry.decision.recipient }}</div>
+            <div><strong>Notes:</strong> {{ entry.decision.notes }}</div>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if entry.flags %}
+    <section class="brief-section">
+        <h3>Flags ({{ entry.flags|length }})</h3>
+        <ul class="flag-list">
+        {% for flag in entry.flags %}
+            <li>{{ flag }}</li>
+        {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <section class="brief-section">
+        <h3>Position / HOS Placeholders</h3>
+        <div class="brief-fields">
+            <div><strong>Position Impact:</strong> {{ entry.position_impact or 'Unknown' }}</div>
+            <div><strong>Return Home Required:</strong> {{ entry.return_home_required or 'Unknown' }}</div>
+            <div><strong>Tomorrow Position Risk:</strong> {{ entry.tomorrow_position_risk or 'Unknown' }}</div>
+            <div><strong>HOS Risk:</strong> {{ entry.hos_risk or 'Unknown' }}</div>
+            <div><strong>Route Risk:</strong> {{ entry.route_risk or 'Unknown' }}</div>
+            <div><strong>Economic Opportunity:</strong> {{ entry.economic_opportunity_flag or 'Unknown' }}</div>
+        </div>
+    </section>
+
+    {% if entry.inquiry_draft %}
+    <section class="brief-section">
+        <h3>Inquiry Draft</h3>
+        <div class="inquiry-draft">
+            <div><strong>To:</strong> {{ entry.inquiry_draft.to }}</div>
+            <div><strong>Subject:</strong> {{ entry.inquiry_draft.subject }}</div>
+            <div><strong>Status:</strong> <span class="status-tag">{{ entry.inquiry_draft.status }}</span></div>
+            <div><strong>Mode:</strong> {{ entry.inquiry_draft.mode }}</div>
+            <pre class="draft-body">{{ entry.inquiry_draft.body }}</pre>
+            {% if entry.inquiry_draft.status == 'DRAFT_CREATED' %}
+            <button class="btn btn-sm btn-warning" onclick="markInquirySent('{{ entry.id }}')">Mark as Sent (Manual)</button>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if conflicts %}
+    <section class="brief-section">
+        <h3>Conflict Notices</h3>
+        {% for cn in conflicts %}
+        <div class="conflict-card severity-{{ cn.severity }}">
+            <strong>{{ cn.conflict_type|replace('_', ' ')|title }}</strong> ({{ cn.severity }})
+            <p>{{ cn.explanation }}</p>
+            <p><em>Recommended: {{ cn.recommended_action }}</em></p>
+            {% if not cn.resolved %}
+            <button class="btn btn-sm" onclick="resolveConflict('{{ cn.id }}')">Resolve</button>
+            {% else %}
+            <span class="resolved-tag">Resolved</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if publisher_actions %}
+    <section class="brief-section">
+        <h3>Publisher Actions</h3>
+        {% for pa in publisher_actions %}
+        <div class="publisher-card">
+            <strong>{{ pa.action_type }}</strong> — {{ pa.status }}
+            <p>{{ pa.trigger_reason }}</p>
+            {% if pa.manifest %}
+            <div class="manifest">
+                <strong>Manifest:</strong>
+                <ul>
+                {% for item in pa.manifest %}
+                    <li>{{ item }}
+                        {% if item in pa.available_data %}<span class="equip-ok">&#10003;</span>
+                        {% else %}<span class="equip-bad">missing</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if pa.status == 'PENDING' %}
+            <button class="btn btn-sm" onclick="updatePublisherStatus('{{ pa.id }}', 'DRAFT')">Generate Draft</button>
+            {% elif pa.status == 'DRAFT' %}
+            <button class="btn btn-sm" onclick="updatePublisherStatus('{{ pa.id }}', 'READY')">Mark Ready</button>
+            {% elif pa.status == 'READY' %}
+            <button class="btn btn-sm btn-success" onclick="updatePublisherStatus('{{ pa.id }}', 'APPROVED')">Mark Approved</button>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="brief-section">
+        <h3>Actions</h3>
+        <div class="card-actions">
+            <button class="btn btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
+            <button class="btn btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
+            <button class="btn btn-danger" onclick="cardAction('{{ entry.id }}', 'pass')">Pass</button>
+            <button class="btn btn-warning" onclick="cardAction('{{ entry.id }}', 'watch')">Watch</button>
+            <button class="btn" onclick="createInquiry('{{ entry.id }}')">Send Inquiry Draft</button>
+            <div class="publisher-triggers">
+                <span>Trigger Publisher:</span>
+                {% for ptype in publisher_action_types %}
+                <button class="btn btn-sm btn-purple" onclick="triggerPublisher('{{ entry.id }}', '{{ ptype }}')">{{ ptype }}</button>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="brief-section">
+        <h3>Event History</h3>
+        <table class="event-table">
+            <thead><tr><th>Action</th><th>Detail</th><th>Time</th></tr></thead>
+            <tbody>
+            {% for ev in entry.events|reverse %}
+            <tr>
+                <td>{{ ev.action }}</td>
+                <td>{% if ev.get('to') %}{{ ev.get('from', '') }} &rarr; {{ ev.to }}{% endif %} {{ ev.get('note', '') }}</td>
+                <td>{{ ev.timestamp }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    {% if entry.notes %}
+    <section class="brief-section">
+        <h3>Notes</h3>
+        <pre>{{ entry.notes }}</pre>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
