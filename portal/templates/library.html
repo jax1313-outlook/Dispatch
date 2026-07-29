@@ -8,6 +8,7 @@
 {% for section in sections %}
 <section class="card-section">
     <h2>{{ section.name }}</h2>
+    {% if section.description %}<p class="section-desc">{{ section.description }}</p>{% endif %}
     {% if section.entries %}
     <div class="library-grid">
         {% for item in section.entries %}

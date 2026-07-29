@@ -144,12 +144,18 @@ def library():
         "Unload Time", "Detention History", "Driver Notes",
     ]
     sections = [
-        {"name": "Company Library", "entries": company_docs},
-        {"name": "Broker Library", "entries": []},
-        {"name": "Customer Library", "entries": []},
-        {"name": "Location Intelligence Library", "fields": location_fields},
-        {"name": "Operations Library", "entries": []},
-        {"name": "Intelligence Library", "entries": []},
+        {"name": "Company Library", "entries": company_docs,
+         "description": "Approved company documents available for Publisher production and broker packets."},
+        {"name": "Broker Library", "entries": [],
+         "description": "Approved broker profiles, contact history, and performance records."},
+        {"name": "Customer Library", "entries": [],
+         "description": "Approved customer/shipper profiles and relationship data."},
+        {"name": "Location Intelligence Library", "fields": location_fields,
+         "description": "Approved facility data, dock notes, and location-specific operational knowledge."},
+        {"name": "Operations Library", "entries": [],
+         "description": "Approved operational templates, checklists, and standard procedures."},
+        {"name": "Intelligence Library", "entries": [],
+         "description": "Approved intelligence products, market data, and analytical references."},
     ]
     return render_template("library.html", sections=sections)
 

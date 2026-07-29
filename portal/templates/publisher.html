@@ -20,7 +20,9 @@
             <div><strong>Related:</strong> {{ action.sandbox_id }}</div>
             <div><strong>Trigger:</strong> {{ action.trigger_reason }}</div>
             <div><strong>Recommended Product:</strong> {{ action.recommended_product }}</div>
-            <div><strong>Human Approval Required:</strong> Yes</div>
+            <div><strong>Available Data:</strong> {{ action.available_data|join(', ') if action.available_data else 'None' }}</div>
+            <div><strong>Missing Data:</strong> {{ action.missing_data|join(', ') if action.missing_data else 'None' }}</div>
+            <div><strong>Human Approval Required:</strong> {{ 'Yes' if action.human_approval_required else 'No' }}</div>
             <div><strong>Created:</strong> {{ action.created_at }}</div>
         </div>
         {% if action.manifest %}

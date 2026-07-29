@@ -656,3 +656,321 @@ class TestCardVisual:
     def test_format_score_value(self):
         from portal.helpers import format_score
         assert format_score(92) == "92"
+
+
+# ==========================================================================
+# Phase 2 — Support Department Verification
+# ==========================================================================
+
+
+# ---------- P2-1. Publisher Queue: all 8 action types ----------
+class TestPublisherAllTypes:
+    def test_all_eight_action_types_exist(self):
+        from portal.models.publisher import ACTION_TYPES
+        expected = [
+            "Broker Packet Required",
+            "Direct Shipper Packet Required",
+            "Rate Sheet Request",
+            "Rate Confirmation Package Required",
+            "DocuSign Package Ready",
+            "Arrival Notice Draft",
+            "POD/BOL Document Package Draft",
+            "Detention Evidence Draft",
+        ]
+        assert ACTION_TYPES == expected
+
+    def test_create_each_action_type(self, client, sample_load_good):
+        from portal.models import publisher
+        entry = _create_dispatch_entry(client, sample_load_good)
+        for action_type in publisher.ACTION_TYPES:
+            resp = client.post("/api/publisher/create", json={
+                "sandbox_id": entry["id"],
+                "action_type": action_type,
+            })
+            data = resp.get_json()
+            assert data["status"] == "ok", f"Failed for {action_type}"
+            action = data["action"]
+            assert action["action_type"] == action_type
+            assert action["sandbox_id"] == entry["id"]
+            assert action["trigger_reason"]
+            assert action["recommended_product"]
+            assert action["human_approval_required"] is True
+            assert action["status"] == "PENDING"
+
+    def test_publisher_card_shows_all_fields(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
+        resp = client.get("/publisher")
+        html = resp.data.decode("utf-8")
+        assert "Trigger:" in html
+        assert "Recommended Product:" in html
+        assert "Available Data:" in html
+        assert "Missing Data:" in html
+        assert "Human Approval Required:" in html
+
+    def test_broker_packet_manifest_complete(self):
+        from portal.models.publisher import BROKER_PACKET_MANIFEST
+        expected = ["Business Card", "W-9", "Insurance", "Authority", "Rate Sheet", "Terms"]
+        assert BROKER_PACKET_MANIFEST == expected
+
+    def test_direct_shipper_manifest_complete(self):
+        from portal.models.publisher import DIRECT_SHIPPER_MANIFEST
+        expected = ["Business Card", "Capabilities Summary", "Insurance", "Rate Sheet", "Terms"]
+        assert DIRECT_SHIPPER_MANIFEST == expected
+
+    def test_rate_confirmation_manifest_complete(self):
+        from portal.models.publisher import RATE_CONFIRMATION_MANIFEST
+        expected = [
+            "Thank-you Cover Letter",
+            "Rate Confirmation",
+            "Terms",
+            "Supporting Documents",
+            "DocuSign-ready Marker",
+        ]
+        assert RATE_CONFIRMATION_MANIFEST == expected
+
+    def test_publisher_does_not_invent_facts(self, client, sample_load_good):
+        from portal.models import publisher
+        entry = _create_dispatch_entry(client, sample_load_good)
+        action = publisher.create_action(
+            action_type="Broker Packet Required",
+            sandbox_id=entry["id"],
+            trigger_reason="Test",
+            available_data=[],
+            missing_data=["W-9", "Insurance"],
+        )
+        assert action["available_data"] == []
+        assert action["missing_data"] == ["W-9", "Insurance"]
+
+
+# ---------- P2-2. Library Placeholder: all sections ----------
+class TestLibraryAllSections:
+    def test_library_six_sections(self, client):
+        resp = client.get("/library")
+        html = resp.data.decode("utf-8")
+        for section in [
+            "Company Library", "Broker Library", "Customer Library",
+            "Location Intelligence Library", "Operations Library", "Intelligence Library",
+        ]:
+            assert section in html, f"Missing section: {section}"
+
+    def test_library_section_descriptions(self, client):
+        resp = client.get("/library")
+        html = resp.data.decode("utf-8")
+        assert "approved company documents" in html.lower()
+        assert "broker profiles" in html.lower()
+        assert "customer" in html.lower()
+        assert "facility data" in html.lower()
+        assert "operational templates" in html.lower()
+        assert "intelligence products" in html.lower()
+
+    def test_company_library_eight_placeholders(self, client):
+        resp = client.get("/library")
+        html = resp.data.decode("utf-8")
+        for doc in ["W-9", "Insurance", "Authority", "Business Card",
+                     "Rate Sheets", "Terms", "Capabilities", "Compliance Documents"]:
+            assert doc in html, f"Missing company doc: {doc}"
+
+    def test_location_intelligence_thirteen_fields(self, client):
+        resp = client.get("/library")
+        html = resp.data.decode("utf-8")
+        for field in [
+            "Facility Name", "Address", "Gate Notes", "Dock Notes",
+            "Check-in Procedure", "Security Requirements", "Liftgate Requirement",
+            "Pallet Jack Requirement", "Forklift Availability", "Load Time",
+            "Unload Time", "Detention History", "Driver Notes",
+        ]:
+            assert field in html, f"Missing location field: {field}"
+
+    def test_library_is_not_archive(self, client):
+        resp = client.get("/library")
+        html = resp.data.decode("utf-8")
+        assert "approved" in html.lower()
+        assert "reusable" in html.lower()
+
+
+# ---------- P2-3. Archive Placeholder: all sections ----------
+class TestArchiveAllSections:
+    def test_archive_five_sections(self, client):
+        resp = client.get("/archive")
+        html = resp.data.decode("utf-8")
+        for section in [
+            "Load Archive", "Decision Archive", "Publisher Archive",
+            "Location History Archive", "Broker History Archive",
+        ]:
+            assert section in html, f"Missing archive section: {section}"
+
+    def test_archive_candidate_preserves_data(self, client, sample_load_good):
+        from portal.models import sandbox
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
+        archived = sandbox.get(entry["id"])
+        assert archived["status"] == "PASS"
+        assert archived["card_data"]["load_id"] == "LOAD-TEST-001"
+        assert archived["score"] == 92
+        assert archived["source_type"] == "dispatch"
+        assert archived["updated_at"]
+        assert "Archive candidate" in archived["notes"]
+
+    def test_archive_table_shows_score_and_decision(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
+        resp = client.get("/archive")
+        html = resp.data.decode("utf-8")
+        assert "Score" in html
+        assert "Decision" in html
+        assert "Notes" in html
+
+    def test_library_and_archive_are_separate(self, client):
+        lib_resp = client.get("/library")
+        arc_resp = client.get("/archive")
+        lib_html = lib_resp.data.decode("utf-8")
+        arc_html = arc_resp.data.decode("utf-8")
+        assert "approved" in lib_html.lower() and "reusable" in lib_html.lower()
+        assert "completed" in arc_html.lower() and "history" in arc_html.lower()
+
+
+# ---------- P2-4. Conflict Notice: all 11 types ----------
+class TestConflictAllTypes:
+    def test_all_eleven_conflict_types_defined(self):
+        from portal.models.conflict import CONFLICT_TYPES
+        expected = [
+            "missing_broker_email", "missing_source_link", "missing_rate",
+            "missing_pickup_window", "equipment_mismatch", "hard_stop",
+            "delivery_appointment_conflict", "hos_eld_conflict",
+            "publisher_missing_document", "library_missing_asset",
+            "corrupt_sandbox_data",
+        ]
+        assert CONFLICT_TYPES == expected
+
+    def test_three_severities_defined(self):
+        from portal.models.conflict import SEVERITIES
+        assert SEVERITIES == ["info", "warning", "critical"]
+
+    def test_conflict_notice_fields(self, client, sample_load_bad):
+        from portal.models import conflict
+        _create_dispatch_entry(client, sample_load_bad)
+        notices = conflict.get_all()
+        assert len(notices) > 0
+        notice = notices[0]
+        assert "conflict_type" in notice
+        assert "severity" in notice
+        assert "sandbox_id" in notice
+        assert "explanation" in notice
+        assert "recommended_action" in notice
+        assert "human_decision_required" in notice
+        assert "resolved" in notice
+
+    def test_hard_stop_generates_critical_notice(self, client, sample_load_hard_stop):
+        from portal.models import conflict
+        _create_dispatch_entry(client, sample_load_hard_stop)
+        notices = conflict.get_all()
+        hard_stops = [n for n in notices if n["conflict_type"] == "hard_stop"]
+        assert len(hard_stops) == 1
+        assert hard_stops[0]["severity"] == "critical"
+        assert hard_stops[0]["human_decision_required"] is True
+
+    def test_conflict_page_shows_human_decision_required(self, client, sample_load_bad):
+        _create_dispatch_entry(client, sample_load_bad)
+        resp = client.get("/conflicts")
+        html = resp.data.decode("utf-8")
+        assert "Human Decision Required" in html
+
+    def test_library_asset_check(self):
+        from portal.models import conflict
+        notices = conflict.check_library_assets()
+        assert len(notices) == 6
+        for n in notices:
+            assert n["conflict_type"] == "library_missing_asset"
+            assert n["sandbox_id"] == "LIBRARY"
+            assert n["human_decision_required"] is False
+
+
+# ---------- P2-5. Sandbox Workflow: all 11 statuses ----------
+class TestSandboxAllStatuses:
+    def test_all_eleven_statuses_defined(self):
+        from portal.models.sandbox import STATUSES
+        expected = [
+            "OPEN", "INTERESTED", "PURSUE", "WATCH", "PASS",
+            "INQUIRY_DRAFTED", "INQUIRY_SENT_MANUAL", "PUBLISHER_REQUIRED",
+            "BOOKED", "EXPIRED", "CLOSED",
+        ]
+        assert STATUSES == expected
+
+    def test_all_statuses_can_be_set(self):
+        from portal.models import sandbox
+        from portal.models.sandbox import STATUSES
+        entry = sandbox.create_entry(
+            source_type="dispatch", source_id="STATUS-TEST", title="Test", card_data={},
+        )
+        for status in STATUSES:
+            updated = sandbox.update_status(entry["id"], status)
+            assert updated["status"] == status
+
+    def test_status_change_logged_in_events(self):
+        from portal.models import sandbox
+        entry = sandbox.create_entry(
+            source_type="dispatch", source_id="EVENT-TEST", title="Test", card_data={},
+        )
+        sandbox.update_status(entry["id"], "INTERESTED")
+        sandbox.update_status(entry["id"], "PURSUE")
+        updated = sandbox.get(entry["id"])
+        assert len(updated["events"]) == 3
+        assert updated["events"][1]["from"] == "OPEN"
+        assert updated["events"][1]["to"] == "INTERESTED"
+        assert updated["events"][2]["from"] == "INTERESTED"
+        assert updated["events"][2]["to"] == "PURSUE"
+
+    def test_no_autonomous_commitment(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        resp = client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
+        data = resp.get_json()
+        assert data["entry"]["status"] == "PURSUE"
+        assert data["entry"]["inquiry_draft"] is None
+
+
+# ---------- P2-6. Inquiry Draft Verification ----------
+class TestInquiryDraftTemplate:
+    def test_inquiry_template_subject(self):
+        from portal.helpers import INQUIRY_TEMPLATE_SUBJECT
+        assert INQUIRY_TEMPLATE_SUBJECT == "Load Inquiry - Level 1 Transport"
+
+    def test_inquiry_template_body_content(self):
+        from portal.helpers import INQUIRY_TEMPLATE_BODY
+        assert "Mike Zachary" in INQUIRY_TEMPLATE_BODY
+        assert "Level 1 Transport Inc." in INQUIRY_TEMPLATE_BODY
+        assert "This is not acceptance." in INQUIRY_TEMPLATE_BODY
+        assert "This is not commitment." in INQUIRY_TEMPLATE_BODY
+        assert "This is not negotiation." in INQUIRY_TEMPLATE_BODY
+        assert "non-binding early inquiry" in INQUIRY_TEMPLATE_BODY
+
+    def test_inquiry_default_mode_human_review(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        resp = client.post("/api/inquiry/create", json={"sandbox_id": entry["id"]})
+        data = resp.get_json()
+        assert data["draft"]["mode"] == "HUMAN_REVIEW"
+
+    def test_inquiry_draft_not_sent(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        resp = client.post("/api/inquiry/create", json={"sandbox_id": entry["id"]})
+        data = resp.get_json()
+        assert data["draft"]["status"] == "DRAFT_CREATED"
+        assert data["draft"]["status"] != "SENT"
+
+    def test_brief_shows_inquiry_draft(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/inquiry/create", json={"sandbox_id": entry["id"]})
+        resp = client.get(f"/brief/{entry['id']}")
+        html = resp.data.decode("utf-8")
+        assert "Inquiry Draft" in html
+        assert "HUMAN_REVIEW" in html
+        assert "non-binding" in html.lower()
+        assert "Mark as Sent" in html
+
+    def test_brief_event_history_renders(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "interested"})
+        resp = client.get(f"/brief/{entry['id']}")
+        html = resp.data.decode("utf-8")
+        assert "Event History" in html
+        assert "INTERESTED" in html

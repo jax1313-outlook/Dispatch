@@ -204,7 +204,7 @@
             {% for ev in entry.events|reverse %}
             <tr>
                 <td>{{ ev.action }}</td>
-                <td>{% if ev.get('to') %}{{ ev.get('from', '') }} &rarr; {{ ev.to }}{% endif %} {{ ev.get('note', '') }}</td>
+                <td>{% if ev.to is defined %}{{ ev.from|default('') }} &rarr; {{ ev.to }}{% endif %} {{ ev.note|default('') }}</td>
                 <td>{{ ev.timestamp }}</td>
             </tr>
             {% endfor %}
