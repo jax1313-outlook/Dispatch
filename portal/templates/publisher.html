@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Publisher — L2-COS Portal{% endblock %}
+{% block page_title %}Publisher Queue{% endblock %}
+
+{% block body %}
+{% set pending = queue|selectattr('status', 'equalto', 'PENDING')|list %}
+{% set active = queue|selectattr('status', 'in', ['DRAFT', 'READY'])|list %}
+{% set completed = queue|selectattr('status', 'in', ['APPROVED', 'ARCHIVED'])|list %}
+
+{% if pending %}
+<section class="card-section">
+    <h2>Pending ({{ pending|length }})</h2>
+    {% for action in pending %}
+    <div class="publisher-card">
+        <div class="publisher-header">
+            <strong>{{ action.action_type }}</strong>
+            <span class="status-tag">{{ action.status }}</span>
+        </div>
+        <div class="publisher-fields">
+            <div><strong>Related:</strong> {{ action.sandbox_id }}</div>
+            <div><strong>Trigger:</strong> {{ action.trigger_reason }}</div>
+            <div><strong>Recommended Product:</strong> {{ action.recommended_product }}</div>
+            <div><strong>Available Data:</strong> {{ action.available_data|join(', ') if action.available_data else 'None' }}</div>
+            <div><strong>Missing Data:</strong> {{ action.missing_data|join(', ') if action.missing_data else 'None' }}</div>
+            <div><strong>Human Approval Required:</strong> {{ 'Yes' if action.human_approval_required else 'No' }}</div>
+            <div><strong>Created:</strong> {{ action.created_at }}</div>
+        </div>
+        {% if action.manifest %}
+        <div class="manifest">
+            <strong>Manifest:</strong>
+            <ul>
+            {% for item in action.manifest %}
+                <li>{{ item }}
+                    {% if item in action.available_data %}<span class="equip-ok">&#10003; available</span>
+                    {% else %}<span class="equip-bad">missing</span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        <div class="card-actions">
+            <button class="btn btn-sm" onclick="updatePublisherStatus('{{ action.id }}', 'DRAFT')">Generate Draft</button>
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% if active %}
+<section class="card-section">
+    <h2>Active ({{ active|length }})</h2>
+    {% for action in active %}
+    <div class="publisher-card">
+        <div class="publisher-header">
+            <strong>{{ action.action_type }}</strong>
+            <span class="status-tag">{{ action.status }}</span>
+        </div>
+        <div class="publisher-fields">
+            <div><strong>Related:</strong> {{ action.sandbox_id }}</div>
+            <div><strong>Trigger:</strong> {{ action.trigger_reason }}</div>
+        </div>
+        <div class="card-actions">
+            {% if action.status == 'DRAFT' %}
+            <button class="btn btn-sm" onclick="updatePublisherStatus('{{ action.id }}', 'READY')">Mark Ready</button>
+            {% elif action.status == 'READY' %}
+            <button class="btn btn-sm btn-success" onclick="updatePublisherStatus('{{ action.id }}', 'APPROVED')">Mark Approved</button>
+            {% endif %}
+            <button class="btn btn-sm btn-danger" onclick="updatePublisherStatus('{{ action.id }}', 'ARCHIVED')">Archive</button>
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% if completed %}
+<section class="card-section">
+    <h2>Completed ({{ completed|length }})</h2>
+    {% for action in completed %}
+    <div class="publisher-card publisher-completed">
+        <div class="publisher-header">
+            <strong>{{ action.action_type }}</strong>
+            <span class="status-tag">{{ action.status }}</span>
+        </div>
+        <div class="publisher-fields">
+            <div><strong>Related:</strong> {{ action.sandbox_id }}</div>
+            <div><strong>Completed:</strong> {{ action.updated_at }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% if not queue %}
+<div class="empty-state">
+    <p>Publisher queue is empty. Publisher action cards are created when you select Pursue on a load card or manually trigger Publisher from a Brief.</p>
+</div>
+{% endif %}
+{% endblock %}

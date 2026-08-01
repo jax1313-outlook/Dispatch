@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}L2-COS Operations Portal{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2>L2-COS Portal</h2>
+            <span class="sidebar-subtitle">Operations Cockpit</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('pages.home') }}" class="{% if request.endpoint == 'pages.home' %}active{% endif %}">Home</a></li>
+            <li><a href="{{ url_for('pages.sam') }}" class="{% if request.endpoint == 'pages.sam' %}active{% endif %}">SAM</a></li>
+            <li><a href="{{ url_for('pages.dispatch') }}" class="{% if request.endpoint == 'pages.dispatch' %}active{% endif %}">Dispatch</a></li>
+            <li><a href="{{ url_for('pages.publisher_view') }}" class="{% if request.endpoint == 'pages.publisher_view' %}active{% endif %}">Publisher</a></li>
+            <li><a href="{{ url_for('pages.library') }}" class="{% if request.endpoint == 'pages.library' %}active{% endif %}">Library</a></li>
+            <li><a href="{{ url_for('pages.archive_view') }}" class="{% if request.endpoint == 'pages.archive_view' %}active{% endif %}">Archive</a></li>
+            <li><a href="{{ url_for('pages.conflicts') }}" class="{% if request.endpoint == 'pages.conflicts' %}active{% endif %}">Conflict Notices</a></li>
+            <li><a href="{{ url_for('pages.settings') }}" class="{% if request.endpoint == 'pages.settings' %}active{% endif %}">Settings</a></li>
+        </ul>
+    </nav>
+
+    <main class="content">
+        <header class="page-header">
+            <h1>{% block page_title %}Portal{% endblock %}</h1>
+            {% block page_actions %}{% endblock %}
+        </header>
+        <div class="page-body">
+            {% block body %}{% endblock %}
+        </div>
+    </main>
+
+    <script>
+    function apiPost(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        }).then(r => r.json());
+    }
+
+    function cardAction(sandboxId, action) {
+        apiPost('/api/action', {sandbox_id: sandboxId, action: action})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function createInquiry(sandboxId) {
+        apiPost('/api/inquiry/create', {sandbox_id: sandboxId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                if (data.status === 'BLOCKED_MISSING_EMAIL' || data.status === 'BLOCKED_HARD_STOP' || data.status === 'NOT_READY') {
+                    alert(data.reason);
+                    return;
+                }
+                location.reload();
+            });
+    }
+
+    function markInquirySent(sandboxId) {
+        apiPost('/api/inquiry/mark-sent', {sandbox_id: sandboxId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function triggerPublisher(sandboxId, actionType) {
+        apiPost('/api/publisher/create', {sandbox_id: sandboxId, action_type: actionType})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function updatePublisherStatus(actionId, status) {
+        apiPost('/api/publisher/update', {action_id: actionId, status: status})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function resolveConflict(noticeId) {
+        apiPost('/api/conflict/resolve', {notice_id: noticeId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+    </script>
+</body>
+</html>

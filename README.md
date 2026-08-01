@@ -24,10 +24,23 @@ python -m cin_lite.run --action approve_proposal   # non-interactive demo
 python -m cin_lite.run                              # interactive
 ```
 
+## L2-COS Operations Portal v1
+
+Local-first operations cockpit combining SAM/government contract and
+Dispatch/load board workflows into one unified portal.
+
+```bash
+pip install -r portal/requirements.txt
+python portal/app.py
+# Opens at http://127.0.0.1:8080
+```
+
+On Windows/PowerShell: `.\run_portal.bat`
+
 ## Tests
 
 ```bash
-pip install pytest pytest-cov
+pip install pytest pytest-cov flask
 python -m pytest --cov=cin_lite --cov-report=term-missing --cov-fail-under=90
 ```
 

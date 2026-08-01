@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Conflict Notices — L2-COS Portal{% endblock %}
+{% block page_title %}Conflict Notices{% endblock %}
+
+{% block body %}
+<p class="section-note">Visible errors are preferred over silent failures. Conflict Notices flag missing data, mismatches, and issues requiring human attention.</p>
+
+{% if unresolved %}
+<section class="card-section">
+    <h2>Unresolved ({{ unresolved|length }})</h2>
+    {% for cn in unresolved %}
+    <div class="conflict-card severity-{{ cn.severity }}">
+        <div class="conflict-header">
+            <strong>{{ cn.conflict_type|replace('_', ' ')|title }}</strong>
+            <span class="severity-tag severity-{{ cn.severity }}">{{ cn.severity }}</span>
+            {% if cn.human_decision_required %}
+            <span class="decision-required">Human Decision Required</span>
+            {% endif %}
+        </div>
+        <div class="conflict-fields">
+            <div><strong>Affected:</strong> {{ cn.sandbox_id }}</div>
+            <div><strong>Explanation:</strong> {{ cn.explanation }}</div>
+            <div><strong>Recommended Action:</strong> {{ cn.recommended_action }}</div>
+            <div><strong>Created:</strong> {{ cn.created_at }}</div>
+        </div>
+        <div class="card-actions">
+            <button class="btn btn-sm btn-success" onclick="resolveConflict('{{ cn.id }}')">Resolve</button>
+            {% if cn.sandbox_id and cn.sandbox_id != 'LIBRARY' %}
+            <a href="{{ url_for('pages.brief', sandbox_id=cn.sandbox_id) }}" class="btn btn-sm">View Card</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% if resolved %}
+<section class="card-section">
+    <h2>Resolved ({{ resolved|length }})</h2>
+    {% for cn in resolved %}
+    <div class="conflict-card conflict-resolved">
+        <div class="conflict-header">
+            <strong>{{ cn.conflict_type|replace('_', ' ')|title }}</strong>
+            <span class="resolved-tag">Resolved</span>
+        </div>
+        <p>{{ cn.explanation }}</p>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% if not unresolved and not resolved %}
+<div class="empty-state">
+    <p>No conflict notices. Notices are generated when loads have missing data, equipment mismatches, or other issues.</p>
+</div>
+{% endif %}
+{% endblock %}

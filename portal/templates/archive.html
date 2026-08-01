@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Archive — L2-COS Portal{% endblock %}
+{% block page_title %}Archive{% endblock %}
+
+{% block body %}
+<p class="section-note">Archive stores completed records, decisions, evidence, and audit bundles. Archive is the system of record for completed history.</p>
+
+{% for section in sections %}
+<section class="card-section">
+    <h2>{{ section.name }}</h2>
+    <p class="section-desc">{{ section.description }}</p>
+    {% set section_items = archived|selectattr('source_type', 'defined')|list %}
+    {% if not archived %}
+    <div class="empty-state-sm">
+        <p>No archived records yet. Records move here when marked Pass, Closed, Expired, or Booked.</p>
+    </div>
+    {% endif %}
+</section>
+{% endfor %}
+
+{% if archived %}
+<section class="card-section">
+    <h2>Archive Candidates ({{ archived|length }})</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Source</th>
+                <th>Score</th>
+                <th>Status</th>
+                <th>Decision</th>
+                <th>Notes</th>
+                <th>Updated</th>
+                <th>Brief</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for entry in archived %}
+            <tr>
+                <td>{{ entry.id }}</td>
+                <td>{{ entry.title }}</td>
+                <td>{{ entry.source_type }}</td>
+                <td>{{ entry.score if entry.score is not none else 'Unknown' }}</td>
+                <td><span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span></td>
+                <td>{{ entry.decision.action|default('—', true)|replace('_', ' ')|title if entry.decision else '—' }}</td>
+                <td>{{ entry.notes[:60] ~ '...' if entry.notes and entry.notes|length > 60 else entry.notes or '—' }}</td>
+                <td>{{ entry.updated_at }}</td>
+                <td><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">View</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Settings — L2-COS Portal{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block body %}
+<section class="card-section">
+    <h2>Portal Configuration</h2>
+    <table class="data-table">
+        <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
+        <tbody>
+            <tr><td>Host</td><td>{{ config.HOST }}</td><td>PORTAL_HOST</td></tr>
+            <tr><td>Port</td><td>{{ config.PORT }}</td><td>PORTAL_PORT</td></tr>
+            <tr><td>Data Directory</td><td>{{ config.DATA_DIR }}</td><td>PORTAL_DATA_DIR</td></tr>
+            <tr><td>Inquiry Threshold</td><td>{{ config.INQUIRY_THRESHOLD }}</td><td>PORTAL_INQUIRY_THRESHOLD</td></tr>
+            <tr><td>Inquiry Mode</td><td>{{ config.INQUIRY_MODE }}</td><td>PORTAL_INQUIRY_MODE</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
+    <h2>Integration Status</h2>
+    <table class="data-table">
+        <thead><tr><th>Integration</th><th>Status</th></tr></thead>
+        <tbody>
+            <tr><td>SAM.gov API</td><td>{{ 'Configured' if config.SECRET_KEY != 'dev-portal-key-change-in-production' else 'Not configured (using sample data)' }}</td></tr>
+            <tr><td>SMTP Email</td><td>Not configured (drafts only)</td></tr>
+            <tr><td>Motive / Samsara</td><td>Not connected (future)</td></tr>
+            <tr><td>QuickBooks</td><td>Not connected (future)</td></tr>
+            <tr><td>DocuSign</td><td>Not connected (future)</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
+    <h2>Doctrine Reference</h2>
+    <ul>
+        <li><strong>Portal</strong> displays and controls workflow. Portal is not the system of record.</li>
+        <li><strong>Archive</strong> is the system of record for completed history.</li>
+        <li><strong>Library</strong> stores approved current reusable knowledge.</li>
+        <li><strong>Publisher</strong> produces documents from approved inputs only.</li>
+        <li><strong>Human</strong> decides everything. AI decides nothing.</li>
+        <li><strong>Software</strong> automates administration.</li>
+    </ul>
+</section>
+{% endblock %}

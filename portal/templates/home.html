@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Home — L2-COS Portal{% endblock %}
+{% block page_title %}Home{% endblock %}
+
+{% block body %}
+<div class="dashboard-summary">
+    <div class="summary-card">
+        <span class="summary-number">{{ (sam_cards|length) + (dispatch_cards|length) }}</span>
+        <span class="summary-label">Active Cards</span>
+    </div>
+    <div class="summary-card summary-warning">
+        <span class="summary-number">{{ conflict_count }}</span>
+        <span class="summary-label">Conflict Notices</span>
+    </div>
+    <div class="summary-card summary-info">
+        <span class="summary-number">{{ publisher_count }}</span>
+        <span class="summary-label">Publisher Queue</span>
+    </div>
+</div>
+
+{% if dispatch_cards %}
+<section class="card-section">
+    <h2>Dispatch — Top Loads</h2>
+    <div class="card-grid">
+    {% for entry in dispatch_cards %}
+        {% set vis = card_visual(entry.score) %}
+        <div class="card card-dispatch">
+            <div class="card-header {{ vis.css }}">
+                <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
+                <span class="card-score">Score {{ format_score(entry.score) }}</span>
+            </div>
+            <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
+            <div class="card-meta">
+                <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+            </div>
+            <div class="card-fields">
+                {% set cd = entry.card_data %}
+                <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
+                <div><strong>Dest:</strong> {{ cd.destination or 'Unknown' }}</div>
+                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}</div>
+                <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
+            </div>
+            <div class="card-actions">
+                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Brief</a>
+                <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
+                <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if sam_cards %}
+<section class="card-section">
+    <h2>SAM — Top Opportunities</h2>
+    <div class="card-grid">
+    {% for entry in sam_cards %}
+        {% set vis = card_visual(entry.score, entry.decision) %}
+        <div class="card card-sam">
+            <div class="card-header {{ vis.css }}">
+                <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
+                {% if entry.decision and entry.decision.priority %}
+                <span class="card-score">Priority: {{ entry.decision.priority }}</span>
+                {% endif %}
+            </div>
+            <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
+            <div class="card-meta">
+                <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+            </div>
+            <div class="card-fields">
+                {% set cd = entry.card_data %}
+                <div><strong>Agency:</strong> {{ cd.agency or 'Unknown' }}</div>
+                <div><strong>Sol #:</strong> {{ cd.solicitation_number or 'Unknown' }}</div>
+            </div>
+            <div class="card-actions">
+                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Brief</a>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if not sam_cards and not dispatch_cards %}
+<div class="empty-state">
+    <p>No active cards. Visit <a href="{{ url_for('pages.sam') }}">SAM</a> or <a href="{{ url_for('pages.dispatch') }}">Dispatch</a> to load data.</p>
+</div>
+{% endif %}
+{% endblock %}
