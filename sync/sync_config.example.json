@@ -1,0 +1,35 @@
+{
+  "vps": {
+    "hostname": "YOUR_VPS_IP_OR_HOSTNAME",
+    "port": 22,
+    "username": "YOUR_VPS_USERNAME",
+    "ssh_key_path": "C:\\Users\\YourUser\\.ssh\\id_rsa",
+    "remote_base_path": "/approved_records",
+    "connection_timeout": 30
+  },
+  "local": {
+    "primary_path": "C:\\Documents\\Level 1 build\\Portal\\cin-hybrid-main\\sync_data",
+    "backup_path": "D:\\Level 1\\Level 1 Dispatch\\sync_data"
+  },
+  "sync": {
+    "retry_count": 3,
+    "retry_backoff": [5, 15, 30],
+    "approved_statuses": ["APPROVED", "BOOKED", "CLOSED", "PASS", "EXPIRED"],
+    "log_retention_days": 90
+  },
+  "data_types": [
+    "loads",
+    "brokers",
+    "customers",
+    "library",
+    "archive",
+    "publisher",
+    "locations",
+    "intelligence/location",
+    "intelligence/broker",
+    "intelligence/customer",
+    "intelligence/route",
+    "intelligence/position",
+    "intelligence/market"
+  ]
+}
