@@ -7,46 +7,63 @@
 
 {% for section in sections %}
 <section class="card-section">
-    <h2>{{ section.name }}</h2>
-    <p class="section-desc">{{ section.description }}</p>
-    {% set section_items = archived|selectattr('source_type', 'defined')|list %}
-    {% if not archived %}
+    <h2>{{ section.name }} ({{ section.records|length }})</h2>
+    {% if section.records %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Decision</th>
+                <th>Archived</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for record in section.records %}
+            <tr>
+                <td>{{ record.id }}</td>
+                <td>{{ record.title }}</td>
+                <td>{{ record.decision_summary or '—' }}</td>
+                <td>{{ record.archived_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
     <div class="empty-state-sm">
-        <p>No archived records yet. Records move here when marked Pass, Closed, Expired, or Booked.</p>
+        <p>No archived records in this section yet.</p>
     </div>
     {% endif %}
 </section>
 {% endfor %}
 
-{% if archived %}
+{% if sandbox_archived %}
 <section class="card-section">
-    <h2>Archive Candidates ({{ archived|length }})</h2>
+    <h2>Sandbox — Archive Candidates ({{ sandbox_archived|length }})</h2>
+    <p class="section-desc">Sandbox entries with terminal status that can be archived.</p>
     <table class="data-table">
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Title</th>
                 <th>Source</th>
-                <th>Score</th>
                 <th>Status</th>
-                <th>Decision</th>
-                <th>Notes</th>
                 <th>Updated</th>
-                <th>Brief</th>
+                <th>Action</th>
             </tr>
         </thead>
         <tbody>
-        {% for entry in archived %}
+        {% for entry in sandbox_archived %}
             <tr>
                 <td>{{ entry.id }}</td>
                 <td>{{ entry.title }}</td>
                 <td>{{ entry.source_type }}</td>
-                <td>{{ entry.score if entry.score is not none else 'Unknown' }}</td>
                 <td><span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span></td>
-                <td>{{ entry.decision.action|default('—', true)|replace('_', ' ')|title if entry.decision else '—' }}</td>
-                <td>{{ entry.notes[:60] ~ '...' if entry.notes and entry.notes|length > 60 else entry.notes or '—' }}</td>
                 <td>{{ entry.updated_at }}</td>
-                <td><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">View</a></td>
+                <td>
+                    <button class="btn btn-sm" onclick="archiveEntry('{{ entry.id }}')">Archive</button>
+                    <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Brief</a>
+                </td>
             </tr>
         {% endfor %}
         </tbody>

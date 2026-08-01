@@ -87,6 +87,8 @@ body {
 }
 .summary-card.summary-warning { border-left: 4px solid #e74c3c; }
 .summary-card.summary-info { border-left: 4px solid #9b59b6; }
+.summary-card.summary-archive { border-left: 4px solid #7f8c8d; }
+.summary-card.summary-intel { border-left: 4px solid #2980b9; }
 .summary-number { display: block; font-size: 28px; font-weight: 700; color: #2c3e50; }
 .summary-label { font-size: 12px; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; }
 
@@ -356,7 +358,7 @@ body {
 /* ---------- Library ---------- */
 .library-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 8px;
 }
 .library-item {
@@ -369,7 +371,45 @@ body {
     gap: 8px;
 }
 .library-icon { font-size: 18px; }
-.library-name { flex: 1; font-size: 13px; font-weight: 500; }
+.library-details { flex: 1; display: flex; flex-direction: column; }
+.library-name { font-size: 13px; font-weight: 500; }
+.library-meta { font-size: 11px; color: #999; }
+.missing-assets { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.missing-assets strong { font-size: 13px; margin-right: 4px; }
+.section-actions { margin-top: 10px; }
+
+/* ---------- Intelligence ---------- */
+.intel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 10px;
+}
+.intel-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-left: 3px solid #2980b9;
+    border-radius: 4px;
+    padding: 12px 14px;
+}
+.intel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.intel-header strong { font-size: 14px; }
+.intel-id { font-size: 11px; color: #999; }
+.intel-content { font-size: 13px; color: #555; margin-bottom: 6px; }
+.intel-meta { font-size: 11px; color: #999; display: flex; gap: 12px; }
+
+/* ---------- Operational Considerations ---------- */
+.card-considerations {
+    padding: 4px 16px;
+    font-size: 11px;
+    color: #666;
+    background: #f8f9fa;
+    border-top: 1px solid #f0f0f0;
+}
 
 /* ---------- Tables ---------- */
 .data-table {

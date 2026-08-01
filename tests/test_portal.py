@@ -514,12 +514,20 @@ class TestInquiryBlockedMissingEmail:
 
 # ---------- 15. Archive candidate created on PASS ----------
 class TestArchiveCandidate:
-    def test_pass_creates_archive_note(self, client, sample_load_good):
+    def test_pass_creates_archive_record(self, client, sample_load_good):
+        from portal.models import archive as arc_model
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
+        records = arc_model.get_section("load")
+        assert len(records) >= 1
+        assert records[0]["source_id"] == entry["id"]
+
+    def test_pass_adds_archived_note(self, client, sample_load_good):
         from portal.models import sandbox
         entry = _create_dispatch_entry(client, sample_load_good)
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
         updated = sandbox.get(entry["id"])
-        assert "Archive candidate" in updated["notes"]
+        assert "Archived" in updated["notes"]
 
     def test_archive_page_shows_passed(self, client, sample_load_good):
         entry = _create_dispatch_entry(client, sample_load_good)
@@ -771,16 +779,15 @@ class TestLibraryAllSections:
                      "Rate Sheets", "Terms", "Capabilities", "Compliance Documents"]:
             assert doc in html, f"Missing company doc: {doc}"
 
-    def test_location_intelligence_thirteen_fields(self, client):
-        resp = client.get("/library")
-        html = resp.data.decode("utf-8")
-        for field in [
+    def test_location_intelligence_fields_defined(self):
+        from portal.models.library import LOCATION_FIELDS
+        expected = [
             "Facility Name", "Address", "Gate Notes", "Dock Notes",
             "Check-in Procedure", "Security Requirements", "Liftgate Requirement",
             "Pallet Jack Requirement", "Forklift Availability", "Load Time",
             "Unload Time", "Detention History", "Driver Notes",
-        ]:
-            assert field in html, f"Missing location field: {field}"
+        ]
+        assert LOCATION_FIELDS == expected
 
     def test_library_is_not_archive(self, client):
         resp = client.get("/library")
@@ -801,25 +808,24 @@ class TestArchiveAllSections:
             assert section in html, f"Missing archive section: {section}"
 
     def test_archive_candidate_preserves_data(self, client, sample_load_good):
-        from portal.models import sandbox
+        from portal.models import archive as arc_model
         entry = _create_dispatch_entry(client, sample_load_good)
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
-        archived = sandbox.get(entry["id"])
-        assert archived["status"] == "PASS"
-        assert archived["card_data"]["load_id"] == "LOAD-TEST-001"
-        assert archived["score"] == 92
-        assert archived["source_type"] == "dispatch"
-        assert archived["updated_at"]
-        assert "Archive candidate" in archived["notes"]
+        records = arc_model.get_section("load")
+        assert len(records) >= 1
+        record = records[0]
+        assert record["source_id"] == entry["id"]
+        assert record["record_data"]["score"] == 92
+        assert record["record_data"]["source_type"] == "dispatch"
 
-    def test_archive_table_shows_score_and_decision(self, client, sample_load_good):
+    def test_archive_table_shows_columns(self, client, sample_load_good):
         entry = _create_dispatch_entry(client, sample_load_good)
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
         resp = client.get("/archive")
         html = resp.data.decode("utf-8")
-        assert "Score" in html
+        assert "Title" in html
         assert "Decision" in html
-        assert "Notes" in html
+        assert "Archived" in html
 
     def test_library_and_archive_are_separate(self, client):
         lib_resp = client.get("/library")
@@ -974,3 +980,429 @@ class TestInquiryDraftTemplate:
         html = resp.data.decode("utf-8")
         assert "Event History" in html
         assert "INTERESTED" in html
+
+
+# ==========================================================================
+# Phase 3 — Library / Archive / Intelligence Model and API Tests
+# ==========================================================================
+
+
+# ---------- Library Model ----------
+class TestLibraryModel:
+    def test_add_record(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "W-9", content="uploaded")
+        assert record["id"].startswith("LIB-COM-")
+        assert record["name"] == "W-9"
+        assert record["section"] == "company"
+        assert record["status"] == "approved"
+        assert record["content"] == "uploaded"
+
+    def test_get_all_sections(self):
+        from portal.models import library as lib_model
+        lib_model.add_record("company", "W-9")
+        lib_model.add_record("broker", "Test Broker")
+        data = lib_model.get_all()
+        assert "company" in data
+        assert "broker" in data
+        assert len(data["company"]) >= 1
+        assert len(data["broker"]) >= 1
+
+    def test_get_section(self):
+        from portal.models import library as lib_model
+        lib_model.add_record("customer", "Acme Corp")
+        records = lib_model.get_section("customer")
+        assert len(records) >= 1
+        assert records[0]["name"] == "Acme Corp"
+
+    def test_update_record(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Insurance")
+        updated = lib_model.update_record(record["id"], name="Insurance Certificate")
+        assert updated["name"] == "Insurance Certificate"
+        assert updated["updated_at"] >= record["created_at"]
+
+    def test_delete_record(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("operations", "Checklist")
+        deleted = lib_model.delete_record(record["id"])
+        assert deleted["name"] == "Checklist"
+        remaining = lib_model.get_section("operations")
+        assert all(r["id"] != record["id"] for r in remaining)
+
+    def test_delete_nonexistent_raises(self):
+        from portal.models import library as lib_model
+        with pytest.raises(KeyError):
+            lib_model.delete_record("LIB-NONEXISTENT")
+
+    def test_invalid_section_raises(self):
+        from portal.models import library as lib_model
+        with pytest.raises(ValueError):
+            lib_model.add_record("invalid_section", "test")
+
+    def test_available_and_missing_company_assets(self):
+        from portal.models import library as lib_model
+        lib_model.add_record("company", "W-9")
+        lib_model.add_record("company", "Insurance")
+        available = lib_model.get_available_company_assets()
+        missing = lib_model.get_missing_company_assets()
+        assert "W-9" in available
+        assert "Insurance" in available
+        assert "W-9" not in missing
+        assert "Insurance" not in missing
+        assert "Authority" in missing
+
+    def test_six_sections_defined(self):
+        from portal.models.library import SECTIONS
+        assert len(SECTIONS) == 6
+        assert "company" in SECTIONS
+        assert "broker" in SECTIONS
+        assert "customer" in SECTIONS
+        assert "location_intelligence" in SECTIONS
+        assert "operations" in SECTIONS
+        assert "intelligence" in SECTIONS
+
+
+# ---------- Archive Model ----------
+class TestArchiveModel:
+    def test_create_record(self):
+        from portal.models import archive as arc_model
+        record = arc_model.create_record(
+            section="load",
+            source_id="TEST-001",
+            title="Test Load",
+            record_data={"origin": "Jacksonville"},
+            decision_summary="PASS — test",
+        )
+        assert record["id"].startswith("ARC-LOA-")
+        assert record["section"] == "load"
+        assert record["title"] == "Test Load"
+        assert record["decision_summary"] == "PASS — test"
+
+    def test_dedup_by_source_id(self):
+        from portal.models import archive as arc_model
+        r1 = arc_model.create_record("load", "DEDUP-001", "Load A", {})
+        r2 = arc_model.create_record("load", "DEDUP-001", "Load A Updated", {})
+        assert r1["id"] == r2["id"]
+        records = arc_model.get_section("load")
+        dedup = [r for r in records if r["source_id"] == "DEDUP-001"]
+        assert len(dedup) == 1
+
+    def test_archive_from_sandbox_dispatch(self):
+        from portal.models import archive as arc_model
+        entry = {
+            "id": "SBX-DISPATCH-TEST",
+            "source_type": "dispatch",
+            "source_id": "LOAD-100",
+            "title": "Test Load",
+            "status": "PASS",
+            "card_data": {"origin": "Tampa"},
+            "score": 85,
+            "decision": {},
+            "flags": [],
+            "intelligence": {},
+            "events": [],
+            "notes": "",
+            "inquiry_draft": None,
+            "publisher_actions": [],
+        }
+        record = arc_model.archive_from_sandbox(entry)
+        assert record["section"] == "load"
+        assert record["record_data"]["source_type"] == "dispatch"
+
+    def test_archive_from_sandbox_sam(self):
+        from portal.models import archive as arc_model
+        entry = {
+            "id": "SBX-SAM-TEST",
+            "source_type": "sam",
+            "source_id": "SOL-100",
+            "title": "Test SAM",
+            "status": "PASS",
+            "card_data": {},
+            "decision": {"action": "reject", "reason": "Not eligible"},
+            "flags": [],
+            "intelligence": {},
+            "events": [],
+            "notes": "",
+            "inquiry_draft": None,
+            "publisher_actions": [],
+        }
+        record = arc_model.archive_from_sandbox(entry)
+        assert record["section"] == "decision"
+
+    def test_archive_publisher_action(self):
+        from portal.models import archive as arc_model
+        action = {
+            "id": "PUB-001",
+            "action_type": "Broker Packet Required",
+            "sandbox_id": "SBX-TEST",
+            "status": "ARCHIVED",
+        }
+        record = arc_model.archive_publisher_action(action)
+        assert record["section"] == "publisher"
+        assert record["source_id"] == "PUB-001"
+
+    def test_total_count(self):
+        from portal.models import archive as arc_model
+        arc_model.create_record("load", "COUNT-1", "A", {})
+        arc_model.create_record("decision", "COUNT-2", "B", {})
+        assert arc_model.total_count() >= 2
+
+    def test_invalid_section_raises(self):
+        from portal.models import archive as arc_model
+        with pytest.raises(ValueError):
+            arc_model.create_record("invalid", "X", "X", {})
+
+    def test_five_sections_defined(self):
+        from portal.models.archive import ARCHIVE_SECTIONS, SECTION_LABELS
+        assert len(ARCHIVE_SECTIONS) == 5
+        assert len(SECTION_LABELS) == 5
+        for s in ARCHIVE_SECTIONS:
+            assert s in SECTION_LABELS
+
+
+# ---------- Intelligence Model ----------
+class TestIntelligenceModel:
+    def test_create_record(self):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record(
+            intel_type="broker",
+            subject="Test Broker",
+            content="Reliable partner",
+            source="manual",
+        )
+        assert record["id"].startswith("INT-BRO-")
+        assert record["subject"] == "Test Broker"
+        assert record["content"] == "Reliable partner"
+        assert record["source"] == "manual"
+
+    def test_get_by_type(self):
+        from portal.models import intelligence as intel_model
+        intel_model.create_record("location", "Port of Savannah", "Busy area")
+        records = intel_model.get_by_type("location")
+        assert len(records) >= 1
+        assert records[0]["subject"] == "Port of Savannah"
+
+    def test_update_record(self):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("market", "Fuel Prices", "Rising")
+        updated = intel_model.update_record(record["id"], content="Stable")
+        assert updated["content"] == "Stable"
+        assert updated["updated_at"] >= record["created_at"]
+
+    def test_update_nonexistent_raises(self):
+        from portal.models import intelligence as intel_model
+        with pytest.raises(KeyError):
+            intel_model.update_record("INT-NONEXISTENT", content="test")
+
+    def test_invalid_type_raises(self):
+        from portal.models import intelligence as intel_model
+        with pytest.raises(ValueError):
+            intel_model.create_record("invalid_type", "Test", "Content")
+
+    def test_total_count(self):
+        from portal.models import intelligence as intel_model
+        intel_model.create_record("broker", "A", "x")
+        intel_model.create_record("customer", "B", "y")
+        assert intel_model.total_count() >= 2
+
+    def test_six_types_defined(self):
+        from portal.models.intelligence import INTEL_TYPES, INTEL_LABELS
+        assert len(INTEL_TYPES) == 6
+        assert len(INTEL_LABELS) == 6
+        for t in INTEL_TYPES:
+            assert t in INTEL_LABELS
+
+
+# ---------- Library API ----------
+class TestLibraryAPI:
+    def test_add_record(self, client):
+        resp = client.post("/api/library/add", json={
+            "section": "company",
+            "name": "W-9",
+            "content": "uploaded",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["record"]["name"] == "W-9"
+
+    def test_add_invalid_section(self, client):
+        resp = client.post("/api/library/add", json={
+            "section": "invalid",
+            "name": "test",
+        })
+        assert resp.status_code == 400
+
+    def test_add_missing_fields(self, client):
+        resp = client.post("/api/library/add", json={"section": "company"})
+        assert resp.status_code == 400
+
+    def test_update_record(self, client):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("broker", "Test Broker")
+        resp = client.post("/api/library/update", json={
+            "record_id": record["id"],
+            "name": "Updated Broker",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["record"]["name"] == "Updated Broker"
+
+    def test_update_nonexistent(self, client):
+        resp = client.post("/api/library/update", json={
+            "record_id": "LIB-NONEXISTENT",
+        })
+        assert resp.status_code == 404
+
+    def test_delete_record(self, client):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("operations", "To Delete")
+        resp = client.post("/api/library/delete", json={
+            "record_id": record["id"],
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+
+    def test_delete_nonexistent(self, client):
+        resp = client.post("/api/library/delete", json={
+            "record_id": "LIB-NONEXISTENT",
+        })
+        assert resp.status_code == 404
+
+
+# ---------- Archive API ----------
+class TestArchiveAPI:
+    def test_archive_sandbox_entry(self, client, sample_load_good):
+        entry = _create_dispatch_entry(client, sample_load_good)
+        resp = client.post("/api/archive/create", json={
+            "sandbox_id": entry["id"],
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["record"]["source_id"] == entry["id"]
+
+    def test_archive_missing_sandbox(self, client):
+        resp = client.post("/api/archive/create", json={
+            "sandbox_id": "SBX-NONEXISTENT",
+        })
+        assert resp.status_code == 404
+
+    def test_archive_missing_sandbox_id(self, client):
+        resp = client.post("/api/archive/create", json={})
+        assert resp.status_code == 400
+
+    def test_publisher_archive_on_status_change(self, client, sample_load_good):
+        from portal.models import publisher, archive as arc_model
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
+        queue = publisher.get_queue()
+        action_id = queue[0]["id"]
+        client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "ARCHIVED",
+        })
+        pub_archive = arc_model.get_section("publisher")
+        assert len(pub_archive) >= 1
+
+
+# ---------- Intelligence API ----------
+class TestIntelligenceAPI:
+    def test_add_record(self, client):
+        resp = client.post("/api/intelligence/add", json={
+            "intel_type": "broker",
+            "subject": "Test Broker",
+            "content": "Good broker",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["record"]["subject"] == "Test Broker"
+
+    def test_add_invalid_type(self, client):
+        resp = client.post("/api/intelligence/add", json={
+            "intel_type": "invalid",
+            "subject": "Test",
+        })
+        assert resp.status_code == 400
+
+    def test_add_missing_fields(self, client):
+        resp = client.post("/api/intelligence/add", json={
+            "intel_type": "broker",
+        })
+        assert resp.status_code == 400
+
+    def test_update_record(self, client):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("location", "Port A", "Good docks")
+        resp = client.post("/api/intelligence/update", json={
+            "record_id": record["id"],
+            "content": "Updated docks",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["record"]["content"] == "Updated docks"
+
+    def test_update_nonexistent(self, client):
+        resp = client.post("/api/intelligence/update", json={
+            "record_id": "INT-NONEXISTENT",
+        })
+        assert resp.status_code == 404
+
+    def test_inquiry_creates_broker_intel(self, client, sample_load_good):
+        from portal.models import intelligence as intel_model
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/inquiry/create", json={"sandbox_id": entry["id"]})
+        broker_intel = intel_model.get_by_type("broker")
+        broker_names = [r["subject"] for r in broker_intel]
+        assert "Southeast Freight Partners" in broker_names
+
+
+# ---------- New Page Rendering ----------
+class TestNewPages:
+    def test_intelligence_page_renders(self, client):
+        resp = client.get("/intelligence")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "Operational Intelligence" in html
+        assert "Location Intelligence" in html
+        assert "Broker Intelligence" in html
+
+    def test_intelligence_page_shows_records(self, client):
+        from portal.models import intelligence as intel_model
+        intel_model.create_record("broker", "Test Broker Intel", "Content here")
+        resp = client.get("/intelligence")
+        html = resp.data.decode("utf-8")
+        assert "Test Broker Intel" in html
+
+    def test_home_shows_archive_count(self, client):
+        resp = client.get("/home")
+        html = resp.data.decode("utf-8")
+        assert "Archived Records" in html
+
+    def test_home_shows_intel_count(self, client):
+        resp = client.get("/home")
+        html = resp.data.decode("utf-8")
+        assert "Intelligence Records" in html
+
+    def test_library_add_button(self, client):
+        resp = client.get("/library")
+        html = resp.data.decode("utf-8")
+        assert "Add Record" in html
+
+    def test_library_missing_assets_shown(self, client):
+        resp = client.get("/library")
+        html = resp.data.decode("utf-8")
+        assert "Missing Company Assets" in html
+        assert "W-9" in html
+
+    def test_archive_sections_rendered(self, client):
+        resp = client.get("/archive")
+        html = resp.data.decode("utf-8")
+        assert "Load Archive" in html
+        assert "Decision Archive" in html
+        assert "Publisher Archive" in html
+
+    def test_dispatch_operational_considerations(self, client, sample_load_good):
+        _create_dispatch_entry(client, sample_load_good)
+        resp = client.get("/dispatch")
+        html = resp.data.decode("utf-8")
+        assert "Operational Considerations" in html
