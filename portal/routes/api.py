@@ -1,4 +1,4 @@
-"""JSON API routes — card actions, publisher, inquiry, conflicts."""
+"""JSON API routes — card actions, publisher, inquiry, conflicts, library, archive, intelligence."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from flask import Blueprint, jsonify, request
 
 from portal import helpers
 from portal.models import sandbox, publisher, conflict
+from portal.models import library as lib_model
+from portal.models import archive as arc_model
+from portal.models import intelligence as intel_model
 
 api_bp = Blueprint("api", __name__)
 
@@ -41,16 +44,22 @@ def card_action():
     updated = sandbox.update_status(sandbox_id, new_status)
 
     if action == "PURSUE":
+        available = lib_model.get_available_company_assets()
+        missing = lib_model.get_missing_company_assets()
         publisher.create_action(
             action_type="Broker Packet Required",
             sandbox_id=sandbox_id,
             trigger_reason=f"User selected PURSUE for {entry.get('title', sandbox_id)}",
-            available_data=_available_library_docs(),
-            missing_data=_missing_library_docs(),
+            available_data=available,
+            missing_data=missing,
         )
 
     if action == "PASS":
-        _create_archive_candidate(entry)
+        arc_model.archive_from_sandbox(entry)
+        sandbox.add_note(
+            entry["id"],
+            f"Archived — status PASS at {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}",
+        )
 
     return jsonify({"status": "ok", "entry": updated})
 
@@ -68,12 +77,15 @@ def create_publisher_action():
     if not entry:
         return jsonify({"error": "Sandbox entry not found"}), 404
 
+    available = lib_model.get_available_company_assets()
+    missing = lib_model.get_missing_company_assets()
+
     action = publisher.create_action(
         action_type=action_type,
         sandbox_id=sandbox_id,
         trigger_reason=f"Manual trigger for {entry.get('title', sandbox_id)}",
-        available_data=_available_library_docs(),
-        missing_data=_missing_library_docs(),
+        available_data=available,
+        missing_data=missing,
     )
     sandbox.update_status(sandbox_id, "PUBLISHER_REQUIRED")
     return jsonify({"status": "ok", "action": action})
@@ -90,6 +102,8 @@ def update_publisher_action():
 
     try:
         action = publisher.update_action_status(action_id, new_status)
+        if new_status == "ARCHIVED":
+            arc_model.archive_publisher_action(action)
         return jsonify({"status": "ok", "action": action})
     except (KeyError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
@@ -137,6 +151,14 @@ def create_inquiry():
     sandbox.set_inquiry_draft(sandbox_id, draft)
     sandbox.update_status(sandbox_id, "INQUIRY_DRAFTED")
 
+    if entry.get("source_type") == "dispatch" and card.get("broker"):
+        intel_model.create_record(
+            intel_type="broker",
+            subject=card["broker"],
+            content=f"Inquiry drafted for load {entry.get('source_id', '')}",
+            source=f"auto-contact:{sandbox_id}",
+        )
+
     return jsonify({"status": "DRAFT_CREATED", "draft": draft})
 
 
@@ -174,16 +196,107 @@ def resolve_conflict():
         return jsonify({"error": str(exc)}), 404
 
 
-def _available_library_docs() -> list[str]:
-    return []
+# ---- Library API ----
+
+@api_bp.route("/library/add", methods=["POST"])
+def library_add():
+    data = request.get_json(force=True)
+    section = data.get("section")
+    name = data.get("name")
+    if not section or not name:
+        return jsonify({"error": "section and name required"}), 400
+    try:
+        record = lib_model.add_record(
+            section=section,
+            name=name,
+            content=data.get("content", ""),
+            metadata=data.get("metadata"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
-def _missing_library_docs() -> list[str]:
-    return ["W-9", "Insurance", "Authority", "Business Card", "Rate Sheets", "Terms"]
+@api_bp.route("/library/update", methods=["POST"])
+def library_update():
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    if not record_id:
+        return jsonify({"error": "record_id required"}), 400
+    try:
+        record = lib_model.update_record(
+            record_id=record_id,
+            name=data.get("name"),
+            content=data.get("content"),
+            metadata=data.get("metadata"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
 
 
-def _create_archive_candidate(entry: dict) -> None:
-    sandbox.add_note(
-        entry["id"],
-        f"Archive candidate created — status PASS at {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}",
-    )
+@api_bp.route("/library/delete", methods=["POST"])
+def library_delete():
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    if not record_id:
+        return jsonify({"error": "record_id required"}), 400
+    try:
+        record = lib_model.delete_record(record_id)
+        return jsonify({"status": "ok", "record": record})
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+# ---- Archive API ----
+
+@api_bp.route("/archive/create", methods=["POST"])
+def archive_create():
+    data = request.get_json(force=True)
+    sandbox_id = data.get("sandbox_id")
+    if not sandbox_id:
+        return jsonify({"error": "sandbox_id required"}), 400
+    entry = sandbox.get(sandbox_id)
+    if not entry:
+        return jsonify({"error": "Sandbox entry not found"}), 404
+    record = arc_model.archive_from_sandbox(entry)
+    return jsonify({"status": "ok", "record": record})
+
+
+# ---- Intelligence API ----
+
+@api_bp.route("/intelligence/add", methods=["POST"])
+def intelligence_add():
+    data = request.get_json(force=True)
+    intel_type = data.get("intel_type")
+    subject = data.get("subject")
+    if not intel_type or not subject:
+        return jsonify({"error": "intel_type and subject required"}), 400
+    try:
+        record = intel_model.create_record(
+            intel_type=intel_type,
+            subject=subject,
+            content=data.get("content", ""),
+            source=data.get("source", ""),
+            metadata=data.get("metadata"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/intelligence/update", methods=["POST"])
+def intelligence_update():
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    if not record_id:
+        return jsonify({"error": "record_id required"}), 400
+    try:
+        record = intel_model.update_record(
+            record_id=record_id,
+            content=data.get("content"),
+            metadata=data.get("metadata"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404

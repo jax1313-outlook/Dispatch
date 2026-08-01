@@ -19,6 +19,7 @@
             <li><a href="{{ url_for('pages.publisher_view') }}" class="{% if request.endpoint == 'pages.publisher_view' %}active{% endif %}">Publisher</a></li>
             <li><a href="{{ url_for('pages.library') }}" class="{% if request.endpoint == 'pages.library' %}active{% endif %}">Library</a></li>
             <li><a href="{{ url_for('pages.archive_view') }}" class="{% if request.endpoint == 'pages.archive_view' %}active{% endif %}">Archive</a></li>
+            <li><a href="{{ url_for('pages.intelligence_view') }}" class="{% if request.endpoint == 'pages.intelligence_view' %}active{% endif %}">Intelligence</a></li>
             <li><a href="{{ url_for('pages.conflicts') }}" class="{% if request.endpoint == 'pages.conflicts' %}active{% endif %}">Conflict Notices</a></li>
             <li><a href="{{ url_for('pages.settings') }}" class="{% if request.endpoint == 'pages.settings' %}active{% endif %}">Settings</a></li>
         </ul>
@@ -89,6 +90,44 @@
 
     function resolveConflict(noticeId) {
         apiPost('/api/conflict/resolve', {notice_id: noticeId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function libraryAdd(section) {
+        var name = prompt('Record name:');
+        if (!name) return;
+        apiPost('/api/library/add', {section: section, name: name})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function libraryDelete(recordId) {
+        if (!confirm('Remove this library record?')) return;
+        apiPost('/api/library/delete', {record_id: recordId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function archiveEntry(sandboxId) {
+        apiPost('/api/archive/create', {sandbox_id: sandboxId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function intelAdd(intelType) {
+        var subject = prompt('Subject:');
+        if (!subject) return;
+        var content = prompt('Content:');
+        apiPost('/api/intelligence/add', {intel_type: intelType, subject: subject, content: content || ''})
             .then(data => {
                 if (data.error) { alert(data.error); return; }
                 location.reload();

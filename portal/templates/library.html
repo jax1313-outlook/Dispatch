@@ -9,31 +9,39 @@
 <section class="card-section">
     <h2>{{ section.name }}</h2>
     {% if section.description %}<p class="section-desc">{{ section.description }}</p>{% endif %}
-    {% if section.entries %}
-    <div class="library-grid">
-        {% for item in section.entries %}
-        <div class="library-item">
-            <span class="library-icon">&#128196;</span>
-            <span class="library-name">{{ item.name }}</span>
-            <span class="status-tag status-placeholder">{{ item.status }}</span>
-        </div>
+
+    {% if section.key == 'company' and section.missing %}
+    <div class="missing-assets">
+        <strong>Missing Company Assets:</strong>
+        {% for asset in section.missing %}
+        <span class="status-tag status-placeholder">{{ asset }}</span>
         {% endfor %}
     </div>
-    {% elif section.fields %}
+    {% endif %}
+
+    {% if section.records %}
     <div class="library-grid">
-        {% for field in section.fields %}
+        {% for record in section.records %}
         <div class="library-item">
-            <span class="library-icon">&#128205;</span>
-            <span class="library-name">{{ field }}</span>
-            <span class="status-tag status-placeholder">placeholder</span>
+            <span class="library-icon">&#128196;</span>
+            <div class="library-details">
+                <span class="library-name">{{ record.name }}</span>
+                <span class="library-meta">{{ record.updated_at }}</span>
+            </div>
+            <span class="status-tag status-interested">{{ record.status }}</span>
+            <button class="btn btn-sm btn-danger" onclick="libraryDelete('{{ record.id }}')" title="Remove">&#10005;</button>
         </div>
         {% endfor %}
     </div>
     {% else %}
     <div class="empty-state-sm">
-        <p>No items yet. This section will store approved reusable {{ section.name|lower }} data.</p>
+        <p>No records yet.</p>
     </div>
     {% endif %}
+
+    <div class="section-actions">
+        <button class="btn btn-sm btn-success" onclick="libraryAdd('{{ section.key }}')">+ Add Record</button>
+    </div>
 </section>
 {% endfor %}
 {% endblock %}

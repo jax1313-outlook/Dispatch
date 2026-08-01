@@ -53,11 +53,14 @@
             {% endif %}
         </div>
 
-        <div class="card-position-stubs">
+        <div class="card-considerations">
             <small>
+                <strong>Operational Considerations:</strong>
                 Position Impact: {{ entry.position_impact or 'Unknown' }} |
                 HOS Risk: {{ entry.hos_risk or 'Unknown' }} |
-                Return Home: {{ entry.return_home_required or 'Unknown' }}
+                Return Route: {{ entry.return_home_required or 'Unknown' }} |
+                Deadhead: {{ cd.deadhead_miles ~ ' mi' if cd.deadhead_miles else 'Unknown' }} |
+                Fuel Est: {{ '$' ~ cd.fuel_estimate if cd.fuel_estimate else 'Unknown' }}
             </small>
         </div>
 

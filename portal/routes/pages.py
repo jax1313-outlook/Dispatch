@@ -6,6 +6,9 @@ from flask import Blueprint, render_template, request, redirect, url_for
 
 from portal import helpers
 from portal.models import sandbox, publisher, conflict
+from portal.models import library as lib_model
+from portal.models import archive as arc_model
+from portal.models import intelligence as intel_model
 
 pages_bp = Blueprint("pages", __name__)
 
@@ -33,6 +36,8 @@ def home():
         dispatch_cards=dispatch_sorted,
         conflict_count=len(unresolved),
         publisher_count=len(pub_queue),
+        archive_count=arc_model.total_count(),
+        intel_count=intel_model.total_count(),
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
@@ -127,54 +132,65 @@ def publisher_view():
 
 @pages_bp.route("/library")
 def library():
-    company_docs = [
-        {"name": "W-9", "status": "placeholder"},
-        {"name": "Insurance", "status": "placeholder"},
-        {"name": "Authority", "status": "placeholder"},
-        {"name": "Business Card", "status": "placeholder"},
-        {"name": "Rate Sheets", "status": "placeholder"},
-        {"name": "Terms", "status": "placeholder"},
-        {"name": "Capabilities", "status": "placeholder"},
-        {"name": "Compliance Documents", "status": "placeholder"},
-    ]
-    location_fields = [
-        "Facility Name", "Address", "Gate Notes", "Dock Notes",
-        "Check-in Procedure", "Security Requirements", "Liftgate Requirement",
-        "Pallet Jack Requirement", "Forklift Availability", "Load Time",
-        "Unload Time", "Detention History", "Driver Notes",
-    ]
+    all_records = lib_model.get_all()
+    missing = lib_model.get_missing_company_assets()
     sections = [
-        {"name": "Company Library", "entries": company_docs,
-         "description": "Approved company documents available for Publisher production and broker packets."},
-        {"name": "Broker Library", "entries": [],
-         "description": "Approved broker profiles, contact history, and performance records."},
-        {"name": "Customer Library", "entries": [],
-         "description": "Approved customer/shipper profiles and relationship data."},
-        {"name": "Location Intelligence Library", "fields": location_fields,
-         "description": "Approved facility data, dock notes, and location-specific operational knowledge."},
-        {"name": "Operations Library", "entries": [],
-         "description": "Approved operational templates, checklists, and standard procedures."},
-        {"name": "Intelligence Library", "entries": [],
-         "description": "Approved intelligence products, market data, and analytical references."},
+        {"name": "Company Library", "key": "company",
+         "description": "Approved company documents available for Publisher production and broker packets.",
+         "records": all_records.get("company", []),
+         "missing": missing},
+        {"name": "Broker Library", "key": "broker",
+         "description": "Approved broker profiles, contact history, and performance records.",
+         "records": all_records.get("broker", [])},
+        {"name": "Customer Library", "key": "customer",
+         "description": "Approved customer/shipper profiles and relationship data.",
+         "records": all_records.get("customer", [])},
+        {"name": "Location Intelligence Library", "key": "location_intelligence",
+         "description": "Approved facility data, dock notes, and location-specific operational knowledge.",
+         "records": all_records.get("location_intelligence", [])},
+        {"name": "Operations Library", "key": "operations",
+         "description": "Approved operational templates, checklists, and standard procedures.",
+         "records": all_records.get("operations", [])},
+        {"name": "Intelligence Library", "key": "intelligence",
+         "description": "Approved intelligence products, market data, and analytical references.",
+         "records": all_records.get("intelligence", [])},
     ]
     return render_template("library.html", sections=sections)
 
 
 @pages_bp.route("/archive")
 def archive_view():
-    all_entries = sandbox.get_all()
-    archived = [
-        v for v in all_entries.values()
+    all_archive = arc_model.get_all()
+    all_sandbox = sandbox.get_all()
+    sandbox_archived = [
+        v for v in all_sandbox.values()
         if v["status"] in ("PASS", "CLOSED", "EXPIRED", "BOOKED")
     ]
-    sections = [
-        {"name": "Load Archive", "description": "Completed load records and decisions"},
-        {"name": "Decision Archive", "description": "Historical decision records"},
-        {"name": "Publisher Archive", "description": "Published document packages"},
-        {"name": "Location History Archive", "description": "Historical location intelligence"},
-        {"name": "Broker History Archive", "description": "Historical broker performance"},
-    ]
-    return render_template("archive.html", sections=sections, archived=archived)
+    sections = []
+    for key in arc_model.ARCHIVE_SECTIONS:
+        sections.append({
+            "name": arc_model.SECTION_LABELS[key],
+            "key": key,
+            "records": all_archive.get(key, []),
+        })
+    return render_template(
+        "archive.html",
+        sections=sections,
+        sandbox_archived=sandbox_archived,
+    )
+
+
+@pages_bp.route("/intelligence")
+def intelligence_view():
+    all_intel = intel_model.get_all()
+    sections = []
+    for key in intel_model.INTEL_TYPES:
+        sections.append({
+            "name": intel_model.INTEL_LABELS[key],
+            "key": key,
+            "records": all_intel.get(key, []),
+        })
+    return render_template("intelligence.html", sections=sections)
 
 
 @pages_bp.route("/conflicts")
