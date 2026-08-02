@@ -96,7 +96,15 @@ def dispatch():
     from dispatch.models import LOAD_STATUSES
 
     status_filter = request.args.get("status")
-    engine_loads = dispatch_svc.list_loads(status=status_filter)
+    customer_search = request.args.get("customer", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    engine_loads = dispatch_svc.list_loads(
+        status=status_filter,
+        customer=customer_search or None,
+        date_from=date_from or None,
+        date_to=date_to or None,
+    )
     fin_dashboard = dispatch_svc.get_financial_dashboard()
 
     all_entries = sandbox.get_all()
@@ -136,6 +144,9 @@ def dispatch():
         fin_dashboard=fin_dashboard,
         active_drivers=active_drivers,
         active_equipment=active_equipment,
+        customer_search=customer_search,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -171,8 +182,21 @@ def fleet():
         EQUIPMENT_TYPES, EQUIPMENT_STATUSES,
     )
 
-    drivers = dispatch_svc.list_drivers()
-    equipment = dispatch_svc.list_equipment()
+    driver_status = request.args.get("driver_status")
+    driver_search = request.args.get("driver_name", "").strip()
+    equip_status = request.args.get("equip_status")
+    equip_type = request.args.get("equip_type")
+    equip_search = request.args.get("unit_number", "").strip()
+
+    drivers = dispatch_svc.list_drivers(
+        status=driver_status or None,
+        name=driver_search or None,
+    )
+    equipment = dispatch_svc.list_equipment(
+        status=equip_status or None,
+        equipment_type=equip_type or None,
+        unit_number=equip_search or None,
+    )
     summary = dispatch_svc.get_fleet_summary()
 
     return render_template(
@@ -184,6 +208,11 @@ def fleet():
         license_classes=LICENSE_CLASSES,
         equipment_types=EQUIPMENT_TYPES,
         equipment_statuses=EQUIPMENT_STATUSES,
+        driver_status_filter=driver_status or "",
+        driver_search=driver_search,
+        equip_status_filter=equip_status or "",
+        equip_type_filter=equip_type or "",
+        equip_search=equip_search,
     )
 
 

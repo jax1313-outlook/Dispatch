@@ -127,8 +127,16 @@ def get_load(load_id: str) -> dict | None:
     return store.get_load(load_id)
 
 
-def list_loads(status: str | None = None) -> list[dict]:
-    return store.list_loads(status=status)
+def list_loads(
+    status: str | None = None,
+    customer: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict]:
+    return store.list_loads(
+        status=status, customer=customer,
+        date_from=date_from, date_to=date_to,
+    )
 
 
 def update_load(load_id: str, **fields) -> dict | None:
@@ -768,8 +776,11 @@ def get_driver(driver_id: str) -> dict | None:
     return store.get_driver(driver_id)
 
 
-def list_drivers(status: str | None = None) -> list[dict]:
-    return store.list_drivers(status=status)
+def list_drivers(
+    status: str | None = None,
+    name: str | None = None,
+) -> list[dict]:
+    return store.list_drivers(status=status, name=name)
 
 
 def update_driver(driver_id: str, **fields) -> dict | None:
@@ -826,8 +837,12 @@ def get_equipment(equipment_id: str) -> dict | None:
 def list_equipment(
     status: str | None = None,
     equipment_type: str | None = None,
+    unit_number: str | None = None,
 ) -> list[dict]:
-    return store.list_equipment(status=status, equipment_type=equipment_type)
+    return store.list_equipment(
+        status=status, equipment_type=equipment_type,
+        unit_number=unit_number,
+    )
 
 
 def update_equipment(equipment_id: str, **fields) -> dict | None:

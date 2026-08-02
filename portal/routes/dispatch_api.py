@@ -37,7 +37,13 @@ def list_loads():
     status = request.args.get("status")
     if status and status not in LOAD_STATUSES:
         return jsonify({"error": f"Invalid status: {status}"}), 400
-    loads = services.list_loads(status=status)
+    customer = request.args.get("customer")
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    loads = services.list_loads(
+        status=status, customer=customer,
+        date_from=date_from, date_to=date_to,
+    )
     return jsonify({"status": "ok", "loads": loads, "count": len(loads)})
 
 
@@ -502,7 +508,8 @@ def list_drivers():
     status = request.args.get("status")
     if status and status not in DRIVER_STATUSES:
         return jsonify({"error": f"Invalid status: {status}"}), 400
-    drivers = services.list_drivers(status=status)
+    name = request.args.get("name")
+    drivers = services.list_drivers(status=status, name=name)
     return jsonify({"status": "ok", "drivers": drivers, "count": len(drivers)})
 
 
@@ -565,7 +572,10 @@ def list_equipment():
     eq_type = request.args.get("equipment_type")
     if eq_type and eq_type not in EQUIPMENT_TYPES:
         return jsonify({"error": f"Invalid equipment_type: {eq_type}"}), 400
-    items = services.list_equipment(status=status, equipment_type=eq_type)
+    unit_number = request.args.get("unit_number")
+    items = services.list_equipment(
+        status=status, equipment_type=eq_type, unit_number=unit_number,
+    )
     return jsonify({"status": "ok", "equipment": items, "count": len(items)})
 
 

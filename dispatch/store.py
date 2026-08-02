@@ -48,16 +48,33 @@ def get_load(load_id: str) -> dict | None:
     return dict_from_row(row) if row else None
 
 
-def list_loads(status: str | None = None) -> list[dict]:
+def list_loads(
+    status: str | None = None,
+    customer: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list = []
+    if status:
+        clauses.append("status=?")
+        params.append(status)
+    if customer:
+        clauses.append("customer LIKE ?")
+        params.append(f"%{customer}%")
+    if date_from:
+        clauses.append("created_at >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("created_at <= ?")
+        params.append(date_to + "T23:59:59Z" if "T" not in date_to else date_to)
+    where = " AND ".join(clauses)
+    sql = "SELECT * FROM loads"
+    if where:
+        sql += f" WHERE {where}"
+    sql += " ORDER BY updated_at DESC"
     with get_connection() as conn:
-        if status:
-            rows = conn.execute(
-                "SELECT * FROM loads WHERE status=? ORDER BY updated_at DESC", (status,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM loads ORDER BY updated_at DESC"
-            ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict_from_row(r) for r in rows]
 
 
@@ -567,17 +584,24 @@ def get_driver(driver_id: str) -> dict | None:
     return dict_from_row(row) if row else None
 
 
-def list_drivers(status: str | None = None) -> list[dict]:
+def list_drivers(
+    status: str | None = None,
+    name: str | None = None,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list = []
+    if status:
+        clauses.append("status=?")
+        params.append(status)
+    if name:
+        clauses.append("name LIKE ?")
+        params.append(f"%{name}%")
+    sql = "SELECT * FROM drivers"
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY name ASC"
     with get_connection() as conn:
-        if status:
-            rows = conn.execute(
-                "SELECT * FROM drivers WHERE status=? ORDER BY name ASC",
-                (status,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM drivers ORDER BY name ASC"
-            ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict_from_row(r) for r in rows]
 
 
@@ -640,20 +664,24 @@ def get_equipment(equipment_id: str) -> dict | None:
 def list_equipment(
     status: str | None = None,
     equipment_type: str | None = None,
+    unit_number: str | None = None,
 ) -> list[dict]:
+    clauses: list[str] = []
+    params: list = []
+    if status:
+        clauses.append("status=?")
+        params.append(status)
+    if equipment_type:
+        clauses.append("equipment_type=?")
+        params.append(equipment_type)
+    if unit_number:
+        clauses.append("unit_number LIKE ?")
+        params.append(f"%{unit_number}%")
+    sql = "SELECT * FROM equipment"
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY unit_number ASC"
     with get_connection() as conn:
-        clauses: list[str] = []
-        params: list[str] = []
-        if status:
-            clauses.append("status=?")
-            params.append(status)
-        if equipment_type:
-            clauses.append("equipment_type=?")
-            params.append(equipment_type)
-        sql = "SELECT * FROM equipment"
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY unit_number ASC"
         rows = conn.execute(sql, params).fetchall()
     return [dict_from_row(r) for r in rows]
 
