@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import pytest
 
-from dispatch import db, models, services, store
+from dispatch import db, models, notifications, services, store
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -1020,3 +1021,186 @@ class TestDispatchEndToEnd:
         assert len(bundle["evidence"]) == 2
         assert len(bundle["pods"]) == 1
         assert bundle["retention"] is not None
+
+
+# ── Notification tests ───────────────────────────────────────────────
+
+class TestNotifications:
+    def test_make_and_verify_token(self):
+        token = notifications.make_token("LOAD-123", "acknowledge")
+        assert notifications.verify_token("LOAD-123", "acknowledge", token)
+
+    def test_verify_token_rejects_bad(self):
+        token = notifications.make_token("LOAD-123", "acknowledge")
+        assert not notifications.verify_token("LOAD-123", "escalate", token)
+        assert not notifications.verify_token("LOAD-OTHER", "acknowledge", token)
+        assert not notifications.verify_token("LOAD-123", "acknowledge", "bad")
+
+    def test_notify_exception_renders(self, sample_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            result = notifications.notify_exception(sample_load, {
+                "exception_id": "EXC-1",
+                "exception_type": "damage",
+                "severity": "critical",
+                "description": "Major cargo damage",
+            })
+            assert result == "mock"
+            args = mock_send.call_args
+            msg = args[0][1]
+            assert "Exception" in msg["Subject"]
+            assert "critical" in msg["Subject"]
+
+    def test_notify_delivered_renders(self, sample_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            result = notifications.notify_delivered(sample_load, {
+                "milestone_id": "MS-1",
+                "event_type": "delivered",
+                "location": "Savannah, GA",
+                "event_time": "2026-08-03T14:00:00Z",
+            })
+            assert result == "mock"
+            assert "Delivered" in mock_send.call_args[0][1]["Subject"]
+
+    def test_notify_pod_generated_renders(self, sample_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            result = notifications.notify_pod_generated(sample_load, {
+                "pod_id": "POD-1",
+                "evidence_ids": ["EV-1", "EV-2"],
+                "recipient": "billing@test.com",
+            })
+            assert result == "mock"
+            assert "POD" in mock_send.call_args[0][1]["Subject"]
+
+    def test_notify_archived_renders(self, sample_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            result = notifications.notify_archived(sample_load, {
+                "archive_id": "RET-1",
+                "final_status": "delivered",
+                "evidence_index": ["EV-1"],
+                "archive_location": "retention/LOAD-1",
+            })
+            assert result == "mock"
+            assert "Archived" in mock_send.call_args[0][1]["Subject"]
+
+
+class TestNotificationIntegration:
+    """Verify that service functions fire notifications at the right moments."""
+
+    def test_delivery_milestone_triggers_notification(self, dispatched_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.add_milestone(dispatched_load["load_id"], "arrived_pickup")
+            services.add_milestone(dispatched_load["load_id"], "loaded")
+            services.add_milestone(dispatched_load["load_id"], "departed_pickup")
+            services.add_milestone(dispatched_load["load_id"], "arrived_delivery")
+            assert mock_send.call_count == 0
+            services.add_milestone(
+                dispatched_load["load_id"], "delivered", location="Savannah, GA",
+            )
+            assert mock_send.call_count == 1
+            assert "Delivered" in mock_send.call_args[0][1]["Subject"]
+
+    def test_high_severity_exception_triggers_notification(self, sample_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.open_exception(
+                sample_load["load_id"], severity="high", description="Damage",
+            )
+            assert mock_send.call_count == 1
+            assert "Exception" in mock_send.call_args[0][1]["Subject"]
+
+    def test_low_severity_exception_no_notification(self, sample_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.open_exception(
+                sample_load["load_id"], severity="low", description="Minor",
+            )
+            assert mock_send.call_count == 0
+
+    def test_medium_severity_exception_no_notification(self, sample_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.open_exception(
+                sample_load["load_id"], severity="medium", description="Something",
+            )
+            assert mock_send.call_count == 0
+
+    def test_pod_generation_triggers_notification(self, delivered_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.generate_pod(delivered_load["load_id"])
+            calls = [c for c in mock_send.call_args_list
+                     if "POD" in c[0][1]["Subject"]]
+            assert len(calls) == 1
+
+    def test_archive_triggers_notification(self, delivered_load):
+        with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.archive_load(delivered_load["load_id"])
+            calls = [c for c in mock_send.call_args_list
+                     if "Archived" in c[0][1]["Subject"]]
+            assert len(calls) == 1
+
+
+class TestDispatchDecisionEndpoint:
+    """Decision endpoint for email action clicks."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, tmp_path):
+        db.set_db_path(tmp_path / "decision.db")
+        yield
+        db.set_db_path(None)
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    def _create_load(self, client):
+        return client.post("/api/dispatch/loads", json={
+            "customer": "Decision Test Co",
+        }).get_json()["load"]
+
+    def test_acknowledge_action(self, client):
+        load = self._create_load(client)
+        load_id = load["load_id"]
+        token = notifications.make_token(load_id, "acknowledge")
+        resp = client.get(f"/api/dispatch/decision/{load_id}/acknowledge?token={token}")
+        assert resp.status_code == 200
+        assert b"Action Recorded" in resp.data
+
+    def test_invalid_action(self, client):
+        load = self._create_load(client)
+        resp = client.get(
+            f"/api/dispatch/decision/{load['load_id']}/bogus?token=x"
+        )
+        assert resp.status_code == 400
+
+    def test_invalid_token(self, client):
+        load = self._create_load(client)
+        resp = client.get(
+            f"/api/dispatch/decision/{load['load_id']}/acknowledge?token=bad"
+        )
+        assert resp.status_code == 403
+
+    def test_load_not_found(self, client):
+        token = notifications.make_token("NONEXISTENT", "acknowledge")
+        resp = client.get(f"/api/dispatch/decision/NONEXISTENT/acknowledge?token={token}")
+        assert resp.status_code == 404
+
+    def test_escalate_creates_exception(self, client):
+        load = self._create_load(client)
+        load_id = load["load_id"]
+        token = notifications.make_token(load_id, "escalate")
+        with patch("dispatch.notifications._send_or_write", return_value="mock"):
+            resp = client.get(f"/api/dispatch/decision/{load_id}/escalate?token={token}")
+        assert resp.status_code == 200
+        excs = client.get(f"/api/dispatch/loads/{load_id}/exceptions").get_json()
+        assert excs["count"] == 1
+        assert excs["exceptions"][0]["severity"] == "high"
+
+    def test_flag_review_creates_exception(self, client):
+        load = self._create_load(client)
+        load_id = load["load_id"]
+        token = notifications.make_token(load_id, "flag_review")
+        resp = client.get(f"/api/dispatch/decision/{load_id}/flag_review?token={token}")
+        assert resp.status_code == 200
+        excs = client.get(f"/api/dispatch/loads/{load_id}/exceptions").get_json()
+        assert excs["count"] == 1
