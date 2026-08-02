@@ -1211,6 +1211,63 @@ def get_lane_history(load_id: str) -> list[dict]:
     return history
 
 
+# ── Lane Templates ──────────────────────────────────────────────────
+
+
+def create_lane_template(
+    name: str,
+    customer: str = "",
+    broker_shipper: str = "",
+    pickup_location: str = "",
+    delivery_location: str = "",
+    equipment: str = "",
+    notes: str = "",
+) -> dict:
+    from dispatch.models import LaneTemplate
+    tpl = LaneTemplate(
+        name=name,
+        customer=customer,
+        broker_shipper=broker_shipper,
+        pickup_location=pickup_location,
+        delivery_location=delivery_location,
+        equipment=equipment,
+        notes=notes,
+    )
+    return store.create_lane_template(tpl)
+
+
+def get_lane_template(template_id: str) -> dict | None:
+    return store.get_lane_template(template_id)
+
+
+def list_lane_templates() -> list[dict]:
+    return store.list_lane_templates()
+
+
+def update_lane_template(template_id: str, **fields) -> dict | None:
+    return store.update_lane_template(template_id, **fields)
+
+
+def delete_lane_template(template_id: str) -> bool:
+    return store.delete_lane_template(template_id)
+
+
+def create_load_from_template(template_id: str) -> dict | None:
+    tpl = store.get_lane_template(template_id)
+    if not tpl:
+        return None
+    load = create_load(
+        customer=tpl["customer"],
+        broker_shipper=tpl["broker_shipper"],
+        pickup_location=tpl["pickup_location"],
+        delivery_location=tpl["delivery_location"],
+        equipment=tpl["equipment"],
+        notes=tpl["notes"],
+    )
+    store.increment_lane_template_usage(template_id)
+    return load
+
+
 def global_search(query: str) -> dict:
     return store.global_search(query)
 

@@ -4,6 +4,7 @@
 {% block page_actions %}
 <button class="btn btn-sm btn-success" onclick="toggleNewLoadForm()">+ New Load</button>
 <button class="btn btn-sm" onclick="toggleImportForm()">Import CSV</button>
+<button class="btn btn-sm" onclick="toggleForm('lane-templates-section')">Templates</button>
 <a href="{{ url_for('pages.dispatch', refresh=1) }}" class="btn btn-sm">Refresh Board</a>
 {% endblock %}
 
@@ -50,6 +51,24 @@
 {# ── New Load Form (hidden) ───────────────────────────────────────── #}
 <div id="new-load-form" class="brief-section" style="display:none;margin-bottom:20px;">
     <h3>Create New Load</h3>
+    {% if lane_templates %}
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <label><strong>Use Template:</strong></label>
+        <select id="lane-template-select" onchange="applyLaneTemplate(this.value)" style="padding:4px 8px;min-width:200px;">
+            <option value="">— Start blank —</option>
+            {% for tpl in lane_templates %}
+            <option value="{{ tpl.template_id }}"
+                    data-customer="{{ tpl.customer }}"
+                    data-broker="{{ tpl.broker_shipper }}"
+                    data-pickup="{{ tpl.pickup_location }}"
+                    data-delivery="{{ tpl.delivery_location }}"
+                    data-equipment="{{ tpl.equipment }}"
+                    data-notes="{{ tpl.notes }}">{{ tpl.name }} ({{ tpl.pickup_location }} → {{ tpl.delivery_location }})</option>
+            {% endfor %}
+        </select>
+        <button type="button" class="btn btn-xs btn-success" onclick="quickCreateFromTemplate()" title="Create load directly from selected template">Quick Create</button>
+    </div>
+    {% endif %}
     <form onsubmit="createLoad(event)">
         <div class="brief-fields" style="margin-bottom:12px;">
             <div><label><strong>Customer *</strong><br>
@@ -107,6 +126,57 @@
         </div>
     </form>
     <div id="import-result" style="display:none;margin-top:10px;"></div>
+</div>
+
+{# ── Lane Templates (hidden by default) ─────────────────────────── #}
+<div id="lane-templates-section" class="brief-section" style="display:none;margin-bottom:20px;">
+    <h3>Lane Templates</h3>
+    <div id="lane-templates-list">
+        {% if lane_templates %}
+        <table class="data-table" style="margin-bottom:12px;">
+            <thead><tr><th>Name</th><th>Customer</th><th>Origin</th><th>Destination</th><th>Uses</th><th></th></tr></thead>
+            <tbody>
+            {% for tpl in lane_templates %}
+            <tr>
+                <td>{{ tpl.name }}</td>
+                <td>{{ tpl.customer or '—' }}</td>
+                <td>{{ tpl.pickup_location or '—' }}</td>
+                <td>{{ tpl.delivery_location or '—' }}</td>
+                <td>{{ tpl.usage_count }}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-xs btn-success" onclick="createFromTemplate('{{ tpl.template_id }}')" title="Create load from this template">Use</button>
+                    <button class="btn btn-xs btn-danger" onclick="deleteLaneTemplate('{{ tpl.template_id }}')" title="Delete template">Del</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:#888;font-size:0.9em;">No lane templates saved yet. Create one below.</p>
+        {% endif %}
+    </div>
+    <details style="margin-top:8px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:0.9em;">+ New Template</summary>
+        <form onsubmit="saveLaneTemplate(event)" style="margin-top:8px;">
+            <div class="brief-fields" style="margin-bottom:12px;">
+                <div><label><strong>Template Name *</strong><br>
+                    <input type="text" name="tpl_name" required style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Customer</strong><br>
+                    <input type="text" name="tpl_customer" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Broker / Shipper</strong><br>
+                    <input type="text" name="tpl_broker" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Pickup Location</strong><br>
+                    <input type="text" name="tpl_pickup" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Delivery Location</strong><br>
+                    <input type="text" name="tpl_delivery" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Equipment</strong><br>
+                    <input type="text" name="tpl_equipment" style="width:100%;padding:4px 8px;"></label></div>
+                <div class="full-width"><label><strong>Notes</strong><br>
+                    <input type="text" name="tpl_notes" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Save Template</button>
+        </form>
+    </details>
 </div>
 
 {# ── Stalled Load Alert ───────────────────────────────────────────── #}
@@ -351,6 +421,67 @@ function createLoad(e) {
         if (r.error) { alert(r.error); return; }
         location.reload();
     });
+}
+
+function applyLaneTemplate(templateId) {
+    var sel = document.getElementById('lane-template-select');
+    var opt = sel.options[sel.selectedIndex];
+    var form = document.querySelector('#new-load-form form');
+    if (!templateId) {
+        form.reset();
+        return;
+    }
+    form.customer.value = opt.dataset.customer || '';
+    form.broker_shipper.value = opt.dataset.broker || '';
+    form.pickup_location.value = opt.dataset.pickup || '';
+    form.delivery_location.value = opt.dataset.delivery || '';
+    form.equipment.value = opt.dataset.equipment || '';
+    form.notes.value = opt.dataset.notes || '';
+}
+
+function quickCreateFromTemplate() {
+    var sel = document.getElementById('lane-template-select');
+    var tid = sel.value;
+    if (!tid) { alert('Select a template first.'); return; }
+    apiPost('/api/dispatch/lane-templates/' + tid + '/create-load', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function createFromTemplate(templateId) {
+    apiPost('/api/dispatch/lane-templates/' + templateId + '/create-load', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function saveLaneTemplate(e) {
+    e.preventDefault();
+    var form = e.target;
+    var data = {
+        name: form.tpl_name.value,
+        customer: form.tpl_customer.value,
+        broker_shipper: form.tpl_broker.value,
+        pickup_location: form.tpl_pickup.value,
+        delivery_location: form.tpl_delivery.value,
+        equipment: form.tpl_equipment.value,
+        notes: form.tpl_notes.value
+    };
+    apiPost('/api/dispatch/lane-templates', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function deleteLaneTemplate(templateId) {
+    if (!confirm('Delete this lane template?')) return;
+    fetch('/api/dispatch/lane-templates/' + templateId, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            if (r.error) { alert(r.error); return; }
+            location.reload();
+        });
 }
 
 function getSelectedLoadIds() {

@@ -1183,3 +1183,65 @@ def import_loads_csv():
             errors.append(f"Row {i}: {exc}")
 
     return jsonify({"status": "ok", "created": created, "errors": errors})
+
+
+# ── Lane Templates ──────────────────────────────────────────────────
+
+
+@dispatch_bp.route("/lane-templates", methods=["GET"])
+def list_lane_templates():
+    return jsonify(services.list_lane_templates())
+
+
+@dispatch_bp.route("/lane-templates", methods=["POST"])
+def create_lane_template():
+    data = request.get_json(force=True)
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    try:
+        tpl = services.create_lane_template(
+            name=name,
+            customer=data.get("customer", ""),
+            broker_shipper=data.get("broker_shipper", ""),
+            pickup_location=data.get("pickup_location", ""),
+            delivery_location=data.get("delivery_location", ""),
+            equipment=data.get("equipment", ""),
+            notes=data.get("notes", ""),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(tpl), 201
+
+
+@dispatch_bp.route("/lane-templates/<template_id>", methods=["GET"])
+def get_lane_template(template_id):
+    tpl = services.get_lane_template(template_id)
+    if not tpl:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(tpl)
+
+
+@dispatch_bp.route("/lane-templates/<template_id>", methods=["PATCH"])
+def update_lane_template(template_id):
+    data = request.get_json(force=True)
+    tpl = services.update_lane_template(template_id, **data)
+    if not tpl:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(tpl)
+
+
+@dispatch_bp.route("/lane-templates/<template_id>", methods=["DELETE"])
+def delete_lane_template(template_id):
+    ok = services.delete_lane_template(template_id)
+    if not ok:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"status": "deleted"})
+
+
+@dispatch_bp.route("/lane-templates/<template_id>/create-load", methods=["POST"])
+def create_load_from_template(template_id):
+    load = services.create_load_from_template(template_id)
+    if not load:
+        return jsonify({"error": "template not found"}), 404
+    return jsonify(load), 201

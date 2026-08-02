@@ -471,3 +471,31 @@ class LoadActivity:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass
+class LaneTemplate:
+    template_id: str = ""
+    name: str = ""
+    customer: str = ""
+    broker_shipper: str = ""
+    pickup_location: str = ""
+    delivery_location: str = ""
+    equipment: str = ""
+    notes: str = ""
+    usage_count: int = 0
+    created_at: str = ""
+    updated_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.template_id:
+            self.template_id = _gen_id("LNT")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.updated_at:
+            self.updated_at = self.created_at
+        if not self.name:
+            raise ValueError("Lane template name is required")
+
+    def to_dict(self) -> dict:
+        return asdict(self)

@@ -190,6 +190,20 @@ CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
 CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment(status);
 CREATE INDEX IF NOT EXISTS idx_equipment_type ON equipment(equipment_type);
 CREATE INDEX IF NOT EXISTS idx_activities_load ON activities(load_id);
+
+CREATE TABLE IF NOT EXISTS lane_templates (
+    template_id     TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    customer        TEXT NOT NULL DEFAULT '',
+    broker_shipper  TEXT NOT NULL DEFAULT '',
+    pickup_location TEXT NOT NULL DEFAULT '',
+    delivery_location TEXT NOT NULL DEFAULT '',
+    equipment       TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    usage_count     INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
 """
 
 
