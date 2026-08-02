@@ -378,6 +378,55 @@
     {% endif %}
 </div>
 
+{# ── Activity Thread ───────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Activity ({{ activities|length }})</h3>
+    </div>
+
+    <div style="margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="addComment(event, '{{ load.load_id }}')">
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <div style="flex:1;">
+                    <input type="text" name="message" placeholder="Add a comment..." required
+                           style="width:100%;padding:6px 10px;font-size:13px;border:1px solid #ddd;border-radius:4px;">
+                </div>
+                <div>
+                    <input type="text" name="author" placeholder="Your name" style="padding:6px 10px;width:120px;font-size:13px;border:1px solid #ddd;border-radius:4px;">
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary">Post</button>
+            </div>
+        </form>
+    </div>
+
+    {% if activities %}
+    <div class="activity-thread">
+        {% for act in activities %}
+        <div class="activity-item activity-{{ act.activity_type }}">
+            <div class="activity-header">
+                {% if act.activity_type == 'comment' %}
+                    <strong>{{ act.author or 'Anonymous' }}</strong>
+                {% elif act.activity_type == 'status_change' %}
+                    <span class="status-tag">Status Change</span>
+                {% elif act.activity_type == 'assignment' %}
+                    <span class="status-tag">Assignment</span>
+                {% else %}
+                    <span class="status-tag">System</span>
+                {% endif %}
+                <span class="activity-time">{{ act.created_at[:16] if act.created_at else '' }}</span>
+                {% if act.activity_type == 'comment' %}
+                <button class="btn btn-xs btn-danger" onclick="deleteComment('{{ act.activity_id }}')" style="margin-left:auto;">Remove</button>
+                {% endif %}
+            </div>
+            <div class="activity-message">{{ act.message }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state-sm">No activity yet.</p>
+    {% endif %}
+</div>
+
 {# ── POD Packages ──────────────────────────────────────────────────── #}
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -889,6 +938,26 @@ function saveLoadInfo(e, loadId) {
         body: JSON.stringify(data)
     }).then(function(r) { return r.json(); }).then(function(r) {
         if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function addComment(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    apiPost('/api/dispatch/loads/' + loadId + '/activities', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function deleteComment(activityId) {
+    if (!confirm('Remove this comment?')) return;
+    fetch('/api/dispatch/activities/' + activityId, {method: 'DELETE'}).then(function(r) {
+        return r.json();
+    }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
         location.reload();
     });
 }

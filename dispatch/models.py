@@ -120,6 +120,10 @@ EQUIPMENT_TYPES = [
 
 EQUIPMENT_STATUSES = ["active", "inactive", "maintenance", "retired"]
 
+ACTIVITY_TYPES = ["comment", "status_change", "assignment", "system"]
+
+ACTIVITY_SOURCES = ["user", "system"]
+
 
 def _validate_choice(value: str, choices: list[str], field_name: str) -> None:
     if value not in choices:
@@ -442,6 +446,28 @@ class Equipment:
             self.updated_at = self.created_at
         _validate_choice(self.equipment_type, EQUIPMENT_TYPES, "equipment_type")
         _validate_choice(self.status, EQUIPMENT_STATUSES, "status")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class LoadActivity:
+    activity_id: str = ""
+    load_id: str = ""
+    activity_type: str = "comment"
+    message: str = ""
+    author: str = ""
+    source: str = "user"
+    created_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.activity_id:
+            self.activity_id = _gen_id("ACT")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        _validate_choice(self.activity_type, ACTIVITY_TYPES, "activity_type")
+        _validate_choice(self.source, ACTIVITY_SOURCES, "source")
 
     def to_dict(self) -> dict:
         return asdict(self)

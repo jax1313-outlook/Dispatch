@@ -168,6 +168,16 @@ CREATE TABLE IF NOT EXISTS equipment (
     updated_at      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS activities (
+    activity_id     TEXT PRIMARY KEY,
+    load_id         TEXT NOT NULL REFERENCES loads(load_id),
+    activity_type   TEXT NOT NULL DEFAULT 'comment',
+    message         TEXT NOT NULL DEFAULT '',
+    author          TEXT NOT NULL DEFAULT '',
+    source          TEXT NOT NULL DEFAULT 'user',
+    created_at      TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_milestones_load ON milestones(load_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_load ON evidence(load_id);
 CREATE INDEX IF NOT EXISTS idx_exceptions_load ON exceptions(load_id);
@@ -179,6 +189,7 @@ CREATE INDEX IF NOT EXISTS idx_settlements_status ON settlements(payment_status)
 CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
 CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment(status);
 CREATE INDEX IF NOT EXISTS idx_equipment_type ON equipment(equipment_type);
+CREATE INDEX IF NOT EXISTS idx_activities_load ON activities(load_id);
 """
 
 
