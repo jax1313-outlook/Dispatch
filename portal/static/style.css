@@ -89,6 +89,7 @@ body {
 .summary-card.summary-info { border-left: 4px solid #9b59b6; }
 .summary-card.summary-archive { border-left: 4px solid #7f8c8d; }
 .summary-card.summary-intel { border-left: 4px solid #2980b9; }
+.summary-card.summary-pending { border-left: 4px solid #e67e22; }
 .summary-number { display: block; font-size: 28px; font-weight: 700; color: #2c3e50; }
 .summary-label { font-size: 12px; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; }
 
@@ -117,6 +118,7 @@ body {
 }
 .card-sam { border-left: 4px solid #3498db; }
 .card-dispatch { border-left: 4px solid #27ae60; }
+.card-pending { border-left: 4px solid #e67e22; }
 .card h3 { padding: 8px 16px 4px; font-size: 15px; font-weight: 600; }
 .card h3 a { color: #2c3e50; text-decoration: none; }
 .card h3 a:hover { color: #3498db; }

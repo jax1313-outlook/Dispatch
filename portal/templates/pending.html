@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Pipeline — L2-COS Portal{% endblock %}
+{% block page_title %}Pipeline{% endblock %}
+
+{% block page_actions %}
+<button class="btn btn-primary" onclick="runPipeline()">Run Pipeline</button>
+{% endblock %}
+
+{% block body %}
+<section class="card-section">
+    <h2>Pending Decisions ({{ pending|length }})</h2>
+    {% if pending %}
+    <div class="card-grid">
+    {% for item in pending %}
+        <div class="card card-pending">
+            <div class="card-header {% if item.priority == 'urgent' %}card-investigate{% elif item.priority == 'high' %}card-high{% elif item.priority == 'medium' %}card-analysis{% else %}card-default{% endif %}">
+                <span class="card-badge">{{ item.priority|upper if item.priority else 'UNSET' }}</span>
+                <span class="card-score">{{ item.flag_count }} flag{{ 's' if item.flag_count != 1 }}</span>
+            </div>
+            <h3>{{ item.title or 'Untitled' }}</h3>
+            <div class="card-meta">
+                <span class="status-tag status-open">PENDING</span>
+                {% if item.solicitation_number %}
+                <span style="font-size:12px;color:#666;">{{ item.solicitation_number }}</span>
+                {% endif %}
+            </div>
+            <div class="card-fields">
+                <div><strong>Agency:</strong> {{ item.agency or 'Unknown' }}</div>
+                <div><strong>Recommendation:</strong> {{ item.recommendation or 'None' }}</div>
+                <div><strong>Contract ID:</strong> <code style="font-size:11px;">{{ item.contract_id }}</code></div>
+            </div>
+            {% if item.summary %}
+            <div class="card-summary">{{ item.summary[:200] }}{% if item.summary|length > 200 %}...{% endif %}</div>
+            {% endif %}
+            {% if item.flags %}
+            <div class="card-indicators">
+                {% for flag in item.flags %}
+                <span class="indicator">{{ flag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div class="card-actions">
+                {% for key, (label, route) in actions.items() %}
+                <button class="btn btn-sm {% if key == 'approve_archive' %}btn-success{% elif key == 'approve_proposal' %}btn-primary{% elif key == 'reject' %}btn-danger{% elif key == 'flag_review' %}btn-warning{% elif key == 'deeper_analysis' %}btn-purple{% endif %}"
+                    onclick="pipelineDecide('{{ item.contract_id }}', '{{ key }}')">{{ label }}</button>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state-sm">No contracts awaiting a decision.</div>
+    {% endif %}
+</section>
+
+{% if history %}
+<section class="card-section">
+    <h2>Routing History</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Contract ID</th>
+                <th>Action</th>
+                <th>Route</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for record in history %}
+            <tr>
+                <td><code style="font-size:11px;">{{ record.contract_id }}</code></td>
+                <td>{{ record.get('action_label', record.get('action', '')) }}</td>
+                <td>{{ record.get('route', '') }}</td>
+                <td>{{ record.get('decided_at', '') }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+<script>
+function runPipeline() {
+    if (!confirm('Run the acquisition-to-checkpoint pipeline?')) return;
+    apiPost('/api/pipeline/run', {})
+        .then(data => {
+            if (data.error) { alert(data.error); return; }
+            alert('Processed ' + data.processed + ' contract(s).');
+            location.reload();
+        });
+}
+
+function pipelineDecide(contractId, action) {
+    apiPost('/api/pipeline/decide', {contract_id: contractId, action: action})
+        .then(data => {
+            if (data.error) { alert(data.error); return; }
+            location.reload();
+        });
+}
+</script>
+{% endblock %}

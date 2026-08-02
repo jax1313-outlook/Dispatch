@@ -1,4 +1,4 @@
-"""Automation Layer — orchestrator.
+"""Automation Layer — CLI orchestrator.
 
 Runs the full Phase-1 pipeline end-to-end:
 
@@ -16,74 +16,30 @@ Run from the project root:
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 
-from cin_lite import acquisition, processing, archive, control, email_delivery, pending
-from cin_lite.agents import summarizer, router
-from cin_lite.workflows import proposal
+from cin_lite import control
+from cin_lite.pipeline import process_contracts
 
 
 def run(action_override: str | None) -> None:
-    contracts = acquisition.acquire()
-    if not contracts:
+    results = process_contracts(action_override)
+    if not results:
         print("No contracts acquired. Add JSON files under cin_lite/sample_data/.")
         return
 
-    print(f"Acquired {len(contracts)} contract(s).\n")
+    print(f"Processed {len(results)} contract(s).\n")
 
-    for contract in contracts:
-        contract["_acquired_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        intelligence = processing.process(contract)
-        flags = processing.all_flags(intelligence)
-        summary = summarizer.summarize(contract, intelligence, flags)
-        decision = router.decide(contract, intelligence, summary, flags)
-
-        contract_id = archive.make_id(contract)
-
-        text_email = control.render_email(contract, intelligence, summary, flags, decision)
-        html_email = control.render_html_email(
-            contract, intelligence, summary, flags, decision,
-            token_fn=email_delivery.make_token,
-            contract_id=contract_id,
-        )
-
-        pending.store(contract_id, contract, intelligence, summary, decision, flags)
-        checkpoint_status = email_delivery.deliver_checkpoint(
-            contract, contract_id, text_email, html_email,
-        )
-        print(text_email)
-        print(f"\n   checkpoint email: {checkpoint_status}")
-        print(f"   pending decision stored: {contract_id}")
-
-        if action_override:
-            action = control.collect(default=action_override, recommended=decision["action"])
-            label, route = control.resolve(action)
-
-            metadata = archive.store(contract, intelligence, summary)
-            routing_path = archive.record_routing(
-                metadata["contract_id"], action, route, metadata, decision
-            )
-            email_status = email_delivery.deliver_decision(
-                contract, metadata["contract_id"], summary, decision, action, route, flags
-            )
-
-            pending.complete(contract_id)
-
-            print(f"\n-> {metadata['contract_id']}: {label} -> routed to {route}")
-            print(f"   archived under {archive.ARCHIVE_ROOT}")
-            print(f"   routing record: {routing_path}")
-            print(f"   email: {email_status}")
-
-            if proposal.is_triggered(action):
-                result = proposal.trigger(
-                    contract, metadata["contract_id"], intelligence, decision, summary, flags
-                )
-                print(f"   proposal triggered: {result['proposal_id']}")
-                print(f"     outline: {result['outline_path']}")
-                print(f"     kickoff email: {result['email_status']}")
+    for r in results:
+        print(f"  {r['contract_id']}: {r['title']}")
+        print(f"    recommendation: {r['recommendation']} (priority {r['priority']})")
+        print(f"    flags: {r['flag_count']}")
+        print(f"    checkpoint email: {r['checkpoint_email']}")
+        if r["status"] == "decided":
+            print(f"    -> {r['action_label']} -> {r['route']}")
+            if "proposal" in r:
+                print(f"    proposal triggered: {r['proposal']['proposal_id']}")
         else:
-            print(f"   awaiting decision via email or portal")
+            print(f"    awaiting decision via email or portal")
         print()
 
 
