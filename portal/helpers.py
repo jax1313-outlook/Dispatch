@@ -72,7 +72,13 @@ def card_visual(score: int | None, decision: dict | None = None) -> dict:
     if score is not None:
         if score >= SCORE_HIGH_THRESHOLD:
             return {"icon": "✅", "label": "HIGH VALUE MATCH", "css": "card-high"}
-        return {"icon": "\U0001f7e5", "label": "", "css": "card-investigate"}
+        if score >= 75:
+            return {"icon": "🟢", "label": "STRONG MATCH", "css": "card-strong"}
+        if score >= 60:
+            return {"icon": "🟡", "label": "MODERATE", "css": "card-moderate"}
+        if score >= 40:
+            return {"icon": "🟠", "label": "LOW VALUE", "css": "card-low"}
+        return {"icon": "🔴", "label": "POOR MATCH", "css": "card-poor"}
 
     if decision:
         action = decision.get("action", "")

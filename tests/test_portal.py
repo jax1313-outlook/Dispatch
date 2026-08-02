@@ -221,8 +221,8 @@ class TestRedSquare:
     def test_low_score_visual(self):
         from portal.helpers import card_visual
         vis = card_visual(65)
-        assert vis["css"] == "card-investigate"
-        assert "🟥" in vis["icon"]
+        assert vis["css"] == "card-moderate"
+        assert "🟡" in vis["icon"]
 
     def test_high_score_visual(self):
         from portal.helpers import card_visual
@@ -686,7 +686,7 @@ class TestCardVisual:
     def test_score_below_90(self):
         from portal.helpers import card_visual
         vis = card_visual(89)
-        assert vis["css"] == "card-investigate"
+        assert vis["css"] == "card-strong"
 
     def test_decision_approve_proposal(self):
         from portal.helpers import card_visual

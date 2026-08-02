@@ -62,6 +62,7 @@ def card_action():
             equipment=cd.get("equipment_required", ""),
             notes=_build_booking_notes(cd, entry),
         )
+        _auto_rate_confirm(dispatch_svc, engine_load["load_id"], cd)
         sandbox.link_engine_load(sandbox_id, engine_load["load_id"])
         updated = sandbox.update_status(sandbox_id, "BOOKED",
                                         note=f"Booked as engine load {engine_load['load_id']}")
@@ -362,6 +363,31 @@ def _extract_window_start(window: str) -> str:
         return ""
     parts = window.split(" - ")
     return parts[0].strip()
+
+
+def _auto_rate_confirm(dispatch_svc, load_id: str, cd: dict) -> None:
+    """Create a RateConfirmation from opportunity card data when booking a load."""
+    rate = cd.get("rate")
+    if not rate:
+        return
+    try:
+        rate_amount = float(rate)
+    except (TypeError, ValueError):
+        return
+    distance = 0.0
+    if cd.get("distance_miles"):
+        try:
+            distance = float(cd["distance_miles"])
+        except (TypeError, ValueError):
+            pass
+    dispatch_svc.confirm_rate(
+        load_id=load_id,
+        rate_amount=rate_amount,
+        rate_type="flat",
+        distance_miles=distance,
+        confirmed_by="booking-auto",
+        notes=f"Auto-confirmed from load board opportunity (RPM: ${cd.get('rpm', 'N/A')})",
+    )
 
 
 def _build_booking_notes(cd: dict, entry: dict) -> str:
