@@ -776,6 +776,52 @@ def check_overdue_settlements() -> list[dict]:
     return newly_overdue
 
 
+def dispute_settlement(
+    load_id: str,
+    reason: str = "",
+) -> dict | None:
+    existing = store.get_settlement(load_id)
+    if not existing:
+        return None
+    if existing["payment_status"] not in ("invoiced", "overdue"):
+        raise ValueError(
+            f"Cannot dispute settlement in status '{existing['payment_status']}'"
+        )
+    notes = existing.get("notes", "")
+    if reason:
+        notes = f"{notes}\nDISPUTE: {reason}".strip()
+    result = store.update_settlement(
+        load_id, payment_status="disputed", notes=notes,
+    )
+    load = store.get_load(load_id)
+    if load and result:
+        notifications.notify_settlement_disputed(load, result, reason)
+    return result
+
+
+def write_off_settlement(
+    load_id: str,
+    reason: str = "",
+) -> dict | None:
+    existing = store.get_settlement(load_id)
+    if not existing:
+        return None
+    if existing["payment_status"] not in ("invoiced", "overdue", "disputed"):
+        raise ValueError(
+            f"Cannot write off settlement in status '{existing['payment_status']}'"
+        )
+    notes = existing.get("notes", "")
+    if reason:
+        notes = f"{notes}\nWRITE-OFF: {reason}".strip()
+    result = store.update_settlement(
+        load_id, payment_status="written_off", notes=notes,
+    )
+    load = store.get_load(load_id)
+    if load and result:
+        notifications.notify_settlement_written_off(load, result, reason)
+    return result
+
+
 _STALL_THRESHOLDS_HOURS: dict[str, int] = {
     "created": 24,
     "dispatched": 12,

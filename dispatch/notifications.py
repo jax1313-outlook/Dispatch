@@ -393,3 +393,61 @@ def notify_payment_overdue(load: dict, settlement: dict) -> str:
     subject = f"[DISPATCH] OVERDUE — {load.get('customer', load['load_id'])}"
     msg = _build([reviewer_address()], subject, text, html=html)
     return _send_or_write(f"dispatch-overdue-{load['load_id']}", msg)
+
+
+def notify_settlement_disputed(load: dict, settlement: dict, reason: str = "") -> str:
+    esc = _html.escape
+    invoice_num = settlement.get("invoice_number", "")
+    invoice_amt = settlement.get("invoice_amount", 0)
+
+    detail = f"""\
+<div style="background:#fff3e0;border-left:4px solid #e65100;padding:12px 16px;margin-bottom:16px;">
+    <strong>Settlement Disputed</strong><br>
+    Invoice #: <code>{esc(invoice_num)}</code><br>
+    Amount: <strong>${invoice_amt:,.2f}</strong><br>
+    {f'Reason: {esc(reason)}' if reason else ''}
+</div>
+<p style="color:#666;font-size:13px;">
+    This invoice has been disputed. Review and resolve the dispute or escalate.
+</p>"""
+
+    text, html = _render_notification(
+        load,
+        event_type="settlement_disputed",
+        headline="Settlement Disputed",
+        detail_html=detail,
+        recommended="flag_review",
+    )
+
+    subject = f"[DISPATCH] DISPUTED — {load.get('customer', load['load_id'])}"
+    msg = _build([reviewer_address()], subject, text, html=html)
+    return _send_or_write(f"dispatch-disputed-{load['load_id']}", msg)
+
+
+def notify_settlement_written_off(load: dict, settlement: dict, reason: str = "") -> str:
+    esc = _html.escape
+    invoice_num = settlement.get("invoice_number", "")
+    invoice_amt = settlement.get("invoice_amount", 0)
+
+    detail = f"""\
+<div style="background:#fce4ec;border-left:4px solid #880e4f;padding:12px 16px;margin-bottom:16px;">
+    <strong>Settlement Written Off</strong><br>
+    Invoice #: <code>{esc(invoice_num)}</code><br>
+    Amount: <strong>${invoice_amt:,.2f}</strong><br>
+    {f'Reason: {esc(reason)}' if reason else ''}
+</div>
+<p style="color:#666;font-size:13px;">
+    This invoice has been written off as uncollectible.
+</p>"""
+
+    text, html = _render_notification(
+        load,
+        event_type="settlement_written_off",
+        headline="Settlement Written Off",
+        detail_html=detail,
+        recommended="acknowledge",
+    )
+
+    subject = f"[DISPATCH] WRITTEN OFF — {load.get('customer', load['load_id'])}"
+    msg = _build([reviewer_address()], subject, text, html=html)
+    return _send_or_write(f"dispatch-writeoff-{load['load_id']}", msg)

@@ -516,6 +516,36 @@ def record_payment(load_id):
     return jsonify({"status": "ok", "settlement": result})
 
 
+@dispatch_bp.route("/loads/<load_id>/settlement/dispute", methods=["POST"])
+def dispute_settlement(load_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = services.dispute_settlement(
+            load_id=load_id,
+            reason=data.get("reason", ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    if not result:
+        return jsonify({"error": f"No settlement for {load_id}"}), 404
+    return jsonify({"status": "ok", "settlement": result})
+
+
+@dispatch_bp.route("/loads/<load_id>/settlement/write-off", methods=["POST"])
+def write_off_settlement(load_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = services.write_off_settlement(
+            load_id=load_id,
+            reason=data.get("reason", ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    if not result:
+        return jsonify({"error": f"No settlement for {load_id}"}), 404
+    return jsonify({"status": "ok", "settlement": result})
+
+
 @dispatch_bp.route("/settlements", methods=["GET"])
 def list_settlements():
     status = request.args.get("payment_status")

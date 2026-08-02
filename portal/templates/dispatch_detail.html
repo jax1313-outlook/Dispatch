@@ -546,6 +546,33 @@
     <div style="margin-top:10px;">
         <button class="btn btn-sm btn-success" onclick="toggleEl('payment-form')">Record Payment</button>
         <button class="btn btn-sm btn-warning" onclick="markOverdue('{{ load.load_id }}')">Mark Overdue</button>
+        <button class="btn btn-sm btn-danger" onclick="disputeSettlement('{{ load.load_id }}')">Dispute</button>
+        <button class="btn btn-sm" style="background:#880e4f;color:#fff;" onclick="writeOffSettlement('{{ load.load_id }}')">Write Off</button>
+    </div>
+
+    <div id="payment-form" style="display:none;margin-top:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="recordPayment(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:8px;">
+                <div><label><strong>Payment Amount ($) *</strong><br>
+                    <input type="number" name="payment_amount" step="0.01" min="0" required style="width:100%;padding:4px 8px;"
+                           value="{{ settlement.invoice_amount }}"></label></div>
+                <div><label><strong>Payment Method</strong><br>
+                    <select name="payment_method" style="width:100%;padding:4px;">
+                        {% for m in payment_methods %}<option value="{{ m }}">{{ m|replace('_', ' ')|title }}</option>{% endfor %}
+                    </select></label></div>
+                <div><label><strong>Factoring Fee ($)</strong><br>
+                    <input type="number" name="factoring_fee" step="0.01" min="0" value="0" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Notes</strong><br>
+                    <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success">Record</button>
+            <button type="button" class="btn btn-sm" onclick="toggleEl('payment-form')">Cancel</button>
+        </form>
+    </div>
+    {% elif settlement.payment_status == 'disputed' %}
+    <div style="margin-top:10px;">
+        <button class="btn btn-sm btn-success" onclick="toggleEl('payment-form')">Resolve &amp; Pay</button>
+        <button class="btn btn-sm" style="background:#880e4f;color:#fff;" onclick="writeOffSettlement('{{ load.load_id }}')">Write Off</button>
     </div>
 
     <div id="payment-form" style="display:none;margin-top:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
@@ -744,6 +771,25 @@ function markOverdue(loadId) {
           if (r.error) { alert(r.error); return; }
           location.reload();
       });
+}
+
+function disputeSettlement(loadId) {
+    var reason = prompt('Dispute reason (optional):');
+    if (reason === null) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/settlement/dispute', {reason: reason}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function writeOffSettlement(loadId) {
+    if (!confirm('Write off this invoice as uncollectible?')) return;
+    var reason = prompt('Write-off reason (optional):');
+    if (reason === null) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/settlement/write-off', {reason: reason}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
 }
 
 function assignDriver(loadId) {
