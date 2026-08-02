@@ -197,8 +197,15 @@ def dispatch_detail(load_id):
 @pages_bp.route("/brokers")
 def brokers():
     from dispatch import services as dispatch_svc
+    from dispatch.models import BROKER_STATUSES
     scorecards = dispatch_svc.get_broker_scorecards()
-    return render_template("brokers.html", scorecards=scorecards)
+    contacts = dispatch_svc.list_broker_contacts()
+    return render_template(
+        "brokers.html",
+        scorecards=scorecards,
+        contacts=contacts,
+        broker_statuses=BROKER_STATUSES,
+    )
 
 
 @pages_bp.route("/calendar")

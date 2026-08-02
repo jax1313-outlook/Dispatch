@@ -1,9 +1,147 @@
 {% extends "base.html" %}
 {% block title %}Brokers — L2-COS Portal{% endblock %}
-{% block page_title %}Broker Scorecard{% endblock %}
+{% block page_title %}Broker Directory{% endblock %}
 
 {% block body %}
 
+<style>
+.broker-status { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.8em; font-weight:600; }
+.broker-status.active { background:#d4edda; color:#155724; }
+.broker-status.inactive { background:#e2e3e5; color:#383d41; }
+.broker-status.blacklisted { background:#f8d7da; color:#721c24; }
+.broker-tabs { display:flex; gap:0; margin-bottom:1.5rem; border-bottom:2px solid #dee2e6; }
+.broker-tabs button { padding:10px 20px; border:none; background:none; cursor:pointer; font-weight:600; color:#6c757d; border-bottom:2px solid transparent; margin-bottom:-2px; }
+.broker-tabs button.active { color:#2c3e50; border-bottom-color:#3498db; }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+.broker-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.9em; }
+.broker-detail-grid dt { font-weight:600; color:#555; }
+.broker-detail-grid dd { margin:0; }
+</style>
+
+<div class="broker-tabs">
+    <button class="active" onclick="switchTab('directory')">Contact Directory</button>
+    <button onclick="switchTab('scorecard')">Performance Scorecard</button>
+</div>
+
+<!-- Contact Directory Tab -->
+<div id="tab-directory" class="tab-content active">
+
+<div class="dashboard-summary">
+    <div class="summary-card">
+        <span class="summary-number">{{ contacts|length }}</span>
+        <span class="summary-label">Total Brokers</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #27ae60;">
+        <span class="summary-number">{{ contacts|selectattr('status','equalto','active')|list|length }}</span>
+        <span class="summary-label">Active</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #e74c3c;">
+        <span class="summary-number">{{ contacts|selectattr('status','equalto','blacklisted')|list|length }}</span>
+        <span class="summary-label">Blacklisted</span>
+    </div>
+</div>
+
+<div class="card-section">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2>Broker Contacts</h2>
+        <button onclick="document.getElementById('add-broker-form').style.display='block'" style="padding:6px 14px; background:#3498db; color:#fff; border:none; border-radius:4px; cursor:pointer;">+ Add Broker</button>
+    </div>
+
+    <div id="add-broker-form" style="display:none; margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:6px;">
+        <h3 style="margin-top:0;">Add Broker Contact</h3>
+        <form onsubmit="addBroker(event)">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                <div>
+                    <label>Company Name *</label>
+                    <input type="text" name="company_name" required style="width:100%;">
+                </div>
+                <div>
+                    <label>Contact Name</label>
+                    <input type="text" name="contact_name" style="width:100%;">
+                </div>
+                <div>
+                    <label>Phone</label>
+                    <input type="text" name="phone" style="width:100%;">
+                </div>
+                <div>
+                    <label>Email</label>
+                    <input type="email" name="email" style="width:100%;">
+                </div>
+                <div>
+                    <label>MC Number</label>
+                    <input type="text" name="mc_number" style="width:100%;">
+                </div>
+                <div>
+                    <label>DOT Number</label>
+                    <input type="text" name="dot_number" style="width:100%;">
+                </div>
+                <div>
+                    <label>Address</label>
+                    <input type="text" name="address" style="width:100%;">
+                </div>
+                <div>
+                    <label>Payment Terms</label>
+                    <input type="text" name="payment_terms" placeholder="e.g. Net 30" style="width:100%;">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label>Notes</label>
+                    <textarea name="notes" rows="2" style="width:100%;"></textarea>
+                </div>
+            </div>
+            <div style="margin-top:0.75rem; display:flex; gap:0.5rem;">
+                <button type="submit" style="padding:6px 14px; background:#27ae60; color:#fff; border:none; border-radius:4px; cursor:pointer;">Save</button>
+                <button type="button" onclick="document.getElementById('add-broker-form').style.display='none'" style="padding:6px 14px; background:#95a5a6; color:#fff; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <div style="margin-bottom:1rem;">
+        <input type="text" id="broker-search" placeholder="Search brokers..." oninput="filterBrokers()" style="padding:6px 12px; width:300px; border:1px solid #dee2e6; border-radius:4px;">
+    </div>
+
+    {% if contacts %}
+    <table class="data-table" id="broker-table">
+        <thead>
+            <tr>
+                <th>Company</th>
+                <th>Contact</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>MC #</th>
+                <th>Payment Terms</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in contacts %}
+            <tr data-broker-id="{{ c.broker_id }}" data-searchable="{{ c.company_name|lower }} {{ c.contact_name|lower }} {{ c.mc_number|lower }} {{ c.phone }} {{ c.email|lower }}">
+                <td style="font-weight:600;">{{ c.company_name }}</td>
+                <td>{{ c.contact_name or '—' }}</td>
+                <td>{{ c.phone or '—' }}</td>
+                <td>{{ c.email or '—' }}</td>
+                <td>{{ c.mc_number or '—' }}</td>
+                <td>{{ c.payment_terms or '—' }}</td>
+                <td><span class="broker-status {{ c.status }}">{{ c.status }}</span></td>
+                <td>
+                    <button onclick="editBroker('{{ c.broker_id }}')" style="padding:2px 8px; font-size:0.85em; border:1px solid #3498db; color:#3498db; background:none; border-radius:3px; cursor:pointer;">Edit</button>
+                    <button onclick="deleteBroker('{{ c.broker_id }}', '{{ c.company_name }}')" style="padding:2px 8px; font-size:0.85em; border:1px solid #e74c3c; color:#e74c3c; background:none; border-radius:3px; cursor:pointer;">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No broker contacts yet. Click "+ Add Broker" to create your first entry.</p>
+    </div>
+    {% endif %}
+</div>
+</div>
+
+<!-- Scorecard Tab -->
+<div id="tab-scorecard" class="tab-content">
 {% if scorecards %}
 <div class="dashboard-summary">
     <div class="summary-card">
@@ -76,5 +214,70 @@
     <p>No broker data yet. Create loads with a broker/shipper name to build scorecards.</p>
 </div>
 {% endif %}
+</div>
+
+<script>
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.broker-tabs button').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    event.target.classList.add('active');
+}
+
+function addBroker(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = {};
+    new FormData(form).forEach((v, k) => { data[k] = v; });
+    fetch('/api/dispatch/broker-contacts', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(r => {
+        if (!r.ok) return r.json().then(d => { alert(d.error || 'Error'); throw new Error(); });
+        location.reload();
+    }).catch(() => {});
+}
+
+function editBroker(id) {
+    fetch('/api/dispatch/broker-contacts/' + id)
+    .then(r => r.json())
+    .then(b => {
+        const fields = ['company_name','contact_name','phone','email','mc_number','dot_number','address','payment_terms','notes'];
+        const vals = {};
+        fields.forEach(f => {
+            const v = prompt(f.replace(/_/g,' ') + ':', b[f] || '');
+            if (v !== null) vals[f] = v;
+        });
+        if (Object.keys(vals).length === 0) return;
+        const statusVal = prompt('Status (active/inactive/blacklisted):', b.status);
+        if (statusVal !== null) vals.status = statusVal;
+        fetch('/api/dispatch/broker-contacts/' + id, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(vals)
+        }).then(r => {
+            if (!r.ok) return r.json().then(d => { alert(d.error || 'Error'); throw new Error(); });
+            location.reload();
+        }).catch(() => {});
+    });
+}
+
+function deleteBroker(id, name) {
+    if (!confirm('Delete broker "' + name + '"?')) return;
+    fetch('/api/dispatch/broker-contacts/' + id, { method: 'DELETE' })
+    .then(r => {
+        if (!r.ok) return r.json().then(d => { alert(d.error || 'Error'); throw new Error(); });
+        location.reload();
+    }).catch(() => {});
+}
+
+function filterBrokers() {
+    const q = document.getElementById('broker-search').value.toLowerCase();
+    document.querySelectorAll('#broker-table tbody tr').forEach(row => {
+        row.style.display = row.dataset.searchable.includes(q) ? '' : 'none';
+    });
+}
+</script>
 
 {% endblock %}

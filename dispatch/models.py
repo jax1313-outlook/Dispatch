@@ -641,3 +641,38 @@ class LaneTemplate:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+BROKER_STATUSES = ["active", "inactive", "blacklisted"]
+
+
+@dataclass
+class BrokerContact:
+    broker_id: str = ""
+    company_name: str = ""
+    contact_name: str = ""
+    phone: str = ""
+    email: str = ""
+    mc_number: str = ""
+    dot_number: str = ""
+    address: str = ""
+    payment_terms: str = ""
+    notes: str = ""
+    status: str = "active"
+    created_at: str = ""
+    updated_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.broker_id:
+            self.broker_id = _gen_id("BRK")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.updated_at:
+            self.updated_at = self.created_at
+        if not self.company_name:
+            raise ValueError("Broker company name is required")
+        if self.status:
+            _validate_choice(self.status, BROKER_STATUSES, "status")
+
+    def to_dict(self) -> dict:
+        return asdict(self)

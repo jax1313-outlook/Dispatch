@@ -13,6 +13,7 @@ from flask import Blueprint, Response, jsonify, render_template, request
 
 from dispatch import notifications, services
 from dispatch.models import (
+    BROKER_STATUSES,
     DETENTION_LOCATIONS,
     DETENTION_STATUSES,
     DRIVER_STATUSES,
@@ -1473,3 +1474,67 @@ def ifta_quarterly_report():
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify(report)
+
+
+# ── Broker Contact Directory ─────────────────────────────────────────
+
+
+@dispatch_bp.route("/broker-contacts", methods=["GET"])
+def list_broker_contacts():
+    kwargs = {}
+    status = request.args.get("status")
+    if status:
+        kwargs["status"] = status
+    search = request.args.get("search")
+    if search:
+        kwargs["search"] = search
+    return jsonify(services.list_broker_contacts(**kwargs))
+
+
+@dispatch_bp.route("/broker-contacts", methods=["POST"])
+def add_broker_contact():
+    data = request.get_json(force=True)
+    try:
+        result = services.add_broker_contact(
+            company_name=data.get("company_name", ""),
+            contact_name=data.get("contact_name", ""),
+            phone=data.get("phone", ""),
+            email=data.get("email", ""),
+            mc_number=data.get("mc_number", ""),
+            dot_number=data.get("dot_number", ""),
+            address=data.get("address", ""),
+            payment_terms=data.get("payment_terms", ""),
+            notes=data.get("notes", ""),
+            status=data.get("status", "active"),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result), 201
+
+
+@dispatch_bp.route("/broker-contacts/<broker_id>", methods=["GET"])
+def get_broker_contact(broker_id):
+    broker = services.get_broker_contact_with_stats(broker_id)
+    if not broker:
+        return jsonify({"error": "broker not found"}), 404
+    return jsonify(broker)
+
+
+@dispatch_bp.route("/broker-contacts/<broker_id>", methods=["PUT"])
+def update_broker_contact(broker_id):
+    data = request.get_json(force=True)
+    try:
+        result = services.update_broker_contact(broker_id, data)
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not result:
+        return jsonify({"error": "broker not found"}), 404
+    return jsonify(result)
+
+
+@dispatch_bp.route("/broker-contacts/<broker_id>", methods=["DELETE"])
+def delete_broker_contact(broker_id):
+    ok = services.delete_broker_contact(broker_id)
+    if not ok:
+        return jsonify({"error": "broker not found"}), 404
+    return jsonify({"status": "ok"})
