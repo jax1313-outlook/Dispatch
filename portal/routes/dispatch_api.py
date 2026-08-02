@@ -102,6 +102,14 @@ def load_bundle(load_id):
     return jsonify({"status": "ok", **bundle})
 
 
+# ── Stalled Loads ─────────────────────────────────────────────────────
+
+@dispatch_bp.route("/loads/stalled", methods=["GET"])
+def stalled_loads():
+    stalled = services.check_stalled_loads()
+    return jsonify({"status": "ok", "loads": stalled, "count": len(stalled)})
+
+
 # ── Visibility ────────────────────────────────────────────────────────
 
 @dispatch_bp.route("/loads/<load_id>/visibility", methods=["GET"])

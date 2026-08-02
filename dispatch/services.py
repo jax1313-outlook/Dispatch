@@ -748,6 +748,51 @@ def check_overdue_settlements() -> list[dict]:
     return newly_overdue
 
 
+_STALL_THRESHOLDS_HOURS: dict[str, int] = {
+    "created": 24,
+    "dispatched": 12,
+    "en_route_pickup": 8,
+    "at_pickup": 4,
+    "picked_up": 4,
+    "in_transit": 48,
+    "at_delivery": 4,
+    "delivered": 24,
+}
+
+
+def check_stalled_loads(thresholds: dict[str, int] | None = None) -> list[dict]:
+    """Find loads that have been in their current status longer than expected.
+
+    Returns loads with added 'hours_in_status' and 'threshold_hours' fields.
+    """
+    from datetime import datetime, timezone
+
+    limits = thresholds or _STALL_THRESHOLDS_HOURS
+    now = datetime.now(timezone.utc)
+    stalled = []
+
+    all_loads = store.list_loads()
+    for load in all_loads:
+        status = load["status"]
+        if status not in limits:
+            continue
+        updated = load.get("updated_at", "")
+        if not updated:
+            continue
+        try:
+            ts = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        hours = (now - ts).total_seconds() / 3600
+        if hours >= limits[status]:
+            load["hours_in_status"] = round(hours, 1)
+            load["threshold_hours"] = limits[status]
+            stalled.append(load)
+
+    stalled.sort(key=lambda x: x["hours_in_status"], reverse=True)
+    return stalled
+
+
 # ── Driver Management ───────────────────────────────────────────────
 
 
