@@ -107,6 +107,9 @@ def dispatch():
                 card_data=load,
                 score=load.get("score"),
             )
+            scoring = load.get("_scoring")
+            if scoring:
+                sandbox.update_scoring(entry["id"], scoring)
             conflict.check_dispatch_card(load, entry["id"])
         all_entries = sandbox.get_all()
         dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}

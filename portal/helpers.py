@@ -58,13 +58,20 @@ def load_and_process_sam() -> list[dict]:
 
 
 def load_dispatch_data() -> list[dict]:
-    """Load dispatch/load data from sample files."""
+    """Load dispatch/load data from sample files and run scoring."""
+    from dispatch.scoring import score_load
+
     loads: list[dict] = []
     if DISPATCH_SAMPLE_DIR.exists():
         for path in sorted(DISPATCH_SAMPLE_DIR.glob("*.json")):
             with path.open(encoding="utf-8") as fh:
                 data = json.load(fh)
             data.setdefault("_source_file", path.name)
+            scoring = score_load(data)
+            data["deadhead_miles"] = scoring.get("deadhead_miles")
+            data["fuel_estimate"] = scoring.get("fuel_estimate")
+            data["score"] = scoring["score"]
+            data["_scoring"] = scoring
             loads.append(data)
     return loads
 

@@ -57,6 +57,27 @@ def get(sandbox_id: str) -> dict | None:
     return _load().get(sandbox_id)
 
 
+def update_scoring(sandbox_id: str, scoring: dict) -> dict | None:
+    """Update Position/HOS fields and score from a scoring result dict."""
+    data = _load()
+    if sandbox_id not in data:
+        return None
+    entry = data[sandbox_id]
+    for field in ("position_impact", "return_home_required", "tomorrow_position_risk",
+                  "hos_risk", "route_risk", "economic_opportunity_flag"):
+        if field in scoring:
+            entry[field] = scoring[field]
+    if "score" in scoring:
+        entry["score"] = scoring["score"]
+    if "deadhead_miles" in scoring and scoring["deadhead_miles"] is not None:
+        entry["card_data"]["deadhead_miles"] = scoring["deadhead_miles"]
+    if "fuel_estimate" in scoring and scoring["fuel_estimate"] is not None:
+        entry["card_data"]["fuel_estimate"] = scoring["fuel_estimate"]
+    entry["updated_at"] = _utc_now()
+    _save(data)
+    return entry
+
+
 def create_entry(
     source_type: str,
     source_id: str,
