@@ -89,6 +89,27 @@
     </form>
 </div>
 
+{# ── Stalled Load Alert ───────────────────────────────────────────── #}
+{% if stalled_loads %}
+<div class="card-section" style="border-left:4px solid #e74c3c;background:#fdf2f2;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span class="severity-tag severity-high">{{ stalled_loads|length }} Stalled</span>
+        <strong>Loads exceeding expected time in status</strong>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        {% for sl in stalled_loads[:5] %}
+        <a href="{{ url_for('pages.dispatch_detail', load_id=sl.load_id) }}" class="kpi-chip kpi-exception" style="text-decoration:none;">
+            <span class="kpi-count">{{ sl.hours_in_status }}h</span>
+            {{ sl.customer[:15] }} — {{ sl.status|replace('_', ' ') }}
+        </a>
+        {% endfor %}
+        {% if stalled_loads|length > 5 %}
+        <span class="kpi-chip">+{{ stalled_loads|length - 5 }} more</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {# ── Operational KPIs ─────────────────────────────────────────────── #}
 {% set active_statuses = ['dispatched', 'en_route_pickup', 'at_pickup', 'picked_up', 'in_transit', 'at_delivery'] %}
 {% set ns = namespace(dispatched=0, en_route=0, in_transit=0, at_delivery=0, delivered=0, exceptions=0) %}
@@ -154,13 +175,14 @@
                 <th>Delivery</th>
                 <th>Driver</th>
                 <th>Equipment</th>
-                <th>Updated</th>
+                <th>Age</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
         {% for load in engine_loads %}
-            <tr>
+            {% set is_stalled = load.load_id in stalled_ids %}
+            <tr {% if is_stalled %}style="border-left:3px solid #e74c3c;"{% endif %}>
                 <td><a href="{{ url_for('pages.dispatch_detail', load_id=load.load_id) }}">{{ load.load_id[:12] }}...</a></td>
                 <td>{{ load.customer }}</td>
                 <td><span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></td>
@@ -168,7 +190,7 @@
                 <td>{{ load.delivery_location or '—' }}</td>
                 <td>{{ load.driver or '—' }}</td>
                 <td>{{ load.equipment or '—' }}</td>
-                <td>{{ load.updated_at[:16] if load.updated_at else '—' }}</td>
+                <td {% if is_stalled %}style="color:#e74c3c;font-weight:700;"{% endif %}>{{ load.updated_at|time_ago }}</td>
                 <td><a href="{{ url_for('pages.dispatch_detail', load_id=load.load_id) }}" class="btn btn-sm">View</a></td>
             </tr>
         {% endfor %}

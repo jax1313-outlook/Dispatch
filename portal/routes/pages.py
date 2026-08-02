@@ -133,6 +133,8 @@ def dispatch():
     entries_sorted = sorted(dispatch_entries.values(), key=_priority_key, reverse=True)
     active_drivers = dispatch_svc.list_drivers(status="active")
     active_equipment = dispatch_svc.list_equipment(status="active")
+    stalled = dispatch_svc.check_stalled_loads()
+    stalled_ids = {ld["load_id"] for ld in stalled}
     return render_template(
         "dispatch.html",
         entries=entries_sorted,
@@ -147,6 +149,8 @@ def dispatch():
         customer_search=customer_search,
         date_from=date_from,
         date_to=date_to,
+        stalled_loads=stalled,
+        stalled_ids=stalled_ids,
     )
 
 

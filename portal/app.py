@@ -35,6 +35,25 @@ def create_app(config: dict | None = None) -> Flask:
     if not app.config.get("TESTING"):
         check_secret_key()
     register_routes(app)
+
+    @app.template_filter("time_ago")
+    def _time_ago(iso_str: str) -> str:
+        if not iso_str:
+            return "—"
+        from datetime import datetime, timezone
+        try:
+            ts = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return "—"
+        delta = datetime.now(timezone.utc) - ts
+        hours = delta.total_seconds() / 3600
+        if hours < 1:
+            return f"{int(delta.total_seconds() / 60)}m"
+        if hours < 24:
+            return f"{int(hours)}h"
+        days = int(hours / 24)
+        return f"{days}d"
+
     return app
 
 
