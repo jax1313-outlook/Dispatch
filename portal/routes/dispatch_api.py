@@ -20,6 +20,7 @@ from dispatch.models import (
     EXCEPTION_STATUSES,
     EXCEPTION_TYPES,
     SEVERITY_LEVELS,
+    ACTIVITY_TYPES,
     EXPENSE_CATEGORIES,
     LICENSE_CLASSES,
     LOAD_STATUSES,
@@ -932,3 +933,42 @@ def export_settlements_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=settlements.csv"},
     )
+
+
+# ── Activities ───────────────────────────────────────────────────────
+
+
+@dispatch_bp.route("/loads/<load_id>/activities", methods=["GET"])
+def list_activities(load_id):
+    load = services.get_load(load_id)
+    if not load:
+        return jsonify({"error": "Load not found"}), 404
+    return jsonify(services.list_activities(load_id))
+
+
+@dispatch_bp.route("/loads/<load_id>/activities", methods=["POST"])
+def add_activity(load_id):
+    data = request.get_json(force=True)
+    message = data.get("message", "").strip()
+    if not message:
+        return jsonify({"error": "message is required"}), 400
+    activity_type = data.get("activity_type", "comment")
+    if activity_type not in ACTIVITY_TYPES:
+        return jsonify({"error": f"Invalid activity_type. Must be one of {ACTIVITY_TYPES}"}), 400
+    try:
+        result = services.add_activity(
+            load_id=load_id,
+            message=message,
+            activity_type=activity_type,
+            author=data.get("author", ""),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+    return jsonify(result), 201
+
+
+@dispatch_bp.route("/activities/<activity_id>", methods=["DELETE"])
+def delete_activity(activity_id):
+    if services.delete_activity(activity_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "Activity not found"}), 404

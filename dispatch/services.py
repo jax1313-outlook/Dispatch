@@ -144,11 +144,22 @@ def update_load(load_id: str, **fields) -> dict | None:
         _validate_driver_assignment(fields["driver_id"])
     if "equipment_id" in fields and fields["equipment_id"]:
         _validate_equipment_assignment(fields["equipment_id"])
+    old_status = None
     if "status" in fields:
         current = store.get_load(load_id)
         if current:
-            validate_status_transition(current["status"], fields["status"])
-    return store.update_load(load_id, **fields)
+            old_status = current["status"]
+            validate_status_transition(old_status, fields["status"])
+    result = store.update_load(load_id, **fields)
+    if result and old_status and "status" in fields:
+        from dispatch.models import LoadActivity
+        store.create_activity(LoadActivity(
+            load_id=load_id,
+            activity_type="status_change",
+            message=f"Status changed from {old_status} to {fields['status']}",
+            source="system",
+        ))
+    return result
 
 
 _DELETABLE_STATUSES = {"created", "cancelled"}
@@ -1015,6 +1026,39 @@ def delete_equipment(equipment_id: str) -> bool:
     return store.delete_equipment(equipment_id)
 
 
+# ── Activities ─────────────────────────────────────────────────────────
+
+
+def add_activity(
+    load_id: str,
+    message: str,
+    activity_type: str = "comment",
+    author: str = "",
+    source: str = "user",
+) -> dict:
+    from dispatch.models import LoadActivity
+
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load {load_id} not found")
+    activity = LoadActivity(
+        load_id=load_id,
+        activity_type=activity_type,
+        message=message,
+        author=author,
+        source=source,
+    )
+    return store.create_activity(activity)
+
+
+def list_activities(load_id: str) -> list[dict]:
+    return store.list_activities(load_id)
+
+
+def delete_activity(activity_id: str) -> bool:
+    return store.delete_activity(activity_id)
+
+
 def get_fleet_summary() -> dict:
     """Aggregate fleet stats: active/inactive counts for drivers and equipment."""
     drivers = store.list_drivers()
@@ -1067,6 +1111,7 @@ def get_load_bundle(load_id: str) -> dict | None:
         "settlement": store.get_settlement(load_id),
         "assigned_driver": assigned_driver,
         "assigned_equipment": assigned_equipment,
+        "activities": store.list_activities(load_id),
         "active_drivers": store.list_drivers(status="active"),
         "active_equipment": store.list_equipment(status="active"),
     }

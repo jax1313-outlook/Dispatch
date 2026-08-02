@@ -12,6 +12,7 @@ from dispatch.models import (
     ExceptionNotice,
     Expense,
     Load,
+    LoadActivity,
     LoadVisibilityRecord,
     MilestoneEvent,
     PODPackage,
@@ -103,7 +104,7 @@ def delete_load(load_id: str) -> bool:
     _CHILD_TABLES = [
         "visibility", "milestones", "evidence", "exceptions",
         "pod_packages", "retention", "rate_confirmations",
-        "expenses", "settlements",
+        "expenses", "settlements", "activities",
     ]
     with get_connection() as conn:
         for table in _CHILD_TABLES:
@@ -863,5 +864,39 @@ def delete_equipment(equipment_id: str) -> bool:
     with get_connection() as conn:
         cur = conn.execute(
             "DELETE FROM equipment WHERE equipment_id=?", (equipment_id,)
+        )
+    return cur.rowcount > 0
+
+
+# ── Activities ─────────────────────────────────────────────────────────
+
+
+def create_activity(activity: LoadActivity) -> dict:
+    d = activity.to_dict()
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO activities
+               (activity_id, load_id, activity_type, message, author,
+                source, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (d["activity_id"], d["load_id"], d["activity_type"],
+             d["message"], d["author"], d["source"], d["created_at"]),
+        )
+    return d
+
+
+def list_activities(load_id: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM activities WHERE load_id=? ORDER BY created_at DESC",
+            (load_id,),
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def delete_activity(activity_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM activities WHERE activity_id=?", (activity_id,)
         )
     return cur.rowcount > 0

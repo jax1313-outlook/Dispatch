@@ -600,6 +600,17 @@ body {
 .event-table th { text-align: left; padding: 4px 8px; background: #f8f9fa; font-weight: 600; }
 .event-table td { padding: 4px 8px; border-bottom: 1px solid #f5f5f5; }
 
+/* ---------- Activity Thread ---------- */
+.activity-thread { display: flex; flex-direction: column; gap: 8px; }
+.activity-item { padding: 8px 12px; border-radius: 4px; font-size: 13px; border: 1px solid #e8e8e8; background: #fff; }
+.activity-item.activity-comment { border-left: 3px solid #3498db; }
+.activity-item.activity-status_change { border-left: 3px solid #27ae60; background: #f0faf4; }
+.activity-item.activity-assignment { border-left: 3px solid #8e44ad; background: #faf0ff; }
+.activity-item.activity-system { border-left: 3px solid #95a5a6; background: #f8f9fa; }
+.activity-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px; }
+.activity-time { color: #999; font-size: 11px; }
+.activity-message { line-height: 1.4; }
+
 /* ---------- Empty States ---------- */
 .empty-state {
     text-align: center;
