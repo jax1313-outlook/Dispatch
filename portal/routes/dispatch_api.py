@@ -471,6 +471,18 @@ def financial_dashboard():
     return jsonify({"status": "ok", **dashboard})
 
 
+# ── Aging Check ─────────────────────────────────────────────────────
+
+@dispatch_bp.route("/settlements/aging", methods=["POST"])
+def run_aging_check():
+    newly_overdue = services.check_overdue_settlements()
+    return jsonify({
+        "status": "ok",
+        "newly_overdue": newly_overdue,
+        "count": len(newly_overdue),
+    })
+
+
 # ── Decision (email action clicks) ──────────────────────────────────
 
 @dispatch_bp.route("/decision/<load_id>/<action>")
