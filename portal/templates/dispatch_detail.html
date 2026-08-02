@@ -328,19 +328,15 @@
             <div class="brief-fields" style="margin-bottom:8px;">
                 <div><label><strong>Type</strong><br>
                     <select name="exception_type" style="width:100%;padding:4px;">
-                        <option value="delay">Delay</option>
-                        <option value="damage">Damage</option>
-                        <option value="refusal">Refusal</option>
-                        <option value="shortage">Shortage</option>
-                        <option value="overage">Overage</option>
-                        <option value="other">Other</option>
+                        {% for et in exception_types %}
+                        <option value="{{ et }}">{{ et|replace('_', ' ')|title }}</option>
+                        {% endfor %}
                     </select></label></div>
                 <div><label><strong>Severity</strong><br>
                     <select name="severity" style="width:100%;padding:4px;">
-                        <option value="low">Low</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="high">High</option>
-                        <option value="critical">Critical</option>
+                        {% for sv in severity_levels %}
+                        <option value="{{ sv }}" {% if sv == 'medium' %}selected{% endif %}>{{ sv|title }}</option>
+                        {% endfor %}
                     </select></label></div>
                 <div class="full-width"><label><strong>Description</strong><br>
                     <input type="text" name="description" style="width:100%;padding:4px 8px;"></label></div>

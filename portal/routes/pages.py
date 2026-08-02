@@ -166,6 +166,7 @@ def dispatch_detail(load_id):
     from dispatch.models import (
         LOAD_STATUSES,
         MILESTONE_TYPES, MILESTONE_SOURCES, EVIDENCE_TYPES,
+        EXCEPTION_TYPES, SEVERITY_LEVELS, EXCEPTION_STATUSES,
         EXPENSE_CATEGORIES, RATE_TYPES, SETTLEMENT_STATUSES, PAYMENT_METHODS,
     )
 
@@ -178,6 +179,9 @@ def dispatch_detail(load_id):
         milestone_types=MILESTONE_TYPES,
         milestone_sources=MILESTONE_SOURCES,
         evidence_types=EVIDENCE_TYPES,
+        exception_types=EXCEPTION_TYPES,
+        severity_levels=SEVERITY_LEVELS,
+        exception_statuses=EXCEPTION_STATUSES,
         expense_categories=EXPENSE_CATEGORIES,
         rate_types=RATE_TYPES,
         settlement_statuses=SETTLEMENT_STATUSES,
@@ -274,6 +278,56 @@ def billing():
         fin_dashboard=fin_dashboard,
         disputed_count=disputed_count,
         written_off_count=written_off_count,
+    )
+
+
+@pages_bp.route("/exceptions")
+def exceptions():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import EXCEPTION_TYPES, SEVERITY_LEVELS, EXCEPTION_STATUSES
+
+    status_filter = request.args.get("status")
+    severity_filter = request.args.get("severity")
+    type_filter = request.args.get("exception_type")
+
+    all_exceptions = dispatch_svc.list_exceptions(status=status_filter or None)
+    if severity_filter:
+        all_exceptions = [e for e in all_exceptions if e.get("severity") == severity_filter]
+    if type_filter:
+        all_exceptions = [e for e in all_exceptions if e.get("exception_type") == type_filter]
+
+    load_cache: dict[str, dict] = {}
+    for exc in all_exceptions:
+        lid = exc["load_id"]
+        if lid not in load_cache:
+            load_cache[lid] = dispatch_svc.get_load(lid) or {}
+        exc["customer"] = load_cache[lid].get("customer", "")
+        exc["load_status"] = load_cache[lid].get("load_status", load_cache[lid].get("status", ""))
+
+    open_count = sum(1 for e in all_exceptions if e.get("status") == "open") if not status_filter else None
+    investigating_count = sum(1 for e in all_exceptions if e.get("status") == "investigating") if not status_filter else None
+    critical_count = len([
+        e for e in dispatch_svc.list_exceptions(status="open")
+        if e.get("severity") == "critical"
+    ])
+    high_count = len([
+        e for e in dispatch_svc.list_exceptions(status="open")
+        if e.get("severity") == "high"
+    ])
+
+    return render_template(
+        "exceptions.html",
+        exceptions=all_exceptions,
+        exception_types=EXCEPTION_TYPES,
+        severity_levels=SEVERITY_LEVELS,
+        exception_statuses=EXCEPTION_STATUSES,
+        status_filter=status_filter or "",
+        severity_filter=severity_filter or "",
+        type_filter=type_filter or "",
+        open_count=open_count,
+        investigating_count=investigating_count,
+        critical_count=critical_count,
+        high_count=high_count,
     )
 
 
