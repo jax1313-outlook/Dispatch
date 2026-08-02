@@ -99,11 +99,35 @@ CREATE TABLE IF NOT EXISTS retention (
     archived_at      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS rate_confirmations (
+    confirmation_id TEXT PRIMARY KEY,
+    load_id         TEXT NOT NULL REFERENCES loads(load_id),
+    rate_amount     REAL NOT NULL DEFAULT 0,
+    rate_type       TEXT NOT NULL DEFAULT 'flat',
+    distance_miles  REAL NOT NULL DEFAULT 0,
+    confirmed_by    TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    confirmed_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+    expense_id          TEXT PRIMARY KEY,
+    load_id             TEXT NOT NULL REFERENCES loads(load_id),
+    category            TEXT NOT NULL DEFAULT 'other',
+    description         TEXT NOT NULL DEFAULT '',
+    amount              REAL NOT NULL DEFAULT 0,
+    incurred_at         TEXT NOT NULL,
+    receipt_evidence_id TEXT,
+    notes               TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_milestones_load ON milestones(load_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_load ON evidence(load_id);
 CREATE INDEX IF NOT EXISTS idx_exceptions_load ON exceptions(load_id);
 CREATE INDEX IF NOT EXISTS idx_exceptions_status ON exceptions(status);
 CREATE INDEX IF NOT EXISTS idx_loads_status ON loads(status);
+CREATE INDEX IF NOT EXISTS idx_rate_conf_load ON rate_confirmations(load_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_load ON expenses(load_id);
 """
 
 

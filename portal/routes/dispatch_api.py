@@ -13,9 +13,11 @@ from dispatch.models import (
     EVIDENCE_TYPES,
     EXCEPTION_STATUSES,
     EXCEPTION_TYPES,
+    EXPENSE_CATEGORIES,
     LOAD_STATUSES,
     MILESTONE_SOURCES,
     MILESTONE_TYPES,
+    RATE_TYPES,
     SEVERITY_LEVELS,
 )
 
@@ -258,6 +260,120 @@ def get_retention(load_id):
     if not ret:
         return jsonify({"error": f"No retention record for {load_id}"}), 404
     return jsonify({"status": "ok", "retention": ret})
+
+
+# ── Rate Confirmation ────────────────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/rate", methods=["GET"])
+def get_rate(load_id):
+    rc = services.get_rate_confirmation(load_id)
+    if not rc:
+        return jsonify({"error": f"No rate confirmation for {load_id}"}), 404
+    return jsonify({"status": "ok", "rate_confirmation": rc})
+
+
+@dispatch_bp.route("/loads/<load_id>/rate", methods=["POST"])
+def confirm_rate(load_id):
+    data = request.get_json(silent=True) or {}
+    rate_amount = data.get("rate_amount")
+    if rate_amount is None:
+        return jsonify({"error": "rate_amount is required"}), 400
+    try:
+        rate_amount = float(rate_amount)
+    except (ValueError, TypeError):
+        return jsonify({"error": "rate_amount must be a number"}), 400
+    rate_type = data.get("rate_type", "flat")
+    if rate_type not in RATE_TYPES:
+        return jsonify({"error": f"Invalid rate_type: {rate_type}"}), 400
+    distance = 0.0
+    if data.get("distance_miles") is not None:
+        try:
+            distance = float(data["distance_miles"])
+        except (ValueError, TypeError):
+            return jsonify({"error": "distance_miles must be a number"}), 400
+    try:
+        rc = services.confirm_rate(
+            load_id=load_id,
+            rate_amount=rate_amount,
+            rate_type=rate_type,
+            distance_miles=distance,
+            confirmed_by=data.get("confirmed_by", ""),
+            notes=data.get("notes", ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "rate_confirmation": rc}), 201
+
+
+# ── Expenses ─────────────────────────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/expenses", methods=["GET"])
+def list_expenses(load_id):
+    items = services.list_expenses(load_id)
+    return jsonify({
+        "status": "ok", "load_id": load_id,
+        "expenses": items, "count": len(items),
+    })
+
+
+@dispatch_bp.route("/loads/<load_id>/expenses", methods=["POST"])
+def add_expense(load_id):
+    data = request.get_json(silent=True) or {}
+    amount = data.get("amount")
+    if amount is None:
+        return jsonify({"error": "amount is required"}), 400
+    try:
+        amount = float(amount)
+    except (ValueError, TypeError):
+        return jsonify({"error": "amount must be a number"}), 400
+    category = data.get("category", "other")
+    if category not in EXPENSE_CATEGORIES:
+        return jsonify({"error": f"Invalid category: {category}"}), 400
+    try:
+        exp = services.add_expense(
+            load_id=load_id,
+            category=category,
+            description=data.get("description", ""),
+            amount=amount,
+            receipt_evidence_id=data.get("receipt_evidence_id"),
+            notes=data.get("notes", ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "expense": exp}), 201
+
+
+@dispatch_bp.route("/expenses/<expense_id>", methods=["PATCH"])
+def update_expense(expense_id):
+    data = request.get_json(silent=True) or {}
+    if "category" in data and data["category"] not in EXPENSE_CATEGORIES:
+        return jsonify({"error": f"Invalid category: {data['category']}"}), 400
+    if "amount" in data:
+        try:
+            data["amount"] = float(data["amount"])
+        except (ValueError, TypeError):
+            return jsonify({"error": "amount must be a number"}), 400
+    result = services.update_expense(expense_id, **data)
+    if not result:
+        return jsonify({"error": f"Expense {expense_id} not found"}), 404
+    return jsonify({"status": "ok", "expense": result})
+
+
+@dispatch_bp.route("/expenses/<expense_id>", methods=["DELETE"])
+def delete_expense(expense_id):
+    if not services.delete_expense(expense_id):
+        return jsonify({"error": f"Expense {expense_id} not found"}), 404
+    return jsonify({"status": "ok"})
+
+
+# ── Financials Summary ───────────────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/financials", methods=["GET"])
+def get_financials(load_id):
+    result = services.get_financials(load_id)
+    if not result:
+        return jsonify({"error": f"Load {load_id} not found"}), 404
+    return jsonify({"status": "ok", **result})
 
 
 # ── Decision (email action clicks) ──────────────────────────────────
