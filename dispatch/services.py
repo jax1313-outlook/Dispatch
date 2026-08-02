@@ -917,6 +917,17 @@ def check_stalled_loads(thresholds: dict[str, int] | None = None) -> list[dict]:
     return stalled
 
 
+def notify_stalled_loads(thresholds: dict[str, int] | None = None) -> list[dict]:
+    """Check for stalled loads and send email notifications for each.
+
+    Returns the list of stalled loads that were notified.
+    """
+    stalled = check_stalled_loads(thresholds)
+    for load in stalled:
+        notifications.notify_stalled(load)
+    return stalled
+
+
 # ── Driver Management ───────────────────────────────────────────────
 
 

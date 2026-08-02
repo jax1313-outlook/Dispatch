@@ -95,6 +95,7 @@
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
         <span class="severity-tag severity-high">{{ stalled_loads|length }} Stalled</span>
         <strong>Loads exceeding expected time in status</strong>
+        <button class="btn btn-sm btn-warning" onclick="sendStallAlerts()" title="Send email alerts for all stalled loads">Send Stall Alerts</button>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
         {% for sl in stalled_loads[:5] %}
@@ -371,6 +372,14 @@ function batchAdvance() {
         if (r.errors && r.errors.length) msg += '\n\nErrors:\n' + r.errors.join('\n');
         alert(msg);
         location.reload();
+    });
+}
+
+function sendStallAlerts() {
+    if (!confirm('Send email alerts for all stalled loads?')) return;
+    apiPost('/api/dispatch/loads/stalled/notify', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        alert('Sent ' + r.notified + ' stall alert(s).');
     });
 }
 

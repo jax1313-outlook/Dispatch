@@ -127,6 +127,17 @@ def stalled_loads():
     return jsonify({"status": "ok", "loads": stalled, "count": len(stalled)})
 
 
+@dispatch_bp.route("/loads/stalled/notify", methods=["POST"])
+def notify_stalled():
+    notified = services.notify_stalled_loads()
+    return jsonify({
+        "status": "ok", "notified": len(notified),
+        "loads": [{"load_id": l["load_id"], "customer": l.get("customer", ""),
+                    "hours_in_status": l.get("hours_in_status", 0)}
+                   for l in notified],
+    })
+
+
 # ── Visibility ────────────────────────────────────────────────────────
 
 @dispatch_bp.route("/loads/<load_id>/visibility", methods=["GET"])
