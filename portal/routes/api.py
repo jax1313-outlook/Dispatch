@@ -48,6 +48,8 @@ def card_action():
         if entry.get("source_type") != "dispatch":
             return jsonify({"error": "Only dispatch entries can be booked"}), 400
 
+        booking_conflicts = conflict.check_booking_conflicts(entry["card_data"], sandbox_id)
+
         from dispatch import services as dispatch_svc
         cd = entry["card_data"]
         engine_load = dispatch_svc.create_load(
@@ -63,7 +65,10 @@ def card_action():
         sandbox.link_engine_load(sandbox_id, engine_load["load_id"])
         updated = sandbox.update_status(sandbox_id, "BOOKED",
                                         note=f"Booked as engine load {engine_load['load_id']}")
-        return jsonify({"status": "ok", "entry": updated, "engine_load": engine_load})
+        resp = {"status": "ok", "entry": updated, "engine_load": engine_load}
+        if booking_conflicts:
+            resp["warnings"] = [c["explanation"] for c in booking_conflicts]
+        return jsonify(resp)
 
     updated = sandbox.update_status(sandbox_id, new_status)
 

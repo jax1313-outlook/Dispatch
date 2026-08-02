@@ -305,6 +305,150 @@ class TestHelperFunctions:
         assert result == ""
 
 
+class TestBookingConflicts:
+    def test_no_conflicts_when_no_active_loads(self, client, dispatch_entry):
+        resp = client.post("/api/action", json={
+            "sandbox_id": dispatch_entry["id"],
+            "action": "book",
+        })
+        data = resp.get_json()
+        assert resp.status_code == 200
+        assert "warnings" not in data
+
+    def test_overlap_detected(self, client, dispatch_entry):
+        from dispatch import services
+        services.create_load(
+            customer="Existing Customer",
+            pickup_location="Jacksonville, FL",
+            delivery_location="Savannah, GA",
+            pickup_datetime="2026-07-30 08:00",
+            delivery_datetime="2026-07-30 16:00",
+        )
+        resp = client.post("/api/action", json={
+            "sandbox_id": dispatch_entry["id"],
+            "action": "book",
+        })
+        data = resp.get_json()
+        assert resp.status_code == 200
+        assert "warnings" in data
+        assert any("overlap" in w.lower() for w in data["warnings"])
+
+    def test_tight_turnaround_detected(self, client):
+        from dispatch import services
+        services.create_load(
+            customer="Earlier Load",
+            pickup_location="Tampa, FL",
+            delivery_location="Jacksonville, FL",
+            pickup_datetime="2026-07-30 04:00",
+            delivery_datetime="2026-07-30 05:30",
+        )
+        entry = sandbox.create_entry(
+            source_type="dispatch",
+            source_id="LOAD-TIGHT",
+            title="Tight Turnaround Load",
+            card_data={
+                **SAMPLE_CARD_DATA,
+                "pickup_window": "2026-07-30 06:00 - 07:00",
+                "delivery_window": "2026-07-30 14:00 - 18:00",
+            },
+            score=85,
+        )
+        resp = client.post("/api/action", json={
+            "sandbox_id": entry["id"],
+            "action": "book",
+        })
+        data = resp.get_json()
+        assert resp.status_code == 200
+        assert "warnings" in data
+        assert any("turnaround" in w.lower() for w in data["warnings"])
+
+    def test_no_conflict_with_archived_loads(self, client, dispatch_entry):
+        from dispatch import services
+        load = services.create_load(
+            customer="Archived Customer",
+            pickup_location="Jacksonville, FL",
+            delivery_location="Savannah, GA",
+            pickup_datetime="2026-07-30 08:00",
+            delivery_datetime="2026-07-30 16:00",
+        )
+        services.update_load(load["load_id"], status="cancelled")
+        resp = client.post("/api/action", json={
+            "sandbox_id": dispatch_entry["id"],
+            "action": "book",
+        })
+        data = resp.get_json()
+        assert resp.status_code == 200
+        assert "warnings" not in data
+
+    def test_conflict_still_allows_booking(self, client, dispatch_entry):
+        from dispatch import services
+        services.create_load(
+            customer="Existing",
+            pickup_location="Jacksonville, FL",
+            delivery_location="Savannah, GA",
+            pickup_datetime="2026-07-30 08:00",
+            delivery_datetime="2026-07-30 16:00",
+        )
+        resp = client.post("/api/action", json={
+            "sandbox_id": dispatch_entry["id"],
+            "action": "book",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert "engine_load" in data
+        assert data["entry"]["status"] == "BOOKED"
+
+
+class TestConflictDetectionUnit:
+    def test_parse_window_start(self):
+        from portal.models.conflict import _parse_window_start
+        result = _parse_window_start("2026-07-30 06:00 - 10:00")
+        assert result is not None
+        assert result.hour == 6
+
+    def test_parse_window_end_short(self):
+        from portal.models.conflict import _parse_window_end
+        result = _parse_window_end("2026-07-30 06:00 - 10:00")
+        assert result is not None
+        assert result.hour == 10
+
+    def test_parse_window_end_full(self):
+        from portal.models.conflict import _parse_window_end
+        result = _parse_window_end("2026-07-30 06:00 - 2026-07-30 18:00")
+        assert result is not None
+        assert result.hour == 18
+
+    def test_parse_window_empty(self):
+        from portal.models.conflict import _parse_window_start, _parse_window_end
+        assert _parse_window_start("") is None
+        assert _parse_window_end("") is None
+
+    def test_windows_overlap(self):
+        from datetime import datetime
+        from portal.models.conflict import _windows_overlap
+        a_start = datetime(2026, 7, 30, 6, 0)
+        a_end = datetime(2026, 7, 30, 10, 0)
+        b_start = datetime(2026, 7, 30, 8, 0)
+        b_end = datetime(2026, 7, 30, 16, 0)
+        assert _windows_overlap(a_start, a_end, b_start, b_end)
+
+    def test_windows_no_overlap(self):
+        from datetime import datetime
+        from portal.models.conflict import _windows_overlap
+        a_start = datetime(2026, 7, 30, 6, 0)
+        a_end = datetime(2026, 7, 30, 10, 0)
+        b_start = datetime(2026, 7, 30, 12, 0)
+        b_end = datetime(2026, 7, 30, 16, 0)
+        assert not _windows_overlap(a_start, a_end, b_start, b_end)
+
+    def test_windows_overlap_none_end(self):
+        from datetime import datetime
+        from portal.models.conflict import _windows_overlap
+        a_start = datetime(2026, 7, 30, 6, 0)
+        b_start = datetime(2026, 7, 30, 6, 0)
+        assert not _windows_overlap(a_start, None, b_start, None)
+
+
 class TestTemplateRendering:
     def test_dispatch_page_shows_book_button(self, client, dispatch_entry):
         resp = client.get("/dispatch")

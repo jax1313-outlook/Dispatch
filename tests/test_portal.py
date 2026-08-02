@@ -887,14 +887,15 @@ class TestArchiveAllSections:
         assert "completed" in arc_html.lower() and "history" in arc_html.lower()
 
 
-# ---------- P2-4. Conflict Notice: all 11 types ----------
+# ---------- P2-4. Conflict Notice: all types ----------
 class TestConflictAllTypes:
-    def test_all_eleven_conflict_types_defined(self):
+    def test_all_conflict_types_defined(self):
         from portal.models.conflict import CONFLICT_TYPES
         expected = [
             "missing_broker_email", "missing_source_link", "missing_rate",
             "missing_pickup_window", "equipment_mismatch", "hard_stop",
             "delivery_appointment_conflict", "hos_eld_conflict",
+            "scheduling_overlap", "turnaround_too_tight",
             "publisher_missing_document", "library_missing_asset",
             "corrupt_sandbox_data",
         ]
