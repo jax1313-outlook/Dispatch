@@ -8,10 +8,12 @@ from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
 from dispatch.models import (
     EvidenceItem,
     ExceptionNotice,
+    Expense,
     Load,
     LoadVisibilityRecord,
     MilestoneEvent,
     PODPackage,
+    RateConfirmation,
     RetentionArchive,
 )
 
@@ -351,3 +353,114 @@ def list_retentions() -> list[dict]:
         d = dict_from_row(r)
         results.append(deserialize_json_fields(d, "evidence_index"))
     return results
+
+
+# ── RateConfirmation ─────────────────────────────────────────────────
+
+def create_rate_confirmation(rc: RateConfirmation) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO rate_confirmations
+               (confirmation_id, load_id, rate_amount, rate_type,
+                distance_miles, confirmed_by, notes, confirmed_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (rc.confirmation_id, rc.load_id, rc.rate_amount,
+             rc.rate_type, rc.distance_miles, rc.confirmed_by,
+             rc.notes, rc.confirmed_at),
+        )
+    return rc.to_dict()
+
+
+def get_rate_confirmation(load_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM rate_confirmations WHERE load_id=?", (load_id,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    rc = RateConfirmation(**d)
+    return rc.to_dict()
+
+
+def update_rate_confirmation(load_id: str, **fields) -> dict | None:
+    existing = get_rate_confirmation(load_id)
+    if not existing:
+        return None
+    allowed = {"rate_amount", "rate_type", "distance_miles", "confirmed_by", "notes"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [load_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE rate_confirmations SET {set_clause} WHERE load_id=?", values
+        )
+    return get_rate_confirmation(load_id)
+
+
+def delete_rate_confirmation(load_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM rate_confirmations WHERE load_id=?", (load_id,)
+        )
+    return cur.rowcount > 0
+
+
+# ── Expense ──────────────────────────────────────────────────────────
+
+def create_expense(exp: Expense) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO expenses
+               (expense_id, load_id, category, description, amount,
+                incurred_at, receipt_evidence_id, notes)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (exp.expense_id, exp.load_id, exp.category,
+             exp.description, exp.amount, exp.incurred_at,
+             exp.receipt_evidence_id, exp.notes),
+        )
+    return exp.to_dict()
+
+
+def get_expense(expense_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM expenses WHERE expense_id=?", (expense_id,)
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_expenses(load_id: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM expenses WHERE load_id=? ORDER BY incurred_at ASC",
+            (load_id,),
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def update_expense(expense_id: str, **fields) -> dict | None:
+    existing = get_expense(expense_id)
+    if not existing:
+        return None
+    allowed = {"category", "description", "amount", "receipt_evidence_id", "notes"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [expense_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE expenses SET {set_clause} WHERE expense_id=?", values
+        )
+    return get_expense(expense_id)
+
+
+def delete_expense(expense_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM expenses WHERE expense_id=?", (expense_id,)
+        )
+    return cur.rowcount > 0

@@ -131,7 +131,10 @@ def dispatch():
 @pages_bp.route("/dispatch/<load_id>")
 def dispatch_detail(load_id):
     from dispatch import services as dispatch_svc
-    from dispatch.models import MILESTONE_TYPES, MILESTONE_SOURCES, EVIDENCE_TYPES
+    from dispatch.models import (
+        MILESTONE_TYPES, MILESTONE_SOURCES, EVIDENCE_TYPES,
+        EXPENSE_CATEGORIES, RATE_TYPES,
+    )
 
     bundle = dispatch_svc.get_load_bundle(load_id)
     if not bundle:
@@ -141,6 +144,8 @@ def dispatch_detail(load_id):
         milestone_types=MILESTONE_TYPES,
         milestone_sources=MILESTONE_SOURCES,
         evidence_types=EVIDENCE_TYPES,
+        expense_categories=EXPENSE_CATEGORIES,
+        rate_types=RATE_TYPES,
         **bundle,
     )
 

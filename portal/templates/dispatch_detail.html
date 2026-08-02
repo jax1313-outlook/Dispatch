@@ -233,6 +233,118 @@
     {% endif %}
 </div>
 
+{# ── Financials ───────────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Financials</h3>
+        {% if not financials or not financials.rate_confirmation %}
+        <button class="btn btn-sm btn-success" onclick="toggleEl('rate-form')">Confirm Rate</button>
+        {% endif %}
+    </div>
+
+    {# Rate confirmation form #}
+    <div id="rate-form" style="display:none;margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="confirmRate(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:8px;">
+                <div><label><strong>Rate Amount ($) *</strong><br>
+                    <input type="number" name="rate_amount" step="0.01" min="0" required style="width:100%;padding:4px 8px;"
+                           value="{{ financials.rate_confirmation.rate_amount if financials and financials.rate_confirmation else '' }}"></label></div>
+                <div><label><strong>Rate Type</strong><br>
+                    <select name="rate_type" style="width:100%;padding:4px;">
+                        {% for t in rate_types %}
+                        <option value="{{ t }}" {% if financials and financials.rate_confirmation and financials.rate_confirmation.rate_type == t %}selected{% endif %}>{{ t|replace('_', ' ')|title }}</option>
+                        {% endfor %}
+                    </select></label></div>
+                <div><label><strong>Distance (miles)</strong><br>
+                    <input type="number" name="distance_miles" step="0.1" min="0" style="width:100%;padding:4px 8px;"
+                           value="{{ financials.rate_confirmation.distance_miles if financials and financials.rate_confirmation else '' }}"></label></div>
+                <div><label><strong>Notes</strong><br>
+                    <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success">Confirm</button>
+            <button type="button" class="btn btn-sm" onclick="toggleEl('rate-form')">Cancel</button>
+        </form>
+    </div>
+
+    {% if financials and financials.rate_confirmation %}
+    <div class="financial-summary">
+        <div class="financial-item financial-revenue">
+            <span class="financial-label">Revenue</span>
+            <span class="financial-value">${{ "%.2f"|format(financials.summary.revenue) }}</span>
+        </div>
+        <div class="financial-item financial-expenses">
+            <span class="financial-label">Expenses</span>
+            <span class="financial-value">${{ "%.2f"|format(financials.summary.total_expenses) }}</span>
+        </div>
+        <div class="financial-item {% if financials.summary.profit >= 0 %}financial-profit{% else %}financial-loss{% endif %}">
+            <span class="financial-label">Profit</span>
+            <span class="financial-value">${{ "%.2f"|format(financials.summary.profit) }}</span>
+        </div>
+        <div class="financial-item">
+            <span class="financial-label">Margin</span>
+            <span class="financial-value">{{ "%.1f"|format(financials.summary.margin_pct) }}%</span>
+        </div>
+    </div>
+
+    <div style="margin-top:10px;font-size:13px;color:#555;">
+        <strong>Rate:</strong> ${{ "%.2f"|format(financials.rate_confirmation.rate_amount) }}
+        ({{ financials.rate_confirmation.rate_type|replace('_', ' ') }})
+        {% if financials.rate_confirmation.distance_miles %} | <strong>Distance:</strong> {{ financials.rate_confirmation.distance_miles }} mi{% endif %}
+        {% if financials.rate_confirmation.confirmed_by %} | <strong>By:</strong> {{ financials.rate_confirmation.confirmed_by }}{% endif %}
+        {% if financials.rate_confirmation.notes %} | {{ financials.rate_confirmation.notes }}{% endif %}
+        <button class="btn btn-sm" style="margin-left:8px;" onclick="toggleEl('rate-form')">Edit Rate</button>
+    </div>
+    {% else %}
+    <p class="empty-state-sm">No rate confirmed yet.</p>
+    {% endif %}
+
+    {# Expense list #}
+    <div style="margin-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <strong>Expenses ({{ financials.expenses|length if financials else 0 }})</strong>
+            <button class="btn btn-sm btn-success" onclick="toggleEl('expense-form')">+ Add Expense</button>
+        </div>
+
+        <div id="expense-form" style="display:none;margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+            <form onsubmit="addExpense(event, '{{ load.load_id }}')">
+                <div class="brief-fields" style="margin-bottom:8px;">
+                    <div><label><strong>Category</strong><br>
+                        <select name="category" style="width:100%;padding:4px;">
+                            {% for c in expense_categories %}<option value="{{ c }}">{{ c|replace('_', ' ')|title }}</option>{% endfor %}
+                        </select></label></div>
+                    <div><label><strong>Amount ($) *</strong><br>
+                        <input type="number" name="amount" step="0.01" min="0" required style="width:100%;padding:4px 8px;"></label></div>
+                    <div><label><strong>Description</strong><br>
+                        <input type="text" name="description" style="width:100%;padding:4px 8px;"></label></div>
+                    <div><label><strong>Notes</strong><br>
+                        <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
+                </div>
+                <button type="submit" class="btn btn-sm btn-success">Add</button>
+                <button type="button" class="btn btn-sm" onclick="toggleEl('expense-form')">Cancel</button>
+            </form>
+        </div>
+
+        {% if financials and financials.expenses %}
+        <table class="event-table">
+            <thead><tr><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th></th></tr></thead>
+            <tbody>
+            {% for exp in financials.expenses %}
+            <tr>
+                <td><span class="status-tag">{{ exp.category|replace('_', ' ') }}</span></td>
+                <td>{{ exp.description or '—' }}</td>
+                <td><strong>${{ "%.2f"|format(exp.amount) }}</strong></td>
+                <td>{{ exp.incurred_at[:16] if exp.incurred_at else '—' }}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="deleteExpense('{{ exp.expense_id }}')">Remove</button></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state-sm">No expenses recorded.</p>
+        {% endif %}
+    </div>
+</div>
+
 {# ── Retention / Archive ──────────────────────────────────────────── #}
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -316,6 +428,39 @@ function archiveLoad(loadId) {
         if (r.error) { alert(r.error); return; }
         location.reload();
     });
+}
+
+function confirmRate(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    if (data.rate_amount) data.rate_amount = parseFloat(data.rate_amount);
+    if (data.distance_miles) data.distance_miles = parseFloat(data.distance_miles);
+    apiPost('/api/dispatch/loads/' + loadId + '/rate', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function addExpense(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    if (data.amount) data.amount = parseFloat(data.amount);
+    apiPost('/api/dispatch/loads/' + loadId + '/expenses', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function deleteExpense(expenseId) {
+    if (!confirm('Remove this expense?')) return;
+    fetch('/api/dispatch/expenses/' + expenseId, {method: 'DELETE'})
+        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            if (r.error) { alert(r.error); return; }
+            location.reload();
+        });
 }
 </script>
 {% endblock %}

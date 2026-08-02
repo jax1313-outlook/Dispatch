@@ -11,10 +11,12 @@ from dispatch.models import (
     LOAD_STATUSES,
     EvidenceItem,
     ExceptionNotice,
+    Expense,
     Load,
     LoadVisibilityRecord,
     MilestoneEvent,
     PODPackage,
+    RateConfirmation,
     RetentionArchive,
     _utc_now,
 )
@@ -324,12 +326,15 @@ def archive_load(load_id: str) -> dict:
     pods = store.list_pods(load_id)
     pod_id = pods[0]["pod_id"] if pods else None
 
+    financials = get_financials(load_id)
+    archive_loc = f"retention/{load_id}"
+
     ret = RetentionArchive(
         load_id=load_id,
         final_status=load["status"],
         pod_package_id=pod_id,
         evidence_index=evidence_ids,
-        archive_location=f"retention/{load_id}",
+        archive_location=archive_loc,
     )
     result = store.create_retention(ret)
 
@@ -357,6 +362,105 @@ def list_retentions() -> list[dict]:
     return store.list_retentions()
 
 
+def confirm_rate(
+    load_id: str,
+    rate_amount: float,
+    rate_type: str = "flat",
+    distance_miles: float = 0.0,
+    confirmed_by: str = "",
+    notes: str = "",
+) -> dict:
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+
+    existing = store.get_rate_confirmation(load_id)
+    if existing:
+        return store.update_rate_confirmation(
+            load_id,
+            rate_amount=rate_amount,
+            rate_type=rate_type,
+            distance_miles=distance_miles,
+            confirmed_by=confirmed_by,
+            notes=notes,
+        )
+
+    rc = RateConfirmation(
+        load_id=load_id,
+        rate_amount=rate_amount,
+        rate_type=rate_type,
+        distance_miles=distance_miles,
+        confirmed_by=confirmed_by,
+        notes=notes,
+    )
+    return store.create_rate_confirmation(rc)
+
+
+def get_rate_confirmation(load_id: str) -> dict | None:
+    return store.get_rate_confirmation(load_id)
+
+
+def add_expense(
+    load_id: str,
+    category: str = "other",
+    description: str = "",
+    amount: float = 0.0,
+    receipt_evidence_id: str | None = None,
+    notes: str = "",
+) -> dict:
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+
+    exp = Expense(
+        load_id=load_id,
+        category=category,
+        description=description,
+        amount=amount,
+        receipt_evidence_id=receipt_evidence_id,
+        notes=notes,
+    )
+    return store.create_expense(exp)
+
+
+def update_expense(expense_id: str, **fields) -> dict | None:
+    return store.update_expense(expense_id, **fields)
+
+
+def delete_expense(expense_id: str) -> bool:
+    return store.delete_expense(expense_id)
+
+
+def list_expenses(load_id: str) -> list[dict]:
+    return store.list_expenses(load_id)
+
+
+def get_financials(load_id: str) -> dict | None:
+    load = store.get_load(load_id)
+    if not load:
+        return None
+
+    rate = store.get_rate_confirmation(load_id)
+    expenses = store.list_expenses(load_id)
+    total_expenses = sum(e["amount"] for e in expenses)
+
+    revenue = rate["revenue"] if rate else 0.0
+    profit = revenue - total_expenses
+    margin_pct = (profit / revenue * 100) if revenue > 0 else 0.0
+
+    return {
+        "rate_confirmation": rate,
+        "expenses": expenses,
+        "summary": {
+            "revenue": round(revenue, 2),
+            "total_expenses": round(total_expenses, 2),
+            "profit": round(profit, 2),
+            "margin_pct": round(margin_pct, 1),
+            "expense_count": len(expenses),
+        },
+    }
+
+
 def get_load_bundle(load_id: str) -> dict | None:
     load = store.get_load(load_id)
     if not load:
@@ -369,4 +473,5 @@ def get_load_bundle(load_id: str) -> dict | None:
         "exceptions": store.list_exceptions(load_id=load_id),
         "pods": store.list_pods(load_id),
         "retention": store.get_retention_by_load(load_id),
+        "financials": get_financials(load_id),
     }

@@ -76,6 +76,20 @@ RETENTION_STATUSES = ["active", "archived", "expired"]
 
 VALIDATION_STATUSES = ["pending", "validated", "disputed"]
 
+RATE_TYPES = ["flat", "per_mile"]
+
+EXPENSE_CATEGORIES = [
+    "fuel",
+    "tolls",
+    "lumper",
+    "detention",
+    "repair",
+    "insurance",
+    "scale",
+    "parking",
+    "other",
+]
+
 
 def _validate_choice(value: str, choices: list[str], field_name: str) -> None:
     if value not in choices:
@@ -249,6 +263,58 @@ class RetentionArchive:
         if not self.archived_at:
             self.archived_at = _utc_now()
         _validate_choice(self.retention_status, RETENTION_STATUSES, "retention_status")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class RateConfirmation:
+    confirmation_id: str = ""
+    load_id: str = ""
+    rate_amount: float = 0.0
+    rate_type: str = "flat"
+    distance_miles: float = 0.0
+    confirmed_by: str = ""
+    notes: str = ""
+    confirmed_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.confirmation_id:
+            self.confirmation_id = _gen_id("RC")
+        if not self.confirmed_at:
+            self.confirmed_at = _utc_now()
+        _validate_choice(self.rate_type, RATE_TYPES, "rate_type")
+
+    @property
+    def revenue(self) -> float:
+        if self.rate_type == "per_mile" and self.distance_miles:
+            return self.rate_amount * self.distance_miles
+        return self.rate_amount
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["revenue"] = self.revenue
+        return d
+
+
+@dataclass
+class Expense:
+    expense_id: str = ""
+    load_id: str = ""
+    category: str = "other"
+    description: str = ""
+    amount: float = 0.0
+    incurred_at: str = ""
+    receipt_evidence_id: str | None = None
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.expense_id:
+            self.expense_id = _gen_id("EXP")
+        if not self.incurred_at:
+            self.incurred_at = _utc_now()
+        _validate_choice(self.category, EXPENSE_CATEGORIES, "category")
 
     def to_dict(self) -> dict:
         return asdict(self)
