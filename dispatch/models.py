@@ -50,7 +50,7 @@ MILESTONE_TYPES = [
     "completed",
 ]
 
-MILESTONE_SOURCES = ["driver", "dispatcher", "system", "customer", "eld"]
+MILESTONE_SOURCES = ["driver", "dispatcher", "system", "customer", "eld", "email"]
 
 EVIDENCE_TYPES = ["bol", "pod", "photo", "screenshot", "message", "document", "other"]
 
