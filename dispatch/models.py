@@ -264,6 +264,7 @@ class RetentionArchive:
     final_status: str = "completed"
     pod_package_id: str | None = None
     evidence_index: list[str] = field(default_factory=list)
+    financial_summary: dict = field(default_factory=dict)
     archive_location: str = ""
     retention_status: str = "active"
     archived_at: str = ""

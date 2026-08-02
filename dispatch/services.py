@@ -328,6 +328,12 @@ def archive_load(load_id: str) -> dict:
     pod_id = pods[0]["pod_id"] if pods else None
 
     financials = get_financials(load_id)
+    fin_summary = financials["summary"] if financials else {}
+    settlement = store.get_settlement(load_id)
+    if settlement:
+        fin_summary["settlement_status"] = settlement["payment_status"]
+        fin_summary["invoice_number"] = settlement["invoice_number"]
+
     archive_loc = f"retention/{load_id}"
 
     ret = RetentionArchive(
@@ -335,6 +341,7 @@ def archive_load(load_id: str) -> dict:
         final_status=load["status"],
         pod_package_id=pod_id,
         evidence_index=evidence_ids,
+        financial_summary=fin_summary,
         archive_location=archive_loc,
     )
     result = store.create_retention(ret)
@@ -485,7 +492,9 @@ def create_settlement(
         payment_status="invoiced",
         notes=notes,
     )
-    return store.create_settlement(stl)
+    result = store.create_settlement(stl)
+    notifications.notify_invoice_created(load, result)
+    return result
 
 
 def update_settlement(load_id: str, **fields) -> dict | None:
@@ -503,7 +512,7 @@ def record_payment(
     if not existing:
         return None
 
-    return store.update_settlement(
+    result = store.update_settlement(
         load_id,
         payment_amount=payment_amount,
         payment_method=payment_method,
@@ -512,6 +521,12 @@ def record_payment(
         payment_date=_utc_now(),
         notes=notes or existing.get("notes", ""),
     )
+
+    load = store.get_load(load_id)
+    if load and result:
+        notifications.notify_payment_received(load, result)
+
+    return result
 
 
 def get_settlement(load_id: str) -> dict | None:
@@ -567,6 +582,32 @@ def get_financial_dashboard() -> dict:
         "paid_count": paid_count,
         "overdue_count": overdue_count,
     }
+
+
+def check_overdue_settlements() -> list[dict]:
+    """Scan invoiced settlements and mark overdue if past due date.
+
+    Returns the list of settlements that were newly marked overdue.
+    """
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    invoiced = store.list_settlements(payment_status="invoiced")
+    newly_overdue = []
+
+    for stl in invoiced:
+        due = stl.get("due_date", "")
+        if not due or due >= now:
+            continue
+
+        updated = store.update_settlement(stl["load_id"], payment_status="overdue")
+        if updated:
+            load = store.get_load(stl["load_id"])
+            if load:
+                notifications.notify_payment_overdue(load, updated)
+            newly_overdue.append(updated)
+
+    return newly_overdue
 
 
 def get_load_bundle(load_id: str) -> dict | None:

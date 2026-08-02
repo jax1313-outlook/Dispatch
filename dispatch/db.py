@@ -89,14 +89,15 @@ CREATE TABLE IF NOT EXISTS pod_packages (
 );
 
 CREATE TABLE IF NOT EXISTS retention (
-    archive_id       TEXT PRIMARY KEY,
-    load_id          TEXT NOT NULL REFERENCES loads(load_id),
-    final_status     TEXT NOT NULL DEFAULT 'completed',
-    pod_package_id   TEXT,
-    evidence_index   TEXT NOT NULL DEFAULT '[]',
-    archive_location TEXT NOT NULL DEFAULT '',
-    retention_status TEXT NOT NULL DEFAULT 'active',
-    archived_at      TEXT NOT NULL
+    archive_id        TEXT PRIMARY KEY,
+    load_id           TEXT NOT NULL REFERENCES loads(load_id),
+    final_status      TEXT NOT NULL DEFAULT 'completed',
+    pod_package_id    TEXT,
+    evidence_index    TEXT NOT NULL DEFAULT '[]',
+    financial_summary TEXT NOT NULL DEFAULT '{}',
+    archive_location  TEXT NOT NULL DEFAULT '',
+    retention_status  TEXT NOT NULL DEFAULT 'active',
+    archived_at       TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS rate_confirmations (

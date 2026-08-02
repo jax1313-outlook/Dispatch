@@ -109,6 +109,9 @@ def _render_notification(
         "delivered": "#2e7d32",
         "pod_generated": "#1565c0",
         "archived": "#6a1b9a",
+        "invoice_created": "#1b5e20",
+        "payment_received": "#2e7d32",
+        "payment_overdue": "#c62828",
     }
     header_color = event_colors.get(event_type, "#1a237e")
 
@@ -265,3 +268,98 @@ def notify_archived(load: dict, retention: dict) -> str:
     subject = f"[DISPATCH] Archived — {load.get('customer', load['load_id'])}"
     msg = _build([reviewer_address()], subject, text, html=html)
     return _send_or_write(f"dispatch-archive-{load['load_id']}", msg)
+
+
+def notify_invoice_created(load: dict, settlement: dict) -> str:
+    """Send notification when an invoice/settlement is created for a load."""
+    esc = _html.escape
+    invoice_num = settlement.get("invoice_number", "")
+    invoice_amt = settlement.get("invoice_amount", 0)
+    due_date = settlement.get("due_date", "")
+
+    detail = f"""\
+<div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;margin-bottom:16px;">
+    <strong>Invoice Created</strong><br>
+    Invoice #: <code>{esc(invoice_num)}</code><br>
+    Amount: <strong>${invoice_amt:,.2f}</strong><br>
+    Due Date: {esc(due_date) or 'Not set'}<br>
+    Status: Invoiced
+</div>"""
+
+    text, html = _render_notification(
+        load,
+        event_type="invoice_created",
+        headline="Invoice Created",
+        detail_html=detail,
+        recommended="acknowledge",
+    )
+
+    subject = f"[DISPATCH] Invoice Created — {load.get('customer', load['load_id'])}"
+    msg = _build([reviewer_address()], subject, text, html=html)
+    return _send_or_write(f"dispatch-invoice-{load['load_id']}", msg)
+
+
+def notify_payment_received(load: dict, settlement: dict) -> str:
+    """Send notification when payment is recorded for a load."""
+    esc = _html.escape
+    invoice_num = settlement.get("invoice_number", "")
+    payment_amt = settlement.get("payment_amount", 0)
+    net_payment = settlement.get("net_payment", payment_amt)
+    method = settlement.get("payment_method", "")
+    factoring = settlement.get("factoring_fee", 0)
+
+    factoring_line = ""
+    if factoring:
+        factoring_line = f"Factoring Fee: ${factoring:,.2f}<br>\n    Net Payment: <strong>${net_payment:,.2f}</strong><br>"
+
+    detail = f"""\
+<div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;margin-bottom:16px;">
+    <strong>Payment Received</strong><br>
+    Invoice #: <code>{esc(invoice_num)}</code><br>
+    Payment: <strong>${payment_amt:,.2f}</strong><br>
+    {factoring_line}
+    Method: {esc(method)}
+</div>"""
+
+    text, html = _render_notification(
+        load,
+        event_type="payment_received",
+        headline="Payment Received",
+        detail_html=detail,
+        recommended="acknowledge",
+    )
+
+    subject = f"[DISPATCH] Payment Received — {load.get('customer', load['load_id'])}"
+    msg = _build([reviewer_address()], subject, text, html=html)
+    return _send_or_write(f"dispatch-payment-{load['load_id']}", msg)
+
+
+def notify_payment_overdue(load: dict, settlement: dict) -> str:
+    """Send notification when a payment becomes overdue."""
+    esc = _html.escape
+    invoice_num = settlement.get("invoice_number", "")
+    invoice_amt = settlement.get("invoice_amount", 0)
+    due_date = settlement.get("due_date", "")
+
+    detail = f"""\
+<div style="background:#ffebee;border-left:4px solid #c62828;padding:12px 16px;margin-bottom:16px;">
+    <strong>Payment Overdue</strong><br>
+    Invoice #: <code>{esc(invoice_num)}</code><br>
+    Amount Due: <strong>${invoice_amt:,.2f}</strong><br>
+    Due Date: <strong style="color:#c62828;">{esc(due_date)}</strong>
+</div>
+<p style="color:#666;font-size:13px;">
+    This invoice is past due. Follow up with the customer or escalate for collection.
+</p>"""
+
+    text, html = _render_notification(
+        load,
+        event_type="payment_overdue",
+        headline="Payment Overdue",
+        detail_html=detail,
+        recommended="flag_review",
+    )
+
+    subject = f"[DISPATCH] OVERDUE — {load.get('customer', load['load_id'])}"
+    msg = _build([reviewer_address()], subject, text, html=html)
+    return _send_or_write(f"dispatch-overdue-{load['load_id']}", msg)

@@ -313,10 +313,12 @@ def create_retention(ret: RetentionArchive) -> dict:
         conn.execute(
             """INSERT INTO retention
                (archive_id, load_id, final_status, pod_package_id,
-                evidence_index, archive_location, retention_status, archived_at)
-               VALUES (?,?,?,?,?,?,?,?)""",
+                evidence_index, financial_summary, archive_location,
+                retention_status, archived_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (ret.archive_id, ret.load_id, ret.final_status,
              ret.pod_package_id, json.dumps(ret.evidence_index),
+             json.dumps(ret.financial_summary),
              ret.archive_location, ret.retention_status, ret.archived_at),
         )
     return ret.to_dict()
@@ -330,7 +332,7 @@ def get_retention(archive_id: str) -> dict | None:
     if not row:
         return None
     d = dict_from_row(row)
-    return deserialize_json_fields(d, "evidence_index")
+    return deserialize_json_fields(d, "evidence_index", "financial_summary")
 
 
 def get_retention_by_load(load_id: str) -> dict | None:
@@ -341,7 +343,7 @@ def get_retention_by_load(load_id: str) -> dict | None:
     if not row:
         return None
     d = dict_from_row(row)
-    return deserialize_json_fields(d, "evidence_index")
+    return deserialize_json_fields(d, "evidence_index", "financial_summary")
 
 
 def list_retentions() -> list[dict]:
@@ -352,7 +354,7 @@ def list_retentions() -> list[dict]:
     results = []
     for r in rows:
         d = dict_from_row(r)
-        results.append(deserialize_json_fields(d, "evidence_index"))
+        results.append(deserialize_json_fields(d, "evidence_index", "financial_summary"))
     return results
 
 
