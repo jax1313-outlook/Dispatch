@@ -100,6 +100,35 @@
     </section>
     {% endif %}
 
+    {% if entry.intelligence %}
+    <section class="brief-section">
+        <h3>Intelligence Modules ({{ entry.intelligence|length }})</h3>
+        {% for module_name, module_data in entry.intelligence.items() %}
+        <div class="intel-module">
+            <div class="intel-module-header">
+                <strong>{{ module_name|replace('_', ' ')|title }}</strong>
+                {% if module_data.score is not none %}
+                <span class="intel-module-score">Score: {{ module_data.score }}</span>
+                {% endif %}
+                {% if module_data.flags %}
+                <span class="flag-count">{{ module_data.flags|length }} flag{{ 's' if module_data.flags|length != 1 }}</span>
+                {% endif %}
+            </div>
+            {% if module_data.summary %}
+            <div class="intel-module-summary">{{ module_data.summary }}</div>
+            {% endif %}
+            {% if module_data.flags %}
+            <div class="intel-module-flags">
+                {% for flag in module_data.flags %}
+                <span class="indicator">{{ flag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
     <section class="brief-section">
         <h3>Position / HOS Placeholders</h3>
         <div class="brief-fields">

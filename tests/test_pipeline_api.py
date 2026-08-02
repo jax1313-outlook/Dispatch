@@ -41,6 +41,39 @@ class TestProcessContracts:
             assert "checkpoint_email" in r
 
 
+class TestProcessContractsResilience:
+    def test_bad_contract_does_not_abort_batch(self, tmp_archive, monkeypatch):
+        from cin_lite import acquisition, processing
+
+        good = {"title": "Good Contract", "solicitation_number": "SOL-GOOD",
+                "agency": "GSA", "naics_text": "", "description": "ok",
+                "estimated_value": None, "response_date": None, "notes": ""}
+        bad = {"title": "Bad Contract"}
+
+        def mock_acquire():
+            return [good, bad, good]
+
+        orig_process = processing.process
+
+        call_count = [0]
+        def failing_process(contract):
+            call_count[0] += 1
+            if contract is bad:
+                raise RuntimeError("simulated failure")
+            return orig_process(contract)
+
+        monkeypatch.setattr(acquisition, "acquire", mock_acquire)
+        monkeypatch.setattr(processing, "process", failing_process)
+
+        results = process_contracts()
+        assert len(results) == 3
+        statuses = [r["status"] for r in results]
+        assert statuses.count("error") == 1
+        assert statuses.count("pending") == 2
+        assert results[1]["status"] == "error"
+        assert "simulated failure" in results[1]["error"]
+
+
 class TestResolveDecision:
     def _seed(self, tmp_archive, contract_id="CIN-RES-001"):
         pending.store(

@@ -9,6 +9,7 @@ caller (portal UI, email click, CLI).
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime, timezone
 
 from cin_lite import acquisition, processing, archive, control, email_delivery, pending
@@ -25,52 +26,74 @@ def process_contracts(action_override: str | None = None) -> list[dict]:
     When *action_override* is set the decision is applied immediately
     (status="decided"); otherwise the contract is left pending
     (status="pending").
+
+    Individual contract failures are caught and logged so one bad contract
+    does not abort the entire batch.
     """
     contracts = acquisition.acquire()
     results: list[dict] = []
 
     for contract in contracts:
-        contract["_acquired_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        intelligence = processing.process(contract)
-        flags = processing.all_flags(intelligence)
-        summary = summarizer.summarize(contract, intelligence, flags)
-        decision = router.decide(contract, intelligence, summary, flags)
-        contract_id = archive.make_id(contract)
-
-        text_email = control.render_email(contract, intelligence, summary, flags, decision)
-        html_email = control.render_html_email(
-            contract, intelligence, summary, flags, decision,
-            token_fn=email_delivery.make_token,
-            contract_id=contract_id,
-        )
-
-        pending.store(contract_id, contract, intelligence, summary, decision, flags)
-        checkpoint_status = email_delivery.deliver_checkpoint(
-            contract, contract_id, text_email, html_email,
-        )
-
-        result = {
-            "contract_id": contract_id,
-            "title": contract.get("title"),
-            "agency": contract.get("agency"),
-            "solicitation_number": contract.get("solicitation_number"),
-            "summary": summary,
-            "recommendation": decision.get("action"),
-            "priority": decision.get("priority"),
-            "flag_count": len(flags),
-            "checkpoint_email": checkpoint_status,
-            "status": "pending",
-        }
-
-        if action_override:
-            dec = resolve_decision(contract_id, action_override)
-            result.update(dec)
-            result["status"] = "decided"
-
+        try:
+            result = _process_single(contract, action_override)
+        except Exception as exc:
+            title = contract.get("title", "unknown")
+            print(f"cin_lite: pipeline error for '{title}': {exc}", file=sys.stderr)
+            results.append({
+                "contract_id": None,
+                "title": title,
+                "agency": contract.get("agency"),
+                "solicitation_number": contract.get("solicitation_number"),
+                "status": "error",
+                "error": str(exc),
+            })
+            continue
         results.append(result)
 
     return results
+
+
+def _process_single(contract: dict, action_override: str | None) -> dict:
+    """Process a single contract through the full pipeline."""
+    contract["_acquired_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    intelligence = processing.process(contract)
+    flags = processing.all_flags(intelligence)
+    summary = summarizer.summarize(contract, intelligence, flags)
+    decision = router.decide(contract, intelligence, summary, flags)
+    contract_id = archive.make_id(contract)
+
+    text_email = control.render_email(contract, intelligence, summary, flags, decision)
+    html_email = control.render_html_email(
+        contract, intelligence, summary, flags, decision,
+        token_fn=email_delivery.make_token,
+        contract_id=contract_id,
+    )
+
+    pending.store(contract_id, contract, intelligence, summary, decision, flags)
+    checkpoint_status = email_delivery.deliver_checkpoint(
+        contract, contract_id, text_email, html_email,
+    )
+
+    result = {
+        "contract_id": contract_id,
+        "title": contract.get("title"),
+        "agency": contract.get("agency"),
+        "solicitation_number": contract.get("solicitation_number"),
+        "summary": summary,
+        "recommendation": decision.get("action"),
+        "priority": decision.get("priority"),
+        "flag_count": len(flags),
+        "checkpoint_email": checkpoint_status,
+        "status": "pending",
+    }
+
+    if action_override:
+        dec = resolve_decision(contract_id, action_override)
+        result.update(dec)
+        result["status"] = "decided"
+
+    return result
 
 
 def resolve_decision(contract_id: str, action: str) -> dict:
