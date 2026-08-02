@@ -725,6 +725,14 @@ def dispatch_decision(load_id, action):
             description="Flagged for review via email action by reviewer",
         )
 
+    services.add_milestone(
+        load_id=load_id,
+        event_type="checkpoint",
+        source="email",
+        note=f"Email decision: {label}",
+        entered_by="reviewer",
+    )
+
     return render_template(
         "dispatch_decision.html",
         success=True,
