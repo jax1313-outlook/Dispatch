@@ -22,9 +22,62 @@
         <div><strong>Delivery Time:</strong> {{ load.delivery_datetime or '—' }}</div>
         <div><strong>Equipment:</strong> {{ load.equipment or '—' }}</div>
         <div><strong>Driver:</strong> {{ load.driver or '—' }}</div>
+        <div><strong>Driver ID:</strong> {{ load.driver_id or '—' }}</div>
+        <div><strong>Equipment ID:</strong> {{ load.equipment_id or '—' }}</div>
         <div class="full-width"><strong>Notes:</strong> {{ load.notes or '—' }}</div>
         <div><strong>Created:</strong> {{ load.created_at[:16] if load.created_at else '—' }}</div>
         <div><strong>Updated:</strong> {{ load.updated_at[:16] if load.updated_at else '—' }}</div>
+    </div>
+</div>
+
+{# ── Fleet Assignment ──────────────────────────────────────────────── #}
+<div class="brief-section">
+    <h3>Fleet Assignment</h3>
+    <div class="brief-fields">
+        <div>
+            <strong>Assigned Driver:</strong>
+            {% if assigned_driver %}
+                {{ assigned_driver.name }} ({{ assigned_driver.driver_id[:12] }})
+                <button class="btn btn-sm btn-danger" style="margin-left:6px;" onclick="unassignDriver('{{ load.load_id }}')">Remove</button>
+            {% else %}
+                <span style="color:#999;">None</span>
+            {% endif %}
+        </div>
+        <div>
+            <strong>Assigned Equipment:</strong>
+            {% if assigned_equipment %}
+                {{ assigned_equipment.unit_number }} ({{ assigned_equipment.equipment_type|replace('_', ' ') }})
+                <button class="btn btn-sm btn-danger" style="margin-left:6px;" onclick="unassignEquipment('{{ load.load_id }}')">Remove</button>
+            {% else %}
+                <span style="color:#999;">None</span>
+            {% endif %}
+        </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;">
+        {% if active_drivers %}
+        <div>
+            <label><strong>Assign Driver</strong><br>
+            <select id="assign-driver-select" style="padding:4px;min-width:180px;">
+                <option value="">-- Select --</option>
+                {% for d in active_drivers %}
+                <option value="{{ d.driver_id }}" {% if assigned_driver and d.driver_id == assigned_driver.driver_id %}selected{% endif %}>{{ d.name }}</option>
+                {% endfor %}
+            </select></label>
+            <button class="btn btn-sm btn-success" onclick="assignDriver('{{ load.load_id }}')">Assign</button>
+        </div>
+        {% endif %}
+        {% if active_equipment %}
+        <div>
+            <label><strong>Assign Equipment</strong><br>
+            <select id="assign-equipment-select" style="padding:4px;min-width:180px;">
+                <option value="">-- Select --</option>
+                {% for e in active_equipment %}
+                <option value="{{ e.equipment_id }}" {% if assigned_equipment and e.equipment_id == assigned_equipment.equipment_id %}selected{% endif %}>{{ e.unit_number }} ({{ e.equipment_type|replace('_', ' ') }})</option>
+                {% endfor %}
+            </select></label>
+            <button class="btn btn-sm btn-success" onclick="assignEquipment('{{ load.load_id }}')">Assign</button>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -562,6 +615,42 @@ function markOverdue(loadId) {
           if (r.error) { alert(r.error); return; }
           location.reload();
       });
+}
+
+function assignDriver(loadId) {
+    var sel = document.getElementById('assign-driver-select');
+    var driverId = sel.value;
+    if (!driverId) { alert('Select a driver first.'); return; }
+    apiPost('/api/dispatch/loads/' + loadId + '/assign-driver', {driver_id: driverId}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function unassignDriver(loadId) {
+    if (!confirm('Remove driver assignment?')) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/unassign-driver', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function assignEquipment(loadId) {
+    var sel = document.getElementById('assign-equipment-select');
+    var equipmentId = sel.value;
+    if (!equipmentId) { alert('Select equipment first.'); return; }
+    apiPost('/api/dispatch/loads/' + loadId + '/assign-equipment', {equipment_id: equipmentId}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function unassignEquipment(loadId) {
+    if (!confirm('Remove equipment assignment?')) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/unassign-equipment', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
 }
 </script>
 {% endblock %}

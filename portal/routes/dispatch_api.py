@@ -47,17 +47,22 @@ def create_load():
     customer = data.get("customer", "")
     if not customer:
         return jsonify({"error": "customer is required"}), 400
-    load = services.create_load(
-        customer=customer,
-        broker_shipper=data.get("broker_shipper", ""),
-        pickup_location=data.get("pickup_location", ""),
-        delivery_location=data.get("delivery_location", ""),
-        pickup_datetime=data.get("pickup_datetime", ""),
-        delivery_datetime=data.get("delivery_datetime", ""),
-        equipment=data.get("equipment", ""),
-        driver=data.get("driver", ""),
-        notes=data.get("notes", ""),
-    )
+    try:
+        load = services.create_load(
+            customer=customer,
+            broker_shipper=data.get("broker_shipper", ""),
+            pickup_location=data.get("pickup_location", ""),
+            delivery_location=data.get("delivery_location", ""),
+            pickup_datetime=data.get("pickup_datetime", ""),
+            delivery_datetime=data.get("delivery_datetime", ""),
+            equipment=data.get("equipment", ""),
+            driver=data.get("driver", ""),
+            driver_id=data.get("driver_id", ""),
+            equipment_id=data.get("equipment_id", ""),
+            notes=data.get("notes", ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     return jsonify({"status": "ok", "load": load}), 201
 
 
@@ -74,7 +79,10 @@ def update_load(load_id):
     data = request.get_json(silent=True) or {}
     if "status" in data and data["status"] not in LOAD_STATUSES:
         return jsonify({"error": f"Invalid status: {data['status']}"}), 400
-    result = services.update_load(load_id, **data)
+    try:
+        result = services.update_load(load_id, **data)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     if not result:
         return jsonify({"error": f"Load {load_id} not found"}), 404
     return jsonify({"status": "ok", "load": result})
@@ -609,6 +617,56 @@ def delete_equipment_route(equipment_id):
     if not services.delete_equipment(equipment_id):
         return jsonify({"error": f"Equipment {equipment_id} not found"}), 404
     return jsonify({"status": "ok"})
+
+
+# ── Fleet Assignment ────────────────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/assign-driver", methods=["POST"])
+def assign_driver(load_id):
+    data = request.get_json(silent=True) or {}
+    driver_id = data.get("driver_id", "")
+    if not driver_id:
+        return jsonify({"error": "driver_id is required"}), 400
+    try:
+        result = services.assign_driver(load_id, driver_id)
+    except ValueError as e:
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 400
+        return jsonify({"error": msg}), status
+    return jsonify({"status": "ok", "load": result})
+
+
+@dispatch_bp.route("/loads/<load_id>/unassign-driver", methods=["POST"])
+def unassign_driver(load_id):
+    try:
+        result = services.unassign_driver(load_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "load": result})
+
+
+@dispatch_bp.route("/loads/<load_id>/assign-equipment", methods=["POST"])
+def assign_equipment(load_id):
+    data = request.get_json(silent=True) or {}
+    equipment_id = data.get("equipment_id", "")
+    if not equipment_id:
+        return jsonify({"error": "equipment_id is required"}), 400
+    try:
+        result = services.assign_equipment(load_id, equipment_id)
+    except ValueError as e:
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 400
+        return jsonify({"error": msg}), status
+    return jsonify({"status": "ok", "load": result})
+
+
+@dispatch_bp.route("/loads/<load_id>/unassign-equipment", methods=["POST"])
+def unassign_equipment(load_id):
+    try:
+        result = services.unassign_equipment(load_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "load": result})
 
 
 # ── Fleet Summary ───────────────────────────────────────────────────

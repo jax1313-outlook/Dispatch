@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS loads (
     delivery_datetime TEXT NOT NULL DEFAULT '',
     equipment       TEXT NOT NULL DEFAULT '',
     driver          TEXT NOT NULL DEFAULT '',
+    driver_id       TEXT NOT NULL DEFAULT '',
+    equipment_id    TEXT NOT NULL DEFAULT '',
     status          TEXT NOT NULL DEFAULT 'created',
     notes           TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,

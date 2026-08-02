@@ -64,8 +64,15 @@ def create_load(
     delivery_datetime: str = "",
     equipment: str = "",
     driver: str = "",
+    driver_id: str = "",
+    equipment_id: str = "",
     notes: str = "",
 ) -> dict:
+    if driver_id:
+        _validate_driver_assignment(driver_id)
+    if equipment_id:
+        _validate_equipment_assignment(equipment_id)
+
     load = Load(
         customer=customer,
         broker_shipper=broker_shipper,
@@ -75,6 +82,8 @@ def create_load(
         delivery_datetime=delivery_datetime,
         equipment=equipment,
         driver=driver,
+        driver_id=driver_id,
+        equipment_id=equipment_id,
         notes=notes,
     )
     result = store.create_load(load)
@@ -96,7 +105,64 @@ def list_loads(status: str | None = None) -> list[dict]:
 
 
 def update_load(load_id: str, **fields) -> dict | None:
+    if "driver_id" in fields and fields["driver_id"]:
+        _validate_driver_assignment(fields["driver_id"])
+    if "equipment_id" in fields and fields["equipment_id"]:
+        _validate_equipment_assignment(fields["equipment_id"])
     return store.update_load(load_id, **fields)
+
+
+def assign_driver(load_id: str, driver_id: str) -> dict | None:
+    """Assign an active driver to a load."""
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+    _validate_driver_assignment(driver_id)
+    drv = store.get_driver(driver_id)
+    return store.update_load(load_id, driver_id=driver_id, driver=drv["name"])
+
+
+def unassign_driver(load_id: str) -> dict | None:
+    """Remove driver assignment from a load."""
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+    return store.update_load(load_id, driver_id="", driver="")
+
+
+def assign_equipment(load_id: str, equipment_id: str) -> dict | None:
+    """Assign active equipment to a load."""
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+    _validate_equipment_assignment(equipment_id)
+    eqp = store.get_equipment(equipment_id)
+    label = f"{eqp['unit_number']} ({eqp['equipment_type']})"
+    return store.update_load(load_id, equipment_id=equipment_id, equipment=label)
+
+
+def unassign_equipment(load_id: str) -> dict | None:
+    """Remove equipment assignment from a load."""
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+    return store.update_load(load_id, equipment_id="", equipment="")
+
+
+def _validate_driver_assignment(driver_id: str) -> None:
+    drv = store.get_driver(driver_id)
+    if not drv:
+        raise ValueError(f"Driver not found: {driver_id}")
+    if drv["status"] != "active":
+        raise ValueError(f"Driver {driver_id} is not active (status: {drv['status']})")
+
+
+def _validate_equipment_assignment(equipment_id: str) -> None:
+    eqp = store.get_equipment(equipment_id)
+    if not eqp:
+        raise ValueError(f"Equipment not found: {equipment_id}")
+    if eqp["status"] != "active":
+        raise ValueError(f"Equipment {equipment_id} is not active (status: {eqp['status']})")
 
 
 def get_visibility(load_id: str) -> dict | None:
@@ -746,6 +812,14 @@ def get_load_bundle(load_id: str) -> dict | None:
     load = store.get_load(load_id)
     if not load:
         return None
+
+    assigned_driver = None
+    if load.get("driver_id"):
+        assigned_driver = store.get_driver(load["driver_id"])
+    assigned_equipment = None
+    if load.get("equipment_id"):
+        assigned_equipment = store.get_equipment(load["equipment_id"])
+
     return {
         "load": load,
         "visibility": store.get_visibility(load_id),
@@ -756,4 +830,8 @@ def get_load_bundle(load_id: str) -> dict | None:
         "retention": store.get_retention_by_load(load_id),
         "financials": get_financials(load_id),
         "settlement": store.get_settlement(load_id),
+        "assigned_driver": assigned_driver,
+        "assigned_equipment": assigned_equipment,
+        "active_drivers": store.list_drivers(status="active"),
+        "active_equipment": store.list_equipment(status="active"),
     }
