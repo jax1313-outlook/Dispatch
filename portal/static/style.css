@@ -559,6 +559,13 @@ body {
 .settlement-disputed { background: #fdebd0; color: #e67e22; }
 .settlement-written_off { background: #f5f5f5; color: #999; }
 
+/* ---------- Fleet ---------- */
+.fleet-active { background: #d5f5e3; color: #1e8449; }
+.fleet-inactive { background: #f5f5f5; color: #999; }
+.fleet-on_leave { background: #fef9e7; color: #b7950b; }
+.fleet-maintenance { background: #fdebd0; color: #e67e22; }
+.fleet-retired { background: #f5f5f5; color: #999; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 800px) {
     .sidebar { width: 180px; }

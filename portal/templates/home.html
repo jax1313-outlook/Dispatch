@@ -32,6 +32,10 @@
         <span class="summary-number">{{ pending_count }}</span>
         <span class="summary-label">Pending Decisions</span>
     </a>
+    <a href="{{ url_for('pages.fleet') }}" class="summary-card" style="text-decoration:none;color:inherit;border-left:4px solid #2980b9;">
+        <span class="summary-number">{{ fleet_summary.drivers_by_status.get('active', 0) }}D / {{ fleet_summary.equipment_by_status.get('active', 0) }}E</span>
+        <span class="summary-label">Fleet Active</span>
+    </a>
 </div>
 
 {% if dispatch_cards %}

@@ -101,6 +101,25 @@ EXPENSE_CATEGORIES = [
     "other",
 ]
 
+DRIVER_STATUSES = ["active", "inactive", "on_leave"]
+
+LICENSE_CLASSES = ["A", "B", "C"]
+
+EQUIPMENT_TYPES = [
+    "dry_van",
+    "reefer",
+    "flatbed",
+    "step_deck",
+    "lowboy",
+    "tanker",
+    "container",
+    "box_truck",
+    "straight_truck",
+    "other",
+]
+
+EQUIPMENT_STATUSES = ["active", "inactive", "maintenance", "retired"]
+
 
 def _validate_choice(value: str, choices: list[str], field_name: str) -> None:
     if value not in choices:
@@ -366,3 +385,61 @@ class Settlement:
         d = asdict(self)
         d["net_payment"] = self.net_payment
         return d
+
+
+@dataclass
+class Driver:
+    driver_id: str = ""
+    name: str = ""
+    license_number: str = ""
+    license_class: str = ""
+    phone: str = ""
+    email: str = ""
+    status: str = "active"
+    hire_date: str = ""
+    notes: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.driver_id:
+            self.driver_id = _gen_id("DRV")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.updated_at:
+            self.updated_at = self.created_at
+        _validate_choice(self.status, DRIVER_STATUSES, "status")
+        if self.license_class:
+            _validate_choice(self.license_class, LICENSE_CLASSES, "license_class")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class Equipment:
+    equipment_id: str = ""
+    unit_number: str = ""
+    equipment_type: str = "dry_van"
+    make: str = ""
+    model: str = ""
+    year: str = ""
+    vin: str = ""
+    license_plate: str = ""
+    status: str = "active"
+    notes: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.equipment_id:
+            self.equipment_id = _gen_id("EQP")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.updated_at:
+            self.updated_at = self.created_at
+        _validate_choice(self.equipment_type, EQUIPMENT_TYPES, "equipment_type")
+        _validate_choice(self.status, EQUIPMENT_STATUSES, "status")
+
+    def to_dict(self) -> dict:
+        return asdict(self)

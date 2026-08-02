@@ -10,10 +10,14 @@ from flask import Blueprint, jsonify, render_template, request
 
 from dispatch import notifications, services
 from dispatch.models import (
+    DRIVER_STATUSES,
+    EQUIPMENT_STATUSES,
+    EQUIPMENT_TYPES,
     EVIDENCE_TYPES,
     EXCEPTION_STATUSES,
     EXCEPTION_TYPES,
     EXPENSE_CATEGORIES,
+    LICENSE_CLASSES,
     LOAD_STATUSES,
     MILESTONE_SOURCES,
     MILESTONE_TYPES,
@@ -481,6 +485,138 @@ def run_aging_check():
         "newly_overdue": newly_overdue,
         "count": len(newly_overdue),
     })
+
+
+# ── Drivers ─────────────────────────────────────────────────────────
+
+@dispatch_bp.route("/drivers", methods=["GET"])
+def list_drivers():
+    status = request.args.get("status")
+    if status and status not in DRIVER_STATUSES:
+        return jsonify({"error": f"Invalid status: {status}"}), 400
+    drivers = services.list_drivers(status=status)
+    return jsonify({"status": "ok", "drivers": drivers, "count": len(drivers)})
+
+
+@dispatch_bp.route("/drivers", methods=["POST"])
+def create_driver():
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "")
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    license_class = data.get("license_class", "")
+    if license_class and license_class not in LICENSE_CLASSES:
+        return jsonify({"error": f"Invalid license_class: {license_class}"}), 400
+    drv = services.create_driver(
+        name=name,
+        license_number=data.get("license_number", ""),
+        license_class=license_class,
+        phone=data.get("phone", ""),
+        email=data.get("email", ""),
+        hire_date=data.get("hire_date", ""),
+        notes=data.get("notes", ""),
+    )
+    return jsonify({"status": "ok", "driver": drv}), 201
+
+
+@dispatch_bp.route("/drivers/<driver_id>", methods=["GET"])
+def get_driver(driver_id):
+    drv = services.get_driver(driver_id)
+    if not drv:
+        return jsonify({"error": f"Driver {driver_id} not found"}), 404
+    return jsonify({"status": "ok", "driver": drv})
+
+
+@dispatch_bp.route("/drivers/<driver_id>", methods=["PATCH"])
+def update_driver(driver_id):
+    data = request.get_json(silent=True) or {}
+    if "status" in data and data["status"] not in DRIVER_STATUSES:
+        return jsonify({"error": f"Invalid status: {data['status']}"}), 400
+    if "license_class" in data and data["license_class"] and data["license_class"] not in LICENSE_CLASSES:
+        return jsonify({"error": f"Invalid license_class: {data['license_class']}"}), 400
+    result = services.update_driver(driver_id, **data)
+    if not result:
+        return jsonify({"error": f"Driver {driver_id} not found"}), 404
+    return jsonify({"status": "ok", "driver": result})
+
+
+@dispatch_bp.route("/drivers/<driver_id>", methods=["DELETE"])
+def delete_driver_route(driver_id):
+    if not services.delete_driver(driver_id):
+        return jsonify({"error": f"Driver {driver_id} not found"}), 404
+    return jsonify({"status": "ok"})
+
+
+# ── Equipment ───────────────────────────────────────────────────────
+
+@dispatch_bp.route("/equipment", methods=["GET"])
+def list_equipment():
+    status = request.args.get("status")
+    if status and status not in EQUIPMENT_STATUSES:
+        return jsonify({"error": f"Invalid status: {status}"}), 400
+    eq_type = request.args.get("equipment_type")
+    if eq_type and eq_type not in EQUIPMENT_TYPES:
+        return jsonify({"error": f"Invalid equipment_type: {eq_type}"}), 400
+    items = services.list_equipment(status=status, equipment_type=eq_type)
+    return jsonify({"status": "ok", "equipment": items, "count": len(items)})
+
+
+@dispatch_bp.route("/equipment", methods=["POST"])
+def create_equipment():
+    data = request.get_json(silent=True) or {}
+    unit_number = data.get("unit_number", "")
+    if not unit_number:
+        return jsonify({"error": "unit_number is required"}), 400
+    eq_type = data.get("equipment_type", "dry_van")
+    if eq_type not in EQUIPMENT_TYPES:
+        return jsonify({"error": f"Invalid equipment_type: {eq_type}"}), 400
+    eqp = services.create_equipment(
+        unit_number=unit_number,
+        equipment_type=eq_type,
+        make=data.get("make", ""),
+        model=data.get("model", ""),
+        year=data.get("year", ""),
+        vin=data.get("vin", ""),
+        license_plate=data.get("license_plate", ""),
+        notes=data.get("notes", ""),
+    )
+    return jsonify({"status": "ok", "equipment": eqp}), 201
+
+
+@dispatch_bp.route("/equipment/<equipment_id>", methods=["GET"])
+def get_equipment(equipment_id):
+    eqp = services.get_equipment(equipment_id)
+    if not eqp:
+        return jsonify({"error": f"Equipment {equipment_id} not found"}), 404
+    return jsonify({"status": "ok", "equipment": eqp})
+
+
+@dispatch_bp.route("/equipment/<equipment_id>", methods=["PATCH"])
+def update_equipment(equipment_id):
+    data = request.get_json(silent=True) or {}
+    if "status" in data and data["status"] not in EQUIPMENT_STATUSES:
+        return jsonify({"error": f"Invalid status: {data['status']}"}), 400
+    if "equipment_type" in data and data["equipment_type"] not in EQUIPMENT_TYPES:
+        return jsonify({"error": f"Invalid equipment_type: {data['equipment_type']}"}), 400
+    result = services.update_equipment(equipment_id, **data)
+    if not result:
+        return jsonify({"error": f"Equipment {equipment_id} not found"}), 404
+    return jsonify({"status": "ok", "equipment": result})
+
+
+@dispatch_bp.route("/equipment/<equipment_id>", methods=["DELETE"])
+def delete_equipment_route(equipment_id):
+    if not services.delete_equipment(equipment_id):
+        return jsonify({"error": f"Equipment {equipment_id} not found"}), 404
+    return jsonify({"status": "ok"})
+
+
+# ── Fleet Summary ───────────────────────────────────────────────────
+
+@dispatch_bp.route("/fleet/summary", methods=["GET"])
+def fleet_summary():
+    summary = services.get_fleet_summary()
+    return jsonify({"status": "ok", **summary})
 
 
 # ── Decision (email action clicks) ──────────────────────────────────
