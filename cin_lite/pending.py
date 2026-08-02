@@ -27,6 +27,8 @@ def store(
     summary: str,
     decision: dict,
     flags: list[str],
+    *,
+    enriched: dict | None = None,
 ) -> Path:
     """Persist all context needed to complete a decision later."""
     _PENDING_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,6 +40,8 @@ def store(
         "decision": decision,
         "flags": flags,
     }
+    if enriched is not None:
+        payload["enriched"] = enriched
     path = _path(contract_id)
     with path.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)

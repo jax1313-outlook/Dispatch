@@ -212,6 +212,7 @@ def pending_decisions():
     for item in items:
         contract = item.get("contract", {})
         decision = item.get("decision", {})
+        enriched = item.get("enriched", {})
         summaries.append({
             "contract_id": item["contract_id"],
             "title": contract.get("title"),
@@ -223,6 +224,9 @@ def pending_decisions():
             "priority": decision.get("priority"),
             "flag_count": len(item.get("flags", [])),
             "flags": item.get("flags", []),
+            "risk_level": enriched.get("risk_level"),
+            "pursuit_readiness": enriched.get("pursuit_readiness"),
+            "strategic_assessment": enriched.get("strategic_assessment"),
         })
     from cin_lite.pipeline import routing_history
     history = routing_history()
@@ -251,6 +255,8 @@ def settings():
         "email_from": email_delivery.from_address(),
         "email_reviewer": email_delivery.reviewer_address(),
         "email_domain": email_delivery.domain(),
+        "email_secret_set": not email_delivery._using_default_secret(),
+        "portal_url": os.environ.get("CIN_LITE_PORTAL_URL", "http://127.0.0.1:8080"),
     }
     return render_template("settings.html", config=Config, cin_config=cin_config)
 

@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timezone
 
 from cin_lite import acquisition, processing, archive, control, email_delivery, pending
-from cin_lite.agents import summarizer, router
+from cin_lite.agents import extractor, summarizer, router
 from cin_lite.workflows import proposal
 
 
@@ -59,6 +59,7 @@ def _process_single(contract: dict, action_override: str | None) -> dict:
 
     intelligence = processing.process(contract)
     flags = processing.all_flags(intelligence)
+    enriched = extractor.extract(contract, intelligence, flags)
     summary = summarizer.summarize(contract, intelligence, flags)
     decision = router.decide(contract, intelligence, summary, flags)
     contract_id = archive.make_id(contract)
@@ -70,7 +71,8 @@ def _process_single(contract: dict, action_override: str | None) -> dict:
         contract_id=contract_id,
     )
 
-    pending.store(contract_id, contract, intelligence, summary, decision, flags)
+    pending.store(contract_id, contract, intelligence, summary, decision, flags,
+                  enriched=enriched)
     checkpoint_status = email_delivery.deliver_checkpoint(
         contract, contract_id, text_email, html_email,
     )

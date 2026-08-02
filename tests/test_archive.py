@@ -21,7 +21,7 @@ def test_make_id_differs_by_contract(mapped_contract, clean_contract):
 
 def test_ensure_tree_creates_subdirs(tmp_archive):
     archive.ensure_tree()
-    for sub in ("Raw", "Processed", "Intelligence", "Summaries", "Routing"):
+    for sub in ("Raw", "Processed", "Intelligence", "Summaries", "Routing", "Pending", "Outbox"):
         assert (tmp_archive / sub).is_dir()
 
 

@@ -28,7 +28,16 @@
                 <div><strong>Agency:</strong> {{ item.agency or 'Unknown' }}</div>
                 <div><strong>Recommendation:</strong> {{ item.recommendation or 'None' }}</div>
                 <div><strong>Contract ID:</strong> <code style="font-size:11px;">{{ item.contract_id }}</code></div>
+                {% if item.risk_level %}
+                <div><strong>Risk:</strong> <span class="indicator">{{ item.risk_level }}</span></div>
+                {% endif %}
+                {% if item.pursuit_readiness %}
+                <div><strong>Pursuit:</strong> <span class="indicator">{{ item.pursuit_readiness }}</span></div>
+                {% endif %}
             </div>
+            {% if item.strategic_assessment %}
+            <div class="card-summary" style="font-style:italic;font-size:12px;color:#555;margin:8px 0;">{{ item.strategic_assessment[:300] }}{% if item.strategic_assessment|length > 300 %}...{% endif %}</div>
+            {% endif %}
             {% if item.summary %}
             <div class="card-summary">{{ item.summary[:200] }}{% if item.summary|length > 200 %}...{% endif %}</div>
             {% endif %}
