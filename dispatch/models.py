@@ -36,6 +36,17 @@ LOAD_STATUSES = [
     "cancelled",
 ]
 
+LOAD_SOURCES = [
+    "direct",
+    "dat",
+    "truckstop",
+    "broker_call",
+    "email",
+    "referral",
+    "website",
+    "other",
+]
+
 MILESTONE_TYPES = [
     "dispatched",
     "en_route_pickup",
@@ -148,6 +159,7 @@ class Load:
     driver_id: str = ""
     equipment_id: str = ""
     status: str = "created"
+    source: str = ""
     notes: str = ""
     created_at: str = ""
     updated_at: str = ""
@@ -161,6 +173,8 @@ class Load:
         if not self.updated_at:
             self.updated_at = now
         _validate_choice(self.status, LOAD_STATUSES, "status")
+        if self.source:
+            _validate_choice(self.source, LOAD_SOURCES, "source")
 
     def to_dict(self) -> dict:
         return asdict(self)

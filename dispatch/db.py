@@ -26,10 +26,13 @@ CREATE TABLE IF NOT EXISTS loads (
     driver_id       TEXT NOT NULL DEFAULT '',
     equipment_id    TEXT NOT NULL DEFAULT '',
     status          TEXT NOT NULL DEFAULT 'created',
+    source          TEXT NOT NULL DEFAULT '',
     notes           TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_loads_source ON loads(source);
 
 CREATE TABLE IF NOT EXISTS visibility (
     load_id                TEXT PRIMARY KEY REFERENCES loads(load_id),
