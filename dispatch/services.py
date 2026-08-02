@@ -9,6 +9,7 @@ from __future__ import annotations
 from dispatch.models import (
     EXCEPTION_STATUSES,
     LOAD_STATUSES,
+    DetentionEvent,
     Driver,
     Equipment,
     EvidenceItem,
@@ -1191,6 +1192,7 @@ def get_load_bundle(load_id: str) -> dict | None:
         "active_drivers": store.list_drivers(status="active"),
         "active_equipment": store.list_equipment(status="active"),
         "lane_history": get_lane_history(load_id),
+        "detentions": store.list_detentions(load_id=load_id),
     }
 
 
@@ -1209,6 +1211,104 @@ def get_lane_history(load_id: str) -> list[dict]:
         h["rate_amount"] = rate["rate_amount"] if rate else None
         h["revenue"] = rate["revenue"] if rate else None
     return history
+
+
+# ── Detention Tracking ──────────────────────────────────────────────
+
+
+def start_detention(
+    load_id: str,
+    location_type: str = "pickup",
+    free_hours: float = 2.0,
+    hourly_rate: float = 75.0,
+    notes: str = "",
+    started_at: str = "",
+) -> dict:
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+
+    active = store.list_detentions(load_id=load_id, status="active")
+    if active:
+        raise ValueError("Load already has an active detention event")
+
+    det = DetentionEvent(
+        load_id=load_id,
+        location_type=location_type,
+        free_hours=free_hours,
+        hourly_rate=hourly_rate,
+        notes=notes,
+        started_at=started_at or _utc_now(),
+    )
+    return store.create_detention(det)
+
+
+def stop_detention(
+    detention_id: str,
+    ended_at: str = "",
+    create_expense: bool = True,
+) -> dict | None:
+    det = store.get_detention(detention_id)
+    if not det:
+        return None
+    if det["status"] != "active":
+        raise ValueError(f"Detention is not active (status: {det['status']})")
+
+    end_time = ended_at or _utc_now()
+    updates: dict = {"ended_at": end_time, "status": "completed"}
+    result = store.update_detention(detention_id, **updates)
+    if not result:
+        return None
+
+    if create_expense and result["billable_amount"] > 0:
+        exp = add_expense(
+            load_id=result["load_id"],
+            category="detention",
+            description=f"Detention at {result['location_type']} — {result['billable_hours']:.1f}h billable",
+            amount=result["billable_amount"],
+            notes=result.get("notes", ""),
+        )
+        store.update_detention(detention_id, expense_id=exp["expense_id"], status="billed")
+        result = store.get_detention(detention_id)
+
+    return result
+
+
+def update_detention(detention_id: str, **fields) -> dict | None:
+    return store.update_detention(detention_id, **fields)
+
+
+def delete_detention(detention_id: str) -> bool:
+    return store.delete_detention(detention_id)
+
+
+def list_detentions(load_id: str | None = None, status: str | None = None) -> list[dict]:
+    return store.list_detentions(load_id=load_id, status=status)
+
+
+def get_detention(detention_id: str) -> dict | None:
+    return store.get_detention(detention_id)
+
+
+def get_detention_summary() -> dict:
+    all_detentions = store.list_detentions()
+    total_events = len(all_detentions)
+    active_count = sum(1 for d in all_detentions if d["status"] == "active")
+    completed = [d for d in all_detentions if d["status"] in ("completed", "billed")]
+    total_hours = sum(d.get("total_hours", 0) for d in completed)
+    total_billable = sum(d.get("billable_amount", 0) for d in completed)
+    pickup_count = sum(1 for d in all_detentions if d["location_type"] == "pickup")
+    delivery_count = sum(1 for d in all_detentions if d["location_type"] == "delivery")
+
+    return {
+        "total_events": total_events,
+        "active_count": active_count,
+        "completed_count": len(completed),
+        "total_hours": round(total_hours, 1),
+        "total_billable": round(total_billable, 2),
+        "pickup_count": pickup_count,
+        "delivery_count": delivery_count,
+    }
 
 
 # ── Lane Templates ──────────────────────────────────────────────────

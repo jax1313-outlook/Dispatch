@@ -7,6 +7,7 @@ import math
 
 from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
 from dispatch.models import (
+    DetentionEvent,
     Driver,
     Equipment,
     EvidenceItem,
@@ -162,7 +163,7 @@ def delete_load(load_id: str) -> bool:
     _CHILD_TABLES = [
         "visibility", "milestones", "evidence", "exceptions",
         "pod_packages", "retention", "rate_confirmations",
-        "expenses", "settlements", "activities",
+        "expenses", "settlements", "activities", "detention_events",
     ]
     with get_connection() as conn:
         for table in _CHILD_TABLES:
@@ -987,6 +988,87 @@ def delete_activity(activity_id: str) -> bool:
     with get_connection() as conn:
         cur = conn.execute(
             "DELETE FROM activities WHERE activity_id=?", (activity_id,)
+        )
+    return cur.rowcount > 0
+
+
+# ── Detention Events ────────────────────────────────────────────────
+
+
+def create_detention(det: DetentionEvent) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO detention_events
+               (detention_id, load_id, location_type, started_at, ended_at,
+                free_hours, hourly_rate, status, notes, expense_id, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (det.detention_id, det.load_id, det.location_type,
+             det.started_at, det.ended_at, det.free_hours,
+             det.hourly_rate, det.status, det.notes,
+             det.expense_id, det.created_at),
+        )
+    return det.to_dict()
+
+
+def get_detention(detention_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM detention_events WHERE detention_id=?",
+            (detention_id,),
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    det = DetentionEvent(**d)
+    return det.to_dict()
+
+
+def list_detentions(load_id: str | None = None, status: str | None = None) -> list[dict]:
+    clauses: list[str] = []
+    params: list = []
+    if load_id:
+        clauses.append("load_id=?")
+        params.append(load_id)
+    if status:
+        clauses.append("status=?")
+        params.append(status)
+    sql = "SELECT * FROM detention_events"
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY started_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    results = []
+    for r in rows:
+        d = dict_from_row(r)
+        det = DetentionEvent(**d)
+        results.append(det.to_dict())
+    return results
+
+
+def update_detention(detention_id: str, **fields) -> dict | None:
+    existing = get_detention(detention_id)
+    if not existing:
+        return None
+    allowed = {"ended_at", "free_hours", "hourly_rate", "status", "notes", "expense_id"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [detention_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE detention_events SET {set_clause} WHERE detention_id=?",
+            values,
+        )
+    return get_detention(detention_id)
+
+
+def delete_detention(detention_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM detention_events WHERE detention_id=?",
+            (detention_id,),
         )
     return cur.rowcount > 0
 

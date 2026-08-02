@@ -375,6 +375,64 @@
     {% endif %}
 </div>
 
+{# ── Detention Tracking ────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Detention ({{ detentions|length }})</h3>
+        <button class="btn btn-sm btn-warning" onclick="toggleEl('detention-form')">+ Start Detention</button>
+    </div>
+
+    <div id="detention-form" style="display:none;margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="startDetention(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:8px;">
+                <div><label><strong>Location</strong><br>
+                    <select name="location_type" style="width:100%;padding:4px;">
+                        <option value="pickup">Pickup</option>
+                        <option value="delivery">Delivery</option>
+                    </select></label></div>
+                <div><label><strong>Free Hours</strong><br>
+                    <input type="number" name="free_hours" step="0.5" min="0" value="2" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Hourly Rate ($)</strong><br>
+                    <input type="number" name="hourly_rate" step="5" min="0" value="75" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Notes</strong><br>
+                    <input type="text" name="notes" placeholder="Optional" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-warning">Start Clock</button>
+            <button type="button" class="btn btn-sm" onclick="toggleEl('detention-form')">Cancel</button>
+        </form>
+    </div>
+
+    {% if detentions %}
+    {% for det in detentions %}
+    <div class="conflict-card severity-{% if det.status == 'active' %}high{% elif det.status == 'billed' %}low{% else %}medium{% endif %}" style="margin-bottom:8px;">
+        <div class="conflict-header">
+            <span class="status-tag {% if det.status == 'active' %}status-open{% elif det.status == 'billed' %}dispatch-completed{% else %}dispatch-delivered{% endif %}">{{ det.status }}</span>
+            <strong>{{ det.location_type|title }} Detention</strong>
+            {% if det.billable_amount > 0 %}
+            <span style="margin-left:auto;font-weight:600;color:#c62828;">${{ "%.2f"|format(det.billable_amount) }}</span>
+            {% endif %}
+        </div>
+        <div class="conflict-fields" style="font-size:13px;">
+            <div>Started: {{ det.started_at[:16] if det.started_at else '—' }}
+                {% if det.ended_at %} | Ended: {{ det.ended_at[:16] }}{% endif %}</div>
+            <div>Free: {{ det.free_hours }}h | Rate: ${{ "%.2f"|format(det.hourly_rate) }}/h
+                {% if det.total_hours > 0 %} | Total: {{ "%.1f"|format(det.total_hours) }}h | Billable: {{ "%.1f"|format(det.billable_hours) }}h{% endif %}</div>
+            {% if det.notes %}<div>{{ det.notes }}</div>{% endif %}
+        </div>
+        {% if det.status == 'active' %}
+        <div style="margin-top:8px;display:flex;gap:6px;">
+            <button class="btn btn-sm btn-success" onclick="stopDetention('{{ det.detention_id }}', true)">Stop &amp; Bill</button>
+            <button class="btn btn-sm" onclick="stopDetention('{{ det.detention_id }}', false)">Stop (No Bill)</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteDetention('{{ det.detention_id }}')">Cancel</button>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="empty-state-sm">No detention events recorded.</p>
+    {% endif %}
+</div>
+
 {# ── Activity Thread ───────────────────────────────────────────────── #}
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
@@ -1009,6 +1067,35 @@ function addComment(e, loadId) {
 function deleteComment(activityId) {
     if (!confirm('Remove this comment?')) return;
     fetch('/api/dispatch/activities/' + activityId, {method: 'DELETE'}).then(function(r) {
+        return r.json();
+    }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function startDetention(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    if (data.free_hours) data.free_hours = parseFloat(data.free_hours);
+    if (data.hourly_rate) data.hourly_rate = parseFloat(data.hourly_rate);
+    apiPost('/api/dispatch/loads/' + loadId + '/detentions', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function stopDetention(detentionId, createExpense) {
+    apiPost('/api/dispatch/detentions/' + detentionId + '/stop', {create_expense: createExpense}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function deleteDetention(detentionId) {
+    if (!confirm('Cancel this detention event?')) return;
+    fetch('/api/dispatch/detentions/' + detentionId, {method: 'DELETE'}).then(function(r) {
         return r.json();
     }).then(function(data) {
         if (data.error) { alert(data.error); return; }

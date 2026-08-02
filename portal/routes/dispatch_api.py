@@ -13,6 +13,8 @@ from flask import Blueprint, Response, jsonify, render_template, request
 
 from dispatch import notifications, services
 from dispatch.models import (
+    DETENTION_LOCATIONS,
+    DETENTION_STATUSES,
     DRIVER_STATUSES,
     EQUIPMENT_STATUSES,
     EQUIPMENT_TYPES,
@@ -1277,3 +1279,70 @@ def load_calendar_api():
         year, month = today.year, today.month
     data = services.get_load_calendar(year, month)
     return jsonify(data)
+
+
+# ── Detention Tracking ─────────────────────────────────────────────
+
+
+@dispatch_bp.route("/loads/<load_id>/detentions", methods=["GET"])
+def list_detentions(load_id):
+    detentions = services.list_detentions(load_id=load_id)
+    return jsonify({"status": "ok", "detentions": detentions, "count": len(detentions)})
+
+
+@dispatch_bp.route("/loads/<load_id>/detentions", methods=["POST"])
+def start_detention(load_id):
+    data = request.get_json(silent=True) or {}
+    location_type = data.get("location_type", "pickup")
+    if location_type not in DETENTION_LOCATIONS:
+        return jsonify({"error": f"Invalid location_type: {location_type}"}), 400
+    try:
+        det = services.start_detention(
+            load_id=load_id,
+            location_type=location_type,
+            free_hours=float(data.get("free_hours", 2.0)),
+            hourly_rate=float(data.get("hourly_rate", 75.0)),
+            notes=data.get("notes", ""),
+            started_at=data.get("started_at", ""),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(det), 201
+
+
+@dispatch_bp.route("/detentions/<detention_id>", methods=["PATCH"])
+def update_detention(detention_id):
+    data = request.get_json(silent=True) or {}
+    result = services.update_detention(detention_id, **data)
+    if not result:
+        return jsonify({"error": "detention not found"}), 404
+    return jsonify(result)
+
+
+@dispatch_bp.route("/detentions/<detention_id>/stop", methods=["POST"])
+def stop_detention(detention_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = services.stop_detention(
+            detention_id,
+            ended_at=data.get("ended_at", ""),
+            create_expense=data.get("create_expense", True),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not result:
+        return jsonify({"error": "detention not found"}), 404
+    return jsonify(result)
+
+
+@dispatch_bp.route("/detentions/<detention_id>", methods=["DELETE"])
+def delete_detention(detention_id):
+    ok = services.delete_detention(detention_id)
+    if not ok:
+        return jsonify({"error": "detention not found"}), 404
+    return jsonify({"status": "ok"})
+
+
+@dispatch_bp.route("/detentions/summary", methods=["GET"])
+def detention_summary():
+    return jsonify(services.get_detention_summary())
