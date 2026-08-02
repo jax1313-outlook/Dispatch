@@ -18,6 +18,7 @@ from dispatch.models import (
     PODPackage,
     RateConfirmation,
     RetentionArchive,
+    Settlement,
     _utc_now,
 )
 from dispatch import notifications, store
@@ -461,6 +462,113 @@ def get_financials(load_id: str) -> dict | None:
     }
 
 
+def create_settlement(
+    load_id: str,
+    due_date: str = "",
+    notes: str = "",
+) -> dict:
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+
+    existing = store.get_settlement(load_id)
+    if existing:
+        raise ValueError(f"Settlement already exists for load {load_id}")
+
+    rate = store.get_rate_confirmation(load_id)
+    invoice_amount = rate["revenue"] if rate else 0.0
+
+    stl = Settlement(
+        load_id=load_id,
+        invoice_amount=invoice_amount,
+        due_date=due_date,
+        payment_status="invoiced",
+        notes=notes,
+    )
+    return store.create_settlement(stl)
+
+
+def update_settlement(load_id: str, **fields) -> dict | None:
+    return store.update_settlement(load_id, **fields)
+
+
+def record_payment(
+    load_id: str,
+    payment_amount: float,
+    payment_method: str = "ach",
+    factoring_fee: float = 0.0,
+    notes: str = "",
+) -> dict | None:
+    existing = store.get_settlement(load_id)
+    if not existing:
+        return None
+
+    return store.update_settlement(
+        load_id,
+        payment_amount=payment_amount,
+        payment_method=payment_method,
+        factoring_fee=factoring_fee,
+        payment_status="paid",
+        payment_date=_utc_now(),
+        notes=notes or existing.get("notes", ""),
+    )
+
+
+def get_settlement(load_id: str) -> dict | None:
+    return store.get_settlement(load_id)
+
+
+def list_settlements(payment_status: str | None = None) -> list[dict]:
+    return store.list_settlements(payment_status=payment_status)
+
+
+def get_financial_dashboard() -> dict:
+    all_loads = store.list_loads()
+    settlements = store.list_settlements()
+
+    total_revenue = 0.0
+    total_expenses = 0.0
+    total_paid = 0.0
+    total_outstanding = 0.0
+    loads_with_rate = 0
+
+    for load in all_loads:
+        rate = store.get_rate_confirmation(load["load_id"])
+        if rate:
+            total_revenue += rate["revenue"]
+            loads_with_rate += 1
+
+        expenses = store.list_expenses(load["load_id"])
+        total_expenses += sum(e["amount"] for e in expenses)
+
+    for stl in settlements:
+        if stl["payment_status"] == "paid":
+            total_paid += stl["net_payment"]
+        elif stl["payment_status"] in ("invoiced", "overdue"):
+            total_outstanding += stl["invoice_amount"]
+
+    total_profit = total_revenue - total_expenses
+    margin_pct = (total_profit / total_revenue * 100) if total_revenue > 0 else 0.0
+
+    invoiced_count = sum(1 for s in settlements if s["payment_status"] == "invoiced")
+    paid_count = sum(1 for s in settlements if s["payment_status"] == "paid")
+    overdue_count = sum(1 for s in settlements if s["payment_status"] == "overdue")
+
+    return {
+        "total_loads": len(all_loads),
+        "loads_with_rate": loads_with_rate,
+        "total_revenue": round(total_revenue, 2),
+        "total_expenses": round(total_expenses, 2),
+        "total_profit": round(total_profit, 2),
+        "margin_pct": round(margin_pct, 1),
+        "total_paid": round(total_paid, 2),
+        "total_outstanding": round(total_outstanding, 2),
+        "invoiced_count": invoiced_count,
+        "paid_count": paid_count,
+        "overdue_count": overdue_count,
+    }
+
+
 def get_load_bundle(load_id: str) -> dict | None:
     load = store.get_load(load_id)
     if not load:
@@ -474,4 +582,5 @@ def get_load_bundle(load_id: str) -> dict | None:
         "pods": store.list_pods(load_id),
         "retention": store.get_retention_by_load(load_id),
         "financials": get_financials(load_id),
+        "settlement": store.get_settlement(load_id),
     }

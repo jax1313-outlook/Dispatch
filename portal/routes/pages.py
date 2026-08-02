@@ -92,6 +92,7 @@ def dispatch():
 
     status_filter = request.args.get("status")
     engine_loads = dispatch_svc.list_loads(status=status_filter)
+    fin_dashboard = dispatch_svc.get_financial_dashboard()
 
     all_entries = sandbox.get_all()
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
@@ -125,6 +126,7 @@ def dispatch():
         status_filter=status_filter,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
+        fin_dashboard=fin_dashboard,
     )
 
 
@@ -133,7 +135,7 @@ def dispatch_detail(load_id):
     from dispatch import services as dispatch_svc
     from dispatch.models import (
         MILESTONE_TYPES, MILESTONE_SOURCES, EVIDENCE_TYPES,
-        EXPENSE_CATEGORIES, RATE_TYPES,
+        EXPENSE_CATEGORIES, RATE_TYPES, SETTLEMENT_STATUSES, PAYMENT_METHODS,
     )
 
     bundle = dispatch_svc.get_load_bundle(load_id)
@@ -146,6 +148,8 @@ def dispatch_detail(load_id):
         evidence_types=EVIDENCE_TYPES,
         expense_categories=EXPENSE_CATEGORIES,
         rate_types=RATE_TYPES,
+        settlement_statuses=SETTLEMENT_STATUSES,
+        payment_methods=PAYMENT_METHODS,
         **bundle,
     )
 

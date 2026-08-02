@@ -17,7 +17,9 @@ from dispatch.models import (
     LOAD_STATUSES,
     MILESTONE_SOURCES,
     MILESTONE_TYPES,
+    PAYMENT_METHODS,
     RATE_TYPES,
+    SETTLEMENT_STATUSES,
     SEVERITY_LEVELS,
 )
 
@@ -374,6 +376,99 @@ def get_financials(load_id):
     if not result:
         return jsonify({"error": f"Load {load_id} not found"}), 404
     return jsonify({"status": "ok", **result})
+
+
+# ── Settlements ──────────────────────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/settlement", methods=["GET"])
+def get_settlement(load_id):
+    stl = services.get_settlement(load_id)
+    if not stl:
+        return jsonify({"error": f"No settlement for {load_id}"}), 404
+    return jsonify({"status": "ok", "settlement": stl})
+
+
+@dispatch_bp.route("/loads/<load_id>/settlement", methods=["POST"])
+def create_settlement(load_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        stl = services.create_settlement(
+            load_id=load_id,
+            due_date=data.get("due_date", ""),
+            notes=data.get("notes", ""),
+        )
+    except ValueError as e:
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 409
+        return jsonify({"error": msg}), status
+    return jsonify({"status": "ok", "settlement": stl}), 201
+
+
+@dispatch_bp.route("/loads/<load_id>/settlement", methods=["PATCH"])
+def update_settlement(load_id):
+    data = request.get_json(silent=True) or {}
+    if "payment_status" in data and data["payment_status"] not in SETTLEMENT_STATUSES:
+        return jsonify({"error": f"Invalid payment_status: {data['payment_status']}"}), 400
+    if "payment_method" in data and data["payment_method"] and data["payment_method"] not in PAYMENT_METHODS:
+        return jsonify({"error": f"Invalid payment_method: {data['payment_method']}"}), 400
+    for field in ("invoice_amount", "payment_amount", "factoring_fee"):
+        if field in data:
+            try:
+                data[field] = float(data[field])
+            except (ValueError, TypeError):
+                return jsonify({"error": f"{field} must be a number"}), 400
+    result = services.update_settlement(load_id, **data)
+    if not result:
+        return jsonify({"error": f"No settlement for {load_id}"}), 404
+    return jsonify({"status": "ok", "settlement": result})
+
+
+@dispatch_bp.route("/loads/<load_id>/payment", methods=["POST"])
+def record_payment(load_id):
+    data = request.get_json(silent=True) or {}
+    payment_amount = data.get("payment_amount")
+    if payment_amount is None:
+        return jsonify({"error": "payment_amount is required"}), 400
+    try:
+        payment_amount = float(payment_amount)
+    except (ValueError, TypeError):
+        return jsonify({"error": "payment_amount must be a number"}), 400
+    payment_method = data.get("payment_method", "ach")
+    if payment_method not in PAYMENT_METHODS:
+        return jsonify({"error": f"Invalid payment_method: {payment_method}"}), 400
+    factoring_fee = 0.0
+    if data.get("factoring_fee") is not None:
+        try:
+            factoring_fee = float(data["factoring_fee"])
+        except (ValueError, TypeError):
+            return jsonify({"error": "factoring_fee must be a number"}), 400
+    result = services.record_payment(
+        load_id=load_id,
+        payment_amount=payment_amount,
+        payment_method=payment_method,
+        factoring_fee=factoring_fee,
+        notes=data.get("notes", ""),
+    )
+    if not result:
+        return jsonify({"error": f"No settlement for {load_id}"}), 404
+    return jsonify({"status": "ok", "settlement": result})
+
+
+@dispatch_bp.route("/settlements", methods=["GET"])
+def list_settlements():
+    status = request.args.get("payment_status")
+    if status and status not in SETTLEMENT_STATUSES:
+        return jsonify({"error": f"Invalid payment_status: {status}"}), 400
+    items = services.list_settlements(payment_status=status)
+    return jsonify({"status": "ok", "settlements": items, "count": len(items)})
+
+
+# ── Financial Dashboard ──────────────────────────────────────────────
+
+@dispatch_bp.route("/dashboard/financials", methods=["GET"])
+def financial_dashboard():
+    dashboard = services.get_financial_dashboard()
+    return jsonify({"status": "ok", **dashboard})
 
 
 # ── Decision (email action clicks) ──────────────────────────────────

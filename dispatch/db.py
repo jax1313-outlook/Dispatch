@@ -121,6 +121,21 @@ CREATE TABLE IF NOT EXISTS expenses (
     notes               TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS settlements (
+    settlement_id   TEXT PRIMARY KEY,
+    load_id         TEXT NOT NULL UNIQUE REFERENCES loads(load_id),
+    invoice_number  TEXT NOT NULL DEFAULT '',
+    invoice_amount  REAL NOT NULL DEFAULT 0,
+    invoice_date    TEXT NOT NULL,
+    due_date        TEXT NOT NULL DEFAULT '',
+    payment_status  TEXT NOT NULL DEFAULT 'draft',
+    payment_amount  REAL NOT NULL DEFAULT 0,
+    payment_date    TEXT NOT NULL DEFAULT '',
+    payment_method  TEXT NOT NULL DEFAULT '',
+    factoring_fee   REAL NOT NULL DEFAULT 0,
+    notes           TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_milestones_load ON milestones(load_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_load ON evidence(load_id);
 CREATE INDEX IF NOT EXISTS idx_exceptions_load ON exceptions(load_id);
@@ -128,6 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_exceptions_status ON exceptions(status);
 CREATE INDEX IF NOT EXISTS idx_loads_status ON loads(status);
 CREATE INDEX IF NOT EXISTS idx_rate_conf_load ON rate_confirmations(load_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_load ON expenses(load_id);
+CREATE INDEX IF NOT EXISTS idx_settlements_status ON settlements(payment_status);
 """
 
 

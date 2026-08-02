@@ -551,6 +551,14 @@ body {
 .btn-danger { background: #e74c3c; color: #fff; border-color: #e74c3c; }
 .btn-danger:hover { background: #c0392b; }
 
+/* ---------- Settlement ---------- */
+.settlement-draft { background: #f5f5f5; color: #999; }
+.settlement-invoiced { background: #fef9e7; color: #b7950b; }
+.settlement-paid { background: #d5f5e3; color: #1e8449; }
+.settlement-overdue { background: #fdedec; color: #c0392b; }
+.settlement-disputed { background: #fdebd0; color: #e67e22; }
+.settlement-written_off { background: #f5f5f5; color: #999; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 800px) {
     .sidebar { width: 180px; }

@@ -345,6 +345,74 @@
     </div>
 </div>
 
+{# ── Settlement ───────────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Settlement</h3>
+        {% if not settlement and financials and financials.rate_confirmation %}
+        <button class="btn btn-sm btn-success" onclick="createSettlement('{{ load.load_id }}')">Create Invoice</button>
+        {% endif %}
+    </div>
+
+    {% if settlement %}
+    <div class="brief-fields">
+        <div><strong>Invoice #:</strong> {{ settlement.invoice_number }}</div>
+        <div><strong>Status:</strong>
+            <span class="status-tag settlement-{{ settlement.payment_status }}">{{ settlement.payment_status }}</span>
+        </div>
+        <div><strong>Invoice Amount:</strong> ${{ "%.2f"|format(settlement.invoice_amount) }}</div>
+        <div><strong>Invoice Date:</strong> {{ settlement.invoice_date[:16] if settlement.invoice_date else '—' }}</div>
+        <div><strong>Due Date:</strong> {{ settlement.due_date[:10] if settlement.due_date else '—' }}</div>
+        {% if settlement.payment_status == 'paid' %}
+        <div><strong>Payment:</strong> ${{ "%.2f"|format(settlement.payment_amount) }}
+            {% if settlement.payment_method %}({{ settlement.payment_method }}){% endif %}
+        </div>
+        <div><strong>Payment Date:</strong> {{ settlement.payment_date[:16] if settlement.payment_date else '—' }}</div>
+        {% if settlement.factoring_fee > 0 %}
+        <div><strong>Factoring Fee:</strong> ${{ "%.2f"|format(settlement.factoring_fee) }}</div>
+        <div><strong>Net Payment:</strong> ${{ "%.2f"|format(settlement.net_payment) }}</div>
+        {% endif %}
+        {% endif %}
+        {% if settlement.notes %}
+        <div class="full-width"><strong>Notes:</strong> {{ settlement.notes }}</div>
+        {% endif %}
+    </div>
+
+    {% if settlement.payment_status in ('invoiced', 'overdue') %}
+    <div style="margin-top:10px;">
+        <button class="btn btn-sm btn-success" onclick="toggleEl('payment-form')">Record Payment</button>
+        <button class="btn btn-sm btn-warning" onclick="markOverdue('{{ load.load_id }}')">Mark Overdue</button>
+    </div>
+
+    <div id="payment-form" style="display:none;margin-top:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="recordPayment(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:8px;">
+                <div><label><strong>Payment Amount ($) *</strong><br>
+                    <input type="number" name="payment_amount" step="0.01" min="0" required style="width:100%;padding:4px 8px;"
+                           value="{{ settlement.invoice_amount }}"></label></div>
+                <div><label><strong>Payment Method</strong><br>
+                    <select name="payment_method" style="width:100%;padding:4px;">
+                        {% for m in payment_methods %}<option value="{{ m }}">{{ m|replace('_', ' ')|title }}</option>{% endfor %}
+                    </select></label></div>
+                <div><label><strong>Factoring Fee ($)</strong><br>
+                    <input type="number" name="factoring_fee" step="0.01" min="0" value="0" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Notes</strong><br>
+                    <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success">Record</button>
+            <button type="button" class="btn btn-sm" onclick="toggleEl('payment-form')">Cancel</button>
+        </form>
+    </div>
+    {% endif %}
+    {% else %}
+    {% if not financials or not financials.rate_confirmation %}
+    <p class="empty-state-sm">Confirm a rate first to create an invoice.</p>
+    {% else %}
+    <p class="empty-state-sm">No invoice created yet.</p>
+    {% endif %}
+    {% endif %}
+</div>
+
 {# ── Retention / Archive ──────────────────────────────────────────── #}
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -461,6 +529,39 @@ function deleteExpense(expenseId) {
             if (r.error) { alert(r.error); return; }
             location.reload();
         });
+}
+
+function createSettlement(loadId) {
+    var dueDate = prompt('Due date (YYYY-MM-DD, optional):');
+    apiPost('/api/dispatch/loads/' + loadId + '/settlement', {due_date: dueDate || ''}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function recordPayment(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    if (data.payment_amount) data.payment_amount = parseFloat(data.payment_amount);
+    if (data.factoring_fee) data.factoring_fee = parseFloat(data.factoring_fee);
+    apiPost('/api/dispatch/loads/' + loadId + '/payment', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function markOverdue(loadId) {
+    if (!confirm('Mark this invoice as overdue?')) return;
+    fetch('/api/dispatch/loads/' + loadId + '/settlement', {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({payment_status: 'overdue'})
+    }).then(function(r) { return r.json(); })
+      .then(function(r) {
+          if (r.error) { alert(r.error); return; }
+          location.reload();
+      });
 }
 </script>
 {% endblock %}

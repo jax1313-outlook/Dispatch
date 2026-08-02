@@ -78,6 +78,17 @@ VALIDATION_STATUSES = ["pending", "validated", "disputed"]
 
 RATE_TYPES = ["flat", "per_mile"]
 
+SETTLEMENT_STATUSES = [
+    "draft",
+    "invoiced",
+    "paid",
+    "overdue",
+    "disputed",
+    "written_off",
+]
+
+PAYMENT_METHODS = ["check", "ach", "wire", "factored", "other"]
+
 EXPENSE_CATEGORIES = [
     "fuel",
     "tolls",
@@ -318,3 +329,39 @@ class Expense:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass
+class Settlement:
+    settlement_id: str = ""
+    load_id: str = ""
+    invoice_number: str = ""
+    invoice_amount: float = 0.0
+    invoice_date: str = ""
+    due_date: str = ""
+    payment_status: str = "draft"
+    payment_amount: float = 0.0
+    payment_date: str = ""
+    payment_method: str = ""
+    factoring_fee: float = 0.0
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.settlement_id:
+            self.settlement_id = _gen_id("STL")
+        if not self.invoice_number:
+            self.invoice_number = f"INV-{self.settlement_id[4:]}"
+        if not self.invoice_date:
+            self.invoice_date = _utc_now()
+        _validate_choice(self.payment_status, SETTLEMENT_STATUSES, "payment_status")
+        if self.payment_method:
+            _validate_choice(self.payment_method, PAYMENT_METHODS, "payment_method")
+
+    @property
+    def net_payment(self) -> float:
+        return self.payment_amount - self.factoring_fee
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["net_payment"] = self.net_payment
+        return d
