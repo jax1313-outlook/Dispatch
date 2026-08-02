@@ -294,7 +294,7 @@
 
     {% if evidence %}
     <table class="event-table">
-        <thead><tr><th>ID</th><th>Type</th><th>Description</th><th>Captured</th><th>Uploaded By</th></tr></thead>
+        <thead><tr><th>ID</th><th>Type</th><th>Description</th><th>Captured</th><th>Uploaded By</th><th>Actions</th></tr></thead>
         <tbody>
         {% for ev in evidence %}
         <tr>
@@ -303,6 +303,10 @@
             <td>{{ ev.description or '—' }}</td>
             <td>{{ ev.capture_time[:16] if ev.capture_time else '—' }}</td>
             <td>{{ ev.uploaded_by or '—' }}</td>
+            <td>
+                <button class="btn btn-xs" onclick="editEvidence('{{ ev.evidence_id }}', '{{ ev.description|e }}')">Edit</button>
+                <button class="btn btn-xs btn-danger" onclick="removeEvidence('{{ ev.evidence_id }}')">Remove</button>
+            </td>
         </tr>
         {% endfor %}
         </tbody>
@@ -706,6 +710,25 @@ function archiveLoad(loadId) {
     if (!confirm('Archive this load? This cannot be undone.')) return;
     apiPost('/api/dispatch/loads/' + loadId + '/archive', {}).then(function(r) {
         if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function editEvidence(evId, currentDesc) {
+    var desc = prompt('Update description:', currentDesc);
+    if (desc === null) return;
+    apiPatch('/api/dispatch/evidence/' + evId, {description: desc}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function removeEvidence(evId) {
+    if (!confirm('Remove this evidence item?')) return;
+    fetch('/api/dispatch/evidence/' + evId, {method: 'DELETE'}).then(function(r) {
+        return r.json();
+    }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
         location.reload();
     });
 }

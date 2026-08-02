@@ -16,6 +16,7 @@ from dispatch.models import (
     EVIDENCE_TYPES,
     EXCEPTION_STATUSES,
     EXCEPTION_TYPES,
+    SEVERITY_LEVELS,
     EXPENSE_CATEGORIES,
     LICENSE_CLASSES,
     LOAD_STATUSES,
@@ -237,6 +238,24 @@ def attach_evidence(load_id):
     return jsonify({"status": "ok", "evidence": ev}), 201
 
 
+@dispatch_bp.route("/evidence/<evidence_id>", methods=["PATCH"])
+def update_evidence(evidence_id):
+    data = request.get_json(silent=True) or {}
+    if "evidence_type" in data and data["evidence_type"] not in EVIDENCE_TYPES:
+        return jsonify({"error": f"Invalid evidence_type: {data['evidence_type']}"}), 400
+    result = services.update_evidence(evidence_id, **data)
+    if not result:
+        return jsonify({"error": f"Evidence {evidence_id} not found"}), 404
+    return jsonify({"status": "ok", "evidence": result})
+
+
+@dispatch_bp.route("/evidence/<evidence_id>", methods=["DELETE"])
+def delete_evidence(evidence_id):
+    if not services.delete_evidence(evidence_id):
+        return jsonify({"error": f"Evidence {evidence_id} not found"}), 404
+    return jsonify({"status": "ok"})
+
+
 # ── Exceptions ────────────────────────────────────────────────────────
 
 @dispatch_bp.route("/loads/<load_id>/exceptions", methods=["GET"])
@@ -280,6 +299,19 @@ def resolve_exception(exception_id):
         exception_id=exception_id,
         resolution_note=data.get("resolution_note", ""),
     )
+    if not result:
+        return jsonify({"error": f"Exception {exception_id} not found"}), 404
+    return jsonify({"status": "ok", "exception": result})
+
+
+@dispatch_bp.route("/exceptions/<exception_id>", methods=["PATCH"])
+def update_exception(exception_id):
+    data = request.get_json(silent=True) or {}
+    if "exception_type" in data and data["exception_type"] not in EXCEPTION_TYPES:
+        return jsonify({"error": f"Invalid exception_type: {data['exception_type']}"}), 400
+    if "severity" in data and data["severity"] not in SEVERITY_LEVELS:
+        return jsonify({"error": f"Invalid severity: {data['severity']}"}), 400
+    result = services.update_exception(exception_id, **data)
     if not result:
         return jsonify({"error": f"Exception {exception_id} not found"}), 404
     return jsonify({"status": "ok", "exception": result})

@@ -362,6 +362,14 @@ def list_evidence(load_id: str) -> list[dict]:
     return store.list_evidence(load_id)
 
 
+def update_evidence(evidence_id: str, **fields) -> dict | None:
+    return store.update_evidence(evidence_id, **fields)
+
+
+def delete_evidence(evidence_id: str) -> bool:
+    return store.delete_evidence(evidence_id)
+
+
 def open_exception(
     load_id: str,
     exception_type: str = "other",
@@ -436,6 +444,10 @@ def list_exceptions(
     load_id: str | None = None, status: str | None = None
 ) -> list[dict]:
     return store.list_exceptions(load_id=load_id, status=status)
+
+
+def update_exception(exception_id: str, **fields) -> dict | None:
+    return store.update_exception(exception_id, **fields)
 
 
 _POD_ELIGIBLE_STATUSES = {"delivered", "completed", "archived"}

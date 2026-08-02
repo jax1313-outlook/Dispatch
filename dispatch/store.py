@@ -263,6 +263,31 @@ def get_evidence(evidence_id: str) -> dict | None:
     return dict_from_row(row) if row else None
 
 
+def update_evidence(evidence_id: str, **fields) -> dict | None:
+    existing = get_evidence(evidence_id)
+    if not existing:
+        return None
+    allowed = {"evidence_type", "description", "uploaded_by"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [evidence_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE evidence SET {set_clause} WHERE evidence_id=?", values
+        )
+    return get_evidence(evidence_id)
+
+
+def delete_evidence(evidence_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM evidence WHERE evidence_id=?", (evidence_id,)
+        )
+    return cur.rowcount > 0
+
+
 # ── ExceptionNotice ───────────────────────────────────────────────────
 
 def create_exception(exc: ExceptionNotice) -> dict:
@@ -307,7 +332,8 @@ def update_exception(exception_id: str, **fields) -> dict | None:
         ).fetchone()
     if not row:
         return None
-    allowed = {"status", "resolution_note", "resolved_at", "severity"}
+    allowed = {"status", "resolution_note", "resolved_at", "severity",
+                "exception_type", "description"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return dict_from_row(row)
