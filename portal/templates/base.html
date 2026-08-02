@@ -166,6 +166,37 @@
                 if (data.count > 0) location.reload();
             });
     }
+
+    (function initTableSort() {
+        document.querySelectorAll('table.data-table').forEach(function(table) {
+            var headers = table.querySelectorAll('thead th');
+            headers.forEach(function(th, colIdx) {
+                if (!th.textContent.trim()) return;
+                th.classList.add('sortable');
+                th.addEventListener('click', function() {
+                    var asc = !th.classList.contains('sort-asc');
+                    headers.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
+                    th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+                    var tbody = table.querySelector('tbody');
+                    var rows = Array.from(tbody.querySelectorAll('tr:not(.edit-row)'));
+                    rows.sort(function(a, b) {
+                        var aCell = a.children[colIdx];
+                        var bCell = b.children[colIdx];
+                        if (!aCell || !bCell) return 0;
+                        var aText = aCell.textContent.trim();
+                        var bText = bCell.textContent.trim();
+                        var aNum = aText.replace(/[$,%]/g, '');
+                        var bNum = bText.replace(/[$,%]/g, '');
+                        if (aNum !== '' && bNum !== '' && !isNaN(aNum) && !isNaN(bNum)) {
+                            return asc ? aNum - bNum : bNum - aNum;
+                        }
+                        return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                    });
+                    rows.forEach(function(row) { tbody.appendChild(row); });
+                });
+            });
+        });
+    })();
     </script>
 </body>
 </html>
