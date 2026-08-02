@@ -86,11 +86,14 @@ def create_notice(
     return notice
 
 
-def resolve_notice(notice_id: str) -> dict:
+def resolve_notice(notice_id: str, resolution_note: str = "") -> dict:
     notices = _load()
     for notice in notices:
         if notice["id"] == notice_id:
             notice["resolved"] = True
+            notice["resolved_at"] = _utc_now()
+            if resolution_note:
+                notice["resolution_note"] = resolution_note
             _save(notices)
             return notice
     raise KeyError(f"Conflict Notice not found: {notice_id}")

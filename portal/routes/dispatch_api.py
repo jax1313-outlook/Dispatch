@@ -144,6 +144,15 @@ def delete_load(load_id):
     return jsonify({"status": "ok", "deleted": True})
 
 
+@dispatch_bp.route("/loads/<load_id>/duplicate", methods=["POST"])
+def duplicate_load(load_id):
+    try:
+        load = services.duplicate_load(load_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "load": load}), 201
+
+
 @dispatch_bp.route("/loads/<load_id>/bundle", methods=["GET"])
 def load_bundle(load_id):
     bundle = services.get_load_bundle(load_id)

@@ -1154,3 +1154,17 @@ def global_search(query: str) -> dict:
 
 def list_uninvoiced_loads() -> list[dict]:
     return store.list_uninvoiced_loads()
+
+
+_DUPLICATE_FIELDS = (
+    "customer", "broker_shipper", "pickup_location", "delivery_location",
+    "pickup_datetime", "delivery_datetime", "equipment", "notes",
+)
+
+
+def duplicate_load(load_id: str) -> dict:
+    source = store.get_load(load_id)
+    if not source:
+        raise ValueError(f"Load not found: {load_id}")
+    kwargs = {k: source.get(k, "") for k in _DUPLICATE_FIELDS}
+    return create_load(**kwargs)

@@ -103,7 +103,9 @@
     }
 
     function resolveConflict(noticeId) {
-        apiPost('/api/conflict/resolve', {notice_id: noticeId})
+        var note = prompt('Resolution note (optional):');
+        if (note === null) return;
+        apiPost('/api/conflict/resolve', {notice_id: noticeId, resolution_note: note})
             .then(data => {
                 if (data.error) { alert(data.error); return; }
                 location.reload();

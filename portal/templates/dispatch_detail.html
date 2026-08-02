@@ -3,6 +3,7 @@
 {% block page_title %}Load Detail{% endblock %}
 {% block page_actions %}
 <a href="{{ url_for('pages.dispatch') }}" class="btn btn-sm">&larr; Back to Dispatch</a>
+<button class="btn btn-sm" onclick="duplicateLoad('{{ load.load_id }}')">Duplicate</button>
 {% if load.status in ('created', 'cancelled') %}
 <button class="btn btn-sm btn-danger" onclick="deleteLoad('{{ load.load_id }}')">Delete Load</button>
 {% endif %}
@@ -785,6 +786,13 @@ function deleteLoad(loadId) {
     }).then(function(data) {
         if (data.error) { alert(data.error); return; }
         window.location.href = '/dispatch';
+    });
+}
+function duplicateLoad(loadId) {
+    if (!confirm('Create a duplicate of this load?')) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/duplicate', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        window.location.href = '/dispatch/' + r.load.load_id;
     });
 }
 
