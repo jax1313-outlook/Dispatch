@@ -22,6 +22,7 @@ from dispatch.models import (
     EXCEPTION_STATUSES,
     EXCEPTION_TYPES,
     IFTA_JURISDICTIONS,
+    LOAD_SOURCES,
     SEVERITY_LEVELS,
     ACTIVITY_TYPES,
     EXPENSE_CATEGORIES,
@@ -105,6 +106,7 @@ def create_load():
             driver=data.get("driver", ""),
             driver_id=data.get("driver_id", ""),
             equipment_id=data.get("equipment_id", ""),
+            source=data.get("source", ""),
             notes=data.get("notes", ""),
         )
     except ValueError as e:
@@ -162,6 +164,13 @@ def load_bundle(load_id):
     if not bundle:
         return jsonify({"error": f"Load {load_id} not found"}), 404
     return jsonify({"status": "ok", **bundle})
+
+
+# ── Load Source Stats ────────────────────────────────────────────────
+
+@dispatch_bp.route("/loads/source-stats", methods=["GET"])
+def load_source_stats():
+    return jsonify(services.get_load_source_stats())
 
 
 # ── Stalled Loads ─────────────────────────────────────────────────────
@@ -1026,7 +1035,7 @@ def batch_create_settlements():
 # ── CSV Export ───────────────────────────────────────────────────────
 
 _LOAD_CSV_COLUMNS = [
-    "load_id", "customer", "broker_shipper", "status",
+    "load_id", "customer", "broker_shipper", "status", "source",
     "pickup_location", "delivery_location",
     "pickup_datetime", "delivery_datetime",
     "equipment", "driver", "notes", "created_at", "updated_at",
@@ -1146,7 +1155,7 @@ def global_search():
 _IMPORT_REQUIRED = {"customer"}
 _IMPORT_FIELDS = {
     "customer", "broker_shipper", "pickup_location", "delivery_location",
-    "pickup_datetime", "delivery_datetime", "equipment", "driver", "notes",
+    "pickup_datetime", "delivery_datetime", "equipment", "driver", "source", "notes",
 }
 
 

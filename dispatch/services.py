@@ -9,6 +9,7 @@ from __future__ import annotations
 from dispatch.models import (
     EXCEPTION_STATUSES,
     IFTA_JURISDICTIONS,
+    LOAD_SOURCES,
     LOAD_STATUSES,
     DetentionEvent,
     Driver,
@@ -97,6 +98,7 @@ def create_load(
     driver: str = "",
     driver_id: str = "",
     equipment_id: str = "",
+    source: str = "",
     notes: str = "",
 ) -> dict:
     if driver_id:
@@ -115,6 +117,7 @@ def create_load(
         driver=driver,
         driver_id=driver_id,
         equipment_id=equipment_id,
+        source=source,
         notes=notes,
     )
     result = store.create_load(load)
@@ -152,6 +155,9 @@ def update_load(load_id: str, **fields) -> dict | None:
         _validate_driver_assignment(fields["driver_id"])
     if "equipment_id" in fields and fields["equipment_id"]:
         _validate_equipment_assignment(fields["equipment_id"])
+    if "source" in fields and fields["source"]:
+        if fields["source"] not in LOAD_SOURCES:
+            raise ValueError(f"Invalid source: {fields['source']}")
     old_status = None
     if "status" in fields:
         current = store.get_load(load_id)
@@ -1428,6 +1434,18 @@ def global_search(query: str) -> dict:
 
 def list_uninvoiced_loads() -> list[dict]:
     return store.list_uninvoiced_loads()
+
+
+def get_load_source_stats() -> dict:
+    all_loads = store.list_loads()
+    by_source: dict[str, int] = {}
+    for ld in all_loads:
+        src = ld.get("source", "") or "unset"
+        by_source[src] = by_source.get(src, 0) + 1
+    return {
+        "total": len(all_loads),
+        "by_source": by_source,
+    }
 
 
 _DUPLICATE_FIELDS = (
