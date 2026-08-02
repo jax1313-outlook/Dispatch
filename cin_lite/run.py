@@ -2,12 +2,13 @@
 
 Runs the full Phase-1 pipeline end-to-end:
 
-    acquire -> process (rule modules) -> render control email
-            -> collect decision -> archive + record routing
+    acquire -> process (rule modules) -> render checkpoint email
+            -> [email mode] store pending decision + send HTML email to reviewer
+            -> [CLI mode]   collect decision interactively -> archive + route
 
 Run from the project root:
 
-    python -m cin_lite.run                      # interactive decision per contract
+    python -m cin_lite.run                      # email mode: send checkpoint, await decision
     python -m cin_lite.run --action reject      # non-interactive (same action for all)
     python -m cin_lite.run --list-actions
 """
@@ -17,7 +18,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 
-from cin_lite import acquisition, processing, archive, control, email_delivery
+from cin_lite import acquisition, processing, archive, control, email_delivery, pending
 from cin_lite.agents import summarizer, router
 from cin_lite.workflows import proposal
 
@@ -38,32 +39,51 @@ def run(action_override: str | None) -> None:
         summary = summarizer.summarize(contract, intelligence, flags)
         decision = router.decide(contract, intelligence, summary, flags)
 
-        email = control.render_email(contract, intelligence, summary, flags, decision)
-        print(email)
+        contract_id = archive.make_id(contract)
 
-        action = control.collect(default=action_override, recommended=decision["action"])
-        label, route = control.resolve(action)
-
-        metadata = archive.store(contract, intelligence, summary)
-        routing_path = archive.record_routing(
-            metadata["contract_id"], action, route, metadata, decision
-        )
-        email_status = email_delivery.deliver_decision(
-            contract, metadata["contract_id"], summary, decision, action, route, flags
+        text_email = control.render_email(contract, intelligence, summary, flags, decision)
+        html_email = control.render_html_email(
+            contract, intelligence, summary, flags, decision,
+            token_fn=email_delivery.make_token,
+            contract_id=contract_id,
         )
 
-        print(f"\n-> {metadata['contract_id']}: {label} -> routed to {route}")
-        print(f"   archived under {archive.ARCHIVE_ROOT}")
-        print(f"   routing record: {routing_path}")
-        print(f"   email: {email_status}")
+        pending.store(contract_id, contract, intelligence, summary, decision, flags)
+        checkpoint_status = email_delivery.deliver_checkpoint(
+            contract, contract_id, text_email, html_email,
+        )
+        print(text_email)
+        print(f"\n   checkpoint email: {checkpoint_status}")
+        print(f"   pending decision stored: {contract_id}")
 
-        if proposal.is_triggered(action):
-            result = proposal.trigger(
-                contract, metadata["contract_id"], intelligence, decision, summary, flags
+        if action_override:
+            action = control.collect(default=action_override, recommended=decision["action"])
+            label, route = control.resolve(action)
+
+            metadata = archive.store(contract, intelligence, summary)
+            routing_path = archive.record_routing(
+                metadata["contract_id"], action, route, metadata, decision
             )
-            print(f"   proposal triggered: {result['proposal_id']}")
-            print(f"     outline: {result['outline_path']}")
-            print(f"     kickoff email: {result['email_status']}")
+            email_status = email_delivery.deliver_decision(
+                contract, metadata["contract_id"], summary, decision, action, route, flags
+            )
+
+            pending.complete(contract_id)
+
+            print(f"\n-> {metadata['contract_id']}: {label} -> routed to {route}")
+            print(f"   archived under {archive.ARCHIVE_ROOT}")
+            print(f"   routing record: {routing_path}")
+            print(f"   email: {email_status}")
+
+            if proposal.is_triggered(action):
+                result = proposal.trigger(
+                    contract, metadata["contract_id"], intelligence, decision, summary, flags
+                )
+                print(f"   proposal triggered: {result['proposal_id']}")
+                print(f"     outline: {result['outline_path']}")
+                print(f"     kickoff email: {result['email_status']}")
+        else:
+            print(f"   awaiting decision via email or portal")
         print()
 
 
