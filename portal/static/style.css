@@ -662,6 +662,27 @@ body {
 .fleet-retired { background: #f5f5f5; color: #999; }
 
 /* ---------- Responsive ---------- */
+/* ── Activity Feed ─────────────────────────────────────── */
+.activity-feed { display: flex; flex-direction: column; gap: 0; }
+.activity-item {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-time {
+    flex-shrink: 0; width: 3rem; text-align: right;
+    color: #888; font-size: 0.8rem;
+}
+.activity-type {
+    flex-shrink: 0; padding: 0.15rem 0.5rem;
+    background: #edf2f7; border-radius: 3px;
+    font-size: 0.75rem; text-transform: uppercase;
+    color: #555; font-weight: 600;
+}
+.activity-note { color: #888; font-size: 0.85rem; }
+
 @media (max-width: 800px) {
     .sidebar { width: 180px; }
     .content { margin-left: 180px; }

@@ -41,6 +41,10 @@ def home():
     fleet_summary = dispatch_svc.get_fleet_summary()
     fin_dashboard = dispatch_svc.get_financial_dashboard()
 
+    stalled = dispatch_svc.check_stalled_loads()
+    from dispatch import store as dispatch_store
+    recent_activity = dispatch_store.get_recent_activity(limit=15)
+
     return render_template(
         "home.html",
         sam_cards=sam_sorted,
@@ -53,6 +57,8 @@ def home():
         engine_load_count=len(active_engine),
         fleet_summary=fleet_summary,
         fin_dashboard=fin_dashboard,
+        stalled_loads=stalled,
+        recent_activity=recent_activity,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )

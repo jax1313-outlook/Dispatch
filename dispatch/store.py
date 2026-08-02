@@ -174,6 +174,19 @@ def get_milestone(milestone_id: str) -> dict | None:
     return dict_from_row(row) if row else None
 
 
+def get_recent_activity(limit: int = 20) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT m.*, l.customer, l.status AS load_status
+               FROM milestones m
+               JOIN loads l ON m.load_id = l.load_id
+               ORDER BY m.event_time DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
 # ── EvidenceItem ──────────────────────────────────────────────────────
 
 def create_evidence(ev: EvidenceItem) -> dict:
