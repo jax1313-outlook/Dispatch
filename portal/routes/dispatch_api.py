@@ -1245,3 +1245,19 @@ def create_load_from_template(template_id):
     if not load:
         return jsonify({"error": "template not found"}), 404
     return jsonify(load), 201
+
+
+# ── Broker Scorecard ────────────────────────────────────────────────
+
+
+@dispatch_bp.route("/brokers", methods=["GET"])
+def broker_scorecards():
+    return jsonify(services.get_broker_scorecards())
+
+
+@dispatch_bp.route("/brokers/<path:broker_name>", methods=["GET"])
+def broker_detail(broker_name):
+    detail = services.get_broker_detail(broker_name)
+    if not detail["loads"]:
+        return jsonify({"error": "no loads found for broker"}), 404
+    return jsonify(detail)
