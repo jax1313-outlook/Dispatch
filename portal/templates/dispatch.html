@@ -154,6 +154,7 @@
             {% if customer_search or date_from or date_to %}
             <a href="{{ url_for('pages.dispatch', status=status_filter) if status_filter else url_for('pages.dispatch') }}" class="btn btn-sm">Clear</a>
             {% endif %}
+            <a href="/api/dispatch/loads/export.csv?status={{ status_filter or '' }}&customer={{ customer_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}" class="btn btn-sm" title="Export filtered loads to CSV">Export CSV</a>
         </div>
     </form>
     <div style="margin-bottom:10px;display:flex;gap:4px;flex-wrap:wrap;">

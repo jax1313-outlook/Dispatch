@@ -65,6 +65,7 @@
             {% if customer_search or invoice_search or date_from or date_to %}
             <a href="{{ url_for('pages.billing', status=status_filter or '') }}" class="btn btn-sm">Clear</a>
             {% endif %}
+            <a href="/api/dispatch/settlements/export.csv?status={{ status_filter or '' }}&customer={{ customer_search or '' }}&invoice={{ invoice_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}" class="btn btn-sm" title="Export filtered settlements to CSV">Export CSV</a>
         </div>
     </form>
 

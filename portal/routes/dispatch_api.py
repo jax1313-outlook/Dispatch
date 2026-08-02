@@ -6,7 +6,10 @@ POD packages, and retention archive.
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, render_template, request
+import csv
+import io
+
+from flask import Blueprint, Response, jsonify, render_template, request
 
 from dispatch import notifications, services
 from dispatch.models import (
@@ -25,7 +28,6 @@ from dispatch.models import (
     PAYMENT_METHODS,
     RATE_TYPES,
     SETTLEMENT_STATUSES,
-    SEVERITY_LEVELS,
 )
 
 dispatch_bp = Blueprint("dispatch_api", __name__)
@@ -868,4 +870,65 @@ def dispatch_decision(load_id, action):
         load_id=load_id,
         action_label=label,
         load=load,
+    )
+
+
+# ── CSV Export ───────────────────────────────────────────────────────
+
+_LOAD_CSV_COLUMNS = [
+    "load_id", "customer", "broker_shipper", "status",
+    "pickup_location", "delivery_location",
+    "pickup_datetime", "delivery_datetime",
+    "equipment", "driver", "notes", "created_at", "updated_at",
+]
+
+_SETTLEMENT_CSV_COLUMNS = [
+    "invoice_number", "load_id", "invoice_amount", "payment_status",
+    "invoice_date", "due_date", "payment_amount", "payment_date",
+    "payment_method", "notes",
+]
+
+
+def _to_csv(rows: list[dict], columns: list[str]) -> str:
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({c: row.get(c, "") for c in columns})
+    return buf.getvalue()
+
+
+@dispatch_bp.route("/loads/export.csv", methods=["GET"])
+def export_loads_csv():
+    loads = services.list_loads(
+        status=request.args.get("status") or None,
+        customer=request.args.get("customer") or None,
+        date_from=request.args.get("date_from") or None,
+        date_to=request.args.get("date_to") or None,
+    )
+    csv_data = _to_csv(loads, _LOAD_CSV_COLUMNS)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=loads.csv"},
+    )
+
+
+@dispatch_bp.route("/settlements/export.csv", methods=["GET"])
+def export_settlements_csv():
+    settlements = services.list_settlements(
+        payment_status=request.args.get("status") or None,
+        customer=request.args.get("customer") or None,
+        date_from=request.args.get("date_from") or None,
+        date_to=request.args.get("date_to") or None,
+        invoice_number=request.args.get("invoice") or None,
+    )
+    for stl in settlements:
+        load = services.get_load(stl["load_id"])
+        stl["customer"] = load["customer"] if load else ""
+    csv_data = _to_csv(settlements, ["customer"] + _SETTLEMENT_CSV_COLUMNS)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=settlements.csv"},
     )
