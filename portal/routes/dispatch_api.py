@@ -1261,3 +1261,19 @@ def broker_detail(broker_name):
     if not detail["loads"]:
         return jsonify({"error": "no loads found for broker"}), 404
     return jsonify(detail)
+
+
+# ── Load Calendar ───────────────────────────────────────────────────
+
+
+@dispatch_bp.route("/calendar", methods=["GET"])
+def load_calendar_api():
+    from datetime import date
+    today = date.today()
+    try:
+        year = int(request.args.get("year", today.year))
+        month = int(request.args.get("month", today.month))
+    except (ValueError, TypeError):
+        year, month = today.year, today.month
+    data = services.get_load_calendar(year, month)
+    return jsonify(data)

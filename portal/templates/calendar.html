@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Calendar — L2-COS Portal{% endblock %}
+{% block page_title %}Load Calendar — {{ cal.month_name }} {{ cal.year }}{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('pages.load_calendar', year=prev_year, month=prev_month) }}" class="btn btn-sm">&larr; Prev</a>
+<a href="{{ url_for('pages.load_calendar') }}" class="btn btn-sm">Today</a>
+<a href="{{ url_for('pages.load_calendar', year=next_year, month=next_month) }}" class="btn btn-sm">Next &rarr;</a>
+{% endblock %}
+
+{% block body %}
+<style>
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:#ddd; border:1px solid #ddd; border-radius:4px; overflow:hidden; }
+.cal-header { background:#34495e; color:#fff; padding:6px 4px; text-align:center; font-size:12px; font-weight:600; }
+.cal-day { background:#fff; min-height:90px; padding:4px; position:relative; vertical-align:top; }
+.cal-day.cal-empty { background:#f9f9f9; }
+.cal-day-num { font-size:12px; font-weight:700; color:#333; margin-bottom:2px; }
+.cal-pickup { display:block; font-size:10px; padding:1px 4px; margin-bottom:1px; background:#e8f4fd; border-left:2px solid #3498db; border-radius:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; color:#2c3e50; }
+.cal-pickup:hover { background:#d4ecfa; }
+.cal-delivery { display:block; font-size:10px; padding:1px 4px; margin-bottom:1px; background:#eafaf1; border-left:2px solid #27ae60; border-radius:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; color:#2c3e50; }
+.cal-delivery:hover { background:#d5f5e3; }
+.cal-legend { display:flex; gap:16px; margin-bottom:12px; font-size:12px; }
+.cal-legend-item { display:flex; align-items:center; gap:4px; }
+.cal-legend-color { width:12px; height:12px; border-radius:2px; }
+</style>
+
+<div class="cal-legend">
+    <div class="cal-legend-item">
+        <div class="cal-legend-color" style="background:#3498db;"></div>
+        <span>Pickup</span>
+    </div>
+    <div class="cal-legend-item">
+        <div class="cal-legend-color" style="background:#27ae60;"></div>
+        <span>Delivery</span>
+    </div>
+</div>
+
+<div class="cal-grid">
+    <div class="cal-header">Sun</div>
+    <div class="cal-header">Mon</div>
+    <div class="cal-header">Tue</div>
+    <div class="cal-header">Wed</div>
+    <div class="cal-header">Thu</div>
+    <div class="cal-header">Fri</div>
+    <div class="cal-header">Sat</div>
+
+    {% for week in cal.weeks %}
+    {% for day in week %}
+    {% if day == 0 %}
+    <div class="cal-day cal-empty"></div>
+    {% else %}
+    {% set day_key = "%04d-%02d-%02d"|format(cal.year, cal.month, day) %}
+    <div class="cal-day">
+        <div class="cal-day-num">{{ day }}</div>
+        {% for ld in cal.pickups.get(day_key, [])[:3] %}
+        <a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}" class="cal-pickup" title="Pickup: {{ ld.customer }}">
+            P: {{ ld.customer[:15] }}
+        </a>
+        {% endfor %}
+        {% if cal.pickups.get(day_key, [])|length > 3 %}
+        <span style="font-size:9px;color:#888;">+{{ cal.pickups[day_key]|length - 3 }} more</span>
+        {% endif %}
+        {% for ld in cal.deliveries.get(day_key, [])[:3] %}
+        <a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}" class="cal-delivery" title="Delivery: {{ ld.customer }}">
+            D: {{ ld.customer[:15] }}
+        </a>
+        {% endfor %}
+        {% if cal.deliveries.get(day_key, [])|length > 3 %}
+        <span style="font-size:9px;color:#888;">+{{ cal.deliveries[day_key]|length - 3 }} more</span>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+</div>
+
+{% set total_pickups = cal.pickups.values()|map('length')|sum %}
+{% set total_deliveries = cal.deliveries.values()|map('length')|sum %}
+{% if total_pickups == 0 and total_deliveries == 0 %}
+<div class="empty-state" style="margin-top:16px;">
+    <p>No pickups or deliveries scheduled for {{ cal.month_name }} {{ cal.year }}.</p>
+</div>
+{% endif %}
+
+{% endblock %}

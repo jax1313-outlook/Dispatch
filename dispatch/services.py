@@ -1286,6 +1286,39 @@ def get_broker_detail(broker_name: str) -> dict:
     return {"broker": broker_name, "loads": loads}
 
 
+# ── Load Calendar ───────────────────────────────────────────────────
+
+
+def get_load_calendar(year: int, month: int) -> dict:
+    from collections import defaultdict
+    import calendar
+
+    all_loads = store.list_loads()
+    pickup_by_day: dict[str, list[dict]] = defaultdict(list)
+    delivery_by_day: dict[str, list[dict]] = defaultdict(list)
+
+    month_prefix = f"{year:04d}-{month:02d}"
+    for ld in all_loads:
+        p = ld.get("pickup_datetime", "")
+        if p and p[:7] == month_prefix:
+            pickup_by_day[p[:10]].append(ld)
+        d = ld.get("delivery_datetime", "")
+        if d and d[:7] == month_prefix:
+            delivery_by_day[d[:10]].append(ld)
+
+    cal = calendar.Calendar(firstweekday=6)
+    weeks = cal.monthdayscalendar(year, month)
+
+    return {
+        "year": year,
+        "month": month,
+        "month_name": calendar.month_name[month],
+        "weeks": weeks,
+        "pickups": dict(pickup_by_day),
+        "deliveries": dict(delivery_by_day),
+    }
+
+
 def global_search(query: str) -> dict:
     return store.global_search(query)
 
