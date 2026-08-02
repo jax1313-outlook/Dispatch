@@ -1082,3 +1082,17 @@ def delete_activity(activity_id):
     if services.delete_activity(activity_id):
         return jsonify({"ok": True})
     return jsonify({"error": "Activity not found"}), 404
+
+
+# ── Global Search ────────────────────────────────────────────────────
+
+@dispatch_bp.route("/search", methods=["GET"])
+def global_search():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"error": "q parameter is required"}), 400
+    if len(q) < 2:
+        return jsonify({"error": "Search query must be at least 2 characters"}), 400
+    results = services.global_search(q)
+    total = sum(len(v) for v in results.values())
+    return jsonify({"status": "ok", "query": q, "total": total, **results})

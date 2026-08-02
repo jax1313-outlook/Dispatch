@@ -369,6 +369,23 @@ def exceptions():
     )
 
 
+@pages_bp.route("/search")
+def search():
+    from dispatch import services as dispatch_svc
+    q = request.args.get("q", "").strip()
+    results = None
+    total = 0
+    if q and len(q) >= 2:
+        results = dispatch_svc.global_search(q)
+        total = sum(len(v) for v in results.values())
+    return render_template(
+        "search.html",
+        query=q,
+        results=results,
+        total=total,
+    )
+
+
 @pages_bp.route("/brief/<sandbox_id>")
 def brief(sandbox_id: str):
     entry = sandbox.get(sandbox_id)

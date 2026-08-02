@@ -963,3 +963,52 @@ def delete_activity(activity_id: str) -> bool:
             "DELETE FROM activities WHERE activity_id=?", (activity_id,)
         )
     return cur.rowcount > 0
+
+
+# ── Global Search ────────────────────────────────────────────────────
+
+def global_search(query: str, limit: int = 50) -> dict:
+    q = f"%{query}%"
+    results: dict[str, list[dict]] = {
+        "loads": [], "drivers": [], "equipment": [], "settlements": [],
+    }
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM loads WHERE "
+            "load_id LIKE ? OR customer LIKE ? OR broker_shipper LIKE ? "
+            "OR pickup_location LIKE ? OR delivery_location LIKE ? OR driver LIKE ? "
+            "ORDER BY updated_at DESC LIMIT ?",
+            (q, q, q, q, q, q, limit),
+        ).fetchall()
+        results["loads"] = [dict_from_row(r) for r in rows]
+
+        rows = conn.execute(
+            "SELECT * FROM drivers WHERE "
+            "driver_id LIKE ? OR name LIKE ? OR phone LIKE ? OR email LIKE ? "
+            "ORDER BY name ASC LIMIT ?",
+            (q, q, q, q, limit),
+        ).fetchall()
+        results["drivers"] = [dict_from_row(r) for r in rows]
+
+        rows = conn.execute(
+            "SELECT * FROM equipment WHERE "
+            "equipment_id LIKE ? OR unit_number LIKE ? OR make LIKE ? "
+            "OR model LIKE ? OR vin LIKE ? OR license_plate LIKE ? "
+            "ORDER BY unit_number ASC LIMIT ?",
+            (q, q, q, q, q, q, limit),
+        ).fetchall()
+        results["equipment"] = [dict_from_row(r) for r in rows]
+
+        rows = conn.execute(
+            "SELECT * FROM settlements WHERE "
+            "settlement_id LIKE ? OR invoice_number LIKE ? OR load_id LIKE ? "
+            "ORDER BY invoice_date DESC LIMIT ?",
+            (q, q, q, limit),
+        ).fetchall()
+        stl_results = []
+        for r in rows:
+            d = dict_from_row(r)
+            stl_results.append(Settlement(**d).to_dict())
+        results["settlements"] = stl_results
+
+    return results

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Search — L2-COS Portal{% endblock %}
+{% block page_title %}Search{% endblock %}
+
+{% block body %}
+
+<div class="brief-container">
+
+<div class="brief-section">
+    <form method="get" action="{{ url_for('pages.search') }}" style="display:flex;gap:8px;align-items:flex-end;">
+        <div style="flex:1;">
+            <label><strong>Search across loads, drivers, equipment, and settlements</strong><br>
+            <input type="text" name="q" value="{{ query }}" placeholder="Enter search term (min 2 characters)..."
+                   style="width:100%;padding:8px 12px;font-size:1em;" autofocus></label>
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+        {% if query %}
+        <a href="{{ url_for('pages.search') }}" class="btn">Clear</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if query and results %}
+<div style="margin-bottom:16px;">
+    <strong>{{ total }} result{{ 's' if total != 1 else '' }}</strong> for "{{ query }}"
+</div>
+
+{# ── Loads ─────────────────────────────────────────────────────────── #}
+{% if results.loads %}
+<div class="card-section">
+    <h2>Loads ({{ results.loads|length }})</h2>
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Load ID</th>
+                <th>Customer</th>
+                <th>Broker/Shipper</th>
+                <th>Pickup</th>
+                <th>Delivery</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ld in results.loads %}
+            <tr>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}">{{ ld.load_id[:12] }}</a></td>
+                <td>{{ ld.customer }}</td>
+                <td>{{ ld.broker_shipper or '—' }}</td>
+                <td>{{ ld.pickup_location or '—' }}</td>
+                <td>{{ ld.delivery_location or '—' }}</td>
+                <td><span class="status-tag dispatch-{{ ld.status }}">{{ ld.status|replace('_', ' ') }}</span></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Drivers ───────────────────────────────────────────────────────── #}
+{% if results.drivers %}
+<div class="card-section">
+    <h2>Drivers ({{ results.drivers|length }})</h2>
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>License</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for drv in results.drivers %}
+            <tr>
+                <td><a href="{{ url_for('pages.driver_detail', driver_id=drv.driver_id) }}">{{ drv.name }}</a></td>
+                <td>{{ drv.phone or '—' }}</td>
+                <td>{{ drv.email or '—' }}</td>
+                <td>{{ drv.license_number or '—' }}</td>
+                <td><span class="status-tag fleet-{{ drv.status }}">{{ drv.status }}</span></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Equipment ─────────────────────────────────────────────────────── #}
+{% if results.equipment %}
+<div class="card-section">
+    <h2>Equipment ({{ results.equipment|length }})</h2>
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Unit #</th>
+                <th>Type</th>
+                <th>Make / Model</th>
+                <th>VIN</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for eqp in results.equipment %}
+            <tr>
+                <td><a href="{{ url_for('pages.equipment_detail', equipment_id=eqp.equipment_id) }}">{{ eqp.unit_number }}</a></td>
+                <td>{{ eqp.equipment_type|replace('_', ' ')|title }}</td>
+                <td>{{ eqp.make }} {{ eqp.model }}</td>
+                <td>{{ eqp.vin or '—' }}</td>
+                <td><span class="status-tag fleet-{{ eqp.status }}">{{ eqp.status }}</span></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Settlements ───────────────────────────────────────────────────── #}
+{% if results.settlements %}
+<div class="card-section">
+    <h2>Settlements ({{ results.settlements|length }})</h2>
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Invoice #</th>
+                <th>Load ID</th>
+                <th>Amount</th>
+                <th>Payment Status</th>
+                <th>Invoice Date</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for stl in results.settlements %}
+            <tr>
+                <td>{{ stl.invoice_number }}</td>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=stl.load_id) }}">{{ stl.load_id[:12] }}</a></td>
+                <td>${{ '%.2f'|format(stl.total_amount) }}</td>
+                <td><span class="status-tag billing-{{ stl.payment_status }}">{{ stl.payment_status }}</span></td>
+                <td>{{ stl.invoice_date[:10] if stl.invoice_date else '—' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{% if total == 0 %}
+<div class="empty-state-sm">
+    <p>No results found for "{{ query }}".</p>
+</div>
+{% endif %}
+
+{% elif query and not results %}
+<div class="empty-state-sm">
+    <p>Search query must be at least 2 characters.</p>
+</div>
+{% endif %}
+
+</div>
+{% endblock %}

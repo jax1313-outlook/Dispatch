@@ -1146,3 +1146,7 @@ def get_load_bundle(load_id: str) -> dict | None:
         "active_drivers": store.list_drivers(status="active"),
         "active_equipment": store.list_equipment(status="active"),
     }
+
+
+def global_search(query: str) -> dict:
+    return store.global_search(query)
