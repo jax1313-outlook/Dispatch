@@ -9,6 +9,8 @@ action.
 
 from __future__ import annotations
 
+import html as _html
+import os
 from typing import Any
 
 # action key -> (human label, resulting route)
@@ -96,7 +98,7 @@ def render_html_email(
     summary: str,
     flags: list[str],
     decision: dict | None = None,
-    action_url_base: str = "http://127.0.0.1:8080/api/decision",
+    action_url_base: str = "",
     token_fn: Any = None,
     contract_id: str = "",
 ) -> str:
@@ -105,6 +107,11 @@ def render_html_email(
     Each button links to ``{action_url_base}/{contract_id}/{action}?token=…``
     so the reviewer can decide directly from the email.
     """
+
+    if not action_url_base:
+        action_url_base = os.environ.get(
+            "CIN_LITE_PORTAL_URL", "http://127.0.0.1:8080"
+        ).rstrip("/") + "/api/decision"
 
     def _link(action: str) -> str:
         token_part = ""
@@ -119,6 +126,13 @@ def render_html_email(
     ]
     module_notes = [r["summary"] for r in intelligence.values() if r.get("summary")]
     recommended = decision.get("action") if decision else None
+
+    esc = _html.escape
+    c_title = esc(str(contract.get("title", "")))
+    c_agency = esc(str(contract.get("agency", "")))
+    c_sol = esc(str(contract.get("solicitation_number", "")))
+    c_value = esc(str(contract.get("estimated_value", "N/A")))
+    esc_summary = esc(summary)
 
     rows = []
     for key, (label, route) in ACTIONS.items():
@@ -138,16 +152,16 @@ def render_html_email(
             f"{route}</td></tr>"
         )
 
-    flags_html = ", ".join(flags) if flags else "<em>none</em>"
+    flags_html = ", ".join(esc(f) for f in flags) if flags else "<em>none</em>"
 
     score_rows = ""
     if scored:
         score_rows = '<table style="width:100%;border-collapse:collapse;margin-top:8px;">'
         for module, score in scored:
             score_rows += (
-                f'<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">{module}</td>'
+                f'<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">{esc(module)}</td>'
                 f'<td style="padding:4px 8px;border-bottom:1px solid #eee;'
-                f'font-weight:600;">{score}</td></tr>'
+                f'font-weight:600;">{esc(str(score))}</td></tr>'
             )
         score_rows += "</table>"
 
@@ -155,7 +169,7 @@ def render_html_email(
     if module_notes:
         notes_html = '<ul style="margin:4px 0;padding-left:20px;">'
         for note in module_notes:
-            notes_html += f"<li>{note}</li>"
+            notes_html += f"<li>{esc(note)}</li>"
         notes_html += "</ul>"
 
     rec_html = ""
@@ -164,10 +178,10 @@ def render_html_email(
         rec_html = f"""
         <div style="background:#f5f5f5;border-left:4px solid #1565c0;padding:12px 16px;margin:16px 0;">
             <strong>Routing Agent Recommendation</strong><br>
-            Action: {rec_label} [{recommended}]<br>
-            Priority: {decision.get('priority', 'n/a')}<br>
-            Reason: {decision.get('reason', '')}<br>
-            Recipient: {decision.get('recipient', '')}<br>
+            Action: {esc(rec_label)} [{esc(str(recommended))}]<br>
+            Priority: {esc(str(decision.get('priority', 'n/a')))}<br>
+            Reason: {esc(str(decision.get('reason', '')))}<br>
+            Recipient: {esc(str(decision.get('recipient', '')))}<br>
         </div>"""
 
     return f"""\
@@ -179,17 +193,17 @@ def render_html_email(
     <div style="padding:20px 24px;border:1px solid #ddd;border-top:none;">
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
             <tr><td style="padding:6px 0;color:#666;width:120px;">Title</td>
-                <td style="padding:6px 0;font-weight:600;">{contract.get('title', '')}</td></tr>
+                <td style="padding:6px 0;font-weight:600;">{c_title}</td></tr>
             <tr><td style="padding:6px 0;color:#666;">Agency</td>
-                <td style="padding:6px 0;">{contract.get('agency', '')}</td></tr>
+                <td style="padding:6px 0;">{c_agency}</td></tr>
             <tr><td style="padding:6px 0;color:#666;">Solicitation</td>
-                <td style="padding:6px 0;">{contract.get('solicitation_number', '')}</td></tr>
+                <td style="padding:6px 0;">{c_sol}</td></tr>
             <tr><td style="padding:6px 0;color:#666;">Est. Value</td>
-                <td style="padding:6px 0;">{contract.get('estimated_value', 'N/A')}</td></tr>
+                <td style="padding:6px 0;">{c_value}</td></tr>
         </table>
 
         <div style="background:#fafafa;padding:12px 16px;border-radius:4px;margin-bottom:16px;">
-            <strong>Summary</strong><br>{summary}
+            <strong>Summary</strong><br>{esc_summary}
         </div>
 
         {notes_html and f'<div style="margin-bottom:16px;"><strong>Module Notes</strong>{notes_html}</div>' or ''}

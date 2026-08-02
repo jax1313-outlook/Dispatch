@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import html as _html
 import os
 import smtplib
 import ssl
@@ -85,12 +86,20 @@ def _write_fallback(fallback_id: str, msg: EmailMessage) -> Path:
     return path
 
 
+def _using_default_secret() -> bool:
+    return not os.environ.get("CIN_LITE_EMAIL_SECRET")
+
+
 def _send_or_write(fallback_id: str, msg: EmailMessage) -> str:
     """Send via SMTP if configured, else write the message to Archive/Outbox."""
     host = os.environ.get("CIN_LITE_SMTP_HOST")
     if not host:
         path = _write_fallback(fallback_id, msg)
         return f"not sent (SMTP not configured); written to {path}"
+
+    if _using_default_secret():
+        print("cin_lite: WARNING — sending emails with the default HMAC secret; "
+              "set CIN_LITE_EMAIL_SECRET for production use.", file=sys.stderr)
 
     port = int(os.environ.get("CIN_LITE_SMTP_PORT", "587"))
     try:
@@ -148,8 +157,9 @@ def _render_decision_html(
     label: str,
 ) -> str:
     """Render the decision confirmation email as styled HTML."""
+    esc = _html.escape
     action_color = control._ACTION_COLORS.get(action, "#333")
-    flags_html = ", ".join(flags) if flags else "<em>none</em>"
+    flags_html = ", ".join(esc(f) for f in flags) if flags else "<em>none</em>"
     recommended = decision.get("action", "")
     rec_label = control.ACTIONS.get(recommended, (recommended, ""))[0]
     followed = decision.get("action") == action
@@ -177,17 +187,17 @@ def _render_decision_html(
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
             <tr><td style="padding:6px 0;color:#666;width:120px;">Title</td>
-                <td style="padding:6px 0;font-weight:600;">{contract.get('title', '')}</td></tr>
+                <td style="padding:6px 0;font-weight:600;">{esc(str(contract.get('title', '')))}</td></tr>
             <tr><td style="padding:6px 0;color:#666;">Agency</td>
-                <td style="padding:6px 0;">{contract.get('agency', '')}</td></tr>
+                <td style="padding:6px 0;">{esc(str(contract.get('agency', '')))}</td></tr>
             <tr><td style="padding:6px 0;color:#666;">Solicitation</td>
-                <td style="padding:6px 0;">{contract.get('solicitation_number', '')}</td></tr>
+                <td style="padding:6px 0;">{esc(str(contract.get('solicitation_number', '')))}</td></tr>
             <tr><td style="padding:6px 0;color:#666;">Contract ID</td>
-                <td style="padding:6px 0;"><strong>{contract_id}</strong></td></tr>
+                <td style="padding:6px 0;"><strong>{esc(contract_id)}</strong></td></tr>
         </table>
 
         <div style="background:#fafafa;padding:12px 16px;border-radius:4px;margin-bottom:16px;">
-            <strong>Summary</strong><br>{summary}
+            <strong>Summary</strong><br>{esc(summary)}
         </div>
 
         <div style="margin-bottom:16px;">
@@ -196,9 +206,9 @@ def _render_decision_html(
 
         <div style="background:#f5f5f5;padding:12px 16px;border-radius:4px;">
             <strong>Agent Recommendation</strong><br>
-            Action: {rec_label} [{recommended}]<br>
-            Priority: {decision.get('priority', 'n/a')}<br>
-            Reason: {decision.get('reason', '')}
+            Action: {esc(rec_label)} [{esc(str(recommended))}]<br>
+            Priority: {esc(str(decision.get('priority', 'n/a')))}<br>
+            Reason: {esc(str(decision.get('reason', '')))}
         </div>
     </div>
 

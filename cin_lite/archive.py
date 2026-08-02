@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 ARCHIVE_ROOT = Path(__file__).resolve().parent / "Archive"
-_SUBDIRS = ("Raw", "Processed", "Intelligence", "Summaries", "Routing")
+_SUBDIRS = ("Raw", "Processed", "Intelligence", "Summaries", "Routing", "Pending", "Outbox")
 
 
 def _utc_now() -> str:
