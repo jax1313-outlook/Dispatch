@@ -64,6 +64,20 @@
                 <input type="text" name="equipment" style="width:100%;padding:4px 8px;"></label></div>
             <div><label><strong>Driver</strong><br>
                 <input type="text" name="driver" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Assign Driver</strong><br>
+                <select name="driver_id" style="width:100%;padding:4px 8px;">
+                    <option value="">— None —</option>
+                    {% for d in active_drivers %}
+                    <option value="{{ d.driver_id }}">{{ d.name }}</option>
+                    {% endfor %}
+                </select></label></div>
+            <div><label><strong>Assign Equipment</strong><br>
+                <select name="equipment_id" style="width:100%;padding:4px 8px;">
+                    <option value="">— None —</option>
+                    {% for e in active_equipment %}
+                    <option value="{{ e.equipment_id }}">{{ e.unit_number }} ({{ e.equipment_type }})</option>
+                    {% endfor %}
+                </select></label></div>
             <div class="full-width"><label><strong>Notes</strong><br>
                 <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
         </div>
@@ -93,6 +107,7 @@
                 <th>Pickup</th>
                 <th>Delivery</th>
                 <th>Driver</th>
+                <th>Equipment</th>
                 <th>Updated</th>
                 <th></th>
             </tr>
@@ -106,6 +121,7 @@
                 <td>{{ load.pickup_location or '—' }}</td>
                 <td>{{ load.delivery_location or '—' }}</td>
                 <td>{{ load.driver or '—' }}</td>
+                <td>{{ load.equipment or '—' }}</td>
                 <td>{{ load.updated_at[:16] if load.updated_at else '—' }}</td>
                 <td><a href="{{ url_for('pages.dispatch_detail', load_id=load.load_id) }}" class="btn btn-sm">View</a></td>
             </tr>
