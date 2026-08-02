@@ -69,9 +69,9 @@
         {% for record in history %}
             <tr>
                 <td><code style="font-size:11px;">{{ record.contract_id }}</code></td>
-                <td>{{ record.get('action_label', record.get('action', '')) }}</td>
-                <td>{{ record.get('route', '') }}</td>
-                <td>{{ record.get('decided_at', '') }}</td>
+                <td>{{ record.action_label or record.action }}</td>
+                <td>{{ record.route }}</td>
+                <td>{{ record.decided_at }}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -91,9 +91,11 @@ function runPipeline() {
 }
 
 function pipelineDecide(contractId, action) {
+    if (!confirm('Apply "' + action.replace(/_/g, ' ') + '" to ' + contractId + '?')) return;
     apiPost('/api/pipeline/decide', {contract_id: contractId, action: action})
         .then(data => {
             if (data.error) { alert(data.error); return; }
+            alert('Decision recorded: ' + (data.action_label || data.action) + ' → ' + data.route);
             location.reload();
         });
 }

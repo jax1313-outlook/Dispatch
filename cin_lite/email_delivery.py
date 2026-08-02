@@ -137,6 +137,77 @@ def deliver_checkpoint(
     )
 
 
+def _render_decision_html(
+    contract: dict,
+    contract_id: str,
+    summary: str,
+    decision: dict,
+    action: str,
+    route: str,
+    flags: list[str],
+    label: str,
+) -> str:
+    """Render the decision confirmation email as styled HTML."""
+    action_color = control._ACTION_COLORS.get(action, "#333")
+    flags_html = ", ".join(flags) if flags else "<em>none</em>"
+    recommended = decision.get("action", "")
+    rec_label = control.ACTIONS.get(recommended, (recommended, ""))[0]
+    followed = decision.get("action") == action
+
+    followed_html = (
+        '<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;'
+        'border-radius:3px;font-size:12px;font-weight:600;">Followed recommendation</span>'
+        if followed else
+        '<span style="background:#fff3e0;color:#e65100;padding:2px 8px;'
+        'border-radius:3px;font-size:12px;font-weight:600;">Overrode recommendation</span>'
+    )
+
+    return f"""\
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#333;">
+    <div style="background:{action_color};color:#fff;padding:16px 24px;">
+        <h1 style="margin:0;font-size:20px;">CIN-Lite — Decision Recorded</h1>
+    </div>
+
+    <div style="padding:20px 24px;border:1px solid #ddd;border-top:none;">
+        <div style="background:#f5f5f5;border-left:4px solid {action_color};padding:12px 16px;margin-bottom:16px;">
+            <strong style="font-size:16px;">{label}</strong>
+            <span style="color:#666;font-size:13px;margin-left:8px;">routed to {route}</span>
+            <br>{followed_html}
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+            <tr><td style="padding:6px 0;color:#666;width:120px;">Title</td>
+                <td style="padding:6px 0;font-weight:600;">{contract.get('title', '')}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Agency</td>
+                <td style="padding:6px 0;">{contract.get('agency', '')}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Solicitation</td>
+                <td style="padding:6px 0;">{contract.get('solicitation_number', '')}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Contract ID</td>
+                <td style="padding:6px 0;"><strong>{contract_id}</strong></td></tr>
+        </table>
+
+        <div style="background:#fafafa;padding:12px 16px;border-radius:4px;margin-bottom:16px;">
+            <strong>Summary</strong><br>{summary}
+        </div>
+
+        <div style="margin-bottom:16px;">
+            <strong>Flags:</strong> {flags_html}
+        </div>
+
+        <div style="background:#f5f5f5;padding:12px 16px;border-radius:4px;">
+            <strong>Agent Recommendation</strong><br>
+            Action: {rec_label} [{recommended}]<br>
+            Priority: {decision.get('priority', 'n/a')}<br>
+            Reason: {decision.get('reason', '')}
+        </div>
+    </div>
+
+    <div style="padding:12px 24px;font-size:11px;color:#999;border:1px solid #ddd;border-top:none;">
+        CIN-Lite Hybrid System &mdash; Contract ID: {contract_id}
+    </div>
+</div>"""
+
+
 def deliver_decision(
     contract: dict,
     contract_id: str,
@@ -146,7 +217,7 @@ def deliver_decision(
     route: str,
     flags: list[str],
 ) -> str:
-    """Send the decision email (summary + routing decision)."""
+    """Send the decision confirmation email (HTML + text fallback)."""
     label = control.ACTIONS.get(action, (action, route))[0]
     priority = decision.get("priority", "n/a")
     subject = f"[CIN-Lite] {contract_id} — {label} (priority {priority})"
@@ -174,4 +245,9 @@ def deliver_decision(
             f"Flags raised: {', '.join(flags) if flags else 'none'}",
         ]
     )
-    return _send_or_write(contract_id, _build(_decision_recipients(decision), subject, body))
+    html = _render_decision_html(
+        contract, contract_id, summary, decision, action, route, flags, label,
+    )
+    return _send_or_write(
+        contract_id, _build(_decision_recipients(decision), subject, body, html=html),
+    )

@@ -92,7 +92,10 @@ def resolve_decision(contract_id: str, action: str) -> dict:
     flags = record["flags"]
 
     metadata = archive.store(contract_data, intelligence, summary)
-    archive.record_routing(metadata["contract_id"], action, route, metadata, decision)
+    archive.record_routing(
+        metadata["contract_id"], action, route, metadata, decision,
+        action_label=label, flags=flags, summary=summary,
+    )
     email_delivery.deliver_decision(
         contract_data, metadata["contract_id"], summary, decision, action, route, flags,
     )

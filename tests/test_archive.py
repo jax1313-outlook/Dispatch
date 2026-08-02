@@ -57,6 +57,25 @@ def test_record_routing_followed_false(tmp_archive, mapped_contract, intelligenc
     assert payload["followed_recommendation"] is False
 
 
+def test_store_metadata_includes_value_and_deadline(tmp_archive, mapped_contract, intelligence):
+    metadata = archive.store(mapped_contract, intelligence, "s")
+    assert "estimated_value" in metadata
+    assert "response_date" in metadata
+
+
+def test_record_routing_includes_label_flags_summary(tmp_archive, mapped_contract, intelligence):
+    metadata = archive.store(mapped_contract, intelligence, "s")
+    decision = {"action": "reject", "priority": "low", "recipient": "none"}
+    path = archive.record_routing(
+        metadata["contract_id"], "reject", "REJECTED", metadata, decision,
+        action_label="Reject", flags=["flag_a", "flag_b"], summary="The summary",
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["action_label"] == "Reject"
+    assert payload["flags"] == ["flag_a", "flag_b"]
+    assert payload["summary"] == "The summary"
+
+
 def test_store_proposal(tmp_archive):
     proposal = {"proposal_id": "PROP-TEST-1", "title": "X"}
     json_path, md_path = archive.store_proposal(proposal, "# Outline\n- a")

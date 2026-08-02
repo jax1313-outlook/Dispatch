@@ -24,10 +24,10 @@
         <span class="summary-number">{{ intel_count }}</span>
         <span class="summary-label">Intelligence Records</span>
     </div>
-    <div class="summary-card summary-pending">
+    <a href="{{ url_for('pages.pending_decisions') }}" class="summary-card summary-pending" style="text-decoration:none;color:inherit;">
         <span class="summary-number">{{ pending_count }}</span>
         <span class="summary-label">Pending Decisions</span>
-    </div>
+    </a>
 </div>
 
 {% if dispatch_cards %}

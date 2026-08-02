@@ -165,6 +165,70 @@ class TestCheckpointDelivery:
         assert "<html>rich</html>" in eml
 
 
+# --------------------------------------------------------------------------- decision confirmation email
+
+class TestDecisionEmail:
+    @staticmethod
+    def _read_eml(path):
+        """Read .eml and return decoded full text (handles MIME base64 parts)."""
+        from email import policy
+        from email.parser import BytesParser
+        raw = path.read_bytes()
+        msg = BytesParser(policy=policy.default).parsebytes(raw)
+        parts = []
+        for part in msg.walk():
+            ct = part.get_content_type()
+            if ct in ("text/plain", "text/html"):
+                parts.append(part.get_content())
+        return "\n".join(parts)
+
+    def test_deliver_decision_has_html(self, tmp_archive, mapped_contract):
+        decision = {"action": "approve_archive", "priority": "medium",
+                    "recipient": "none", "reason": "fits", "notes": ""}
+        status = email_delivery.deliver_decision(
+            mapped_contract, "CIN-DEC-HTML", "Summary text",
+            decision, "approve_archive", "ARCHIVE", ["flag_a"],
+        )
+        assert "written to" in status
+        eml_path = tmp_archive / "Outbox" / "CIN-DEC-HTML.eml"
+        content = self._read_eml(eml_path)
+        assert "Decision Recorded" in content
+        assert "Approve for archive" in content
+        assert "ARCHIVE" in content
+        assert "CIN-DEC-HTML" in content
+
+    def test_decision_html_shows_followed(self, tmp_archive, mapped_contract):
+        decision = {"action": "reject", "priority": "low",
+                    "recipient": "none", "reason": "no fit", "notes": ""}
+        email_delivery.deliver_decision(
+            mapped_contract, "CIN-DEC-FOL", "Sum",
+            decision, "reject", "REJECTED", [],
+        )
+        content = self._read_eml(tmp_archive / "Outbox" / "CIN-DEC-FOL.eml")
+        assert "Followed recommendation" in content
+
+    def test_decision_html_shows_overrode(self, tmp_archive, mapped_contract):
+        decision = {"action": "approve_archive", "priority": "medium",
+                    "recipient": "none", "reason": "fits", "notes": ""}
+        email_delivery.deliver_decision(
+            mapped_contract, "CIN-DEC-OVR", "Sum",
+            decision, "reject", "REJECTED", [],
+        )
+        content = self._read_eml(tmp_archive / "Outbox" / "CIN-DEC-OVR.eml")
+        assert "Overrode recommendation" in content
+
+    def test_decision_html_shows_flags(self, tmp_archive, mapped_contract):
+        decision = {"action": "reject", "priority": "low",
+                    "recipient": "none", "reason": "n", "notes": ""}
+        email_delivery.deliver_decision(
+            mapped_contract, "CIN-DEC-FLG", "Sum",
+            decision, "reject", "REJECTED", ["cyber_flag", "vendor_flag"],
+        )
+        content = self._read_eml(tmp_archive / "Outbox" / "CIN-DEC-FLG.eml")
+        assert "cyber_flag" in content
+        assert "vendor_flag" in content
+
+
 # --------------------------------------------------------------------------- portal decision endpoint
 
 class TestDecisionEndpoint:
