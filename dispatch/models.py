@@ -124,6 +124,10 @@ ACTIVITY_TYPES = ["comment", "status_change", "assignment", "system"]
 
 ACTIVITY_SOURCES = ["user", "system"]
 
+DETENTION_LOCATIONS = ["pickup", "delivery"]
+
+DETENTION_STATUSES = ["active", "completed", "billed"]
+
 
 def _validate_choice(value: str, choices: list[str], field_name: str) -> None:
     if value not in choices:
@@ -471,6 +475,57 @@ class LoadActivity:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass
+class DetentionEvent:
+    detention_id: str = ""
+    load_id: str = ""
+    location_type: str = "pickup"
+    started_at: str = ""
+    ended_at: str = ""
+    free_hours: float = 2.0
+    hourly_rate: float = 75.0
+    status: str = "active"
+    notes: str = ""
+    expense_id: str = ""
+    created_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.detention_id:
+            self.detention_id = _gen_id("DET")
+        if not self.started_at:
+            self.started_at = _utc_now()
+        if not self.created_at:
+            self.created_at = _utc_now()
+        _validate_choice(self.location_type, DETENTION_LOCATIONS, "location_type")
+        _validate_choice(self.status, DETENTION_STATUSES, "status")
+
+    @property
+    def total_hours(self) -> float:
+        if not self.ended_at:
+            return 0.0
+        try:
+            start = datetime.fromisoformat(self.started_at.replace("Z", "+00:00"))
+            end = datetime.fromisoformat(self.ended_at.replace("Z", "+00:00"))
+            return max(0.0, (end - start).total_seconds() / 3600)
+        except (ValueError, TypeError):
+            return 0.0
+
+    @property
+    def billable_hours(self) -> float:
+        return max(0.0, self.total_hours - self.free_hours)
+
+    @property
+    def billable_amount(self) -> float:
+        return round(self.billable_hours * self.hourly_rate, 2)
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["total_hours"] = round(self.total_hours, 2)
+        d["billable_hours"] = round(self.billable_hours, 2)
+        d["billable_amount"] = self.billable_amount
+        return d
 
 
 @dataclass

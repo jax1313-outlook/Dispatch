@@ -191,6 +191,23 @@ CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment(status);
 CREATE INDEX IF NOT EXISTS idx_equipment_type ON equipment(equipment_type);
 CREATE INDEX IF NOT EXISTS idx_activities_load ON activities(load_id);
 
+CREATE TABLE IF NOT EXISTS detention_events (
+    detention_id    TEXT PRIMARY KEY,
+    load_id         TEXT NOT NULL REFERENCES loads(load_id),
+    location_type   TEXT NOT NULL DEFAULT 'pickup',
+    started_at      TEXT NOT NULL,
+    ended_at        TEXT NOT NULL DEFAULT '',
+    free_hours      REAL NOT NULL DEFAULT 2.0,
+    hourly_rate     REAL NOT NULL DEFAULT 75.0,
+    status          TEXT NOT NULL DEFAULT 'active',
+    notes           TEXT NOT NULL DEFAULT '',
+    expense_id      TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_detention_load ON detention_events(load_id);
+CREATE INDEX IF NOT EXISTS idx_detention_status ON detention_events(status);
+
 CREATE TABLE IF NOT EXISTS lane_templates (
     template_id     TEXT PRIMARY KEY,
     name            TEXT NOT NULL,
