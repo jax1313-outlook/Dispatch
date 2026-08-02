@@ -39,6 +39,7 @@ def home():
     active_engine = [l for l in all_engine_loads if l["status"] not in ("archived", "cancelled", "completed")]
 
     fleet_summary = dispatch_svc.get_fleet_summary()
+    fin_dashboard = dispatch_svc.get_financial_dashboard()
 
     return render_template(
         "home.html",
@@ -51,6 +52,7 @@ def home():
         pending_count=len(pending_items),
         engine_load_count=len(active_engine),
         fleet_summary=fleet_summary,
+        fin_dashboard=fin_dashboard,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )

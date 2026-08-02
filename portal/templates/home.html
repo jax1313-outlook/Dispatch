@@ -38,6 +38,36 @@
     </a>
 </div>
 
+{% if fin_dashboard and fin_dashboard.loads_with_rate > 0 %}
+<div class="card-section">
+    <h2>Financial Snapshot</h2>
+    <div class="financial-summary">
+        <div class="financial-item financial-revenue">
+            <span class="financial-label">Revenue</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_revenue) }}</span>
+        </div>
+        <div class="financial-item {% if fin_dashboard.total_profit >= 0 %}financial-profit{% else %}financial-loss{% endif %}">
+            <span class="financial-label">Profit</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_profit) }}</span>
+            <span class="financial-label">{{ "%.1f"|format(fin_dashboard.margin_pct) }}% margin</span>
+        </div>
+        <div class="financial-item" style="border-left:3px solid #27ae60;">
+            <span class="financial-label">Paid</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_paid) }}</span>
+            <span class="financial-label">{{ fin_dashboard.paid_count }} loads</span>
+        </div>
+        <div class="financial-item" style="border-left:3px solid {% if fin_dashboard.overdue_count > 0 %}#e74c3c{% else %}#f39c12{% endif %};">
+            <span class="financial-label">Outstanding</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_outstanding) }}</span>
+            <span class="financial-label">{{ fin_dashboard.invoiced_count }} invoiced{% if fin_dashboard.overdue_count %}, {{ fin_dashboard.overdue_count }} overdue{% endif %}</span>
+        </div>
+        <div class="financial-item">
+            <button class="btn btn-sm" onclick="runAgingCheck()" title="Scan invoiced settlements for overdue payments">Run Aging Check</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if dispatch_cards %}
 <section class="card-section">
     <h2>Dispatch — Top Loads</h2>

@@ -39,6 +39,9 @@
             <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_outstanding) }}</span>
             <span class="financial-label">{{ fin_dashboard.invoiced_count }} invoiced{% if fin_dashboard.overdue_count %}, {{ fin_dashboard.overdue_count }} overdue{% endif %}</span>
         </div>
+        <div class="financial-item">
+            <button class="btn btn-sm" onclick="runAgingCheck()" title="Scan invoiced settlements for overdue payments">Run Aging Check</button>
+        </div>
     </div>
 </div>
 {% endif %}
