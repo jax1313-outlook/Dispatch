@@ -201,6 +201,35 @@ def brokers():
     return render_template("brokers.html", scorecards=scorecards)
 
 
+@pages_bp.route("/calendar")
+def load_calendar():
+    from dispatch import services as dispatch_svc
+    from datetime import date
+
+    today = date.today()
+    try:
+        year = int(request.args.get("year", today.year))
+        month = int(request.args.get("month", today.month))
+    except (ValueError, TypeError):
+        year, month = today.year, today.month
+    if month < 1:
+        month, year = 12, year - 1
+    elif month > 12:
+        month, year = 1, year + 1
+
+    cal_data = dispatch_svc.get_load_calendar(year, month)
+    prev_month = month - 1 if month > 1 else 12
+    prev_year = year if month > 1 else year - 1
+    next_month = month + 1 if month < 12 else 1
+    next_year = year if month < 12 else year + 1
+    return render_template(
+        "calendar.html",
+        cal=cal_data,
+        prev_year=prev_year, prev_month=prev_month,
+        next_year=next_year, next_month=next_month,
+    )
+
+
 @pages_bp.route("/fleet")
 def fleet():
     from dispatch import services as dispatch_svc
