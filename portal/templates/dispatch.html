@@ -89,6 +89,26 @@
     </form>
 </div>
 
+{# ── Operational KPIs ─────────────────────────────────────────────── #}
+{% set active_statuses = ['dispatched', 'en_route_pickup', 'at_pickup', 'picked_up', 'in_transit', 'at_delivery'] %}
+{% set ns = namespace(dispatched=0, en_route=0, in_transit=0, at_delivery=0, delivered=0, exceptions=0) %}
+{% for ld in engine_loads %}
+    {% if ld.status == 'dispatched' %}{% set ns.dispatched = ns.dispatched + 1 %}{% endif %}
+    {% if ld.status in ['en_route_pickup', 'at_pickup', 'picked_up'] %}{% set ns.en_route = ns.en_route + 1 %}{% endif %}
+    {% if ld.status == 'in_transit' %}{% set ns.in_transit = ns.in_transit + 1 %}{% endif %}
+    {% if ld.status == 'at_delivery' %}{% set ns.at_delivery = ns.at_delivery + 1 %}{% endif %}
+    {% if ld.status == 'delivered' %}{% set ns.delivered = ns.delivered + 1 %}{% endif %}
+{% endfor %}
+{% if ns.dispatched or ns.en_route or ns.in_transit or ns.at_delivery or ns.delivered %}
+<div class="dispatch-kpi-bar">
+    {% if ns.dispatched %}<span class="kpi-chip"><span class="kpi-count">{{ ns.dispatched }}</span> Dispatched</span>{% endif %}
+    {% if ns.en_route %}<span class="kpi-chip kpi-active"><span class="kpi-count">{{ ns.en_route }}</span> En Route / Pickup</span>{% endif %}
+    {% if ns.in_transit %}<span class="kpi-chip kpi-active"><span class="kpi-count">{{ ns.in_transit }}</span> In Transit</span>{% endif %}
+    {% if ns.at_delivery %}<span class="kpi-chip kpi-active"><span class="kpi-count">{{ ns.at_delivery }}</span> At Delivery</span>{% endif %}
+    {% if ns.delivered %}<span class="kpi-chip"><span class="kpi-count">{{ ns.delivered }}</span> Delivered</span>{% endif %}
+</div>
+{% endif %}
+
 {# ── Active Loads (Dispatch Engine) ───────────────────────────────── #}
 <div class="card-section">
     <h2>Active Loads ({{ engine_loads|length }})</h2>

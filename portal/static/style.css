@@ -300,6 +300,97 @@ body {
 .equip-ok { color: #27ae60; font-weight: 700; margin-left: 4px; }
 .equip-bad { color: #e74c3c; font-weight: 700; margin-left: 4px; }
 
+/* ---------- Load Status Stepper ---------- */
+.load-stepper {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    margin: 16px 0 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-width: 70px;
+    position: relative;
+}
+.step-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #ddd;
+    border: 3px solid #ccc;
+    z-index: 1;
+    flex-shrink: 0;
+}
+.step.completed .step-dot {
+    background: #27ae60;
+    border-color: #27ae60;
+}
+.step.current .step-dot {
+    background: #2980b9;
+    border-color: #2980b9;
+    box-shadow: 0 0 0 4px rgba(41, 128, 185, 0.2);
+}
+.step.cancelled .step-dot {
+    background: #e74c3c;
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.2);
+}
+.step-label {
+    margin-top: 6px;
+    font-size: 10px;
+    color: #999;
+    text-align: center;
+    line-height: 1.2;
+    text-transform: capitalize;
+}
+.step.completed .step-label { color: #27ae60; font-weight: 600; }
+.step.current .step-label { color: #2980b9; font-weight: 700; }
+.step.cancelled .step-label { color: #e74c3c; font-weight: 700; }
+.step-line {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    width: 100%;
+    height: 3px;
+    background: #ddd;
+    z-index: 0;
+}
+.step:last-child .step-line { display: none; }
+.step.completed .step-line { background: #27ae60; }
+
+/* ---------- Dispatch KPI Bar ---------- */
+.dispatch-kpi-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.kpi-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #eef2f7;
+    color: #555;
+}
+.kpi-chip .kpi-count {
+    background: #2980b9;
+    color: #fff;
+    border-radius: 8px;
+    padding: 1px 7px;
+    font-size: 11px;
+}
+.kpi-chip.kpi-exception .kpi-count { background: #e74c3c; }
+.kpi-chip.kpi-active .kpi-count { background: #27ae60; }
+
 /* ---------- Brief ---------- */
 .brief-container { max-width: 900px; }
 .brief-header {
