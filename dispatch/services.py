@@ -289,6 +289,34 @@ def get_timeline(load_id: str) -> list[dict]:
     return store.list_milestones(load_id)
 
 
+def validate_milestone(milestone_id: str, validation_status: str) -> dict | None:
+    from dispatch.models import VALIDATION_STATUSES
+    if validation_status not in VALIDATION_STATUSES:
+        raise ValueError(
+            f"Invalid validation_status: {validation_status!r}. "
+            f"Must be one of {VALIDATION_STATUSES}"
+        )
+    return store.update_milestone(milestone_id, validation_status=validation_status)
+
+
+def update_visibility_notes(
+    load_id: str,
+    customer_note: str | None = None,
+    internal_note: str | None = None,
+) -> dict | None:
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+    fields: dict[str, str] = {}
+    if customer_note is not None:
+        fields["customer_note"] = customer_note
+    if internal_note is not None:
+        fields["internal_note"] = internal_note
+    if not fields:
+        return store.get_visibility(load_id)
+    return store.update_visibility_notes(load_id, **fields)
+
+
 def attach_evidence(
     load_id: str,
     evidence_type: str = "document",

@@ -662,6 +662,40 @@ body {
 .fleet-retired { background: #f5f5f5; color: #999; }
 
 /* ---------- Responsive ---------- */
+/* ── Validation Badges ─────────────────────────────────── */
+.validation-badge {
+    display: inline-block; padding: 0.15rem 0.5rem;
+    border-radius: 3px; font-size: 0.75rem; font-weight: 600;
+    text-transform: uppercase;
+}
+.validation-pending { background: #ffeaa7; color: #856404; }
+.validation-validated { background: #d4edda; color: #155724; }
+.validation-disputed { background: #f8d7da; color: #721c24; }
+.btn-xs { font-size: 0.7rem; padding: 0.15rem 0.4rem; }
+.btn-danger { background: #e74c3c; color: #fff; border: none; cursor: pointer; border-radius: 3px; }
+.btn-danger:hover { background: #c0392b; }
+
+/* ── Activity Feed ─────────────────────────────────────── */
+.activity-feed { display: flex; flex-direction: column; gap: 0; }
+.activity-item {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-time {
+    flex-shrink: 0; width: 3rem; text-align: right;
+    color: #888; font-size: 0.8rem;
+}
+.activity-type {
+    flex-shrink: 0; padding: 0.15rem 0.5rem;
+    background: #edf2f7; border-radius: 3px;
+    font-size: 0.75rem; text-transform: uppercase;
+    color: #555; font-weight: 600;
+}
+.activity-note { color: #888; font-size: 0.85rem; }
+
 @media (max-width: 800px) {
     .sidebar { width: 180px; }
     .content { margin-left: 180px; }

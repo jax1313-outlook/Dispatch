@@ -192,6 +192,19 @@
             <span>{% if visibility.exception_flag %}<span class="severity-tag severity-critical">ACTIVE</span>{% else %}None{% endif %}</span>
         </div>
     </div>
+    <div class="vis-notes" style="margin-top:0.75rem;">
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+                <label style="font-weight:600;font-size:0.85rem;display:block;margin-bottom:0.25rem;">Customer Note</label>
+                <textarea id="vis-customer-note" rows="2" style="width:100%;font-size:0.9rem;padding:6px;border:1px solid #ddd;border-radius:4px;">{{ visibility.customer_note or '' }}</textarea>
+            </div>
+            <div style="flex:1;min-width:200px;">
+                <label style="font-weight:600;font-size:0.85rem;display:block;margin-bottom:0.25rem;">Internal Note</label>
+                <textarea id="vis-internal-note" rows="2" style="width:100%;font-size:0.9rem;padding:6px;border:1px solid #ddd;border-radius:4px;">{{ visibility.internal_note or '' }}</textarea>
+            </div>
+        </div>
+        <button class="btn btn-sm btn-primary" style="margin-top:0.5rem;" onclick="saveVisibilityNotes('{{ load.load_id }}')">Save Notes</button>
+    </div>
 </div>
 {% endif %}
 
@@ -225,7 +238,7 @@
 
     {% if milestones %}
     <table class="event-table">
-        <thead><tr><th>Time</th><th>Event</th><th>Location</th><th>Source</th><th>Note</th></tr></thead>
+        <thead><tr><th>Time</th><th>Event</th><th>Location</th><th>Source</th><th>Note</th><th>Validation</th></tr></thead>
         <tbody>
         {% for ms in milestones %}
         <tr>
@@ -234,6 +247,15 @@
             <td>{{ ms.location or '—' }}</td>
             <td>{{ ms.source }}</td>
             <td>{{ ms.note or '—' }}</td>
+            <td>
+                <span class="validation-badge validation-{{ ms.validation_status }}">{{ ms.validation_status }}</span>
+                {% if ms.validation_status == 'pending' %}
+                <button class="btn btn-xs btn-success" onclick="validateMilestone('{{ ms.milestone_id }}', 'validated')">Validate</button>
+                <button class="btn btn-xs btn-danger" onclick="validateMilestone('{{ ms.milestone_id }}', 'disputed')">Dispute</button>
+                {% elif ms.validation_status == 'disputed' %}
+                <button class="btn btn-xs btn-success" onclick="validateMilestone('{{ ms.milestone_id }}', 'validated')">Validate</button>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
         </tbody>
@@ -593,6 +615,24 @@ function addMilestone(e, loadId) {
     apiPost('/api/dispatch/loads/' + loadId + '/milestones', data).then(function(r) {
         if (r.error) { alert(r.error); return; }
         location.reload();
+    });
+}
+
+function validateMilestone(msId, status) {
+    apiPatch('/api/dispatch/milestones/' + msId, {validation_status: status}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function saveVisibilityNotes(loadId) {
+    var data = {
+        customer_note: document.getElementById('vis-customer-note').value,
+        internal_note: document.getElementById('vis-internal-note').value
+    };
+    apiPatch('/api/dispatch/loads/' + loadId + '/visibility', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        alert('Notes saved');
     });
 }
 
