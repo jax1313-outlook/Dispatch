@@ -1150,3 +1150,7 @@ def get_load_bundle(load_id: str) -> dict | None:
 
 def global_search(query: str) -> dict:
     return store.global_search(query)
+
+
+def list_uninvoiced_loads() -> list[dict]:
+    return store.list_uninvoiced_loads()

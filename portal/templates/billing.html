@@ -100,14 +100,48 @@
                     {% else %}—{% endif %}
                 </td>
                 <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ stl.notes or '' }}">{{ stl.notes or '—' }}</td>
-                <td>
+                <td style="white-space:nowrap;">
                     {% if stl.payment_status in ('invoiced', 'overdue') %}
+                    <button class="btn btn-xs btn-primary" onclick="showPaymentForm('{{ stl.load_id }}', {{ stl.invoice_amount }})">Record Payment</button>
                     <button class="btn btn-xs btn-danger" onclick="disputeFromList('{{ stl.load_id }}')">Dispute</button>
                     {% elif stl.payment_status == 'disputed' %}
+                    <button class="btn btn-xs btn-primary" onclick="showPaymentForm('{{ stl.load_id }}', {{ stl.invoice_amount }})">Record Payment</button>
                     <button class="btn btn-xs" style="background:#880e4f;color:#fff;" onclick="writeOffFromList('{{ stl.load_id }}')">Write Off</button>
                     {% endif %}
                 </td>
             </tr>
+            {% if stl.payment_status in ('invoiced', 'overdue', 'disputed') %}
+            <tr class="edit-row" id="pay-row-{{ stl.load_id }}" style="display:none;">
+                <td colspan="9" style="background:#f8f9fa;padding:12px;">
+                    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+                        <div>
+                            <label style="font-size:0.8em;"><strong>Amount</strong><br>
+                            <input type="number" id="pay-amount-{{ stl.load_id }}" value="{{ '%.2f'|format(stl.invoice_amount) }}" step="0.01" min="0" style="padding:4px 8px;width:120px;"></label>
+                        </div>
+                        <div>
+                            <label style="font-size:0.8em;"><strong>Method</strong><br>
+                            <select id="pay-method-{{ stl.load_id }}" style="padding:4px 8px;">
+                                {% for m in payment_methods %}
+                                <option value="{{ m }}" {% if m == 'ach' %}selected{% endif %}>{{ m|upper }}</option>
+                                {% endfor %}
+                            </select></label>
+                        </div>
+                        <div>
+                            <label style="font-size:0.8em;"><strong>Factoring Fee</strong><br>
+                            <input type="number" id="pay-fee-{{ stl.load_id }}" value="0" step="0.01" min="0" style="padding:4px 8px;width:100px;"></label>
+                        </div>
+                        <div>
+                            <label style="font-size:0.8em;"><strong>Notes</strong><br>
+                            <input type="text" id="pay-notes-{{ stl.load_id }}" placeholder="Optional" style="padding:4px 8px;width:150px;"></label>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-primary" onclick="submitPayment('{{ stl.load_id }}')">Submit</button>
+                            <button class="btn btn-sm" onclick="hidePaymentForm('{{ stl.load_id }}')">Cancel</button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
@@ -118,7 +152,67 @@
     {% endif %}
 </div>
 
+{% if uninvoiced_loads %}
+<div class="card-section">
+    <h2>Uninvoiced Loads ({{ uninvoiced_loads|length }})</h2>
+    <p class="section-desc">Delivered or completed loads without a settlement. Create an invoice to start tracking payment.</p>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Load ID</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Delivery Location</th>
+                <th>Delivered</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ld in uninvoiced_loads %}
+            <tr>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}">{{ ld.load_id }}</a></td>
+                <td>{{ ld.customer or '—' }}</td>
+                <td><span class="status-tag status-{{ ld.status }}">{{ ld.status|replace('_', ' ') }}</span></td>
+                <td>{{ ld.delivery_location or '—' }}</td>
+                <td>{{ ld.delivery_datetime[:10] if ld.delivery_datetime else ld.updated_at[:10] }}</td>
+                <td>
+                    <button class="btn btn-xs btn-primary" onclick="createInvoice('{{ ld.load_id }}')">Create Invoice</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <script>
+function showPaymentForm(loadId, invoiceAmount) {
+    var row = document.getElementById('pay-row-' + loadId);
+    if (row) {
+        row.style.display = '';
+        document.getElementById('pay-amount-' + loadId).value = invoiceAmount.toFixed(2);
+    }
+}
+function hidePaymentForm(loadId) {
+    var row = document.getElementById('pay-row-' + loadId);
+    if (row) row.style.display = 'none';
+}
+function submitPayment(loadId) {
+    var amount = parseFloat(document.getElementById('pay-amount-' + loadId).value);
+    if (isNaN(amount) || amount <= 0) { alert('Enter a valid payment amount.'); return; }
+    var method = document.getElementById('pay-method-' + loadId).value;
+    var fee = parseFloat(document.getElementById('pay-fee-' + loadId).value) || 0;
+    var notes = document.getElementById('pay-notes-' + loadId).value;
+    apiPost('/api/dispatch/loads/' + loadId + '/payment', {
+        payment_amount: amount,
+        payment_method: method,
+        factoring_fee: fee,
+        notes: notes
+    }).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
 function disputeFromList(loadId) {
     var reason = prompt('Dispute reason (optional):');
     if (reason === null) return;
@@ -132,6 +226,19 @@ function writeOffFromList(loadId) {
     var reason = prompt('Write-off reason (optional):');
     if (reason === null) return;
     apiPost('/api/dispatch/loads/' + loadId + '/settlement/write-off', {reason: reason}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+function createInvoice(loadId) {
+    var dueDate = prompt('Due date (YYYY-MM-DD, optional):');
+    if (dueDate === null) return;
+    var notes = prompt('Invoice notes (optional):');
+    if (notes === null) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/settlement', {
+        due_date: dueDate || '',
+        notes: notes || ''
+    }).then(function(r) {
         if (r.error) { alert(r.error); return; }
         location.reload();
     });

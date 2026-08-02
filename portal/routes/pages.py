@@ -276,7 +276,7 @@ def equipment_detail(equipment_id):
 @pages_bp.route("/billing")
 def billing():
     from dispatch import services as dispatch_svc
-    from dispatch.models import SETTLEMENT_STATUSES
+    from dispatch.models import PAYMENT_METHODS, SETTLEMENT_STATUSES
 
     status_filter = request.args.get("status")
     customer_search = request.args.get("customer", "").strip()
@@ -303,11 +303,13 @@ def billing():
     fin_dashboard = dispatch_svc.get_financial_dashboard()
     disputed_count = sum(1 for s in settlements if s["payment_status"] == "disputed")
     written_off_count = sum(1 for s in settlements if s["payment_status"] == "written_off")
+    uninvoiced_loads = dispatch_svc.list_uninvoiced_loads()
 
     return render_template(
         "billing.html",
         settlements=settlements,
         settlement_statuses=SETTLEMENT_STATUSES,
+        payment_methods=PAYMENT_METHODS,
         status_filter=status_filter or "",
         customer_search=customer_search,
         date_from=date_from,
@@ -316,6 +318,7 @@ def billing():
         fin_dashboard=fin_dashboard,
         disputed_count=disputed_count,
         written_off_count=written_off_count,
+        uninvoiced_loads=uninvoiced_loads,
     )
 
 

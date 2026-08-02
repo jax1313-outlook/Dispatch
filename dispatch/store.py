@@ -1012,3 +1012,18 @@ def global_search(query: str, limit: int = 50) -> dict:
         results["settlements"] = stl_results
 
     return results
+
+
+# ── Uninvoiced Loads ────────────────────────────────────────────────
+
+def list_uninvoiced_loads() -> list[dict]:
+    sql = (
+        "SELECT l.* FROM loads l "
+        "LEFT JOIN settlements s ON l.load_id = s.load_id "
+        "WHERE s.load_id IS NULL "
+        "AND l.status IN ('delivered', 'completed') "
+        "ORDER BY l.updated_at DESC"
+    )
+    with get_connection() as conn:
+        rows = conn.execute(sql).fetchall()
+    return [dict_from_row(r) for r in rows]
