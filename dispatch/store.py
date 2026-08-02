@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 
 from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
 from dispatch.models import (
@@ -20,6 +21,41 @@ from dispatch.models import (
     RetentionArchive,
     Settlement,
 )
+
+DEFAULT_PER_PAGE = 25
+MAX_PER_PAGE = 100
+
+
+def _paginate(
+    sql: str,
+    params: list,
+    conn,
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+    row_mapper=dict_from_row,
+):
+    if page is None:
+        rows = conn.execute(sql, params).fetchall()
+        return [row_mapper(r) for r in rows]
+
+    count_sql = f"SELECT COUNT(*) FROM ({sql})"
+    total = conn.execute(count_sql, params).fetchone()[0]
+
+    pp = min(per_page or DEFAULT_PER_PAGE, MAX_PER_PAGE)
+    pp = max(pp, 1)
+    p = max(page, 1)
+    offset = (p - 1) * pp
+
+    paged_sql = f"{sql} LIMIT ? OFFSET ?"
+    rows = conn.execute(paged_sql, params + [pp, offset]).fetchall()
+    return {
+        "items": [row_mapper(r) for r in rows],
+        "total": total,
+        "page": p,
+        "per_page": pp,
+        "pages": math.ceil(total / pp) if total else 0,
+    }
 
 
 # ── Load ──────────────────────────────────────────────────────────────
@@ -54,7 +90,10 @@ def list_loads(
     customer: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-) -> list[dict]:
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
     clauses: list[str] = []
     params: list = []
     if status:
@@ -75,8 +114,7 @@ def list_loads(
         sql += f" WHERE {where}"
     sql += " ORDER BY updated_at DESC"
     with get_connection() as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return [dict_from_row(r) for r in rows]
+        return _paginate(sql, params, conn, page=page, per_page=per_page)
 
 
 def update_load(load_id: str, **fields) -> dict | None:
@@ -307,23 +345,28 @@ def create_exception(exc: ExceptionNotice) -> dict:
     return exc.to_dict()
 
 
-def list_exceptions(load_id: str | None = None, status: str | None = None) -> list[dict]:
+def list_exceptions(
+    load_id: str | None = None,
+    status: str | None = None,
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
+    clauses: list[str] = []
+    params: list[str] = []
+    if load_id:
+        clauses.append("load_id=?")
+        params.append(load_id)
+    if status:
+        clauses.append("status=?")
+        params.append(status)
+    where = " AND ".join(clauses)
+    sql = "SELECT * FROM exceptions"
+    if where:
+        sql += f" WHERE {where}"
+    sql += " ORDER BY first_reported DESC"
     with get_connection() as conn:
-        clauses: list[str] = []
-        params: list[str] = []
-        if load_id:
-            clauses.append("load_id=?")
-            params.append(load_id)
-        if status:
-            clauses.append("status=?")
-            params.append(status)
-        where = " AND ".join(clauses)
-        sql = "SELECT * FROM exceptions"
-        if where:
-            sql += f" WHERE {where}"
-        sql += " ORDER BY first_reported DESC"
-        rows = conn.execute(sql, params).fetchall()
-    return [dict_from_row(r) for r in rows]
+        return _paginate(sql, params, conn, page=page, per_page=per_page)
 
 
 def update_exception(exception_id: str, **fields) -> dict | None:
@@ -629,7 +672,10 @@ def list_settlements(
     date_from: str | None = None,
     date_to: str | None = None,
     invoice_number: str | None = None,
-) -> list[dict]:
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
     clauses: list[str] = []
     params: list = []
     if payment_status:
@@ -656,14 +702,13 @@ def list_settlements(
     if where:
         sql += " WHERE " + where
     sql += " ORDER BY s.invoice_date DESC"
-    with get_connection() as conn:
-        rows = conn.execute(sql, params).fetchall()
-    results = []
-    for r in rows:
+
+    def settlement_mapper(r):
         d = dict_from_row(r)
-        stl = Settlement(**d)
-        results.append(stl.to_dict())
-    return results
+        return Settlement(**d).to_dict()
+
+    with get_connection() as conn:
+        return _paginate(sql, params, conn, page=page, per_page=per_page, row_mapper=settlement_mapper)
 
 
 # ── Driver ──────────────────────────────────────────────────────────
@@ -694,7 +739,10 @@ def get_driver(driver_id: str) -> dict | None:
 def list_drivers(
     status: str | None = None,
     name: str | None = None,
-) -> list[dict]:
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
     clauses: list[str] = []
     params: list = []
     if status:
@@ -708,8 +756,7 @@ def list_drivers(
         sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY name ASC"
     with get_connection() as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return [dict_from_row(r) for r in rows]
+        return _paginate(sql, params, conn, page=page, per_page=per_page)
 
 
 def update_driver(driver_id: str, **fields) -> dict | None:
@@ -772,7 +819,10 @@ def list_equipment(
     status: str | None = None,
     equipment_type: str | None = None,
     unit_number: str | None = None,
-) -> list[dict]:
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
     clauses: list[str] = []
     params: list = []
     if status:
@@ -789,8 +839,7 @@ def list_equipment(
         sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY unit_number ASC"
     with get_connection() as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return [dict_from_row(r) for r in rows]
+        return _paginate(sql, params, conn, page=page, per_page=per_page)
 
 
 _TERMINAL_STATUSES = ("completed", "archived", "cancelled")

@@ -132,10 +132,14 @@ def list_loads(
     customer: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-) -> list[dict]:
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
     return store.list_loads(
         status=status, customer=customer,
         date_from=date_from, date_to=date_to,
+        page=page, per_page=per_page,
     )
 
 
@@ -452,9 +456,15 @@ def resolve_exception(
 
 
 def list_exceptions(
-    load_id: str | None = None, status: str | None = None
-) -> list[dict]:
-    return store.list_exceptions(load_id=load_id, status=status)
+    load_id: str | None = None,
+    status: str | None = None,
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
+    return store.list_exceptions(
+        load_id=load_id, status=status, page=page, per_page=per_page,
+    )
 
 
 def update_exception(exception_id: str, **fields) -> dict | None:
@@ -743,13 +753,17 @@ def list_settlements(
     date_from: str | None = None,
     date_to: str | None = None,
     invoice_number: str | None = None,
-) -> list[dict]:
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
     return store.list_settlements(
         payment_status=payment_status,
         customer=customer,
         date_from=date_from,
         date_to=date_to,
         invoice_number=invoice_number,
+        page=page, per_page=per_page,
     )
 
 
@@ -959,8 +973,11 @@ def get_driver(driver_id: str) -> dict | None:
 def list_drivers(
     status: str | None = None,
     name: str | None = None,
-) -> list[dict]:
-    return store.list_drivers(status=status, name=name)
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
+    return store.list_drivers(status=status, name=name, page=page, per_page=per_page)
 
 
 def update_driver(driver_id: str, **fields) -> dict | None:
@@ -1018,10 +1035,13 @@ def list_equipment(
     status: str | None = None,
     equipment_type: str | None = None,
     unit_number: str | None = None,
-) -> list[dict]:
+    *,
+    page: int | None = None,
+    per_page: int | None = None,
+) -> list[dict] | dict:
     return store.list_equipment(
         status=status, equipment_type=equipment_type,
-        unit_number=unit_number,
+        unit_number=unit_number, page=page, per_page=per_page,
     )
 
 
