@@ -154,11 +154,15 @@
 
 {% if uninvoiced_loads %}
 <div class="card-section">
-    <h2>Uninvoiced Loads ({{ uninvoiced_loads|length }})</h2>
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Uninvoiced Loads ({{ uninvoiced_loads|length }})</h2>
+        <button class="btn btn-sm btn-primary" onclick="batchCreateInvoices()" id="batch-invoice-btn" style="display:none;">Invoice Selected</button>
+    </div>
     <p class="section-desc">Delivered or completed loads without a settlement. Create an invoice to start tracking payment.</p>
     <table class="data-table">
         <thead>
             <tr>
+                <th><input type="checkbox" id="select-all-uninvoiced" onchange="toggleAllUninvoiced(this)"></th>
                 <th>Load ID</th>
                 <th>Customer</th>
                 <th>Status</th>
@@ -170,6 +174,7 @@
         <tbody>
             {% for ld in uninvoiced_loads %}
             <tr>
+                <td><input type="checkbox" class="uninvoiced-check" value="{{ ld.load_id }}" onchange="updateBatchBtn()"></td>
                 <td><a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}">{{ ld.load_id }}</a></td>
                 <td>{{ ld.customer or '—' }}</td>
                 <td><span class="status-tag status-{{ ld.status }}">{{ ld.status|replace('_', ' ') }}</span></td>
@@ -240,6 +245,32 @@ function createInvoice(loadId) {
         notes: notes || ''
     }).then(function(r) {
         if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+function toggleAllUninvoiced(master) {
+    document.querySelectorAll('.uninvoiced-check').forEach(function(cb) { cb.checked = master.checked; });
+    updateBatchBtn();
+}
+function updateBatchBtn() {
+    var checked = document.querySelectorAll('.uninvoiced-check:checked').length;
+    var btn = document.getElementById('batch-invoice-btn');
+    if (btn) {
+        btn.style.display = checked > 0 ? '' : 'none';
+        btn.textContent = 'Invoice Selected (' + checked + ')';
+    }
+}
+function batchCreateInvoices() {
+    var ids = [];
+    document.querySelectorAll('.uninvoiced-check:checked').forEach(function(cb) { ids.push(cb.value); });
+    if (!ids.length) return;
+    var dueDate = prompt('Due date for all invoices (YYYY-MM-DD, optional):');
+    if (dueDate === null) return;
+    apiPost('/api/dispatch/settlements/batch-create', {load_ids: ids, due_date: dueDate || ''}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        var msg = r.created + ' invoice(s) created.';
+        if (r.errors && r.errors.length) msg += '\nErrors:\n' + r.errors.join('\n');
+        alert(msg);
         location.reload();
     });
 }

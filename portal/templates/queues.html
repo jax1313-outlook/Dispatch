@@ -15,16 +15,18 @@
                 <th>Action</th>
                 <th>Flags</th>
                 <th>Date</th>
+                <th>Summary</th>
             </tr>
         </thead>
         <tbody>
         {% for rec in review_queue %}
             <tr>
-                <td><code style="font-size:11px;">{{ rec.contract_id }}</code></td>
+                <td><a href="{{ url_for('pages.archive_view') }}?q={{ rec.contract_id }}" style="font-weight:600;" title="View in archive"><code style="font-size:11px;">{{ rec.contract_id }}</code></a></td>
                 <td>{{ rec.metadata.title or rec.summary[:60] or '—' }}</td>
                 <td>{{ rec.action_label or rec.action }}</td>
                 <td>{{ rec.flags|length }} flag{{ 's' if rec.flags|length != 1 }}</td>
-                <td>{{ rec.decided_at }}</td>
+                <td>{{ rec.decided_at[:10] if rec.decided_at else '—' }}</td>
+                <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ rec.summary or '' }}">{{ rec.summary[:80] if rec.summary else '—' }}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -46,16 +48,18 @@
                 <th>Action</th>
                 <th>Flags</th>
                 <th>Date</th>
+                <th>Summary</th>
             </tr>
         </thead>
         <tbody>
         {% for rec in analysis_queue %}
             <tr>
-                <td><code style="font-size:11px;">{{ rec.contract_id }}</code></td>
+                <td><a href="{{ url_for('pages.archive_view') }}?q={{ rec.contract_id }}" style="font-weight:600;" title="View in archive"><code style="font-size:11px;">{{ rec.contract_id }}</code></a></td>
                 <td>{{ rec.metadata.title or rec.summary[:60] or '—' }}</td>
                 <td>{{ rec.action_label or rec.action }}</td>
                 <td>{{ rec.flags|length }} flag{{ 's' if rec.flags|length != 1 }}</td>
-                <td>{{ rec.decided_at }}</td>
+                <td>{{ rec.decided_at[:10] if rec.decided_at else '—' }}</td>
+                <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ rec.summary or '' }}">{{ rec.summary[:80] if rec.summary else '—' }}</td>
             </tr>
         {% endfor %}
         </tbody>

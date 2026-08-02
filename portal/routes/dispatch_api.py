@@ -984,6 +984,27 @@ def batch_status_update():
     return jsonify({"updated": updated, "errors": errors})
 
 
+# ── Batch Invoice Creation ───────────────────────────────────────────
+
+
+@dispatch_bp.route("/settlements/batch-create", methods=["POST"])
+def batch_create_settlements():
+    data = request.get_json(force=True)
+    load_ids = data.get("load_ids", [])
+    due_date = data.get("due_date", "")
+    if not load_ids or not isinstance(load_ids, list):
+        return jsonify({"error": "load_ids list is required"}), 400
+    created = 0
+    errors = []
+    for lid in load_ids:
+        try:
+            services.create_settlement(load_id=lid, due_date=due_date)
+            created += 1
+        except ValueError as exc:
+            errors.append(f"{lid}: {exc}")
+    return jsonify({"status": "ok", "created": created, "errors": errors})
+
+
 # ── CSV Export ───────────────────────────────────────────────────────
 
 _LOAD_CSV_COLUMNS = [
