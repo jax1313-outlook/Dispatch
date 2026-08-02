@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dispatch.models import (
     EXCEPTION_STATUSES,
+    IFTA_JURISDICTIONS,
     LOAD_STATUSES,
     DetentionEvent,
     Driver,
@@ -15,6 +16,8 @@ from dispatch.models import (
     EvidenceItem,
     ExceptionNotice,
     Expense,
+    IFTAFuelPurchase,
+    IFTATripLeg,
     Load,
     LoadVisibilityRecord,
     MilestoneEvent,
@@ -1439,3 +1442,177 @@ def duplicate_load(load_id: str) -> dict:
         raise ValueError(f"Load not found: {load_id}")
     kwargs = {k: source.get(k, "") for k in _DUPLICATE_FIELDS}
     return create_load(**kwargs)
+
+
+# ── IFTA Mileage & Fuel ─────────────────────────────────────────────
+
+
+def add_ifta_trip_leg(
+    jurisdiction: str,
+    miles: float,
+    date: str = "",
+    vehicle_id: str = "",
+    load_id: str = "",
+    notes: str = "",
+) -> dict:
+    if jurisdiction not in IFTA_JURISDICTIONS:
+        raise ValueError(f"Invalid jurisdiction: {jurisdiction}")
+    if miles < 0:
+        raise ValueError("Miles must be non-negative")
+    leg = IFTATripLeg(
+        jurisdiction=jurisdiction,
+        miles=miles,
+        date=date,
+        vehicle_id=vehicle_id,
+        load_id=load_id,
+        notes=notes,
+    )
+    return store.create_ifta_trip_leg(leg)
+
+
+def update_ifta_trip_leg(leg_id: str, **kwargs) -> dict:
+    existing = store.get_ifta_trip_leg(leg_id)
+    if not existing:
+        raise ValueError(f"Trip leg not found: {leg_id}")
+    allowed = {"jurisdiction", "miles", "date", "vehicle_id", "load_id", "notes"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+    if "jurisdiction" in updates:
+        if updates["jurisdiction"] not in IFTA_JURISDICTIONS:
+            raise ValueError(f"Invalid jurisdiction: {updates['jurisdiction']}")
+    if "miles" in updates and updates["miles"] < 0:
+        raise ValueError("Miles must be non-negative")
+    if not updates:
+        return existing
+    result = store.update_ifta_trip_leg(leg_id, updates)
+    if not result:
+        raise ValueError(f"Trip leg not found: {leg_id}")
+    return result
+
+
+def delete_ifta_trip_leg(leg_id: str) -> bool:
+    return store.delete_ifta_trip_leg(leg_id)
+
+
+def list_ifta_trip_legs(**kwargs) -> list[dict]:
+    return store.list_ifta_trip_legs(**kwargs)
+
+
+def add_ifta_fuel_purchase(
+    jurisdiction: str,
+    gallons: float,
+    amount: float,
+    date: str = "",
+    vehicle_id: str = "",
+    vendor: str = "",
+    notes: str = "",
+) -> dict:
+    if jurisdiction not in IFTA_JURISDICTIONS:
+        raise ValueError(f"Invalid jurisdiction: {jurisdiction}")
+    if gallons < 0:
+        raise ValueError("Gallons must be non-negative")
+    if amount < 0:
+        raise ValueError("Amount must be non-negative")
+    purchase = IFTAFuelPurchase(
+        jurisdiction=jurisdiction,
+        gallons=gallons,
+        amount=amount,
+        date=date,
+        vehicle_id=vehicle_id,
+        vendor=vendor,
+        notes=notes,
+    )
+    return store.create_ifta_fuel_purchase(purchase)
+
+
+def update_ifta_fuel_purchase(purchase_id: str, **kwargs) -> dict:
+    existing = store.get_ifta_fuel_purchase(purchase_id)
+    if not existing:
+        raise ValueError(f"Fuel purchase not found: {purchase_id}")
+    allowed = {"jurisdiction", "gallons", "amount", "date", "vehicle_id", "vendor", "notes"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+    if "jurisdiction" in updates:
+        if updates["jurisdiction"] not in IFTA_JURISDICTIONS:
+            raise ValueError(f"Invalid jurisdiction: {updates['jurisdiction']}")
+    if not updates:
+        return existing
+    result = store.update_ifta_fuel_purchase(purchase_id, updates)
+    if not result:
+        raise ValueError(f"Fuel purchase not found: {purchase_id}")
+    return result
+
+
+def delete_ifta_fuel_purchase(purchase_id: str) -> bool:
+    return store.delete_ifta_fuel_purchase(purchase_id)
+
+
+def list_ifta_fuel_purchases(**kwargs) -> list[dict]:
+    return store.list_ifta_fuel_purchases(**kwargs)
+
+
+def _quarter_date_range(year: int, quarter: int) -> tuple[str, str]:
+    starts = {1: "01-01", 2: "04-01", 3: "07-01", 4: "10-01"}
+    ends = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
+    return f"{year}-{starts[quarter]}", f"{year}-{ends[quarter]}"
+
+
+def get_ifta_quarterly_report(year: int, quarter: int, vehicle_id: str = "") -> dict:
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+
+    date_from, date_to = _quarter_date_range(year, quarter)
+    leg_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    fuel_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if vehicle_id:
+        leg_kwargs["vehicle_id"] = vehicle_id
+        fuel_kwargs["vehicle_id"] = vehicle_id
+
+    legs = store.list_ifta_trip_legs(**leg_kwargs)
+    purchases = store.list_ifta_fuel_purchases(**fuel_kwargs)
+
+    miles_by_jur: dict[str, float] = {}
+    for leg in legs:
+        j = leg["jurisdiction"]
+        miles_by_jur[j] = miles_by_jur.get(j, 0) + leg["miles"]
+
+    fuel_by_jur: dict[str, dict] = {}
+    for p in purchases:
+        j = p["jurisdiction"]
+        if j not in fuel_by_jur:
+            fuel_by_jur[j] = {"gallons": 0.0, "amount": 0.0}
+        fuel_by_jur[j]["gallons"] += p["gallons"]
+        fuel_by_jur[j]["amount"] += p["amount"]
+
+    total_miles = sum(miles_by_jur.values())
+    total_gallons = sum(f["gallons"] for f in fuel_by_jur.values())
+    fleet_mpg = round(total_miles / total_gallons, 4) if total_gallons > 0 else 0.0
+
+    all_jurs = sorted(set(list(miles_by_jur.keys()) + list(fuel_by_jur.keys())))
+    jurisdictions = []
+    for j in all_jurs:
+        miles = round(miles_by_jur.get(j, 0), 2)
+        fuel = fuel_by_jur.get(j, {"gallons": 0.0, "amount": 0.0})
+        taxable_gallons = round(miles / fleet_mpg, 4) if fleet_mpg > 0 else 0.0
+        net_taxable = round(taxable_gallons - fuel["gallons"], 4)
+        jurisdictions.append({
+            "jurisdiction": j,
+            "miles": miles,
+            "fuel_gallons": round(fuel["gallons"], 4),
+            "fuel_amount": round(fuel["amount"], 2),
+            "taxable_gallons": taxable_gallons,
+            "net_taxable_gallons": net_taxable,
+        })
+
+    return {
+        "year": year,
+        "quarter": quarter,
+        "quarter_label": f"Q{quarter} {year}",
+        "date_from": date_from,
+        "date_to": date_to,
+        "vehicle_id": vehicle_id,
+        "total_miles": round(total_miles, 2),
+        "total_gallons": round(total_gallons, 4),
+        "fleet_mpg": fleet_mpg,
+        "jurisdictions": jurisdictions,
+        "trip_leg_count": len(legs),
+        "fuel_purchase_count": len(purchases),
+    }

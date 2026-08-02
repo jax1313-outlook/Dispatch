@@ -21,6 +21,7 @@ from dispatch.models import (
     EVIDENCE_TYPES,
     EXCEPTION_STATUSES,
     EXCEPTION_TYPES,
+    IFTA_JURISDICTIONS,
     SEVERITY_LEVELS,
     ACTIVITY_TYPES,
     EXPENSE_CATEGORIES,
@@ -1346,3 +1347,120 @@ def delete_detention(detention_id):
 @dispatch_bp.route("/detentions/summary", methods=["GET"])
 def detention_summary():
     return jsonify(services.get_detention_summary())
+
+
+# ── IFTA Trip Legs ─────────────────────────────────────────────────
+
+
+@dispatch_bp.route("/ifta/trip-legs", methods=["GET"])
+def list_ifta_trip_legs():
+    kwargs = {}
+    for key in ("date_from", "date_to", "jurisdiction", "vehicle_id", "load_id"):
+        val = request.args.get(key)
+        if val:
+            kwargs[key] = val
+    return jsonify(services.list_ifta_trip_legs(**kwargs))
+
+
+@dispatch_bp.route("/ifta/trip-legs", methods=["POST"])
+def add_ifta_trip_leg():
+    data = request.get_json(force=True)
+    try:
+        result = services.add_ifta_trip_leg(
+            jurisdiction=data.get("jurisdiction", ""),
+            miles=float(data.get("miles", 0)),
+            date=data.get("date", ""),
+            vehicle_id=data.get("vehicle_id", ""),
+            load_id=data.get("load_id", ""),
+            notes=data.get("notes", ""),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result), 201
+
+
+@dispatch_bp.route("/ifta/trip-legs/<leg_id>", methods=["PATCH"])
+def update_ifta_trip_leg(leg_id):
+    data = request.get_json(force=True)
+    try:
+        result = services.update_ifta_trip_leg(leg_id, **data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)
+
+
+@dispatch_bp.route("/ifta/trip-legs/<leg_id>", methods=["DELETE"])
+def delete_ifta_trip_leg(leg_id):
+    ok = services.delete_ifta_trip_leg(leg_id)
+    if not ok:
+        return jsonify({"error": "trip leg not found"}), 404
+    return jsonify({"status": "ok"})
+
+
+# ── IFTA Fuel Purchases ───────────────────────────────────────────
+
+
+@dispatch_bp.route("/ifta/fuel-purchases", methods=["GET"])
+def list_ifta_fuel_purchases():
+    kwargs = {}
+    for key in ("date_from", "date_to", "jurisdiction", "vehicle_id"):
+        val = request.args.get(key)
+        if val:
+            kwargs[key] = val
+    return jsonify(services.list_ifta_fuel_purchases(**kwargs))
+
+
+@dispatch_bp.route("/ifta/fuel-purchases", methods=["POST"])
+def add_ifta_fuel_purchase():
+    data = request.get_json(force=True)
+    try:
+        result = services.add_ifta_fuel_purchase(
+            jurisdiction=data.get("jurisdiction", ""),
+            gallons=float(data.get("gallons", 0)),
+            amount=float(data.get("amount", 0)),
+            date=data.get("date", ""),
+            vehicle_id=data.get("vehicle_id", ""),
+            vendor=data.get("vendor", ""),
+            notes=data.get("notes", ""),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result), 201
+
+
+@dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>", methods=["PATCH"])
+def update_ifta_fuel_purchase(purchase_id):
+    data = request.get_json(force=True)
+    try:
+        result = services.update_ifta_fuel_purchase(purchase_id, **data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)
+
+
+@dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>", methods=["DELETE"])
+def delete_ifta_fuel_purchase(purchase_id):
+    ok = services.delete_ifta_fuel_purchase(purchase_id)
+    if not ok:
+        return jsonify({"error": "fuel purchase not found"}), 404
+    return jsonify({"status": "ok"})
+
+
+# ── IFTA Quarterly Report ─────────────────────────────────────────
+
+
+@dispatch_bp.route("/ifta/report", methods=["GET"])
+def ifta_quarterly_report():
+    try:
+        year = int(request.args.get("year", 0))
+        quarter = int(request.args.get("quarter", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "year and quarter must be integers"}), 400
+    if not year or not quarter:
+        return jsonify({"error": "year and quarter are required"}), 400
+    vehicle_id = request.args.get("vehicle_id", "")
+    try:
+        report = services.get_ifta_quarterly_report(year, quarter, vehicle_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(report)

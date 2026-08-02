@@ -13,6 +13,8 @@ from dispatch.models import (
     EvidenceItem,
     ExceptionNotice,
     Expense,
+    IFTAFuelPurchase,
+    IFTATripLeg,
     Load,
     LoadActivity,
     LoadVisibilityRecord,
@@ -1271,3 +1273,157 @@ def list_uninvoiced_loads() -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(sql).fetchall()
     return [dict_from_row(r) for r in rows]
+
+
+# ── IFTA Trip Legs ─────────────────────────────────────────────────
+
+def create_ifta_trip_leg(leg: IFTATripLeg) -> dict:
+    d = leg.to_dict()
+    cols = ", ".join(d.keys())
+    placeholders = ", ".join("?" for _ in d)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO ifta_trip_legs ({cols}) VALUES ({placeholders})",
+            list(d.values()),
+        )
+    return d
+
+
+def get_ifta_trip_leg(leg_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ifta_trip_legs WHERE leg_id = ?", (leg_id,)
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_ifta_trip_legs(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    jurisdiction: str | None = None,
+    vehicle_id: str | None = None,
+    load_id: str | None = None,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list[str] = []
+    if date_from:
+        clauses.append("date >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("date <= ?")
+        params.append(date_to)
+    if jurisdiction:
+        clauses.append("jurisdiction = ?")
+        params.append(jurisdiction)
+    if vehicle_id:
+        clauses.append("vehicle_id = ?")
+        params.append(vehicle_id)
+    if load_id:
+        clauses.append("load_id = ?")
+        params.append(load_id)
+    where = " AND ".join(clauses) if clauses else "1=1"
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM ifta_trip_legs WHERE {where} ORDER BY date DESC",
+            params,
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def update_ifta_trip_leg(leg_id: str, updates: dict) -> dict | None:
+    existing = get_ifta_trip_leg(leg_id)
+    if not existing:
+        return None
+    sets = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [leg_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE ifta_trip_legs SET {sets} WHERE leg_id = ?", vals
+        )
+    return get_ifta_trip_leg(leg_id)
+
+
+def delete_ifta_trip_leg(leg_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM ifta_trip_legs WHERE leg_id = ?", (leg_id,)
+        )
+    return cur.rowcount > 0
+
+
+# ── IFTA Fuel Purchases ───────────────────────────────────────────
+
+def create_ifta_fuel_purchase(purchase: IFTAFuelPurchase) -> dict:
+    d = purchase.to_dict()
+    d.pop("price_per_gallon", None)
+    cols = ", ".join(d.keys())
+    placeholders = ", ".join("?" for _ in d)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO ifta_fuel_purchases ({cols}) VALUES ({placeholders})",
+            list(d.values()),
+        )
+    return purchase.to_dict()
+
+
+def get_ifta_fuel_purchase(purchase_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ifta_fuel_purchases WHERE purchase_id = ?",
+            (purchase_id,),
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    return IFTAFuelPurchase(**d).to_dict()
+
+
+def list_ifta_fuel_purchases(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    jurisdiction: str | None = None,
+    vehicle_id: str | None = None,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list[str] = []
+    if date_from:
+        clauses.append("date >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("date <= ?")
+        params.append(date_to)
+    if jurisdiction:
+        clauses.append("jurisdiction = ?")
+        params.append(jurisdiction)
+    if vehicle_id:
+        clauses.append("vehicle_id = ?")
+        params.append(vehicle_id)
+    where = " AND ".join(clauses) if clauses else "1=1"
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM ifta_fuel_purchases WHERE {where} ORDER BY date DESC",
+            params,
+        ).fetchall()
+    return [IFTAFuelPurchase(**dict_from_row(r)).to_dict() for r in rows]
+
+
+def delete_ifta_fuel_purchase(purchase_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM ifta_fuel_purchases WHERE purchase_id = ?",
+            (purchase_id,),
+        )
+    return cur.rowcount > 0
+
+
+def update_ifta_fuel_purchase(purchase_id: str, updates: dict) -> dict | None:
+    existing = get_ifta_fuel_purchase(purchase_id)
+    if not existing:
+        return None
+    sets = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [purchase_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE ifta_fuel_purchases SET {sets} WHERE purchase_id = ?", vals
+        )
+    return get_ifta_fuel_purchase(purchase_id)

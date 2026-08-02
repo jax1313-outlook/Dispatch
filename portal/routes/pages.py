@@ -230,6 +230,34 @@ def load_calendar():
     )
 
 
+@pages_bp.route("/ifta")
+def ifta():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import IFTA_JURISDICTIONS
+    from datetime import date
+
+    today = date.today()
+    try:
+        year = int(request.args.get("year", today.year))
+        quarter = int(request.args.get("quarter", (today.month - 1) // 3 + 1))
+    except (ValueError, TypeError):
+        year = today.year
+        quarter = (today.month - 1) // 3 + 1
+
+    vehicle_id = request.args.get("vehicle_id", "")
+    report = dispatch_svc.get_ifta_quarterly_report(year, quarter, vehicle_id)
+    equipment = dispatch_svc.list_equipment(status="active")
+    return render_template(
+        "ifta.html",
+        report=report,
+        jurisdictions=IFTA_JURISDICTIONS,
+        equipment=equipment,
+        sel_year=year,
+        sel_quarter=quarter,
+        sel_vehicle=vehicle_id,
+    )
+
+
 @pages_bp.route("/fleet")
 def fleet():
     from dispatch import services as dispatch_svc
