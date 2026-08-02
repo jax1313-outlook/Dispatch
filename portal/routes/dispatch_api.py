@@ -163,6 +163,12 @@ def load_bundle(load_id):
 
 # ── Stalled Loads ─────────────────────────────────────────────────────
 
+@dispatch_bp.route("/charts", methods=["GET"])
+def chart_data():
+    data = services.get_chart_data()
+    return jsonify(data)
+
+
 @dispatch_bp.route("/loads/stalled", methods=["GET"])
 def stalled_loads():
     stalled = services.check_stalled_loads()

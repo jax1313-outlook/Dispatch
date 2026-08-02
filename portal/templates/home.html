@@ -74,6 +74,60 @@
 </div>
 {% endif %}
 
+{# ── Dashboard Charts ─────────────────────────────────────────────── #}
+{% if chart_data and chart_data.loads_by_status %}
+<div class="card-section">
+    <h2>Load Overview</h2>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+
+        {# ── Loads by Status (horizontal bar chart) ─── #}
+        <div style="flex:1;min-width:280px;">
+            <h3 style="font-size:14px;color:#7f8c8d;margin-bottom:8px;">Loads by Status</h3>
+            {% set status_colors = {
+                'created': '#3498db', 'dispatched': '#2980b9', 'en_route_pickup': '#8e44ad',
+                'at_pickup': '#9b59b6', 'picked_up': '#e67e22', 'in_transit': '#f39c12',
+                'at_delivery': '#27ae60', 'delivered': '#2ecc71', 'completed': '#1abc9c',
+                'archived': '#7f8c8d', 'cancelled': '#e74c3c'
+            } %}
+            {% set max_count = chart_data.loads_by_status.values()|max if chart_data.loads_by_status else 1 %}
+            {% for status, count in chart_data.loads_by_status.items() %}
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <span style="width:100px;font-size:12px;text-align:right;color:#555;">{{ status|replace('_', ' ') }}</span>
+                <div style="flex:1;background:#f0f0f0;border-radius:3px;height:20px;position:relative;">
+                    <div style="width:{{ (count / max_count * 100)|round }}%;background:{{ status_colors.get(status, '#95a5a6') }};height:100%;border-radius:3px;min-width:2px;"></div>
+                </div>
+                <span style="width:30px;font-size:12px;font-weight:700;color:#333;">{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# ── Revenue by Month (bar chart) ─── #}
+        {% if chart_data.monthly_revenue %}
+        <div style="flex:1;min-width:280px;">
+            <h3 style="font-size:14px;color:#7f8c8d;margin-bottom:8px;">Monthly Revenue</h3>
+            {% set max_rev = chart_data.monthly_revenue|map(attribute='revenue')|max if chart_data.monthly_revenue else 1 %}
+            {% set chart_height = 120 %}
+            {% set bar_count = chart_data.monthly_revenue|length %}
+            {% set bar_width = ([40, (260 / (bar_count if bar_count > 0 else 1))|round|int]|min) %}
+            <svg width="100%" viewBox="0 0 {{ bar_count * (bar_width + 8) + 20 }} {{ chart_height + 30 }}" style="max-width:400px;">
+                {% for item in chart_data.monthly_revenue %}
+                {% set bar_h = (item.revenue / max_rev * chart_height)|round|int if max_rev > 0 else 0 %}
+                {% set x = loop.index0 * (bar_width + 8) + 10 %}
+                <rect x="{{ x }}" y="{{ chart_height - bar_h }}" width="{{ bar_width }}" height="{{ bar_h }}"
+                      fill="#27ae60" rx="2" opacity="0.85"/>
+                <text x="{{ x + bar_width / 2 }}" y="{{ chart_height + 14 }}" text-anchor="middle"
+                      font-size="9" fill="#666">{{ item.month[5:] if item.month|length >= 7 else item.month }}</text>
+                <text x="{{ x + bar_width / 2 }}" y="{{ chart_height - bar_h - 4 }}" text-anchor="middle"
+                      font-size="9" fill="#333" font-weight="600">${{ "%.0f"|format(item.revenue) }}</text>
+                {% endfor %}
+            </svg>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endif %}
+
 {% if stalled_loads %}
 <div class="card-section" id="stalled-alert">
     <div style="display:flex;align-items:center;justify-content:space-between;">

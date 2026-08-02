@@ -814,6 +814,38 @@ def get_financial_dashboard() -> dict:
     }
 
 
+def get_chart_data() -> dict:
+    """Aggregate data for dashboard charts: loads by status, revenue by month."""
+    from collections import defaultdict
+
+    all_loads = store.list_loads()
+
+    status_counts: dict[str, int] = defaultdict(int)
+    for load in all_loads:
+        status_counts[load["status"]] += 1
+
+    monthly_revenue: dict[str, float] = defaultdict(float)
+    monthly_loads: dict[str, int] = defaultdict(int)
+    for load in all_loads:
+        rate = store.get_rate_confirmation(load["load_id"])
+        created = load.get("created_at", "")
+        month_key = created[:7] if len(created) >= 7 else "unknown"
+        monthly_loads[month_key] += 1
+        if rate:
+            monthly_revenue[month_key] += rate["revenue"]
+
+    months_sorted = sorted(set(monthly_revenue.keys()) | set(monthly_loads.keys()))
+
+    return {
+        "loads_by_status": dict(status_counts),
+        "monthly_revenue": [
+            {"month": m, "revenue": round(monthly_revenue.get(m, 0), 2),
+             "loads": monthly_loads.get(m, 0)}
+            for m in months_sorted
+        ],
+    }
+
+
 def check_overdue_settlements() -> list[dict]:
     """Scan invoiced settlements and mark overdue if past due date.
 
