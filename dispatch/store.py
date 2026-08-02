@@ -13,6 +13,7 @@ from dispatch.models import (
     EvidenceItem,
     ExceptionNotice,
     Expense,
+    BrokerContact,
     IFTAFuelPurchase,
     IFTATripLeg,
     Load,
@@ -1427,3 +1428,91 @@ def update_ifta_fuel_purchase(purchase_id: str, updates: dict) -> dict | None:
             f"UPDATE ifta_fuel_purchases SET {sets} WHERE purchase_id = ?", vals
         )
     return get_ifta_fuel_purchase(purchase_id)
+
+
+# ── Broker Contacts ──────────────────────────────────────────────────
+
+
+def create_broker_contact(broker: BrokerContact) -> dict:
+    d = broker.to_dict()
+    cols = ", ".join(d.keys())
+    placeholders = ", ".join("?" for _ in d)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO broker_contacts ({cols}) VALUES ({placeholders})",
+            list(d.values()),
+        )
+    return d
+
+
+def get_broker_contact(broker_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM broker_contacts WHERE broker_id = ?", (broker_id,)
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_broker_contacts(
+    status: str | None = None,
+    search: str | None = None,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list[str] = []
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+    if search:
+        clauses.append(
+            "(company_name LIKE ? OR contact_name LIKE ? OR mc_number LIKE ? "
+            "OR phone LIKE ? OR email LIKE ?)"
+        )
+        q = f"%{search}%"
+        params.extend([q, q, q, q, q])
+    where = " AND ".join(clauses) if clauses else "1=1"
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM broker_contacts WHERE {where} ORDER BY company_name",
+            params,
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def update_broker_contact(broker_id: str, updates: dict) -> dict | None:
+    existing = get_broker_contact(broker_id)
+    if not existing:
+        return None
+    allowed = {
+        "company_name", "contact_name", "phone", "email",
+        "mc_number", "dot_number", "address", "payment_terms",
+        "notes", "status", "updated_at",
+    }
+    filtered = {k: v for k, v in updates.items() if k in allowed}
+    if not filtered:
+        return existing
+    from dispatch.models import _utc_now
+    filtered["updated_at"] = _utc_now()
+    sets = ", ".join(f"{k} = ?" for k in filtered)
+    vals = list(filtered.values()) + [broker_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE broker_contacts SET {sets} WHERE broker_id = ?", vals
+        )
+    return get_broker_contact(broker_id)
+
+
+def delete_broker_contact(broker_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM broker_contacts WHERE broker_id = ?", (broker_id,)
+        )
+    return cur.rowcount > 0
+
+
+def find_broker_by_name(company_name: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM broker_contacts WHERE company_name = ?",
+            (company_name,),
+        ).fetchone()
+    return dict_from_row(row) if row else None

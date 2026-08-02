@@ -255,6 +255,26 @@ CREATE TABLE IF NOT EXISTS ifta_fuel_purchases (
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_date ON ifta_fuel_purchases(date);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_jurisdiction ON ifta_fuel_purchases(jurisdiction);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_vehicle ON ifta_fuel_purchases(vehicle_id);
+
+CREATE TABLE IF NOT EXISTS broker_contacts (
+    broker_id       TEXT PRIMARY KEY,
+    company_name    TEXT NOT NULL,
+    contact_name    TEXT NOT NULL DEFAULT '',
+    phone           TEXT NOT NULL DEFAULT '',
+    email           TEXT NOT NULL DEFAULT '',
+    mc_number       TEXT NOT NULL DEFAULT '',
+    dot_number      TEXT NOT NULL DEFAULT '',
+    address         TEXT NOT NULL DEFAULT '',
+    payment_terms   TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'active',
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_broker_contacts_company ON broker_contacts(company_name);
+CREATE INDEX IF NOT EXISTS idx_broker_contacts_mc ON broker_contacts(mc_number);
+CREATE INDEX IF NOT EXISTS idx_broker_contacts_status ON broker_contacts(status);
 """
 
 

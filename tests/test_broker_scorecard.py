@@ -152,7 +152,7 @@ class TestBrokerScorecardPage:
         resp = client.get("/brokers")
         assert resp.status_code == 200
         html = resp.data.decode()
-        assert "Broker Scorecard" in html
+        assert "Broker Directory" in html
         assert "PageBrk" in html
 
     def test_empty_state(self, client):

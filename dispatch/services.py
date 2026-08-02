@@ -7,10 +7,12 @@ Business logic for the full load lifecycle: create -> dispatch -> pickup
 from __future__ import annotations
 
 from dispatch.models import (
+    BROKER_STATUSES,
     EXCEPTION_STATUSES,
     IFTA_JURISDICTIONS,
     LOAD_SOURCES,
     LOAD_STATUSES,
+    BrokerContact,
     DetentionEvent,
     Driver,
     Equipment,
@@ -1634,3 +1636,79 @@ def get_ifta_quarterly_report(year: int, quarter: int, vehicle_id: str = "") -> 
         "trip_leg_count": len(legs),
         "fuel_purchase_count": len(purchases),
     }
+
+
+# ── Broker Contact Directory ─────────────────────────────────────────
+
+
+def add_broker_contact(
+    company_name: str,
+    contact_name: str = "",
+    phone: str = "",
+    email: str = "",
+    mc_number: str = "",
+    dot_number: str = "",
+    address: str = "",
+    payment_terms: str = "",
+    notes: str = "",
+    status: str = "active",
+) -> dict:
+    if not company_name.strip():
+        raise ValueError("Company name is required")
+    if status not in BROKER_STATUSES:
+        raise ValueError(f"Invalid status: {status!r}")
+    existing = store.find_broker_by_name(company_name.strip())
+    if existing:
+        raise ValueError(f"Broker '{company_name}' already exists")
+    broker = BrokerContact(
+        company_name=company_name.strip(),
+        contact_name=contact_name,
+        phone=phone,
+        email=email,
+        mc_number=mc_number,
+        dot_number=dot_number,
+        address=address,
+        payment_terms=payment_terms,
+        notes=notes,
+        status=status,
+    )
+    return store.create_broker_contact(broker)
+
+
+def get_broker_contact(broker_id: str) -> dict | None:
+    return store.get_broker_contact(broker_id)
+
+
+def list_broker_contacts(**kwargs) -> list[dict]:
+    return store.list_broker_contacts(**kwargs)
+
+
+def update_broker_contact(broker_id: str, updates: dict) -> dict | None:
+    existing = store.get_broker_contact(broker_id)
+    if not existing:
+        return None
+    if "status" in updates and updates["status"] not in BROKER_STATUSES:
+        raise ValueError(f"Invalid status: {updates['status']!r}")
+    if "company_name" in updates:
+        name = updates["company_name"].strip()
+        if not name:
+            raise ValueError("Company name is required")
+        dup = store.find_broker_by_name(name)
+        if dup and dup["broker_id"] != broker_id:
+            raise ValueError(f"Broker '{name}' already exists")
+        updates["company_name"] = name
+    return store.update_broker_contact(broker_id, updates)
+
+
+def delete_broker_contact(broker_id: str) -> bool:
+    return store.delete_broker_contact(broker_id)
+
+
+def get_broker_contact_with_stats(broker_id: str) -> dict | None:
+    broker = store.get_broker_contact(broker_id)
+    if not broker:
+        return None
+    loads = store.get_broker_loads(broker["company_name"])
+    broker["load_count"] = len(loads)
+    broker["loads"] = loads[:10]
+    return broker
