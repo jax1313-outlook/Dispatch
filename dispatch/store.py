@@ -686,6 +686,51 @@ def list_equipment(
     return [dict_from_row(r) for r in rows]
 
 
+_TERMINAL_STATUSES = ("completed", "archived", "cancelled")
+
+
+def get_active_load_for_driver(driver_id: str) -> dict | None:
+    placeholders = ",".join("?" for _ in _TERMINAL_STATUSES)
+    sql = (
+        f"SELECT * FROM loads WHERE driver_id=? AND status NOT IN ({placeholders}) "
+        "ORDER BY updated_at DESC LIMIT 1"
+    )
+    with get_connection() as conn:
+        row = conn.execute(sql, (driver_id, *_TERMINAL_STATUSES)).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def get_active_load_for_equipment(equipment_id: str) -> dict | None:
+    placeholders = ",".join("?" for _ in _TERMINAL_STATUSES)
+    sql = (
+        f"SELECT * FROM loads WHERE equipment_id=? AND status NOT IN ({placeholders}) "
+        "ORDER BY updated_at DESC LIMIT 1"
+    )
+    with get_connection() as conn:
+        row = conn.execute(sql, (equipment_id, *_TERMINAL_STATUSES)).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def get_fleet_assignments() -> dict:
+    placeholders = ",".join("?" for _ in _TERMINAL_STATUSES)
+    sql = (
+        f"SELECT load_id, driver_id, equipment_id, customer, status "
+        f"FROM loads WHERE status NOT IN ({placeholders}) "
+        "AND (driver_id != '' OR equipment_id != '')"
+    )
+    with get_connection() as conn:
+        rows = conn.execute(sql, _TERMINAL_STATUSES).fetchall()
+    driver_loads: dict[str, dict] = {}
+    equip_loads: dict[str, dict] = {}
+    for row in rows:
+        r = dict_from_row(row)
+        if r["driver_id"]:
+            driver_loads[r["driver_id"]] = r
+        if r["equipment_id"]:
+            equip_loads[r["equipment_id"]] = r
+    return {"driver_loads": driver_loads, "equipment_loads": equip_loads}
+
+
 def update_equipment(equipment_id: str, **fields) -> dict | None:
     existing = get_equipment(equipment_id)
     if not existing:
