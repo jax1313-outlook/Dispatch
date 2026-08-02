@@ -94,6 +94,19 @@ def update_load(load_id):
     return jsonify({"status": "ok", "load": result})
 
 
+@dispatch_bp.route("/loads/<load_id>", methods=["DELETE"])
+def delete_load(load_id):
+    try:
+        deleted = services.delete_load(load_id)
+    except ValueError as e:
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 400
+        return jsonify({"error": msg}), status
+    if not deleted:
+        return jsonify({"error": f"Load {load_id} not found"}), 404
+    return jsonify({"status": "ok", "deleted": True})
+
+
 @dispatch_bp.route("/loads/<load_id>/bundle", methods=["GET"])
 def load_bundle(load_id):
     bundle = services.get_load_bundle(load_id)

@@ -100,7 +100,14 @@ def update_load(load_id: str, **fields) -> dict | None:
 
 
 def delete_load(load_id: str) -> bool:
+    _CHILD_TABLES = [
+        "visibility", "milestones", "evidence", "exceptions",
+        "pod_packages", "retention", "rate_confirmations",
+        "expenses", "settlements",
+    ]
     with get_connection() as conn:
+        for table in _CHILD_TABLES:
+            conn.execute(f"DELETE FROM {table} WHERE load_id=?", (load_id,))
         cur = conn.execute("DELETE FROM loads WHERE load_id=?", (load_id,))
     return cur.rowcount > 0
 

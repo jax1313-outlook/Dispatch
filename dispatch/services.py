@@ -151,6 +151,21 @@ def update_load(load_id: str, **fields) -> dict | None:
     return store.update_load(load_id, **fields)
 
 
+_DELETABLE_STATUSES = {"created", "cancelled"}
+
+
+def delete_load(load_id: str) -> bool:
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+    if load["status"] not in _DELETABLE_STATUSES:
+        raise ValueError(
+            f"Cannot delete load in status '{load['status']}'. "
+            f"Only loads in {sorted(_DELETABLE_STATUSES)} can be deleted."
+        )
+    return store.delete_load(load_id)
+
+
 def assign_driver(load_id: str, driver_id: str) -> dict | None:
     """Assign an active driver to a load."""
     load = store.get_load(load_id)
