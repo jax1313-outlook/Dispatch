@@ -137,6 +137,8 @@ class Load:
     delivery_datetime: str = ""
     equipment: str = ""
     driver: str = ""
+    driver_id: str = ""
+    equipment_id: str = ""
     status: str = "created"
     notes: str = ""
     created_at: str = ""

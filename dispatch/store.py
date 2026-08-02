@@ -29,12 +29,14 @@ def create_load(load: Load) -> dict:
             """INSERT INTO loads
                (load_id, customer, broker_shipper, pickup_location,
                 delivery_location, pickup_datetime, delivery_datetime,
-                equipment, driver, status, notes, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                equipment, driver, driver_id, equipment_id,
+                status, notes, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (load.load_id, load.customer, load.broker_shipper,
              load.pickup_location, load.delivery_location,
              load.pickup_datetime, load.delivery_datetime,
-             load.equipment, load.driver, load.status,
+             load.equipment, load.driver, load.driver_id,
+             load.equipment_id, load.status,
              load.notes, load.created_at, load.updated_at),
         )
     return load.to_dict()
@@ -66,7 +68,7 @@ def update_load(load_id: str, **fields) -> dict | None:
     allowed = {
         "customer", "broker_shipper", "pickup_location", "delivery_location",
         "pickup_datetime", "delivery_datetime", "equipment", "driver",
-        "status", "notes", "updated_at",
+        "driver_id", "equipment_id", "status", "notes", "updated_at",
     }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
