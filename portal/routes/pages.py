@@ -194,6 +194,13 @@ def dispatch_detail(load_id):
     )
 
 
+@pages_bp.route("/brokers")
+def brokers():
+    from dispatch import services as dispatch_svc
+    scorecards = dispatch_svc.get_broker_scorecards()
+    return render_template("brokers.html", scorecards=scorecards)
+
+
 @pages_bp.route("/fleet")
 def fleet():
     from dispatch import services as dispatch_svc

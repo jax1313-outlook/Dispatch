@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Brokers — L2-COS Portal{% endblock %}
+{% block page_title %}Broker Scorecard{% endblock %}
+
+{% block body %}
+
+{% if scorecards %}
+<div class="dashboard-summary">
+    <div class="summary-card">
+        <span class="summary-number">{{ scorecards|length }}</span>
+        <span class="summary-label">Active Brokers</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #27ae60;">
+        <span class="summary-number">{{ scorecards|map(attribute='total_loads')|sum }}</span>
+        <span class="summary-label">Total Loads</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #2980b9;">
+        <span class="summary-number">${{ "%.0f"|format(scorecards|map(attribute='total_revenue')|sum) }}</span>
+        <span class="summary-label">Total Revenue</span>
+    </div>
+</div>
+
+<div class="card-section">
+    <h2>Broker Performance</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Broker / Shipper</th>
+                <th>Loads</th>
+                <th>Completed</th>
+                <th>Completion %</th>
+                <th>Revenue</th>
+                <th>Avg Rate</th>
+                <th>Paid</th>
+                <th>Overdue</th>
+                <th>Payment %</th>
+                <th>First Load</th>
+                <th>Last Load</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in scorecards %}
+            <tr>
+                <td style="font-weight:600;">{{ b.broker_shipper }}</td>
+                <td>{{ b.total_loads }}</td>
+                <td>{{ b.completed_loads }}</td>
+                <td>
+                    <span style="color:{% if b.completion_rate >= 80 %}#27ae60{% elif b.completion_rate >= 50 %}#f39c12{% else %}#e74c3c{% endif %};font-weight:600;">
+                        {{ b.completion_rate }}%
+                    </span>
+                </td>
+                <td>${{ "%.0f"|format(b.total_revenue) }}</td>
+                <td>${{ "%.0f"|format(b.avg_rate) }}</td>
+                <td>{{ b.paid_count }}</td>
+                <td>
+                    {% if b.overdue_count > 0 %}
+                    <span style="color:#e74c3c;font-weight:600;">{{ b.overdue_count }}</span>
+                    {% else %}
+                    {{ b.overdue_count }}
+                    {% endif %}
+                </td>
+                <td>
+                    <span style="color:{% if b.payment_reliability >= 80 %}#27ae60{% elif b.payment_reliability >= 50 %}#f39c12{% else %}#e74c3c{% endif %};font-weight:600;">
+                        {{ b.payment_reliability }}%
+                    </span>
+                </td>
+                <td>{{ b.first_load_date[:10] if b.first_load_date else '—' }}</td>
+                <td>{{ b.last_load_date[:10] if b.last_load_date else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No broker data yet. Create loads with a broker/shipper name to build scorecards.</p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1068,6 +1068,65 @@ def increment_lane_template_usage(template_id: str) -> None:
         )
 
 
+# ── Broker Scorecard ────────────────────────────────────────────────
+
+
+def get_broker_scorecards() -> list[dict]:
+    sql = """\
+    SELECT
+        l.broker_shipper,
+        COUNT(*) AS total_loads,
+        SUM(CASE WHEN l.status IN ('completed','archived') THEN 1 ELSE 0 END) AS completed_loads,
+        SUM(CASE WHEN l.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_loads,
+        COALESCE(SUM(
+            CASE WHEN rc.rate_type = 'per_mile' THEN rc.rate_amount * rc.distance_miles
+                 ELSE rc.rate_amount END
+        ), 0) AS total_revenue,
+        CASE WHEN COUNT(rc.confirmation_id) > 0
+             THEN ROUND(SUM(
+                 CASE WHEN rc.rate_type = 'per_mile' THEN rc.rate_amount * rc.distance_miles
+                      ELSE rc.rate_amount END
+             ) / COUNT(rc.confirmation_id), 2)
+             ELSE 0 END AS avg_rate,
+        COUNT(rc.confirmation_id) AS loads_with_rate,
+        SUM(CASE WHEN s.payment_status = 'paid' THEN 1 ELSE 0 END) AS paid_count,
+        SUM(CASE WHEN s.payment_status = 'overdue' THEN 1 ELSE 0 END) AS overdue_count,
+        SUM(CASE WHEN s.payment_status = 'disputed' THEN 1 ELSE 0 END) AS disputed_count,
+        MIN(l.created_at) AS first_load_date,
+        MAX(l.created_at) AS last_load_date
+    FROM loads l
+    LEFT JOIN rate_confirmations rc ON rc.load_id = l.load_id
+    LEFT JOIN settlements s ON s.load_id = l.load_id
+    WHERE l.broker_shipper != ''
+    GROUP BY l.broker_shipper
+    ORDER BY total_loads DESC
+    """
+    with get_connection() as conn:
+        rows = conn.execute(sql).fetchall()
+    results = []
+    for row in rows:
+        d = dict(row)
+        total = d["total_loads"]
+        completed = d["completed_loads"]
+        paid = d["paid_count"]
+        overdue = d["overdue_count"]
+        disputed = d["disputed_count"]
+        settled = paid + overdue + disputed
+        d["completion_rate"] = round(completed / total * 100, 1) if total else 0
+        d["payment_reliability"] = round(paid / settled * 100, 1) if settled else 0
+        results.append(d)
+    return results
+
+
+def get_broker_loads(broker_shipper: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM loads WHERE broker_shipper=? ORDER BY created_at DESC",
+            (broker_shipper,),
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
 # ── Global Search ────────────────────────────────────────────────────
 
 def global_search(query: str, limit: int = 50) -> dict:

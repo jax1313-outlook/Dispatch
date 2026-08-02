@@ -1268,6 +1268,24 @@ def create_load_from_template(template_id: str) -> dict | None:
     return load
 
 
+# ── Broker Scorecard ────────────────────────────────────────────────
+
+
+def get_broker_scorecards() -> list[dict]:
+    return store.get_broker_scorecards()
+
+
+def get_broker_detail(broker_name: str) -> dict:
+    loads = store.get_broker_loads(broker_name)
+    for ld in loads:
+        rate = store.get_rate_confirmation(ld["load_id"])
+        ld["rate_amount"] = rate["rate_amount"] if rate else None
+        ld["revenue"] = rate["revenue"] if rate else None
+        settlement = store.get_settlement(ld["load_id"])
+        ld["payment_status"] = settlement["payment_status"] if settlement else None
+    return {"broker": broker_name, "loads": loads}
+
+
 def global_search(query: str) -> dict:
     return store.global_search(query)
 
