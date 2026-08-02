@@ -144,6 +144,15 @@ def delete_load(load_id):
     return jsonify({"status": "ok", "deleted": True})
 
 
+@dispatch_bp.route("/loads/<load_id>/duplicate", methods=["POST"])
+def duplicate_load(load_id):
+    try:
+        load = services.duplicate_load(load_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "load": load}), 201
+
+
 @dispatch_bp.route("/loads/<load_id>/bundle", methods=["GET"])
 def load_bundle(load_id):
     bundle = services.get_load_bundle(load_id)
@@ -1074,7 +1083,11 @@ def list_activities(load_id):
     load = services.get_load(load_id)
     if not load:
         return jsonify({"error": "Load not found"}), 404
-    return jsonify(services.list_activities(load_id))
+    activity_type = request.args.get("type")
+    if activity_type and activity_type not in ACTIVITY_TYPES:
+        return jsonify({"error": f"Invalid type. Must be one of {ACTIVITY_TYPES}"}), 400
+    items = services.list_activities(load_id, activity_type=activity_type)
+    return jsonify(items)
 
 
 @dispatch_bp.route("/loads/<load_id>/activities", methods=["POST"])

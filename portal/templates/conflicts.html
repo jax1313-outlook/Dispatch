@@ -42,8 +42,10 @@
         <div class="conflict-header">
             <strong>{{ cn.conflict_type|replace('_', ' ')|title }}</strong>
             <span class="resolved-tag">Resolved</span>
+            {% if cn.resolved_at %}<span style="color:#888;font-size:0.85em;margin-left:8px;">{{ cn.resolved_at[:16] }}</span>{% endif %}
         </div>
         <p>{{ cn.explanation }}</p>
+        {% if cn.resolution_note %}<p style="margin-top:4px;color:#555;font-size:0.9em;"><strong>Resolution:</strong> {{ cn.resolution_note }}</p>{% endif %}
     </div>
     {% endfor %}
 </section>

@@ -219,8 +219,9 @@ def resolve_conflict():
     if not notice_id:
         return jsonify({"error": "notice_id required"}), 400
 
+    resolution_note = data.get("resolution_note", "")
     try:
-        notice = conflict.resolve_notice(notice_id)
+        notice = conflict.resolve_notice(notice_id, resolution_note=resolution_note)
         return jsonify({"status": "ok", "notice": notice})
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
