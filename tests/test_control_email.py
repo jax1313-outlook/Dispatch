@@ -47,6 +47,12 @@ def test_render_email_without_decision(mapped_contract, intelligence, flags):
     assert "[ ] approve_proposal" in email  # no recommendation marker
 
 
+def test_render_email_no_reply_instruction(mapped_contract, intelligence, flags):
+    email = control.render_email(mapped_contract, intelligence, "S", flags)
+    assert "reply with the key" not in email
+    assert "buttons in the HTML email" in email
+
+
 # --------------------------------------------------------------------------- collect
 
 def test_collect_non_interactive_default():

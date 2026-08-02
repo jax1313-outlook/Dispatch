@@ -164,6 +164,7 @@ def library():
 
 @pages_bp.route("/archive")
 def archive_view():
+    from cin_lite import archive as cin_archive
     all_archive = arc_model.get_all()
     all_sandbox = sandbox.get_all()
     sandbox_archived = [
@@ -177,10 +178,12 @@ def archive_view():
             "key": key,
             "records": all_archive.get(key, []),
         })
+    pipeline_archived = cin_archive.list_contracts()
     return render_template(
         "archive.html",
         sections=sections,
         sandbox_archived=sandbox_archived,
+        pipeline_archived=pipeline_archived,
     )
 
 

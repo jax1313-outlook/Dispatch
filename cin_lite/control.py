@@ -74,7 +74,7 @@ def render_email(
             "",
         ]
 
-    lines.append("Choose ONE action (reply with the key in brackets):")
+    lines.append("Choose ONE action (use the buttons in the HTML email):")
     for key, (label, route) in ACTIONS.items():
         mark = "*" if key == recommended else " "
         flag = "  <- recommended" if key == recommended else ""

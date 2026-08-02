@@ -84,6 +84,34 @@ def store_proposal(proposal: dict, outline: str) -> tuple[Path, Path]:
     return json_path, md_path
 
 
+def list_contracts() -> list[dict]:
+    """Return metadata for all archived contracts, most recent first."""
+    processed_dir = ARCHIVE_ROOT / "Processed"
+    if not processed_dir.exists():
+        return []
+    results = []
+    for path in sorted(processed_dir.glob("*.json"), reverse=True):
+        with path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        results.append(data.get("metadata", {}))
+    return results
+
+
+def load_artifact(subdir: str, contract_id: str) -> dict | str | None:
+    """Load a single archived artifact by subdirectory and contract ID.
+
+    Returns parsed JSON for .json files, raw text for .txt files, or None.
+    """
+    json_path = ARCHIVE_ROOT / subdir / f"{contract_id}.json"
+    if json_path.exists():
+        with json_path.open(encoding="utf-8") as fh:
+            return json.load(fh)
+    txt_path = ARCHIVE_ROOT / subdir / f"{contract_id}.txt"
+    if txt_path.exists():
+        return txt_path.read_text(encoding="utf-8")
+    return None
+
+
 def record_routing(
     contract_id: str,
     action: str,

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, render_template, request
 
-from cin_lite import control, pending
+from cin_lite import archive, control, pending
 from cin_lite.pipeline import process_contracts, resolve_decision, routing_history
 
 pipeline_bp = Blueprint("pipeline", __name__)
@@ -86,3 +86,25 @@ def history():
     """Return completed routing decisions (most recent first)."""
     records = routing_history()
     return jsonify({"status": "ok", "history": records, "count": len(records)})
+
+
+@pipeline_bp.route("/archive", methods=["GET"])
+def archive_list():
+    """List all CIN-Lite archived contracts."""
+    contracts = archive.list_contracts()
+    return jsonify({"status": "ok", "contracts": contracts, "count": len(contracts)})
+
+
+@pipeline_bp.route("/archive/<contract_id>", methods=["GET"])
+def archive_detail(contract_id: str):
+    """Load all artifacts for a single archived contract."""
+    metadata = archive.load_artifact("Processed", contract_id)
+    if metadata is None:
+        return jsonify({"error": f"Contract {contract_id} not found in archive"}), 404
+    return jsonify({
+        "status": "ok",
+        "metadata": metadata.get("metadata", metadata),
+        "intelligence": archive.load_artifact("Intelligence", contract_id),
+        "summary": archive.load_artifact("Summaries", contract_id),
+        "routing": archive.load_artifact("Routing", contract_id),
+    })

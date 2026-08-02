@@ -26,6 +26,9 @@
             </div>
             <div class="card-fields">
                 <div><strong>Agency:</strong> {{ item.agency or 'Unknown' }}</div>
+                {% if item.estimated_value %}
+                <div><strong>Value:</strong> ${{ "{:,.0f}".format(item.estimated_value) }}</div>
+                {% endif %}
                 <div><strong>Recommendation:</strong> {{ item.recommendation or 'None' }}</div>
                 <div><strong>Contract ID:</strong> <code style="font-size:11px;">{{ item.contract_id }}</code></div>
                 {% if item.risk_level %}

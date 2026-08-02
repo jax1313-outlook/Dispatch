@@ -250,6 +250,38 @@ class TestPipelineAPI:
         data = resp.get_json()
         assert data["count"] >= 1
 
+    def test_archive_list_empty(self, client):
+        resp = client.get("/api/pipeline/archive")
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["count"] == 0
+
+    def test_archive_list_after_decision(self, client, tmp_archive):
+        self._seed(tmp_archive)
+        client.post("/api/pipeline/decide", json={
+            "contract_id": "CIN-API-001", "action": "approve_archive",
+        })
+        resp = client.get("/api/pipeline/archive")
+        data = resp.get_json()
+        assert data["count"] >= 1
+
+    def test_archive_detail(self, client, tmp_archive):
+        self._seed(tmp_archive)
+        client.post("/api/pipeline/decide", json={
+            "contract_id": "CIN-API-001", "action": "approve_archive",
+        })
+        contracts = client.get("/api/pipeline/archive").get_json()["contracts"]
+        cid = contracts[0]["contract_id"]
+        resp = client.get(f"/api/pipeline/archive/{cid}")
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["metadata"]["contract_id"] == cid
+        assert data["summary"] is not None
+
+    def test_archive_detail_not_found(self, client):
+        resp = client.get("/api/pipeline/archive/CIN-NOPE")
+        assert resp.status_code == 404
+
 
 # --------------------------------------------------------------------------- pending page
 
