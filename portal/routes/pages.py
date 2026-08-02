@@ -114,6 +114,8 @@ def dispatch():
         all_entries = sandbox.get_all()
         dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
 
+    _sync_booked_entries(dispatch_entries)
+
     entries_sorted = sorted(dispatch_entries.values(), key=_priority_key, reverse=True)
     return render_template(
         "dispatch.html",
@@ -315,6 +317,23 @@ def settings():
         "portal_secret_set": Config.SECRET_KEY != _DEFAULT_SECRET,
     }
     return render_template("settings.html", config=Config, cin_config=cin_config)
+
+
+def _sync_booked_entries(entries: dict) -> None:
+    """Pull engine load status into any sandbox entries that have an engine_load_id."""
+    from dispatch import services as dispatch_svc
+
+    for sid, entry in entries.items():
+        engine_load_id = entry.get("engine_load_id")
+        if not engine_load_id:
+            continue
+        load = dispatch_svc.get_load(engine_load_id)
+        if not load:
+            continue
+        current = entry.get("card_data", {}).get("engine_status")
+        if current != load["status"]:
+            sandbox.update_engine_status(sid, load["status"])
+            entry["card_data"]["engine_status"] = load["status"]
 
 
 def _priority_key(entry: dict) -> tuple:

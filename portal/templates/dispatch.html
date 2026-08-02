@@ -147,17 +147,30 @@
                 </small>
             </div>
 
+            {% if entry.engine_load_id %}
+            <div class="card-engine-link">
+                <strong>Engine Load:</strong>
+                <a href="{{ url_for('pages.dispatch_detail', load_id=entry.engine_load_id) }}">{{ entry.engine_load_id[:12] }}...</a>
+                {% if cd.engine_status %}
+                <span class="status-tag dispatch-{{ cd.engine_status }}">{{ cd.engine_status|replace('_', ' ') }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div class="card-actions">
                 <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Open Brief</a>
                 {% if cd.source_link %}
                 <a href="{{ cd.source_link }}" target="_blank" rel="noopener" class="btn btn-sm">Open Source</a>
                 {% endif %}
+                {% if not entry.engine_load_id %}
                 <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
                 <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
                 <button class="btn btn-sm btn-danger" onclick="cardAction('{{ entry.id }}', 'pass')">Pass</button>
                 <button class="btn btn-sm btn-warning" onclick="cardAction('{{ entry.id }}', 'watch')">Watch</button>
                 <button class="btn btn-sm" onclick="createInquiry('{{ entry.id }}')">Send Inquiry Draft</button>
                 <button class="btn btn-sm btn-purple" onclick="triggerPublisher('{{ entry.id }}', 'Broker Packet Required')">Trigger Publisher</button>
+                <button class="btn btn-sm btn-book" onclick="bookLoad('{{ entry.id }}')">Book Load</button>
+                {% endif %}
             </div>
         </div>
     {% endfor %}
@@ -185,5 +198,7 @@ function createLoad(e) {
         location.reload();
     });
 }
+
+
 </script>
 {% endblock %}

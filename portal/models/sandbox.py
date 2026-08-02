@@ -167,6 +167,34 @@ def set_inquiry_draft(sandbox_id: str, draft: dict) -> dict:
     return data[sandbox_id]
 
 
+def link_engine_load(sandbox_id: str, engine_load_id: str) -> dict:
+    """Store an engine load_id on a sandbox entry after booking."""
+    data = _load()
+    if sandbox_id not in data:
+        raise KeyError(f"Sandbox entry not found: {sandbox_id}")
+    now = _utc_now()
+    data[sandbox_id]["engine_load_id"] = engine_load_id
+    data[sandbox_id]["updated_at"] = now
+    data[sandbox_id]["events"].append({
+        "action": "engine_linked",
+        "note": f"Linked to engine load {engine_load_id}",
+        "timestamp": now,
+    })
+    _save(data)
+    return data[sandbox_id]
+
+
+def update_engine_status(sandbox_id: str, engine_status: str) -> dict | None:
+    """Sync engine load status back to the sandbox entry's card_data."""
+    data = _load()
+    if sandbox_id not in data:
+        return None
+    data[sandbox_id]["card_data"]["engine_status"] = engine_status
+    data[sandbox_id]["updated_at"] = _utc_now()
+    _save(data)
+    return data[sandbox_id]
+
+
 def add_note(sandbox_id: str, note: str) -> dict:
     data = _load()
     if sandbox_id not in data:

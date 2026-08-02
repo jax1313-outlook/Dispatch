@@ -224,6 +224,8 @@ body {
 .btn-warning:hover { background: #d68910; }
 .btn-purple { background: #9b59b6; color: #fff; border-color: #9b59b6; }
 .btn-purple:hover { background: #8e44ad; }
+.btn-book { background: #1abc9c; color: #fff; border-color: #1abc9c; }
+.btn-book:hover { background: #16a085; }
 
 /* ---------- Status Tags ---------- */
 .status-tag {
@@ -264,6 +266,14 @@ body {
 .dispatch-cancelled { background: #fdedec; color: #c0392b; }
 .dispatch-complete { background: #d5f5e3; color: #1e8449; }
 .dispatch-active { background: #e8f4fd; color: #2471a3; }
+
+.card-engine-link {
+    padding: 6px 10px;
+    margin: 4px 0 8px;
+    background: #e8f8f5;
+    border-radius: 4px;
+    font-size: 13px;
+}
 
 /* ---------- Dispatch Visibility Bar ---------- */
 .dispatch-visibility {
