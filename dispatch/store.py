@@ -991,6 +991,83 @@ def delete_activity(activity_id: str) -> bool:
     return cur.rowcount > 0
 
 
+# ── Lane Templates ──────────────────────────────────────────────────
+
+def create_lane_template(tpl: "LaneTemplate") -> dict:  # noqa: F821
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO lane_templates
+               (template_id, name, customer, broker_shipper,
+                pickup_location, delivery_location, equipment,
+                notes, usage_count, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (tpl.template_id, tpl.name, tpl.customer,
+             tpl.broker_shipper, tpl.pickup_location,
+             tpl.delivery_location, tpl.equipment,
+             tpl.notes, tpl.usage_count,
+             tpl.created_at, tpl.updated_at),
+        )
+    return tpl.to_dict()
+
+
+def get_lane_template(template_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM lane_templates WHERE template_id=?",
+            (template_id,),
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_lane_templates() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM lane_templates ORDER BY usage_count DESC, name"
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def update_lane_template(template_id: str, **fields) -> dict | None:
+    existing = get_lane_template(template_id)
+    if not existing:
+        return None
+    allowed = {
+        "name", "customer", "broker_shipper", "pickup_location",
+        "delivery_location", "equipment", "notes",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    from dispatch.models import _utc_now
+    updates["updated_at"] = _utc_now()
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [template_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE lane_templates SET {set_clause} WHERE template_id=?",
+            values,
+        )
+    return get_lane_template(template_id)
+
+
+def delete_lane_template(template_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM lane_templates WHERE template_id=?",
+            (template_id,),
+        )
+    return cur.rowcount > 0
+
+
+def increment_lane_template_usage(template_id: str) -> None:
+    from dispatch.models import _utc_now
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE lane_templates SET usage_count=usage_count+1, updated_at=? WHERE template_id=?",
+            (_utc_now(), template_id),
+        )
+
+
 # ── Global Search ────────────────────────────────────────────────────
 
 def global_search(query: str, limit: int = 50) -> dict:

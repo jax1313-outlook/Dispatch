@@ -143,6 +143,7 @@ def dispatch():
     active_equipment = dispatch_svc.list_equipment(status="active")
     stalled = dispatch_svc.check_stalled_loads()
     stalled_ids = {ld["load_id"] for ld in stalled}
+    lane_templates = dispatch_svc.list_lane_templates()
     return render_template(
         "dispatch.html",
         entries=entries_sorted,
@@ -159,6 +160,7 @@ def dispatch():
         date_to=date_to,
         stalled_loads=stalled,
         stalled_ids=stalled_ids,
+        lane_templates=lane_templates,
     )
 
 
