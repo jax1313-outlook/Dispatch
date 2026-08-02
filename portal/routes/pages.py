@@ -154,6 +154,7 @@ def dispatch():
 def dispatch_detail(load_id):
     from dispatch import services as dispatch_svc
     from dispatch.models import (
+        LOAD_STATUSES,
         MILESTONE_TYPES, MILESTONE_SOURCES, EVIDENCE_TYPES,
         EXPENSE_CATEGORIES, RATE_TYPES, SETTLEMENT_STATUSES, PAYMENT_METHODS,
     )
@@ -163,6 +164,7 @@ def dispatch_detail(load_id):
         return redirect(url_for("pages.dispatch"))
     return render_template(
         "dispatch_detail.html",
+        load_statuses=LOAD_STATUSES,
         milestone_types=MILESTONE_TYPES,
         milestone_sources=MILESTONE_SOURCES,
         evidence_types=EVIDENCE_TYPES,

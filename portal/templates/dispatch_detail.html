@@ -10,24 +10,87 @@
 
 {# ── Load Info ─────────────────────────────────────────────────────── #}
 <div class="brief-section">
-    <h3>Load Information</h3>
-    <div class="brief-fields">
-        <div><strong>Load ID:</strong> {{ load.load_id }}</div>
-        <div><strong>Status:</strong> <span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></div>
-        <div><strong>Customer:</strong> {{ load.customer }}</div>
-        <div><strong>Broker / Shipper:</strong> {{ load.broker_shipper or '—' }}</div>
-        <div><strong>Pickup Location:</strong> {{ load.pickup_location or '—' }}</div>
-        <div><strong>Delivery Location:</strong> {{ load.delivery_location or '—' }}</div>
-        <div><strong>Pickup Time:</strong> {{ load.pickup_datetime or '—' }}</div>
-        <div><strong>Delivery Time:</strong> {{ load.delivery_datetime or '—' }}</div>
-        <div><strong>Equipment:</strong> {{ load.equipment or '—' }}</div>
-        <div><strong>Driver:</strong> {{ load.driver or '—' }}</div>
-        <div><strong>Driver ID:</strong> {{ load.driver_id or '—' }}</div>
-        <div><strong>Equipment ID:</strong> {{ load.equipment_id or '—' }}</div>
-        <div class="full-width"><strong>Notes:</strong> {{ load.notes or '—' }}</div>
-        <div><strong>Created:</strong> {{ load.created_at[:16] if load.created_at else '—' }}</div>
-        <div><strong>Updated:</strong> {{ load.updated_at[:16] if load.updated_at else '—' }}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Load Information</h3>
+        <button class="btn btn-sm btn-primary" id="edit-load-btn" onclick="toggleLoadEdit()">Edit</button>
     </div>
+
+    {# Read-only view #}
+    <div id="load-info-view">
+        <div class="brief-fields">
+            <div><strong>Load ID:</strong> {{ load.load_id }}</div>
+            <div><strong>Status:</strong> <span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></div>
+            <div><strong>Customer:</strong> {{ load.customer }}</div>
+            <div><strong>Broker / Shipper:</strong> {{ load.broker_shipper or '—' }}</div>
+            <div><strong>Pickup Location:</strong> {{ load.pickup_location or '—' }}</div>
+            <div><strong>Delivery Location:</strong> {{ load.delivery_location or '—' }}</div>
+            <div><strong>Pickup Time:</strong> {{ load.pickup_datetime or '—' }}</div>
+            <div><strong>Delivery Time:</strong> {{ load.delivery_datetime or '—' }}</div>
+            <div><strong>Equipment:</strong> {{ load.equipment or '—' }}</div>
+            <div><strong>Driver:</strong> {{ load.driver or '—' }}</div>
+            <div><strong>Driver ID:</strong> {{ load.driver_id or '—' }}</div>
+            <div><strong>Equipment ID:</strong> {{ load.equipment_id or '—' }}</div>
+            <div class="full-width"><strong>Notes:</strong> {{ load.notes or '—' }}</div>
+            <div><strong>Created:</strong> {{ load.created_at[:16] if load.created_at else '—' }}</div>
+            <div><strong>Updated:</strong> {{ load.updated_at[:16] if load.updated_at else '—' }}</div>
+        </div>
+    </div>
+
+    {# Inline edit form #}
+    <div id="load-info-edit" style="display:none;">
+        <form onsubmit="saveLoadInfo(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:12px;">
+                <div><strong>Load ID:</strong> {{ load.load_id }}</div>
+                <div><label><strong>Status</strong><br>
+                    <select name="status" style="width:100%;padding:4px 8px;">
+                        {% for s in load_statuses %}
+                        <option value="{{ s }}" {% if load.status == s %}selected{% endif %}>{{ s|replace('_', ' ')|title }}</option>
+                        {% endfor %}
+                    </select></label></div>
+                <div><label><strong>Customer *</strong><br>
+                    <input type="text" name="customer" value="{{ load.customer }}" required style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Broker / Shipper</strong><br>
+                    <input type="text" name="broker_shipper" value="{{ load.broker_shipper or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Pickup Location</strong><br>
+                    <input type="text" name="pickup_location" value="{{ load.pickup_location or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Delivery Location</strong><br>
+                    <input type="text" name="delivery_location" value="{{ load.delivery_location or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Pickup Time</strong><br>
+                    <input type="text" name="pickup_datetime" value="{{ load.pickup_datetime or '' }}" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Delivery Time</strong><br>
+                    <input type="text" name="delivery_datetime" value="{{ load.delivery_datetime or '' }}" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+                <div class="full-width"><label><strong>Notes</strong><br>
+                    <input type="text" name="notes" value="{{ load.notes or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-success">Save Changes</button>
+            <button type="button" class="btn" onclick="toggleLoadEdit()">Cancel</button>
+        </form>
+    </div>
+
+    {# Status transition buttons #}
+    {% set transitions = {
+        'created': ['dispatched', 'cancelled'],
+        'dispatched': ['en_route_pickup', 'cancelled'],
+        'en_route_pickup': ['at_pickup', 'cancelled'],
+        'at_pickup': ['picked_up', 'cancelled'],
+        'picked_up': ['in_transit'],
+        'in_transit': ['at_delivery'],
+        'at_delivery': ['delivered'],
+        'delivered': ['completed', 'archived'],
+        'completed': ['archived'],
+    } %}
+    {% set next_statuses = transitions.get(load.status, []) %}
+    {% if next_statuses %}
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <strong style="font-size:0.85em;">Advance:</strong>
+        {% for ns in next_statuses %}
+        <button class="btn btn-sm {% if ns == 'cancelled' %}btn-danger{% else %}btn-success{% endif %}"
+                onclick="advanceLoadStatus('{{ load.load_id }}', '{{ ns }}')">
+            {{ ns|replace('_', ' ')|title }}
+        </button>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 {# ── Fleet Assignment ──────────────────────────────────────────────── #}
@@ -648,6 +711,48 @@ function assignEquipment(loadId) {
 function unassignEquipment(loadId) {
     if (!confirm('Remove equipment assignment?')) return;
     apiPost('/api/dispatch/loads/' + loadId + '/unassign-equipment', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function toggleLoadEdit() {
+    var view = document.getElementById('load-info-view');
+    var edit = document.getElementById('load-info-edit');
+    var btn = document.getElementById('edit-load-btn');
+    if (edit.style.display === 'none') {
+        view.style.display = 'none';
+        edit.style.display = '';
+        btn.style.display = 'none';
+    } else {
+        view.style.display = '';
+        edit.style.display = 'none';
+        btn.style.display = '';
+    }
+}
+
+function saveLoadInfo(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { data[k] = v; });
+    fetch('/api/dispatch/loads/' + loadId, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r) { return r.json(); }).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function advanceLoadStatus(loadId, newStatus) {
+    var label = newStatus.replace(/_/g, ' ');
+    if (newStatus === 'cancelled' && !confirm('Cancel this load?')) return;
+    fetch('/api/dispatch/loads/' + loadId, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: newStatus})
+    }).then(function(r) { return r.json(); }).then(function(r) {
         if (r.error) { alert(r.error); return; }
         location.reload();
     });
