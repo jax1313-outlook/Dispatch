@@ -200,12 +200,15 @@ def fleet():
         unit_number=equip_search or None,
     )
     summary = dispatch_svc.get_fleet_summary()
+    from dispatch import store as dispatch_store
+    assignments = dispatch_store.get_fleet_assignments()
 
     return render_template(
         "fleet.html",
         drivers=drivers,
         equipment=equipment,
         summary=summary,
+        assignments=assignments,
         driver_statuses=DRIVER_STATUSES,
         license_classes=LICENSE_CLASSES,
         equipment_types=EQUIPMENT_TYPES,

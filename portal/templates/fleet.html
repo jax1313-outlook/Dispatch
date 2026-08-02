@@ -129,22 +129,31 @@
                 <th>License</th>
                 <th>Class</th>
                 <th>Phone</th>
-                <th>Email</th>
                 <th>Status</th>
-                <th>Hire Date</th>
+                <th>Assignment</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
         {% for drv in drivers %}
+            {% set drv_load = assignments.driver_loads.get(drv.driver_id) %}
             <tr>
                 <td><strong>{{ drv.name }}</strong></td>
                 <td>{{ drv.license_number or '—' }}</td>
                 <td>{{ drv.license_class or '—' }}</td>
                 <td>{{ drv.phone or '—' }}</td>
-                <td>{{ drv.email or '—' }}</td>
                 <td><span class="status-tag fleet-{{ drv.status }}">{{ drv.status|replace('_', ' ') }}</span></td>
-                <td>{{ drv.hire_date or '—' }}</td>
+                <td>
+                    {% if drv_load %}
+                    <a href="{{ url_for('pages.dispatch_detail', load_id=drv_load.load_id) }}" class="status-tag dispatch-{{ drv_load.status }}" style="text-decoration:none;">
+                        {{ drv_load.customer[:20] }} ({{ drv_load.status|replace('_', ' ') }})
+                    </a>
+                    {% elif drv.status == 'active' %}
+                    <span style="color:#27ae60;font-weight:600;font-size:12px;">Available</span>
+                    {% else %}
+                    <span style="color:#999;font-size:12px;">—</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if drv.status == 'active' %}
                     <button class="btn btn-sm btn-warning" onclick="updateDriverStatus('{{ drv.driver_id }}', 'inactive')">Deactivate</button>
@@ -208,22 +217,33 @@
                 <th>Type</th>
                 <th>Make / Model</th>
                 <th>Year</th>
-                <th>VIN</th>
                 <th>Plate</th>
                 <th>Status</th>
+                <th>Assignment</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
         {% for eqp in equipment %}
+            {% set eqp_load = assignments.equipment_loads.get(eqp.equipment_id) %}
             <tr>
                 <td><strong>{{ eqp.unit_number }}</strong></td>
                 <td>{{ eqp.equipment_type|replace('_', ' ')|title }}</td>
                 <td>{{ eqp.make }} {{ eqp.model }}</td>
                 <td>{{ eqp.year or '—' }}</td>
-                <td>{{ eqp.vin or '—' }}</td>
                 <td>{{ eqp.license_plate or '—' }}</td>
                 <td><span class="status-tag fleet-{{ eqp.status }}">{{ eqp.status }}</span></td>
+                <td>
+                    {% if eqp_load %}
+                    <a href="{{ url_for('pages.dispatch_detail', load_id=eqp_load.load_id) }}" class="status-tag dispatch-{{ eqp_load.status }}" style="text-decoration:none;">
+                        {{ eqp_load.customer[:20] }} ({{ eqp_load.status|replace('_', ' ') }})
+                    </a>
+                    {% elif eqp.status == 'active' %}
+                    <span style="color:#27ae60;font-weight:600;font-size:12px;">Available</span>
+                    {% else %}
+                    <span style="color:#999;font-size:12px;">—</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if eqp.status == 'active' %}
                     <button class="btn btn-sm btn-warning" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'maintenance')">Maintenance</button>
