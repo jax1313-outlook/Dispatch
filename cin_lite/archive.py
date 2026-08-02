@@ -52,6 +52,8 @@ def store(contract: dict, intelligence: dict, summary: str) -> dict:
         "title": contract.get("title"),
         "solicitation_number": contract.get("solicitation_number"),
         "agency": contract.get("agency"),
+        "estimated_value": contract.get("estimated_value"),
+        "response_date": contract.get("response_date"),
         "acquired_at": contract.get("_acquired_at"),
         "processed_at": _utc_now(),
         "flag_count": sum(len(r.get("flags", [])) for r in intelligence.values()),
@@ -82,15 +84,22 @@ def record_routing(
     route: str,
     metadata: dict,
     recommendation: dict | None = None,
+    *,
+    action_label: str = "",
+    flags: list[str] | None = None,
+    summary: str = "",
 ) -> Path:
     """Persist the human decision, resulting route, and the agent recommendation."""
     payload = {
         "contract_id": contract_id,
         "action": action,
+        "action_label": action_label,
         "route": route,
         "decided_at": _utc_now(),
         "recommendation": recommendation,
         "followed_recommendation": bool(recommendation and recommendation.get("action") == action),
+        "flags": flags or [],
+        "summary": summary,
         "metadata": metadata,
     }
     return _write_json("Routing", contract_id, payload)
