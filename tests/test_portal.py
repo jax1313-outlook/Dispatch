@@ -553,7 +553,7 @@ class TestPageRendering:
         assert "SAM.gov API" in html
         assert "SMTP Email" in html
         assert "Claude API" in html
-        assert "CIN-Lite Acquisition" in html
+        assert "DISPATCH Acquisition" in html
         assert "Email Delivery" in html
 
     def test_brief_shows_intelligence_modules(self, client):
@@ -602,7 +602,7 @@ class TestPageRendering:
         archive.store(contract, intel, "test summary")
         resp = client.get("/archive")
         html = resp.data.decode("utf-8")
-        assert "CIN-Lite Pipeline Archive" in html
+        assert "DISPATCH Pipeline Archive" in html
         assert "Pipeline Archived" in html
 
 

@@ -79,9 +79,9 @@ def test_deliver_decision_offline_writes_eml(tmp_archive, mapped_contract):
                                              decision, "approve_proposal", "PROPOSAL_QUEUE", ["f"])
     assert "written to" in status
     eml = (tmp_archive / "Outbox" / "CIN-TEST-1.eml").read_text(encoding="utf-8")
-    assert "Subject: [CIN-Lite] CIN-TEST-1" in eml
-    assert "reviewer@cin-lite.local" in eml
-    assert "proposal-team@cin-lite.local" in eml
+    assert "Subject: [DISPATCH] CIN-TEST-1" in eml
+    assert "reviewer@dispatch.local" in eml
+    assert "proposal-team@dispatch.local" in eml
     assert "summary" in eml
 
 
@@ -122,8 +122,8 @@ class _FakeSMTP:
 
 def test_smtp_success_path(monkeypatch):
     _FakeSMTP.sent.clear()
-    monkeypatch.setenv("CIN_LITE_SMTP_HOST", "smtp.example.com")
-    monkeypatch.setenv("CIN_LITE_SMTP_STARTTLS", "0")
+    monkeypatch.setenv("DISPATCH_SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("DISPATCH_SMTP_STARTTLS", "0")
     monkeypatch.setattr(email_delivery.smtplib, "SMTP", _FakeSMTP)
 
     status = email_delivery.send("S", "B", ["x@y.com"], "ID-1")
@@ -136,7 +136,7 @@ def test_smtp_failure_falls_back(tmp_archive, monkeypatch):
     def _boom(*a, **k):
         raise OSError("connection refused")
 
-    monkeypatch.setenv("CIN_LITE_SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("DISPATCH_SMTP_HOST", "smtp.example.com")
     monkeypatch.setattr(email_delivery.smtplib, "SMTP", _boom)
 
     status = email_delivery.send("S", "B", ["x@y.com"], "ID-2")

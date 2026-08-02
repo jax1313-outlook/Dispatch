@@ -260,18 +260,18 @@ def settings():
     from cin_lite import email_delivery
 
     cin_config = {
-        "sam_api_key": bool(os.environ.get("CIN_LITE_SAM_API_KEY")),
-        "sam_limit": os.environ.get("CIN_LITE_SAM_LIMIT", "10"),
-        "sam_naics": os.environ.get("CIN_LITE_SAM_NAICS", ""),
-        "sam_ptype": os.environ.get("CIN_LITE_SAM_PTYPE", ""),
-        "sam_fetch_desc": os.environ.get("CIN_LITE_SAM_FETCH_DESCRIPTION", "1") == "1",
-        "smtp_host": os.environ.get("CIN_LITE_SMTP_HOST", ""),
+        "sam_api_key": bool(os.environ.get("DISPATCH_SAM_API_KEY")),
+        "sam_limit": os.environ.get("DISPATCH_SAM_LIMIT", "10"),
+        "sam_naics": os.environ.get("DISPATCH_SAM_NAICS", ""),
+        "sam_ptype": os.environ.get("DISPATCH_SAM_PTYPE", ""),
+        "sam_fetch_desc": os.environ.get("DISPATCH_SAM_FETCH_DESCRIPTION", "1") == "1",
+        "smtp_host": os.environ.get("DISPATCH_SMTP_HOST", ""),
         "anthropic_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "email_from": email_delivery.from_address(),
         "email_reviewer": email_delivery.reviewer_address(),
         "email_domain": email_delivery.domain(),
         "email_secret_set": not email_delivery._using_default_secret(),
-        "portal_url": os.environ.get("CIN_LITE_PORTAL_URL", "http://127.0.0.1:8080"),
+        "portal_url": os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080"),
         "portal_secret_set": Config.SECRET_KEY != _DEFAULT_SECRET,
     }
     return render_template("settings.html", config=Config, cin_config=cin_config)

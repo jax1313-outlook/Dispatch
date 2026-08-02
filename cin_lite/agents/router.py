@@ -23,7 +23,7 @@ import sys
 
 from cin_lite.control import ACTIONS
 
-MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
+MODEL = os.environ.get("DISPATCH_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 500
 
 PRIORITIES = ("low", "medium", "high", "urgent")
@@ -148,7 +148,7 @@ def decide(contract: dict, intelligence: dict, summary: str, flags: list[str]) -
     try:
         import anthropic
     except ImportError:
-        print("cin_lite: `anthropic` not installed; using deterministic routing.", file=sys.stderr)
+        print("dispatch: `anthropic` not installed; using deterministic routing.", file=sys.stderr)
         return _deterministic_decision(intelligence, flags)
 
     payload = {
@@ -179,10 +179,10 @@ def decide(contract: dict, intelligence: dict, summary: str, flags: list[str]) -
             # Normalize recipient to the canonical queue for the chosen action.
             decision["recipient"] = _RECIPIENTS.get(decision["action"], decision["recipient"])
             return decision
-        print("cin_lite: routing agent returned an invalid decision; using deterministic routing.",
+        print("dispatch: routing agent returned an invalid decision; using deterministic routing.",
               file=sys.stderr)
     except Exception as exc:  # never break the pipeline on a recommendation
-        print(f"cin_lite: routing agent failed ({exc}); using deterministic routing.",
+        print(f"dispatch: routing agent failed ({exc}); using deterministic routing.",
               file=sys.stderr)
 
     return _deterministic_decision(intelligence, flags)

@@ -10,7 +10,7 @@ The sections below describe the architecture all code must follow.
 
 ## What this is
 
-The **Hybrid CIN-Lite System** is a contract-locating, intelligence-processing, and
+**DISPATCH** is a contract-locating, intelligence-processing, and
 archive-building platform. It runs autonomously but keeps a human in the loop: contracts are
 acquired, passed through deterministic rule modules that extract intelligence as JSON, then the
 user is emailed a checkbox prompt to decide the contract's fate before it is archived or routed.
@@ -81,7 +81,7 @@ Each contract gets a unique ID and a full metadata bundle. Folder layout:
 
 ## Roadmap
 
-- **Phase 1 (current):** CIN-Lite acquisition, rule modules, email control system, archive engine.
+- **Phase 1 (current):** DISPATCH acquisition, rule modules, email control system, archive engine.
 - **Phase 2:** proposal-trigger workflows, deeper intelligence modules.
 - **Phase 3:** integrate into full CIN, add AZP compatibility.
 

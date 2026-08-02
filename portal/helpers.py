@@ -1,6 +1,6 @@
 """Portal helpers — data loading and card processing.
 
-Reads from cin_lite layers without modifying them.
+Reads from pipeline layers without modifying them.
 """
 
 from __future__ import annotations

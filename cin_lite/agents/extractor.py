@@ -18,7 +18,7 @@ import os
 import sys
 from typing import Any
 
-MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
+MODEL = os.environ.get("DISPATCH_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 600
 
 _SYSTEM = (
@@ -202,7 +202,7 @@ def extract(
     try:
         import anthropic
     except ImportError:
-        print("cin_lite: `anthropic` not installed; using deterministic extraction.",
+        print("dispatch: `anthropic` not installed; using deterministic extraction.",
               file=sys.stderr)
         return _deterministic_extraction(contract, intelligence, flags)
 
@@ -231,10 +231,10 @@ def extract(
         result = json.loads(text)
         if _valid(result):
             return result
-        print("cin_lite: extraction agent returned invalid result; using deterministic extraction.",
+        print("dispatch: extraction agent returned invalid result; using deterministic extraction.",
               file=sys.stderr)
     except Exception as exc:
-        print(f"cin_lite: extraction agent failed ({exc}); using deterministic extraction.",
+        print(f"dispatch: extraction agent failed ({exc}); using deterministic extraction.",
               file=sys.stderr)
 
     return _deterministic_extraction(contract, intelligence, flags)

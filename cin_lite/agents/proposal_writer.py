@@ -12,7 +12,7 @@ import json
 import os
 import sys
 
-MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
+MODEL = os.environ.get("DISPATCH_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 900
 
 _SYSTEM = (
@@ -88,7 +88,7 @@ def draft_outline(contract: dict, intelligence: dict, brief: dict, summary: str)
     try:
         import anthropic
     except ImportError:
-        print("cin_lite: `anthropic` not installed; using deterministic outline.", file=sys.stderr)
+        print("dispatch: `anthropic` not installed; using deterministic outline.", file=sys.stderr)
         return _deterministic_outline(contract, intelligence, brief)
 
     payload = {
@@ -116,6 +116,6 @@ def draft_outline(contract: dict, intelligence: dict, brief: dict, summary: str)
         text = "".join(b.text for b in response.content if b.type == "text").strip()
         return text or _deterministic_outline(contract, intelligence, brief)
     except Exception as exc:  # never break the workflow on a draft
-        print(f"cin_lite: proposal agent failed ({exc}); using deterministic outline.",
+        print(f"dispatch: proposal agent failed ({exc}); using deterministic outline.",
               file=sys.stderr)
         return _deterministic_outline(contract, intelligence, brief)

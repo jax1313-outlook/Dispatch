@@ -11,13 +11,13 @@ the deterministic rule modules unchanged:
     estimated_value, response_date, notes
 
 Configuration (environment):
-    CIN_LITE_SAM_API_KEY          api.data.gov key (its presence enables live SAM.gov)
-    CIN_LITE_SAM_LIMIT            max opportunities to pull (default 10)
-    CIN_LITE_SAM_POSTED_FROM      MM/DD/YYYY (default: 7 days ago)
-    CIN_LITE_SAM_POSTED_TO        MM/DD/YYYY (default: today)
-    CIN_LITE_SAM_NAICS            optional NAICS code filter (ncode)
-    CIN_LITE_SAM_PTYPE            optional procurement type filter (e.g. "o,k,p")
-    CIN_LITE_SAM_FETCH_DESCRIPTION  "1"/"0", default "1" (fetch full description text)
+    DISPATCH_SAM_API_KEY          api.data.gov key (its presence enables live SAM.gov)
+    DISPATCH_SAM_LIMIT            max opportunities to pull (default 10)
+    DISPATCH_SAM_POSTED_FROM      MM/DD/YYYY (default: 7 days ago)
+    DISPATCH_SAM_POSTED_TO        MM/DD/YYYY (default: today)
+    DISPATCH_SAM_NAICS            optional NAICS code filter (ncode)
+    DISPATCH_SAM_PTYPE            optional procurement type filter (e.g. "o,k,p")
+    DISPATCH_SAM_FETCH_DESCRIPTION  "1"/"0", default "1" (fetch full description text)
 """
 
 from __future__ import annotations
@@ -39,11 +39,11 @@ _DESCRIPTION_CAP = 4000
 
 def acquire() -> list[dict]:
     """Return raw contract dicts from the configured source (SAM.gov or local)."""
-    api_key = os.environ.get("CIN_LITE_SAM_API_KEY")
+    api_key = os.environ.get("DISPATCH_SAM_API_KEY")
     if api_key:
         print("Acquisition: SAM.gov Opportunities API")
         return _acquire_sam(api_key)
-    print("Acquisition: local sample_data (set CIN_LITE_SAM_API_KEY for live SAM.gov)")
+    print("Acquisition: local sample_data (set DISPATCH_SAM_API_KEY for live SAM.gov)")
     return _acquire_local()
 
 
@@ -70,18 +70,18 @@ def _http_get(url: str, params: dict) -> bytes:
 
 def _acquire_sam(api_key: str) -> list[dict]:
     today = datetime.now(timezone.utc)
-    page_size = int(os.environ.get("CIN_LITE_SAM_LIMIT", "10"))
-    fetch_desc = os.environ.get("CIN_LITE_SAM_FETCH_DESCRIPTION", "1") == "1"
+    page_size = int(os.environ.get("DISPATCH_SAM_LIMIT", "10"))
+    fetch_desc = os.environ.get("DISPATCH_SAM_FETCH_DESCRIPTION", "1") == "1"
 
     base_params = {
         "api_key": api_key,
         "limit": str(page_size),
         "postedFrom": os.environ.get(
-            "CIN_LITE_SAM_POSTED_FROM", (today - timedelta(days=7)).strftime("%m/%d/%Y")
+            "DISPATCH_SAM_POSTED_FROM", (today - timedelta(days=7)).strftime("%m/%d/%Y")
         ),
-        "postedTo": os.environ.get("CIN_LITE_SAM_POSTED_TO", today.strftime("%m/%d/%Y")),
-        "ncode": os.environ.get("CIN_LITE_SAM_NAICS"),
-        "ptype": os.environ.get("CIN_LITE_SAM_PTYPE"),
+        "postedTo": os.environ.get("DISPATCH_SAM_POSTED_TO", today.strftime("%m/%d/%Y")),
+        "ncode": os.environ.get("DISPATCH_SAM_NAICS"),
+        "ptype": os.environ.get("DISPATCH_SAM_PTYPE"),
     }
 
     all_opportunities: list[dict] = []
@@ -95,15 +95,15 @@ def _acquire_sam(api_key: str) -> list[dict]:
             data = json.loads(body)
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode(errors="replace")[:300]
-            print(f"cin_lite: SAM.gov request failed (HTTP {exc.code}): {detail}", file=sys.stderr)
+            print(f"dispatch: SAM.gov request failed (HTTP {exc.code}): {detail}", file=sys.stderr)
             if not all_opportunities:
-                print("cin_lite: falling back to local sample_data.", file=sys.stderr)
+                print("dispatch: falling back to local sample_data.", file=sys.stderr)
                 return _acquire_local()
             break
         except Exception as exc:
-            print(f"cin_lite: SAM.gov acquisition failed ({exc})", file=sys.stderr)
+            print(f"dispatch: SAM.gov acquisition failed ({exc})", file=sys.stderr)
             if not all_opportunities:
-                print("cin_lite: falling back to local sample_data.", file=sys.stderr)
+                print("dispatch: falling back to local sample_data.", file=sys.stderr)
                 return _acquire_local()
             break
 
