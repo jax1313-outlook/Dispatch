@@ -1190,7 +1190,25 @@ def get_load_bundle(load_id: str) -> dict | None:
         "activities": store.list_activities(load_id),
         "active_drivers": store.list_drivers(status="active"),
         "active_equipment": store.list_equipment(status="active"),
+        "lane_history": get_lane_history(load_id),
     }
+
+
+def get_lane_history(load_id: str) -> list[dict]:
+    """Find past loads on the same origin-destination lane, with rate info."""
+    load = store.get_load(load_id)
+    if not load:
+        return []
+    history = store.get_lane_history(
+        load.get("pickup_location", ""),
+        load.get("delivery_location", ""),
+        exclude_load_id=load_id,
+    )
+    for h in history:
+        rate = store.get_rate_confirmation(h["load_id"])
+        h["rate_amount"] = rate["rate_amount"] if rate else None
+        h["revenue"] = rate["revenue"] if rate else None
+    return history
 
 
 def global_search(query: str) -> dict:
