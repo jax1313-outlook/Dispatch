@@ -8,6 +8,41 @@
 
 {% block body %}
 
+{# ── Financial Dashboard ─────────────────────────────────────────── #}
+{% if fin_dashboard and fin_dashboard.loads_with_rate > 0 %}
+<div class="card-section">
+    <h2>Financial Overview</h2>
+    <div class="financial-summary">
+        <div class="financial-item financial-revenue">
+            <span class="financial-label">Total Revenue</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_revenue) }}</span>
+        </div>
+        <div class="financial-item financial-expenses">
+            <span class="financial-label">Total Expenses</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_expenses) }}</span>
+        </div>
+        <div class="financial-item {% if fin_dashboard.total_profit >= 0 %}financial-profit{% else %}financial-loss{% endif %}">
+            <span class="financial-label">Profit</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_profit) }}</span>
+        </div>
+        <div class="financial-item">
+            <span class="financial-label">Margin</span>
+            <span class="financial-value">{{ "%.1f"|format(fin_dashboard.margin_pct) }}%</span>
+        </div>
+        <div class="financial-item" style="border-left:3px solid #27ae60;">
+            <span class="financial-label">Paid</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_paid) }}</span>
+            <span class="financial-label">{{ fin_dashboard.paid_count }} loads</span>
+        </div>
+        <div class="financial-item" style="border-left:3px solid {% if fin_dashboard.overdue_count > 0 %}#e74c3c{% else %}#f39c12{% endif %};">
+            <span class="financial-label">Outstanding</span>
+            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_outstanding) }}</span>
+            <span class="financial-label">{{ fin_dashboard.invoiced_count }} invoiced{% if fin_dashboard.overdue_count %}, {{ fin_dashboard.overdue_count }} overdue{% endif %}</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ── New Load Form (hidden) ───────────────────────────────────────── #}
 <div id="new-load-form" class="brief-section" style="display:none;margin-bottom:20px;">
     <h3>Create New Load</h3>

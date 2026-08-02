@@ -15,6 +15,7 @@ from dispatch.models import (
     PODPackage,
     RateConfirmation,
     RetentionArchive,
+    Settlement,
 )
 
 
@@ -464,3 +465,72 @@ def delete_expense(expense_id: str) -> bool:
             "DELETE FROM expenses WHERE expense_id=?", (expense_id,)
         )
     return cur.rowcount > 0
+
+
+# ── Settlement ───────────────────────────────────────────────────────
+
+def create_settlement(stl: Settlement) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO settlements
+               (settlement_id, load_id, invoice_number, invoice_amount,
+                invoice_date, due_date, payment_status, payment_amount,
+                payment_date, payment_method, factoring_fee, notes)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (stl.settlement_id, stl.load_id, stl.invoice_number,
+             stl.invoice_amount, stl.invoice_date, stl.due_date,
+             stl.payment_status, stl.payment_amount, stl.payment_date,
+             stl.payment_method, stl.factoring_fee, stl.notes),
+        )
+    return stl.to_dict()
+
+
+def get_settlement(load_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM settlements WHERE load_id=?", (load_id,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    stl = Settlement(**d)
+    return stl.to_dict()
+
+
+def update_settlement(load_id: str, **fields) -> dict | None:
+    existing = get_settlement(load_id)
+    if not existing:
+        return None
+    allowed = {
+        "invoice_amount", "due_date", "payment_status", "payment_amount",
+        "payment_date", "payment_method", "factoring_fee", "notes",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [load_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE settlements SET {set_clause} WHERE load_id=?", values
+        )
+    return get_settlement(load_id)
+
+
+def list_settlements(payment_status: str | None = None) -> list[dict]:
+    with get_connection() as conn:
+        if payment_status:
+            rows = conn.execute(
+                "SELECT * FROM settlements WHERE payment_status=? ORDER BY invoice_date DESC",
+                (payment_status,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM settlements ORDER BY invoice_date DESC"
+            ).fetchall()
+    results = []
+    for r in rows:
+        d = dict_from_row(r)
+        stl = Settlement(**d)
+        results.append(stl.to_dict())
+    return results
