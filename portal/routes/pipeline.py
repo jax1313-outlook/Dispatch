@@ -88,6 +88,13 @@ def history():
     return jsonify({"status": "ok", "history": records, "count": len(records)})
 
 
+@pipeline_bp.route("/queue/<route_name>", methods=["GET"])
+def queue(route_name: str):
+    """List contracts routed to a specific queue (e.g. HUMAN_REVIEW, DEEP_ANALYSIS_QUEUE)."""
+    records = routing_history(route_filter=route_name)
+    return jsonify({"status": "ok", "route": route_name, "records": records, "count": len(records)})
+
+
 @pipeline_bp.route("/archive", methods=["GET"])
 def archive_list():
     """List all CIN-Lite archived contracts."""
