@@ -129,6 +129,25 @@ def upsert_visibility(vis: LoadVisibilityRecord) -> dict:
     return vis.to_dict()
 
 
+def update_visibility_notes(load_id: str, **fields) -> dict | None:
+    existing = get_visibility(load_id)
+    if not existing:
+        return None
+    allowed = {"customer_note", "internal_note"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    from dispatch.models import _utc_now
+    updates["updated_at"] = _utc_now()
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [load_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE visibility SET {set_clause} WHERE load_id=?", values
+        )
+    return get_visibility(load_id)
+
+
 def get_visibility(load_id: str) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
@@ -172,6 +191,23 @@ def get_milestone(milestone_id: str) -> dict | None:
             "SELECT * FROM milestones WHERE milestone_id=?", (milestone_id,)
         ).fetchone()
     return dict_from_row(row) if row else None
+
+
+def update_milestone(milestone_id: str, **fields) -> dict | None:
+    existing = get_milestone(milestone_id)
+    if not existing:
+        return None
+    allowed = {"validation_status", "note", "location"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [milestone_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE milestones SET {set_clause} WHERE milestone_id=?", values
+        )
+    return get_milestone(milestone_id)
 
 
 def get_recent_activity(limit: int = 20) -> list[dict]:

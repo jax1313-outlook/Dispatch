@@ -120,6 +120,24 @@ def get_visibility(load_id):
     return jsonify({"status": "ok", "visibility": vis})
 
 
+@dispatch_bp.route("/loads/<load_id>/visibility", methods=["PATCH"])
+def update_visibility(load_id):
+    data = request.get_json(silent=True) or {}
+    customer_note = data.get("customer_note")
+    internal_note = data.get("internal_note")
+    try:
+        vis = services.update_visibility_notes(
+            load_id,
+            customer_note=customer_note,
+            internal_note=internal_note,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    if not vis:
+        return jsonify({"error": f"No visibility record for {load_id}"}), 404
+    return jsonify({"status": "ok", "visibility": vis})
+
+
 # ── Milestones ────────────────────────────────────────────────────────
 
 @dispatch_bp.route("/loads/<load_id>/milestones", methods=["GET"])
@@ -155,6 +173,24 @@ def add_milestone(load_id):
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
     return jsonify({"status": "ok", "milestone": ms}), 201
+
+
+@dispatch_bp.route("/milestones/<milestone_id>", methods=["PATCH"])
+def update_milestone(milestone_id):
+    from dispatch.models import VALIDATION_STATUSES
+    data = request.get_json(silent=True) or {}
+    validation_status = data.get("validation_status")
+    if validation_status and validation_status not in VALIDATION_STATUSES:
+        return jsonify({
+            "error": f"Invalid validation_status: {validation_status}",
+        }), 400
+    try:
+        ms = services.validate_milestone(milestone_id, validation_status) if validation_status else None
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    if not ms:
+        return jsonify({"error": f"Milestone not found: {milestone_id}"}), 404
+    return jsonify({"status": "ok", "milestone": ms})
 
 
 # ── Evidence ──────────────────────────────────────────────────────────
