@@ -9,6 +9,7 @@ from portal.models import sandbox, publisher, conflict
 from portal.models import library as lib_model
 from portal.models import archive as arc_model
 from portal.models import intelligence as intel_model
+from cin_lite import control, pending
 
 pages_bp = Blueprint("pages", __name__)
 
@@ -30,6 +31,8 @@ def home():
     unresolved = conflict.get_unresolved()
     pub_queue = [a for a in publisher.get_queue() if a["status"] not in ("APPROVED", "ARCHIVED")]
 
+    pending_items = pending.list_pending()
+
     return render_template(
         "home.html",
         sam_cards=sam_sorted,
@@ -38,6 +41,7 @@ def home():
         publisher_count=len(pub_queue),
         archive_count=arc_model.total_count(),
         intel_count=intel_model.total_count(),
+        pending_count=len(pending_items),
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
@@ -199,6 +203,35 @@ def conflicts():
     unresolved = [n for n in all_notices if not n.get("resolved")]
     resolved = [n for n in all_notices if n.get("resolved")]
     return render_template("conflicts.html", unresolved=unresolved, resolved=resolved)
+
+
+@pages_bp.route("/pipeline")
+def pending_decisions():
+    items = pending.list_pending()
+    summaries = []
+    for item in items:
+        contract = item.get("contract", {})
+        decision = item.get("decision", {})
+        summaries.append({
+            "contract_id": item["contract_id"],
+            "title": contract.get("title"),
+            "agency": contract.get("agency"),
+            "solicitation_number": contract.get("solicitation_number"),
+            "estimated_value": contract.get("estimated_value"),
+            "summary": item.get("summary", ""),
+            "recommendation": decision.get("action"),
+            "priority": decision.get("priority"),
+            "flag_count": len(item.get("flags", [])),
+            "flags": item.get("flags", []),
+        })
+    from cin_lite.pipeline import routing_history
+    history = routing_history()
+    return render_template(
+        "pending.html",
+        pending=summaries,
+        actions=control.ACTIONS,
+        history=history,
+    )
 
 
 @pages_bp.route("/settings")

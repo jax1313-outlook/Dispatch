@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import sys
 
-from cin_lite import run
+from cin_lite import run, acquisition
+from cin_lite.pipeline import process_contracts
 
 
 def test_run_approve_proposal_triggers_workflow(capsys, tmp_archive):
     run.run("approve_proposal")
     out = capsys.readouterr().out
-    assert "Acquired" in out
+    assert "Processed" in out
     assert "proposal triggered" in out
     assert list((tmp_archive / "Proposals").glob("*.json"))
     assert list((tmp_archive / "Routing").glob("*.json"))
@@ -24,7 +25,7 @@ def test_run_reject_does_not_trigger_proposal(capsys, tmp_archive):
 
 
 def test_run_no_contracts(capsys, monkeypatch):
-    monkeypatch.setattr(run.acquisition, "acquire", lambda: [])
+    monkeypatch.setattr(acquisition, "acquire", lambda: [])
     run.run("reject")
     assert "No contracts acquired" in capsys.readouterr().out
 
@@ -39,4 +40,4 @@ def test_main_list_actions(capsys, monkeypatch):
 def test_main_with_action(capsys, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["run", "--action", "reject"])
     run.main()
-    assert "Acquired" in capsys.readouterr().out
+    assert "Processed" in capsys.readouterr().out

@@ -3,16 +3,16 @@
 Each action button in the HTML email links to:
     GET /api/decision/<contract_id>/<action>?token=<hmac_token>
 
-The endpoint verifies the token, loads the pending decision, completes the
-archive/routing flow, and returns a confirmation page.
+The endpoint verifies the token, then delegates to the shared
+``pipeline.resolve_decision()`` for archive/routing.
 """
 
 from __future__ import annotations
 
 from flask import Blueprint, render_template, request
 
-from cin_lite import archive, control, email_delivery, pending
-from cin_lite.workflows import proposal
+from cin_lite import control, email_delivery, pending
+from cin_lite.pipeline import resolve_decision
 
 decisions_bp = Blueprint("decisions", __name__)
 
@@ -37,8 +37,7 @@ def process_decision(contract_id: str, action: str):
             contract_id=contract_id,
         ), 403
 
-    record = pending.load(contract_id)
-    if not record:
+    if not pending.load(contract_id):
         return render_template(
             "decision.html",
             success=False,
@@ -46,35 +45,14 @@ def process_decision(contract_id: str, action: str):
             contract_id=contract_id,
         ), 404
 
-    label, route = control.resolve(action)
-
-    contract_data = record["contract"]
-    intelligence = record["intelligence"]
-    summary = record["summary"]
-    decision = record["decision"]
-    flags = record["flags"]
-
-    metadata = archive.store(contract_data, intelligence, summary)
-    archive.record_routing(metadata["contract_id"], action, route, metadata, decision)
-    email_delivery.deliver_decision(
-        contract_data, metadata["contract_id"], summary, decision, action, route, flags,
-    )
-
-    proposal_info = None
-    if proposal.is_triggered(action):
-        result = proposal.trigger(
-            contract_data, metadata["contract_id"], intelligence, decision, summary, flags,
-        )
-        proposal_info = result
-
-    pending.complete(contract_id)
+    result = resolve_decision(contract_id, action)
 
     return render_template(
         "decision.html",
         success=True,
-        contract_id=metadata["contract_id"],
-        title=contract_data.get("title", ""),
-        action_label=label,
-        route=route,
-        proposal=proposal_info,
+        contract_id=result["contract_id"],
+        title=result["title"],
+        action_label=result["action_label"],
+        route=result["route"],
+        proposal=result.get("proposal"),
     )

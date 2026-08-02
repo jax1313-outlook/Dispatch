@@ -20,6 +20,7 @@
             <li><a href="{{ url_for('pages.library') }}" class="{% if request.endpoint == 'pages.library' %}active{% endif %}">Library</a></li>
             <li><a href="{{ url_for('pages.archive_view') }}" class="{% if request.endpoint == 'pages.archive_view' %}active{% endif %}">Archive</a></li>
             <li><a href="{{ url_for('pages.intelligence_view') }}" class="{% if request.endpoint == 'pages.intelligence_view' %}active{% endif %}">Intelligence</a></li>
+            <li><a href="{{ url_for('pages.pending_decisions') }}" class="{% if request.endpoint == 'pages.pending_decisions' %}active{% endif %}">Pipeline</a></li>
             <li><a href="{{ url_for('pages.conflicts') }}" class="{% if request.endpoint == 'pages.conflicts' %}active{% endif %}">Conflict Notices</a></li>
             <li><a href="{{ url_for('pages.settings') }}" class="{% if request.endpoint == 'pages.settings' %}active{% endif %}">Settings</a></li>
         </ul>
