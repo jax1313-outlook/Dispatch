@@ -585,6 +585,19 @@ class TestPageRendering:
         resp = client.get("/archive")
         assert resp.status_code == 200
 
+    def test_archive_shows_pipeline_contracts(self, client, tmp_archive):
+        from cin_lite import archive
+        contract = {"title": "Pipeline Archived", "solicitation_number": "SOL-ARC",
+                     "agency": "DOD", "estimated_value": 100000, "response_date": None}
+        intel = {"set_aside_detection": {"module": "set_aside_detection", "version": "1.0",
+                 "flags": [], "findings": {}, "summary": "None",
+                 "score": None, "deterministic": True}}
+        archive.store(contract, intel, "test summary")
+        resp = client.get("/archive")
+        html = resp.data.decode("utf-8")
+        assert "CIN-Lite Pipeline Archive" in html
+        assert "Pipeline Archived" in html
+
 
 # ---------- Sandbox model tests ----------
 class TestSandboxModel:

@@ -37,6 +37,37 @@
 </section>
 {% endfor %}
 
+{% if pipeline_archived %}
+<section class="card-section">
+    <h2>CIN-Lite Pipeline Archive ({{ pipeline_archived|length }})</h2>
+    <p class="section-desc">Contracts processed through the CIN-Lite acquisition pipeline and archived after a decision.</p>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Contract ID</th>
+                <th>Title</th>
+                <th>Agency</th>
+                <th>Solicitation</th>
+                <th>Value</th>
+                <th>Processed</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for rec in pipeline_archived %}
+            <tr>
+                <td><code style="font-size:11px;">{{ rec.contract_id }}</code></td>
+                <td>{{ rec.title or '—' }}</td>
+                <td>{{ rec.agency or '—' }}</td>
+                <td>{{ rec.solicitation_number or '—' }}</td>
+                <td>{% if rec.estimated_value %}${{ "{:,.0f}".format(rec.estimated_value) }}{% else %}—{% endif %}</td>
+                <td>{{ rec.processed_at or '—' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
 {% if sandbox_archived %}
 <section class="card-section">
     <h2>Sandbox — Archive Candidates ({{ sandbox_archived|length }})</h2>

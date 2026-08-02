@@ -101,6 +101,36 @@ def test_store_without_enriched_has_no_key(tmp_archive, mapped_contract, intelli
     assert "_enriched" not in saved
 
 
+def test_list_contracts_empty(tmp_archive):
+    assert archive.list_contracts() == []
+
+
+def test_list_contracts_returns_metadata(tmp_archive, mapped_contract, intelligence):
+    metadata = archive.store(mapped_contract, intelligence, "s")
+    contracts = archive.list_contracts()
+    assert len(contracts) == 1
+    assert contracts[0]["contract_id"] == metadata["contract_id"]
+    assert contracts[0]["title"] == mapped_contract["title"]
+
+
+def test_load_artifact_json(tmp_archive, mapped_contract, intelligence):
+    metadata = archive.store(mapped_contract, intelligence, "s")
+    cid = metadata["contract_id"]
+    raw = archive.load_artifact("Raw", cid)
+    assert raw["title"] == mapped_contract["title"]
+
+
+def test_load_artifact_summary_txt(tmp_archive, mapped_contract, intelligence):
+    archive.store(mapped_contract, intelligence, "the summary")
+    cid = archive.make_id(mapped_contract)
+    summary = archive.load_artifact("Summaries", cid)
+    assert summary == "the summary"
+
+
+def test_load_artifact_missing(tmp_archive):
+    assert archive.load_artifact("Raw", "CIN-NOPE") is None
+
+
 def test_writes_isolated_to_tmp(tmp_archive, mapped_contract, intelligence):
     archive.store(mapped_contract, intelligence, "s")
     assert str(tmp_archive).startswith(str(tmp_archive.parent))
