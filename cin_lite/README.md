@@ -35,6 +35,7 @@ one file per contract, keyed by a unique ID like `CIN-20260627-D0ED1187`.
 |------|-------|----------------|
 | `acquisition.py` | Acquisition | Fetches opportunities from SAM.gov (falls back to `sample_data/`) |
 | `rules/` + `processing.py` | Processing | Deterministic rule modules -> JSON intelligence |
+| `agents/extractor.py` | Processing (non-deterministic) | Claude-backed intelligence extraction |
 | `agents/summarizer.py` | Processing (non-deterministic) | Claude-backed contract summary |
 | `agents/router.py` | Processing (non-deterministic) | Claude-backed routing recommendation |
 | `agents/proposal_writer.py` | Processing (non-deterministic) | Claude-backed proposal outline |
@@ -46,8 +47,8 @@ one file per contract, keyed by a unique ID like `CIN-20260627-D0ED1187`.
 
 ## Tests
 
-A deterministic pytest suite lives in `../tests/` (71 tests, ~96% coverage). From
-the project root:
+A deterministic pytest suite lives in `../tests/` (368+ tests). From the project
+root:
 
 ```bash
 pip install pytest pytest-cov
@@ -183,3 +184,72 @@ default; set `CIN_LITE_SMTP_STARTTLS=0` to disable.
 When `CIN_LITE_SMTP_HOST` is unset — or a send fails — the composed message is
 written to `Archive/Outbox/<id>.eml` (a standard RFC-822 file) and the pipeline
 continues. This keeps the offline, zero-setup path intact.
+
+## Portal API reference
+
+The L2-COS Portal exposes a JSON API under `/api/pipeline/` for external
+automation (n8n, cron, webhooks, scripts). All endpoints return
+`{"status": "ok", ...}` on success.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/pipeline/run` | Run acquisition → processing → checkpoint pipeline. Optional body: `{"action": "approve_archive"}` to auto-decide. |
+| `GET` | `/api/pipeline/pending` | List contracts awaiting a human decision. |
+| `POST` | `/api/pipeline/decide` | Apply a decision. Body: `{"contract_id": "CIN-...", "action": "approve_archive"}` |
+| `GET` | `/api/pipeline/history` | Completed routing decisions (most recent first). |
+| `GET` | `/api/pipeline/queue/<route>` | Contracts routed to a specific queue (e.g. `HUMAN_REVIEW`, `DEEP_ANALYSIS_QUEUE`). |
+| `GET` | `/api/pipeline/archive` | List all archived pipeline contracts. |
+| `GET` | `/api/pipeline/archive/<id>` | Full artifact bundle (metadata, intelligence, summary, routing) for one contract. |
+
+The email decision endpoint (`/api/decision/<id>/<action>?token=...`) is separate
+and HMAC-authenticated — used by the action buttons in checkpoint emails.
+
+### Valid actions
+
+| Key | Label | Route |
+|-----|-------|-------|
+| `approve_archive` | Approve for archive | `ARCHIVE` |
+| `approve_proposal` | Approve for proposal | `PROPOSAL_QUEUE` |
+| `reject` | Reject | `REJECTED` |
+| `flag_review` | Flag for review | `HUMAN_REVIEW` |
+| `deeper_analysis` | Request deeper analysis | `DEEP_ANALYSIS_QUEUE` |
+
+## Automation / n8n integration
+
+The pipeline is designed to be triggered by an external scheduler. The simplest
+setup is a cron job or n8n workflow that POSTs to the portal:
+
+```bash
+# cron: run the pipeline every 6 hours
+0 */6 * * *  curl -s -X POST http://127.0.0.1:8080/api/pipeline/run
+```
+
+### n8n workflow
+
+A minimal n8n workflow has three nodes:
+
+1. **Schedule Trigger** — fires on your cadence (e.g. every 6 hours).
+2. **HTTP Request** — `POST http://<portal-host>:8080/api/pipeline/run`
+   with header `Content-Type: application/json` and empty body `{}`.
+3. **IF** — check `$json.processed > 0` to branch into a notification
+   (Slack, email, etc.) when new contracts are found.
+
+To auto-decide all contracts (skipping the email checkpoint):
+
+```json
+{"action": "approve_archive"}
+```
+
+For a human-in-the-loop workflow, omit the action body — contracts land in
+the pending queue and the pipeline sends checkpoint emails. The reviewer
+clicks a button in the email (or uses the portal UI) to decide each one.
+
+### Webhook-driven decisions
+
+n8n can also listen for the checkpoint email (via an IMAP trigger) and
+auto-decide based on its own logic:
+
+```
+POST /api/pipeline/decide
+{"contract_id": "CIN-20260802-A1B2C3D4", "action": "approve_proposal"}
+```

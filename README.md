@@ -47,8 +47,26 @@ python -m pytest --cov=cin_lite --cov-report=term-missing --cov-fail-under=90
 CI runs the suite with coverage on every push and pull request across Python
 3.11–3.13 (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
+## Pipeline API
+
+The portal exposes a JSON API at `/api/pipeline/` for external automation
+(n8n, cron, webhooks). Key endpoints:
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/pipeline/run          # trigger pipeline
+curl http://127.0.0.1:8080/api/pipeline/pending               # list pending decisions
+curl -X POST http://127.0.0.1:8080/api/pipeline/decide \
+  -H 'Content-Type: application/json' \
+  -d '{"contract_id":"CIN-...","action":"approve_archive"}'   # decide
+curl http://127.0.0.1:8080/api/pipeline/archive               # browse archive
+```
+
+See **[cin_lite/README.md](cin_lite/README.md)** for the full API reference and
+n8n integration guide.
+
 ## Documentation
 
 - **[cin_lite/README.md](cin_lite/README.md)** — full layer-by-layer guide
-  (acquisition, rules, agents, control email, archive, proposal workflow).
+  (acquisition, rules, agents, control email, archive, proposal workflow,
+  API reference, n8n integration).
 - **[CLAUDE.md](CLAUDE.md)** — architecture and constraints (authoritative spec).
