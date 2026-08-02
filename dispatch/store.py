@@ -117,6 +117,26 @@ def list_loads(
         return _paginate(sql, params, conn, page=page, per_page=per_page)
 
 
+def get_lane_history(
+    pickup_location: str,
+    delivery_location: str,
+    exclude_load_id: str = "",
+    limit: int = 10,
+) -> list[dict]:
+    if not pickup_location or not delivery_location:
+        return []
+    sql = (
+        "SELECT * FROM loads "
+        "WHERE pickup_location=? AND delivery_location=? AND load_id!=? "
+        "ORDER BY created_at DESC LIMIT ?"
+    )
+    with get_connection() as conn:
+        rows = conn.execute(
+            sql, (pickup_location, delivery_location, exclude_load_id, limit)
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
 def update_load(load_id: str, **fields) -> dict | None:
     existing = get_load(load_id)
     if not existing:

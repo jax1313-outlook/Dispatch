@@ -664,6 +664,31 @@
     {% endif %}
 </div>
 
+{# ── Lane History ─────────────────────────────────────────────────── #}
+{% if lane_history %}
+<div class="brief-section">
+    <h3>Lane History ({{ lane_history|length }})</h3>
+    <p style="font-size:12px;color:#888;margin-bottom:8px;">
+        Past loads on {{ load.pickup_location or '?' }} &rarr; {{ load.delivery_location or '?' }}
+    </p>
+    <table class="event-table">
+        <thead><tr><th>Load</th><th>Customer</th><th>Status</th><th>Rate</th><th>Broker</th><th>Date</th></tr></thead>
+        <tbody>
+        {% for h in lane_history %}
+        <tr>
+            <td><a href="{{ url_for('pages.dispatch_detail', load_id=h.load_id) }}">{{ h.load_id[:8] }}...</a></td>
+            <td>{{ h.customer or '—' }}</td>
+            <td><span class="status-tag dispatch-{{ h.status }}">{{ h.status|replace('_', ' ') }}</span></td>
+            <td>{% if h.rate_amount %}${{ "%.2f"|format(h.rate_amount) }}{% else %}—{% endif %}</td>
+            <td>{{ h.broker_shipper or '—' }}</td>
+            <td>{{ h.created_at[:10] if h.created_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {# ── Retention / Archive ──────────────────────────────────────────── #}
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
