@@ -1457,3 +1457,93 @@ class TestNewPages:
         resp = client.get("/dispatch")
         html = resp.data.decode("utf-8")
         assert "Operational Considerations" in html
+
+
+# ==========================================================================
+# Dispatch Engine UI
+# ==========================================================================
+
+
+class TestDispatchEngineUI:
+    """Tests for the dispatch engine portal views (active loads + detail)."""
+
+    @pytest.fixture(autouse=True)
+    def _init_dispatch_db(self, tmp_path):
+        from dispatch import db
+        db.set_db_path(tmp_path / "dispatch_ui.db")
+        yield
+        db.set_db_path(None)
+
+    def test_dispatch_page_shows_active_loads_section(self, client):
+        resp = client.get("/dispatch")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "Active Loads" in html
+        assert "Load Board" in html
+
+    def test_dispatch_page_shows_engine_load(self, client):
+        from dispatch import services
+        services.create_load(customer="Test Customer Inc")
+        resp = client.get("/dispatch")
+        html = resp.data.decode("utf-8")
+        assert "Test Customer Inc" in html
+
+    def test_dispatch_page_status_filter(self, client):
+        from dispatch import services
+        services.create_load(customer="Active Co")
+        resp = client.get("/dispatch?status=created")
+        html = resp.data.decode("utf-8")
+        assert "Active Co" in html
+        resp2 = client.get("/dispatch?status=delivered")
+        html2 = resp2.data.decode("utf-8")
+        assert "Active Co" not in html2
+
+    def test_dispatch_detail_renders(self, client):
+        from dispatch import services
+        load = services.create_load(
+            customer="Detail Test",
+            pickup_location="Dallas, TX",
+            delivery_location="Houston, TX",
+        )
+        resp = client.get(f"/dispatch/{load['load_id']}")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "Detail Test" in html
+        assert "Dallas, TX" in html
+        assert "Houston, TX" in html
+        assert "Load Information" in html
+        assert "Visibility" in html
+        assert "Timeline" in html
+        assert "Evidence" in html
+        assert "Exceptions" in html
+        assert "POD Packages" in html
+        assert "Retention Archive" in html
+
+    def test_dispatch_detail_shows_milestones(self, client):
+        from dispatch import services
+        load = services.create_load(customer="MS Test")
+        services.add_milestone(load["load_id"], "dispatched", location="Yard A")
+        resp = client.get(f"/dispatch/{load['load_id']}")
+        html = resp.data.decode("utf-8")
+        assert "dispatched" in html
+        assert "Yard A" in html
+
+    def test_dispatch_detail_shows_exceptions(self, client):
+        from dispatch import services
+        load = services.create_load(customer="Exc Test")
+        services.add_milestone(load["load_id"], "dispatched")
+        services.open_exception(load["load_id"], exception_type="delay", description="Traffic jam")
+        resp = client.get(f"/dispatch/{load['load_id']}")
+        html = resp.data.decode("utf-8")
+        assert "Traffic jam" in html
+        assert "Resolve" in html
+
+    def test_dispatch_detail_not_found_redirects(self, client):
+        resp = client.get("/dispatch/nonexistent-id")
+        assert resp.status_code == 302
+
+    def test_new_load_form_present(self, client):
+        resp = client.get("/dispatch")
+        html = resp.data.decode("utf-8")
+        assert "new-load-form" in html
+        assert "Create New Load" in html

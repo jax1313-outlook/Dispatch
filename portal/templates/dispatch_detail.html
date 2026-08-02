@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}Load {{ load.load_id[:12] }} — L2-COS Portal{% endblock %}
+{% block page_title %}Load Detail{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('pages.dispatch') }}" class="btn btn-sm">&larr; Back to Dispatch</a>
+{% endblock %}
+
+{% block body %}
+<div class="brief-container">
+
+{# ── Load Info ─────────────────────────────────────────────────────── #}
+<div class="brief-section">
+    <h3>Load Information</h3>
+    <div class="brief-fields">
+        <div><strong>Load ID:</strong> {{ load.load_id }}</div>
+        <div><strong>Status:</strong> <span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></div>
+        <div><strong>Customer:</strong> {{ load.customer }}</div>
+        <div><strong>Broker / Shipper:</strong> {{ load.broker_shipper or '—' }}</div>
+        <div><strong>Pickup Location:</strong> {{ load.pickup_location or '—' }}</div>
+        <div><strong>Delivery Location:</strong> {{ load.delivery_location or '—' }}</div>
+        <div><strong>Pickup Time:</strong> {{ load.pickup_datetime or '—' }}</div>
+        <div><strong>Delivery Time:</strong> {{ load.delivery_datetime or '—' }}</div>
+        <div><strong>Equipment:</strong> {{ load.equipment or '—' }}</div>
+        <div><strong>Driver:</strong> {{ load.driver or '—' }}</div>
+        <div class="full-width"><strong>Notes:</strong> {{ load.notes or '—' }}</div>
+        <div><strong>Created:</strong> {{ load.created_at[:16] if load.created_at else '—' }}</div>
+        <div><strong>Updated:</strong> {{ load.updated_at[:16] if load.updated_at else '—' }}</div>
+    </div>
+</div>
+
+{# ── Visibility ────────────────────────────────────────────────────── #}
+{% if visibility %}
+<div class="brief-section">
+    <h3>Visibility</h3>
+    <div class="dispatch-visibility">
+        <div class="vis-item">
+            <span class="vis-label">Current Status</span>
+            <span class="status-tag dispatch-{{ visibility.current_status }}">{{ visibility.current_status|replace('_', ' ') }}</span>
+        </div>
+        <div class="vis-item">
+            <span class="vis-label">Last Milestone</span>
+            <span>{{ (visibility.last_milestone or '—')|replace('_', ' ') }}</span>
+        </div>
+        <div class="vis-item">
+            <span class="vis-label">Next Expected</span>
+            <span>{{ (visibility.next_expected_milestone or '—')|replace('_', ' ') }}</span>
+        </div>
+        <div class="vis-item">
+            <span class="vis-label">Exception Flag</span>
+            <span>{% if visibility.exception_flag %}<span class="severity-tag severity-critical">ACTIVE</span>{% else %}None{% endif %}</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Timeline (Milestones) ─────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Timeline ({{ milestones|length }})</h3>
+        <button class="btn btn-sm btn-success" onclick="toggleEl('milestone-form')">+ Add Milestone</button>
+    </div>
+
+    <div id="milestone-form" style="display:none;margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="addMilestone(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:8px;">
+                <div><label><strong>Event Type *</strong><br>
+                    <select name="event_type" required style="width:100%;padding:4px;">
+                        {% for t in milestone_types %}<option value="{{ t }}">{{ t|replace('_', ' ')|title }}</option>{% endfor %}
+                    </select></label></div>
+                <div><label><strong>Source</strong><br>
+                    <select name="source" style="width:100%;padding:4px;">
+                        {% for s in milestone_sources %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                    </select></label></div>
+                <div><label><strong>Location</strong><br>
+                    <input type="text" name="location" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Note</strong><br>
+                    <input type="text" name="note" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success">Add</button>
+            <button type="button" class="btn btn-sm" onclick="toggleEl('milestone-form')">Cancel</button>
+        </form>
+    </div>
+
+    {% if milestones %}
+    <table class="event-table">
+        <thead><tr><th>Time</th><th>Event</th><th>Location</th><th>Source</th><th>Note</th></tr></thead>
+        <tbody>
+        {% for ms in milestones %}
+        <tr>
+            <td>{{ ms.event_time[:16] if ms.event_time else '—' }}</td>
+            <td><span class="status-tag">{{ ms.event_type|replace('_', ' ') }}</span></td>
+            <td>{{ ms.location or '—' }}</td>
+            <td>{{ ms.source }}</td>
+            <td>{{ ms.note or '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state-sm">No milestones recorded.</p>
+    {% endif %}
+</div>
+
+{# ── Evidence ──────────────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Evidence ({{ evidence|length }})</h3>
+        <button class="btn btn-sm btn-success" onclick="toggleEl('evidence-form')">+ Attach Evidence</button>
+    </div>
+
+    <div id="evidence-form" style="display:none;margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="attachEvidence(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:8px;">
+                <div><label><strong>Type</strong><br>
+                    <select name="evidence_type" style="width:100%;padding:4px;">
+                        {% for t in evidence_types %}<option value="{{ t }}">{{ t|replace('_', ' ')|title }}</option>{% endfor %}
+                    </select></label></div>
+                <div><label><strong>Description</strong><br>
+                    <input type="text" name="description" style="width:100%;padding:4px 8px;"></label></div>
+                <div class="full-width"><label><strong>File Path</strong><br>
+                    <input type="text" name="file_path" placeholder="Optional file reference" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success">Attach</button>
+            <button type="button" class="btn btn-sm" onclick="toggleEl('evidence-form')">Cancel</button>
+        </form>
+    </div>
+
+    {% if evidence %}
+    <table class="event-table">
+        <thead><tr><th>ID</th><th>Type</th><th>Description</th><th>Captured</th><th>Uploaded By</th></tr></thead>
+        <tbody>
+        {% for ev in evidence %}
+        <tr>
+            <td style="font-size:11px;">{{ ev.evidence_id[:12] }}...</td>
+            <td><span class="status-tag">{{ ev.evidence_type }}</span></td>
+            <td>{{ ev.description or '—' }}</td>
+            <td>{{ ev.capture_time[:16] if ev.capture_time else '—' }}</td>
+            <td>{{ ev.uploaded_by or '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state-sm">No evidence attached.</p>
+    {% endif %}
+</div>
+
+{# ── Exceptions ────────────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Exceptions ({{ exceptions|length }})</h3>
+        <button class="btn btn-sm btn-warning" onclick="toggleEl('exception-form')">+ Report Exception</button>
+    </div>
+
+    <div id="exception-form" style="display:none;margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
+        <form onsubmit="openException(event, '{{ load.load_id }}')">
+            <div class="brief-fields" style="margin-bottom:8px;">
+                <div><label><strong>Type</strong><br>
+                    <select name="exception_type" style="width:100%;padding:4px;">
+                        <option value="delay">Delay</option>
+                        <option value="damage">Damage</option>
+                        <option value="refusal">Refusal</option>
+                        <option value="shortage">Shortage</option>
+                        <option value="overage">Overage</option>
+                        <option value="other">Other</option>
+                    </select></label></div>
+                <div><label><strong>Severity</strong><br>
+                    <select name="severity" style="width:100%;padding:4px;">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select></label></div>
+                <div class="full-width"><label><strong>Description</strong><br>
+                    <input type="text" name="description" style="width:100%;padding:4px 8px;"></label></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-warning">Report</button>
+            <button type="button" class="btn btn-sm" onclick="toggleEl('exception-form')">Cancel</button>
+        </form>
+    </div>
+
+    {% if exceptions %}
+    {% for exc in exceptions %}
+    <div class="conflict-card severity-{{ exc.severity }}" style="margin-bottom:8px;">
+        <div class="conflict-header">
+            <span class="severity-tag severity-{{ exc.severity }}">{{ exc.severity }}</span>
+            <strong>{{ exc.exception_type|replace('_', ' ')|title }}</strong>
+            <span class="status-tag {% if exc.status == 'open' %}status-open{% else %}dispatch-completed{% endif %}">{{ exc.status }}</span>
+        </div>
+        <div class="conflict-fields">
+            <div>{{ exc.description or 'No description' }}</div>
+            <div style="margin-top:4px;font-size:11px;color:#999;">
+                Reported: {{ exc.first_reported[:16] if exc.first_reported else '—' }}
+                {% if exc.resolved_at %} | Resolved: {{ exc.resolved_at[:16] }}{% endif %}
+                {% if exc.resolution_note %} | Note: {{ exc.resolution_note }}{% endif %}
+            </div>
+        </div>
+        {% if exc.status == 'open' %}
+        <div style="margin-top:8px;">
+            <button class="btn btn-sm btn-success" onclick="resolveException('{{ exc.exception_id }}')">Resolve</button>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="empty-state-sm">No exceptions reported.</p>
+    {% endif %}
+</div>
+
+{# ── POD Packages ──────────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">POD Packages ({{ pods|length }})</h3>
+        <button class="btn btn-sm btn-primary" onclick="generatePod('{{ load.load_id }}')">Generate POD</button>
+    </div>
+
+    {% if pods %}
+    {% for pod in pods %}
+    <div style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;padding:10px 14px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <strong>{{ pod.pod_id[:12] }}...</strong>
+            <span class="status-tag dispatch-{{ pod.status }}">{{ pod.status }}</span>
+        </div>
+        <div style="font-size:13px;color:#555;">
+            <div>Recipient: {{ pod.recipient or '—' }} | Generated: {{ pod.generated_at[:16] if pod.generated_at else '—' }}</div>
+            <div>Evidence items: {{ pod.evidence_ids|length if pod.evidence_ids else 0 }}</div>
+            {% if pod.notes %}<div>Notes: {{ pod.notes }}</div>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="empty-state-sm">No POD packages generated.</p>
+    {% endif %}
+</div>
+
+{# ── Retention / Archive ──────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Retention Archive</h3>
+        {% if not retention %}
+        <button class="btn btn-sm" onclick="archiveLoad('{{ load.load_id }}')">Archive Load</button>
+        {% endif %}
+    </div>
+
+    {% if retention %}
+    <div class="brief-fields">
+        <div><strong>Archive ID:</strong> {{ retention.archive_id }}</div>
+        <div><strong>Status:</strong> <span class="status-tag dispatch-{{ retention.retention_status }}">{{ retention.retention_status }}</span></div>
+        <div><strong>Final Status:</strong> {{ retention.final_status }}</div>
+        <div><strong>Archived At:</strong> {{ retention.archived_at[:16] if retention.archived_at else '—' }}</div>
+        <div><strong>Location:</strong> {{ retention.archive_location }}</div>
+        <div><strong>Evidence Count:</strong> {{ retention.evidence_index|length if retention.evidence_index else 0 }}</div>
+    </div>
+    {% else %}
+    <p class="empty-state-sm">Not archived.</p>
+    {% endif %}
+</div>
+
+</div>
+
+<script>
+function toggleEl(id) {
+    var el = document.getElementById(id);
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function addMilestone(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    apiPost('/api/dispatch/loads/' + loadId + '/milestones', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function attachEvidence(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    apiPost('/api/dispatch/loads/' + loadId + '/evidence', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function openException(e, loadId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    apiPost('/api/dispatch/loads/' + loadId + '/exceptions', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function resolveException(excId) {
+    var note = prompt('Resolution note (optional):');
+    apiPost('/api/dispatch/exceptions/' + excId + '/resolve', {resolution_note: note || ''}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function generatePod(loadId) {
+    var recipient = prompt('POD recipient (optional):');
+    apiPost('/api/dispatch/loads/' + loadId + '/pod', {recipient: recipient || ''}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function archiveLoad(loadId) {
+    if (!confirm('Archive this load? This cannot be undone.')) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/archive', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+</script>
+{% endblock %}

@@ -81,6 +81,12 @@ def sam():
 
 @pages_bp.route("/dispatch")
 def dispatch():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import LOAD_STATUSES
+
+    status_filter = request.args.get("status")
+    engine_loads = dispatch_svc.list_loads(status=status_filter)
+
     all_entries = sandbox.get_all()
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
 
@@ -103,8 +109,28 @@ def dispatch():
     return render_template(
         "dispatch.html",
         entries=entries_sorted,
+        engine_loads=engine_loads,
+        load_statuses=LOAD_STATUSES,
+        status_filter=status_filter,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
+    )
+
+
+@pages_bp.route("/dispatch/<load_id>")
+def dispatch_detail(load_id):
+    from dispatch import services as dispatch_svc
+    from dispatch.models import MILESTONE_TYPES, MILESTONE_SOURCES, EVIDENCE_TYPES
+
+    bundle = dispatch_svc.get_load_bundle(load_id)
+    if not bundle:
+        return redirect(url_for("pages.dispatch"))
+    return render_template(
+        "dispatch_detail.html",
+        milestone_types=MILESTONE_TYPES,
+        milestone_sources=MILESTONE_SOURCES,
+        evidence_types=EVIDENCE_TYPES,
+        **bundle,
     )
 
 
