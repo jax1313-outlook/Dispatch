@@ -44,6 +44,7 @@ def home():
     stalled = dispatch_svc.check_stalled_loads()
     from dispatch import store as dispatch_store
     recent_activity = dispatch_store.get_recent_activity(limit=15)
+    chart_data = dispatch_svc.get_chart_data()
 
     return render_template(
         "home.html",
@@ -59,6 +60,7 @@ def home():
         fin_dashboard=fin_dashboard,
         stalled_loads=stalled,
         recent_activity=recent_activity,
+        chart_data=chart_data,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
