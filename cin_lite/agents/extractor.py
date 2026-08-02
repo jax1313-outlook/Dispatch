@@ -133,14 +133,14 @@ def _deterministic_extraction(
     if foreign.get("indicators"):
         competitive.append("Foreign-influence indicators present — may limit teaming")
 
-    if vendor.get("sole_source_indicators"):
-        competitive.append("Sole-source indicators suggest incumbent advantage")
+    if vendor.get("indicators", {}).get("limited_competition"):
+        competitive.append("Sole-source/limited-competition indicators suggest incumbent advantage")
 
-    if sub.get("subcontracting_required"):
+    if sub.get("subcontracting_plan_required"):
         competitive.append("Subcontracting plan required — teaming strategy needed")
 
-    if jv.get("jv_encouraged") or jv.get("mp_encouraged"):
-        competitive.append("JV/mentor-protege arrangements encouraged")
+    if jv.get("joint_venture") or jv.get("mentor_protege"):
+        competitive.append("JV/mentor-protege arrangements referenced")
 
     cyber_flags = [f for f in flags if f in (
         "cyber_requirements_present", "cmmc_level_2_or_higher", "sensitive_data_handling",

@@ -41,7 +41,10 @@ def _write_json(subdir: str, contract_id: str, payload: Any) -> Path:
     return path
 
 
-def store(contract: dict, intelligence: dict, summary: str) -> dict:
+def store(
+    contract: dict, intelligence: dict, summary: str,
+    *, enriched: dict | None = None,
+) -> dict:
     """Persist raw/processed/intelligence/summary; return the metadata bundle."""
     ensure_tree()
     contract_id = make_id(contract)
@@ -61,7 +64,10 @@ def store(contract: dict, intelligence: dict, summary: str) -> dict:
 
     _write_json("Raw", contract_id, contract)
     _write_json("Processed", contract_id, {"metadata": metadata, "contract": contract})
-    _write_json("Intelligence", contract_id, intelligence)
+    intel_payload = dict(intelligence)
+    if enriched:
+        intel_payload["_enriched"] = enriched
+    _write_json("Intelligence", contract_id, intel_payload)
     (ARCHIVE_ROOT / "Summaries" / f"{contract_id}.txt").write_text(summary, encoding="utf-8")
 
     return metadata
