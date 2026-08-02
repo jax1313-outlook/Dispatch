@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Billing — L2-COS Portal{% endblock %}
+{% block page_title %}Billing{% endblock %}
+
+{% block body %}
+<div class="dashboard-summary">
+    <div class="summary-card" style="border-left:4px solid #27ae60;">
+        <span class="summary-number">${{ "%.0f"|format(fin_dashboard.total_revenue) }}</span>
+        <span class="summary-label">Total Revenue</span>
+    </div>
+    <div class="summary-card {% if fin_dashboard.total_profit >= 0 %}summary-info{% else %}summary-warning{% endif %}">
+        <span class="summary-number">${{ "%.0f"|format(fin_dashboard.total_profit) }}</span>
+        <span class="summary-label">Profit ({{ "%.1f"|format(fin_dashboard.margin_pct) }}%)</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #2ecc71;">
+        <span class="summary-number">{{ fin_dashboard.paid_count }}</span>
+        <span class="summary-label">Paid (${{ "%.0f"|format(fin_dashboard.total_paid) }})</span>
+    </div>
+    <a href="?status=invoiced" class="summary-card" style="text-decoration:none;color:inherit;border-left:4px solid #f39c12;">
+        <span class="summary-number">{{ fin_dashboard.invoiced_count }}</span>
+        <span class="summary-label">Invoiced</span>
+    </a>
+    <a href="?status=overdue" class="summary-card summary-warning" style="text-decoration:none;color:inherit;">
+        <span class="summary-number">{{ fin_dashboard.overdue_count }}</span>
+        <span class="summary-label">Overdue (${{ "%.0f"|format(fin_dashboard.total_outstanding) }})</span>
+    </a>
+    <a href="?status=disputed" class="summary-card" style="text-decoration:none;color:inherit;border-left:4px solid #e67e22;">
+        <span class="summary-number">{{ disputed_count }}</span>
+        <span class="summary-label">Disputed</span>
+    </a>
+</div>
+
+<div class="card-section">
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Settlements</h2>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <a href="{{ url_for('pages.billing') }}" class="btn btn-sm {% if not status_filter %}btn-primary{% endif %}">All</a>
+            {% for s in settlement_statuses %}
+            <a href="?status={{ s }}" class="btn btn-sm {% if status_filter == s %}btn-primary{% endif %}">{{ s|replace('_', ' ')|title }}</a>
+            {% endfor %}
+        </div>
+        <button class="btn btn-sm btn-warning" onclick="runAgingCheck()" title="Scan invoiced settlements for overdue payments" style="margin-left:auto;">Run Aging Check</button>
+    </div>
+
+    {% if settlements %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Invoice #</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Invoice Amount</th>
+                <th>Invoice Date</th>
+                <th>Due Date</th>
+                <th>Payment</th>
+                <th>Notes</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stl in settlements %}
+            <tr {% if stl.payment_status == 'overdue' %}style="border-left:3px solid #e74c3c;"{% elif stl.payment_status == 'disputed' %}style="border-left:3px solid #e67e22;"{% endif %}>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=stl.load_id) }}">{{ stl.invoice_number }}</a></td>
+                <td>{{ stl.customer or '—' }}</td>
+                <td><span class="status-tag settlement-{{ stl.payment_status }}">{{ stl.payment_status|replace('_', ' ') }}</span></td>
+                <td>${{ "%.2f"|format(stl.invoice_amount) }}</td>
+                <td>{{ stl.invoice_date[:10] if stl.invoice_date else '—' }}</td>
+                <td>{{ stl.due_date[:10] if stl.due_date else '—' }}</td>
+                <td>
+                    {% if stl.payment_status == 'paid' %}
+                    ${{ "%.2f"|format(stl.payment_amount) }}
+                    {% if stl.payment_method %}({{ stl.payment_method }}){% endif %}
+                    {% else %}—{% endif %}
+                </td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ stl.notes or '' }}">{{ stl.notes or '—' }}</td>
+                <td>
+                    {% if stl.payment_status in ('invoiced', 'overdue') %}
+                    <button class="btn btn-xs btn-danger" onclick="disputeFromList('{{ stl.load_id }}')">Dispute</button>
+                    {% elif stl.payment_status == 'disputed' %}
+                    <button class="btn btn-xs" style="background:#880e4f;color:#fff;" onclick="writeOffFromList('{{ stl.load_id }}')">Write Off</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No settlements found{% if status_filter %} with status "{{ status_filter }}"{% endif %}.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function disputeFromList(loadId) {
+    var reason = prompt('Dispute reason (optional):');
+    if (reason === null) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/settlement/dispute', {reason: reason}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+function writeOffFromList(loadId) {
+    if (!confirm('Write off this invoice as uncollectible?')) return;
+    var reason = prompt('Write-off reason (optional):');
+    if (reason === null) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/settlement/write-off', {reason: reason}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+</script>
+{% endblock %}
