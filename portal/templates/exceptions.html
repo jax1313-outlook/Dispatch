@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Exceptions — L2-COS Portal{% endblock %}
+{% block page_title %}Exceptions{% endblock %}
+
+{% block body %}
+
+{# ── Summary Cards ──────────────────────────────────────────────── #}
+<div class="card-section">
+    <div class="financial-summary">
+        <div class="financial-item" style="border-left:3px solid #e74c3c;">
+            <span class="financial-label">Critical (Open)</span>
+            <span class="financial-value">{{ critical_count }}</span>
+        </div>
+        <div class="financial-item" style="border-left:3px solid #e67e22;">
+            <span class="financial-label">High (Open)</span>
+            <span class="financial-value">{{ high_count }}</span>
+        </div>
+        {% if open_count is not none %}
+        <div class="financial-item" style="border-left:3px solid #f39c12;">
+            <span class="financial-label">Open</span>
+            <span class="financial-value">{{ open_count }}</span>
+        </div>
+        {% endif %}
+        {% if investigating_count is not none %}
+        <div class="financial-item" style="border-left:3px solid #3498db;">
+            <span class="financial-label">Investigating</span>
+            <span class="financial-value">{{ investigating_count }}</span>
+        </div>
+        {% endif %}
+        <div class="financial-item">
+            <span class="financial-label">Showing</span>
+            <span class="financial-value">{{ exceptions|length }}</span>
+        </div>
+    </div>
+</div>
+
+{# ── Filters ────────────────────────────────────────────────────── #}
+<div class="card-section">
+    <div style="margin-bottom:10px;display:flex;gap:4px;flex-wrap:wrap;">
+        <a href="{{ url_for('pages.exceptions', severity=severity_filter or '', exception_type=type_filter or '') }}"
+           class="btn btn-sm {% if not status_filter %}btn-primary{% endif %}">All Statuses</a>
+        {% for s in exception_statuses %}
+        <a href="{{ url_for('pages.exceptions', status=s, severity=severity_filter or '', exception_type=type_filter or '') }}"
+           class="btn btn-sm {% if status_filter == s %}btn-primary{% endif %}">{{ s|title }}</a>
+        {% endfor %}
+    </div>
+    <form method="get" action="{{ url_for('pages.exceptions') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        {% if status_filter %}
+        <input type="hidden" name="status" value="{{ status_filter }}">
+        {% endif %}
+        <div>
+            <label style="font-size:0.85em;"><strong>Severity</strong><br>
+            <select name="severity" style="padding:4px 8px;">
+                <option value="">All</option>
+                {% for sv in severity_levels %}
+                <option value="{{ sv }}" {% if severity_filter == sv %}selected{% endif %}>{{ sv|title }}</option>
+                {% endfor %}
+            </select></label>
+        </div>
+        <div>
+            <label style="font-size:0.85em;"><strong>Type</strong><br>
+            <select name="exception_type" style="padding:4px 8px;">
+                <option value="">All</option>
+                {% for et in exception_types %}
+                <option value="{{ et }}" {% if type_filter == et %}selected{% endif %}>{{ et|replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select></label>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+            {% if severity_filter or type_filter %}
+            <a href="{{ url_for('pages.exceptions', status=status_filter or '') }}" class="btn btn-sm">Clear Filters</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+{# ── Exception List ─────────────────────────────────────────────── #}
+<div class="card-section">
+    <h2>Exceptions ({{ exceptions|length }})</h2>
+    {% if exceptions %}
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Exception ID</th>
+                <th>Load</th>
+                <th>Customer</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th>Description</th>
+                <th>Reported</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for exc in exceptions %}
+            <tr class="{% if exc.severity == 'critical' %}exception-row-critical{% elif exc.severity == 'high' %}exception-row-high{% endif %}">
+                <td><code>{{ exc.exception_id[:12] }}...</code></td>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=exc.load_id) }}">{{ exc.load_id[:12] }}...</a></td>
+                <td>{{ exc.customer or '—' }}</td>
+                <td>{{ exc.exception_type|replace('_', ' ')|title }}</td>
+                <td><span class="severity-tag severity-{{ exc.severity }}">{{ exc.severity|upper }}</span></td>
+                <td><span class="status-tag exception-status-{{ exc.status }}">{{ exc.status|title }}</span></td>
+                <td>{{ exc.description[:60] }}{% if exc.description|length > 60 %}...{% endif %}</td>
+                <td>{{ exc.first_reported|time_ago }}</td>
+                <td>
+                    {% if exc.status == 'open' %}
+                    <button class="btn btn-xs btn-primary" onclick="updateExceptionStatus('{{ exc.exception_id }}', 'investigating')">Investigate</button>
+                    <button class="btn btn-xs btn-success" onclick="resolveException('{{ exc.exception_id }}')">Resolve</button>
+                    {% elif exc.status == 'investigating' %}
+                    <button class="btn btn-xs btn-success" onclick="resolveException('{{ exc.exception_id }}')">Resolve</button>
+                    {% elif exc.status == 'resolved' %}
+                    <button class="btn btn-xs" onclick="updateExceptionStatus('{{ exc.exception_id }}', 'closed')">Close</button>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No exceptions{% if status_filter %} with status "{{ status_filter }}"{% endif %}{% if severity_filter %} and severity "{{ severity_filter }}"{% endif %}.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function updateExceptionStatus(exceptionId, status) {
+    apiPatch('/api/dispatch/exceptions/' + exceptionId, {status: status}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function resolveException(exceptionId) {
+    var note = prompt('Resolution note (optional):');
+    if (note === null) return;
+    apiPost('/api/dispatch/exceptions/' + exceptionId + '/resolve', {resolution_note: note}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+</script>
+{% endblock %}

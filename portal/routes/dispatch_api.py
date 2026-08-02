@@ -320,6 +320,29 @@ def update_exception(exception_id):
     return jsonify({"status": "ok", "exception": result})
 
 
+# ── Global Exceptions ────────────────────────────────────────────
+
+@dispatch_bp.route("/exceptions", methods=["GET"])
+def list_all_exceptions():
+    status = request.args.get("status")
+    if status and status not in EXCEPTION_STATUSES:
+        return jsonify({"error": f"Invalid status: {status}"}), 400
+    severity = request.args.get("severity")
+    if severity and severity not in SEVERITY_LEVELS:
+        return jsonify({"error": f"Invalid severity: {severity}"}), 400
+    exc_type = request.args.get("exception_type")
+    if exc_type and exc_type not in EXCEPTION_TYPES:
+        return jsonify({"error": f"Invalid exception_type: {exc_type}"}), 400
+    items = services.list_exceptions(status=status)
+    if severity:
+        items = [e for e in items if e.get("severity") == severity]
+    if exc_type:
+        items = [e for e in items if e.get("exception_type") == exc_type]
+    return jsonify({
+        "status": "ok", "exceptions": items, "count": len(items),
+    })
+
+
 # ── POD Packages ──────────────────────────────────────────────────────
 
 @dispatch_bp.route("/loads/<load_id>/pod", methods=["GET"])
@@ -599,7 +622,13 @@ def list_settlements():
     status = request.args.get("payment_status")
     if status and status not in SETTLEMENT_STATUSES:
         return jsonify({"error": f"Invalid payment_status: {status}"}), 400
-    items = services.list_settlements(payment_status=status)
+    items = services.list_settlements(
+        payment_status=status,
+        customer=request.args.get("customer") or None,
+        date_from=request.args.get("date_from") or None,
+        date_to=request.args.get("date_to") or None,
+        invoice_number=request.args.get("invoice") or None,
+    )
     return jsonify({"status": "ok", "settlements": items, "count": len(items)})
 
 
