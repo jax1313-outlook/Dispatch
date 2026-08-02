@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Profitability — L2-COS Portal{% endblock %}
+{% block page_title %}Load Profitability Ranking{% endblock %}
+
+{% block body %}
+
+<style>
+.profit-positive { color: #27ae60; font-weight: 600; }
+.profit-negative { color: #e74c3c; font-weight: 600; }
+.profit-zero { color: #7f8c8d; }
+.rank-badge { display:inline-block; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; font-weight:700; font-size:0.85em; }
+.rank-1 { background:#ffd700; color:#333; }
+.rank-2 { background:#c0c0c0; color:#333; }
+.rank-3 { background:#cd7f32; color:#fff; }
+.rank-other { background:#ecf0f1; color:#555; }
+.margin-bar { height:6px; border-radius:3px; background:#ecf0f1; overflow:hidden; min-width:60px; }
+.margin-bar-fill { height:100%; border-radius:3px; }
+.filter-bar { display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:6px; }
+.filter-bar label { font-size:0.85em; font-weight:600; color:#555; display:block; margin-bottom:2px; }
+.filter-bar select, .filter-bar input { padding:5px 8px; border:1px solid #dee2e6; border-radius:4px; }
+</style>
+
+<div class="dashboard-summary">
+    <div class="summary-card">
+        <span class="summary-number">{{ summary.total_loads }}</span>
+        <span class="summary-label">Total Loads</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #2980b9;">
+        <span class="summary-number">${{ "%.0f"|format(summary.total_revenue) }}</span>
+        <span class="summary-label">Total Revenue</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid {% if summary.total_profit >= 0 %}#27ae60{% else %}#e74c3c{% endif %};">
+        <span class="summary-number">${{ "%.0f"|format(summary.total_profit) }}</span>
+        <span class="summary-label">Total Profit</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #8e44ad;">
+        <span class="summary-number">{{ summary.avg_margin_pct }}%</span>
+        <span class="summary-label">Avg Margin</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #27ae60;">
+        <span class="summary-number">{{ summary.profitable_count }}</span>
+        <span class="summary-label">Profitable</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #e74c3c;">
+        <span class="summary-number">{{ summary.unprofitable_count }}</span>
+        <span class="summary-label">Unprofitable</span>
+    </div>
+</div>
+
+<form method="GET" action="{{ url_for('pages.profitability') }}">
+<div class="filter-bar">
+    <div>
+        <label>Sort By</label>
+        <select name="sort_by">
+            <option value="profit" {% if sort_by == 'profit' %}selected{% endif %}>Profit ($)</option>
+            <option value="margin_pct" {% if sort_by == 'margin_pct' %}selected{% endif %}>Margin (%)</option>
+            <option value="revenue" {% if sort_by == 'revenue' %}selected{% endif %}>Revenue</option>
+            <option value="revenue_per_mile" {% if sort_by == 'revenue_per_mile' %}selected{% endif %}>Revenue/Mile</option>
+            <option value="total_expenses" {% if sort_by == 'total_expenses' %}selected{% endif %}>Expenses</option>
+        </select>
+    </div>
+    <div>
+        <label>Order</label>
+        <select name="sort_order">
+            <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>High → Low</option>
+            <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Low → High</option>
+        </select>
+    </div>
+    <div>
+        <label>Status</label>
+        <select name="status">
+            <option value="">All</option>
+            {% for s in load_statuses %}
+            <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s|replace('_',' ')|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label>From</label>
+        <input type="date" name="date_from" value="{{ date_from }}">
+    </div>
+    <div>
+        <label>To</label>
+        <input type="date" name="date_to" value="{{ date_to }}">
+    </div>
+    <div>
+        <button type="submit" style="padding:6px 14px; background:#3498db; color:#fff; border:none; border-radius:4px; cursor:pointer;">Apply</button>
+        <a href="{{ url_for('pages.profitability') }}" style="padding:6px 14px; color:#6c757d; text-decoration:none;">Reset</a>
+    </div>
+</div>
+</form>
+
+<div class="card-section">
+    <h2>Load Rankings</h2>
+    {% if loads %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Load ID</th>
+                <th>Customer</th>
+                <th>Broker</th>
+                <th>Route</th>
+                <th>Status</th>
+                <th>Revenue</th>
+                <th>Expenses</th>
+                <th>Profit</th>
+                <th>Margin</th>
+                <th>$/Mile</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in loads %}
+            <tr>
+                <td>
+                    <span class="rank-badge {% if l.rank == 1 %}rank-1{% elif l.rank == 2 %}rank-2{% elif l.rank == 3 %}rank-3{% else %}rank-other{% endif %}">
+                        {{ l.rank }}
+                    </span>
+                </td>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=l.load_id) }}">{{ l.load_id[:16] }}</a></td>
+                <td>{{ l.customer or '—' }}</td>
+                <td>{{ l.broker_shipper or '—' }}</td>
+                <td>{{ l.pickup_location[:15] if l.pickup_location else '—' }} → {{ l.delivery_location[:15] if l.delivery_location else '—' }}</td>
+                <td><span class="status-badge status-{{ l.status }}">{{ l.status|replace('_',' ')|title }}</span></td>
+                <td>${{ "%.0f"|format(l.revenue) }}</td>
+                <td>${{ "%.0f"|format(l.total_expenses) }}</td>
+                <td>
+                    <span class="{% if l.profit > 0 %}profit-positive{% elif l.profit < 0 %}profit-negative{% else %}profit-zero{% endif %}">
+                        ${{ "%.0f"|format(l.profit) }}
+                    </span>
+                </td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span class="{% if l.margin_pct > 0 %}profit-positive{% elif l.margin_pct < 0 %}profit-negative{% else %}profit-zero{% endif %}">
+                            {{ l.margin_pct }}%
+                        </span>
+                        <div class="margin-bar">
+                            <div class="margin-bar-fill" style="width:{{ [l.margin_pct, 100]|min if l.margin_pct > 0 else 0 }}%; background:{% if l.margin_pct >= 20 %}#27ae60{% elif l.margin_pct >= 10 %}#f39c12{% elif l.margin_pct > 0 %}#e67e22{% else %}#e74c3c{% endif %};"></div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    {% if l.revenue_per_mile > 0 %}
+                    ${{ "%.2f"|format(l.revenue_per_mile) }}
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No loads found. Create loads with rate confirmations to see profitability rankings.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

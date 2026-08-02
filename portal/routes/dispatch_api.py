@@ -1538,3 +1538,23 @@ def delete_broker_contact(broker_id):
     if not ok:
         return jsonify({"error": "broker not found"}), 404
     return jsonify({"status": "ok"})
+
+
+# ── Load Profitability Ranking ───────────────────────────────────────
+
+
+@dispatch_bp.route("/profitability", methods=["GET"])
+def load_profitability():
+    sort_by = request.args.get("sort_by", "profit")
+    sort_order = request.args.get("sort_order", "desc")
+    date_from = request.args.get("date_from") or None
+    date_to = request.args.get("date_to") or None
+    status = request.args.get("status") or None
+    try:
+        result = services.get_load_profitability(
+            sort_by=sort_by, sort_order=sort_order,
+            date_from=date_from, date_to=date_to, status=status,
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)

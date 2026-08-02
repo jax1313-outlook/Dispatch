@@ -1516,3 +1516,66 @@ def find_broker_by_name(company_name: str) -> dict | None:
             (company_name,),
         ).fetchone()
     return dict_from_row(row) if row else None
+
+
+# ── Load Profitability ───────────────────────────────────────────────
+
+
+def get_load_profitability_data(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    sql = """\
+    SELECT
+        l.load_id,
+        l.customer,
+        l.broker_shipper,
+        l.pickup_location,
+        l.delivery_location,
+        l.status,
+        l.created_at,
+        COALESCE(
+            CASE WHEN rc.rate_type = 'per_mile'
+                 THEN rc.rate_amount * rc.distance_miles
+                 ELSE rc.rate_amount END,
+            0
+        ) AS revenue,
+        rc.distance_miles,
+        COALESCE(exp_total.total_expenses, 0) AS total_expenses
+    FROM loads l
+    LEFT JOIN rate_confirmations rc ON rc.load_id = l.load_id
+    LEFT JOIN (
+        SELECT load_id, SUM(amount) AS total_expenses
+        FROM expenses GROUP BY load_id
+    ) exp_total ON exp_total.load_id = l.load_id
+    WHERE 1=1
+    """
+    params: list = []
+    if date_from:
+        sql += " AND l.created_at >= ?"
+        params.append(date_from)
+    if date_to:
+        sql += " AND l.created_at <= ?"
+        params.append(date_to)
+    if status:
+        sql += " AND l.status = ?"
+        params.append(status)
+    sql += " ORDER BY l.created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    results = []
+    for row in rows:
+        d = dict(row)
+        revenue = d["revenue"]
+        expenses = d["total_expenses"]
+        profit = revenue - expenses
+        margin = (profit / revenue * 100) if revenue > 0 else 0.0
+        rpm = (revenue / d["distance_miles"]) if d.get("distance_miles") and d["distance_miles"] > 0 else 0.0
+        d["profit"] = round(profit, 2)
+        d["margin_pct"] = round(margin, 1)
+        d["revenue_per_mile"] = round(rpm, 2)
+        d["revenue"] = round(revenue, 2)
+        d["total_expenses"] = round(expenses, 2)
+        results.append(d)
+    return results

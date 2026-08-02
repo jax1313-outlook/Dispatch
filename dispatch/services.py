@@ -1712,3 +1712,50 @@ def get_broker_contact_with_stats(broker_id: str) -> dict | None:
     broker["load_count"] = len(loads)
     broker["loads"] = loads[:10]
     return broker
+
+
+# ── Load Profitability Ranking ───────────────────────────────────────
+
+
+def get_load_profitability(
+    sort_by: str = "profit",
+    sort_order: str = "desc",
+    date_from: str | None = None,
+    date_to: str | None = None,
+    status: str | None = None,
+) -> dict:
+    valid_sort = {"profit", "margin_pct", "revenue", "revenue_per_mile", "total_expenses"}
+    if sort_by not in valid_sort:
+        raise ValueError(f"Invalid sort_by: {sort_by!r}")
+    if sort_order not in ("asc", "desc"):
+        raise ValueError(f"Invalid sort_order: {sort_order!r}")
+
+    rows = store.get_load_profitability_data(
+        date_from=date_from, date_to=date_to, status=status,
+    )
+    reverse = sort_order == "desc"
+    rows.sort(key=lambda r: r.get(sort_by, 0), reverse=reverse)
+
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+
+    total_revenue = sum(r["revenue"] for r in rows)
+    total_expenses = sum(r["total_expenses"] for r in rows)
+    total_profit = total_revenue - total_expenses
+    avg_margin = (
+        sum(r["margin_pct"] for r in rows) / len(rows)
+        if rows else 0.0
+    )
+
+    return {
+        "loads": rows,
+        "summary": {
+            "total_loads": len(rows),
+            "total_revenue": round(total_revenue, 2),
+            "total_expenses": round(total_expenses, 2),
+            "total_profit": round(total_profit, 2),
+            "avg_margin_pct": round(avg_margin, 1),
+            "profitable_count": sum(1 for r in rows if r["profit"] > 0),
+            "unprofitable_count": sum(1 for r in rows if r["profit"] < 0),
+        },
+    }

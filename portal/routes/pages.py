@@ -208,6 +208,36 @@ def brokers():
     )
 
 
+@pages_bp.route("/profitability")
+def profitability():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import LOAD_STATUSES
+
+    sort_by = request.args.get("sort_by", "profit")
+    sort_order = request.args.get("sort_order", "desc")
+    date_from = request.args.get("date_from", "")
+    date_to = request.args.get("date_to", "")
+    status_filter = request.args.get("status", "")
+    result = dispatch_svc.get_load_profitability(
+        sort_by=sort_by,
+        sort_order=sort_order,
+        date_from=date_from or None,
+        date_to=date_to or None,
+        status=status_filter or None,
+    )
+    return render_template(
+        "profitability.html",
+        loads=result["loads"],
+        summary=result["summary"],
+        load_statuses=LOAD_STATUSES,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        date_from=date_from,
+        date_to=date_to,
+        status_filter=status_filter,
+    )
+
+
 @pages_bp.route("/calendar")
 def load_calendar():
     from dispatch import services as dispatch_svc
