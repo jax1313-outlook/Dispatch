@@ -113,6 +113,7 @@ def _render_notification(
         "invoice_created": "#1b5e20",
         "payment_received": "#2e7d32",
         "payment_overdue": "#c62828",
+        "stalled": "#e65100",
     }
     header_color = event_colors.get(event_type, "#1a237e")
 
@@ -451,3 +452,37 @@ def notify_settlement_written_off(load: dict, settlement: dict, reason: str = ""
     subject = f"[DISPATCH] WRITTEN OFF — {load.get('customer', load['load_id'])}"
     msg = _build([reviewer_address()], subject, text, html=html)
     return _send_or_write(f"dispatch-writeoff-{load['load_id']}", msg)
+
+
+def notify_stalled(load: dict) -> str:
+    """Send notification when a load has been stalled beyond its threshold."""
+    esc = _html.escape
+    hours = load.get("hours_in_status", 0)
+    threshold = load.get("threshold_hours", 0)
+    status = load.get("status", "unknown")
+
+    detail = f"""\
+<div style="background:#fff3e0;border-left:4px solid #e65100;padding:12px 16px;margin-bottom:16px;">
+    <strong>Load Stalled</strong><br>
+    Current Status: <strong>{esc(status.replace('_', ' ').title())}</strong><br>
+    Time in Status: <strong style="color:#e65100;">{hours:.1f} hours</strong>
+    (threshold: {threshold}h)<br>
+    Driver: {esc(load.get('driver', '')) or 'Not assigned'}<br>
+    Equipment: {esc(load.get('equipment', '')) or 'Not assigned'}
+</div>
+<p style="color:#666;font-size:13px;">
+    This load has exceeded the expected time in its current status.
+    Review and take action to keep it moving.
+</p>"""
+
+    text, html = _render_notification(
+        load,
+        event_type="stalled",
+        headline=f"Load Stalled — {status.replace('_', ' ').title()} for {hours:.1f}h",
+        detail_html=detail,
+        recommended="flag_review",
+    )
+
+    subject = f"[DISPATCH] STALLED — {load.get('customer', load['load_id'])} ({hours:.0f}h in {status})"
+    msg = _build([reviewer_address()], subject, text, html=html)
+    return _send_or_write(f"dispatch-stalled-{load['load_id']}", msg)
