@@ -231,6 +231,39 @@ def fleet():
     )
 
 
+@pages_bp.route("/billing")
+def billing():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import SETTLEMENT_STATUSES
+
+    status_filter = request.args.get("status")
+    settlements = dispatch_svc.list_settlements(
+        payment_status=status_filter if status_filter else None,
+    )
+
+    loads_by_id: dict[str, dict] = {}
+    for stl in settlements:
+        lid = stl["load_id"]
+        if lid not in loads_by_id:
+            load = dispatch_svc.get_load(lid)
+            loads_by_id[lid] = load or {}
+        stl["customer"] = loads_by_id[lid].get("customer", "")
+
+    fin_dashboard = dispatch_svc.get_financial_dashboard()
+    disputed_count = sum(1 for s in settlements if s["payment_status"] == "disputed")
+    written_off_count = sum(1 for s in settlements if s["payment_status"] == "written_off")
+
+    return render_template(
+        "billing.html",
+        settlements=settlements,
+        settlement_statuses=SETTLEMENT_STATUSES,
+        status_filter=status_filter or "",
+        fin_dashboard=fin_dashboard,
+        disputed_count=disputed_count,
+        written_off_count=written_off_count,
+    )
+
+
 @pages_bp.route("/brief/<sandbox_id>")
 def brief(sandbox_id: str):
     entry = sandbox.get(sandbox_id)
