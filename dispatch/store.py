@@ -867,6 +867,20 @@ def get_active_load_for_equipment(equipment_id: str) -> dict | None:
     return dict_from_row(row) if row else None
 
 
+def get_loads_for_driver(driver_id: str) -> list[dict]:
+    sql = "SELECT * FROM loads WHERE driver_id=? ORDER BY updated_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, (driver_id,)).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def get_loads_for_equipment(equipment_id: str) -> list[dict]:
+    sql = "SELECT * FROM loads WHERE equipment_id=? ORDER BY updated_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, (equipment_id,)).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
 def get_fleet_assignments() -> dict:
     placeholders = ",".join("?" for _ in _TERMINAL_STATUSES)
     sql = (
