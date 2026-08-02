@@ -560,7 +560,13 @@ def settings():
         "portal_url": os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080"),
         "portal_secret_set": Config.SECRET_KEY != _DEFAULT_SECRET,
     }
-    return render_template("settings.html", config=Config, cin_config=cin_config)
+    from dispatch.services import _STALL_THRESHOLDS_HOURS
+    return render_template(
+        "settings.html",
+        config=Config,
+        cin_config=cin_config,
+        stall_thresholds=_STALL_THRESHOLDS_HOURS,
+    )
 
 
 def _sync_booked_entries(entries: dict) -> None:

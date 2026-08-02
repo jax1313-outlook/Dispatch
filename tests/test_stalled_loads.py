@@ -175,7 +175,7 @@ class TestDispatchPageStalled:
         services.create_load(customer="Fresh")
         resp = client.get("/dispatch")
         html = resp.data.decode()
-        assert "Stalled" not in html
+        assert "severity-high" not in html
 
     def test_stalled_banner_shown(self, client):
         load = services.create_load(customer="Stale Banner Corp")

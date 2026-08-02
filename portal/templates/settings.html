@@ -61,6 +61,32 @@
 </section>
 
 <section class="card-section">
+    <h2>Stall Detection Thresholds</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:8px;">Loads exceeding these thresholds (in hours) are flagged as stalled on the dashboard.</p>
+    <table class="data-table">
+        <thead><tr><th>Status</th><th>Threshold (hours)</th></tr></thead>
+        <tbody>
+            {% for status, hours in stall_thresholds.items() %}
+            <tr>
+                <td>{{ status|replace('_', ' ')|title }}</td>
+                <td>{{ hours }}h</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
+    <h2>Accounting Integration</h2>
+    <table class="data-table">
+        <thead><tr><th>Integration</th><th>Status</th></tr></thead>
+        <tbody>
+            <tr><td>QuickBooks Online</td><td>Planned — API connection for invoicing, payments, and aging reports</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
     <h2>Doctrine Reference</h2>
     <ul>
         <li><strong>Portal</strong> displays and controls workflow. Portal is not the system of record.</li>

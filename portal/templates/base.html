@@ -159,6 +159,15 @@
             });
     }
 
+    function notifyStalled() {
+        if (!confirm('Send stalled-load notifications for all stalled loads?')) return;
+        apiPost('/api/dispatch/loads/stalled/notify', {})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                alert(data.notified + ' stalled load notification(s) sent.');
+            });
+    }
+
     function runAgingCheck() {
         apiPost('/api/dispatch/settlements/aging', {})
             .then(data => {

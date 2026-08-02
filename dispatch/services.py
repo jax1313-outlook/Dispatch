@@ -1109,12 +1109,25 @@ def get_fleet_summary() -> dict:
             t = e["equipment_type"]
             equip_by_type[t] = equip_by_type.get(t, 0) + 1
 
+    active_loads = [
+        ld for ld in store.list_loads()
+        if ld["status"] not in ("archived", "cancelled", "completed")
+    ]
+    assigned_driver_ids = {ld["driver_id"] for ld in active_loads if ld.get("driver_id")}
+    assigned_equip_ids = {ld["equipment_id"] for ld in active_loads if ld.get("equipment_id")}
+    active_driver_count = driver_by_status.get("active", 0)
+    active_equip_count = equip_by_status.get("active", 0)
+
     return {
         "total_drivers": len(drivers),
         "drivers_by_status": driver_by_status,
         "total_equipment": len(equipment),
         "equipment_by_status": equip_by_status,
         "active_equipment_by_type": equip_by_type,
+        "drivers_assigned": len(assigned_driver_ids),
+        "drivers_available": max(0, active_driver_count - len(assigned_driver_ids)),
+        "equipment_assigned": len(assigned_equip_ids),
+        "equipment_available": max(0, active_equip_count - len(assigned_equip_ids)),
     }
 
 
