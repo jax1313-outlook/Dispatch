@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Decision — {{ load_id[:16] }}...{% endblock %}
+{% block page_title %}Load Decision{% endblock %}
+
+{% block body %}
+{% if success %}
+<div class="card" style="border-left:4px solid #2e7d32;padding:24px;margin-bottom:20px;">
+    <h2 style="color:#2e7d32;margin-top:0;">Action Recorded</h2>
+    <table style="margin-bottom:16px;">
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Load ID</td>
+            <td style="padding:4px 0;"><strong>{{ load_id[:16] }}...</strong></td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Customer</td>
+            <td style="padding:4px 0;">{{ load.customer if load else '' }}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Action</td>
+            <td style="padding:4px 0;"><strong>{{ action_label }}</strong></td></tr>
+    </table>
+    <p style="color:#666;font-size:14px;">
+        <a href="{{ url_for('pages.dispatch_detail', load_id=load_id) }}">View load details</a>
+    </p>
+</div>
+{% else %}
+<div class="card" style="border-left:4px solid #c62828;padding:24px;">
+    <h2 style="color:#c62828;margin-top:0;">Action Failed</h2>
+    <p>{{ error }}</p>
+    <p style="color:#666;font-size:14px;">Load ID: {{ load_id }}</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -18,7 +18,7 @@ from dispatch.models import (
     RetentionArchive,
     _utc_now,
 )
-from dispatch import store
+from dispatch import notifications, store
 
 
 _MILESTONE_TO_STATUS = {
@@ -137,6 +137,10 @@ def add_milestone(
     )
     store.upsert_visibility(vis)
 
+    if event_type == "delivered":
+        updated_load = store.get_load(load_id) or load
+        notifications.notify_delivered(updated_load, result)
+
     return result
 
 
@@ -206,6 +210,9 @@ def open_exception(
             internal_note=vis.get("internal_note", ""),
         )
         store.upsert_visibility(updated)
+
+    if severity in ("high", "critical"):
+        notifications.notify_exception(load, result)
 
     return result
 
@@ -289,6 +296,8 @@ def generate_pod(
             note=f"POD generated: {pod.pod_id}",
         )
 
+    notifications.notify_pod_generated(load, result)
+
     return result
 
 
@@ -334,6 +343,8 @@ def archive_load(load_id: str) -> dict:
             exception_flag=bool(vis.get("exception_flag")),
         )
         store.upsert_visibility(updated)
+
+    notifications.notify_archived(load, result)
 
     return result
 

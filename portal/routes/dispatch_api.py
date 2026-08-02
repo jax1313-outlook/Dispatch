@@ -6,9 +6,9 @@ POD packages, and retention archive.
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, render_template, request
 
-from dispatch import services
+from dispatch import notifications, services
 from dispatch.models import (
     EVIDENCE_TYPES,
     EXCEPTION_STATUSES,
@@ -258,3 +258,60 @@ def get_retention(load_id):
     if not ret:
         return jsonify({"error": f"No retention record for {load_id}"}), 404
     return jsonify({"status": "ok", "retention": ret})
+
+
+# ── Decision (email action clicks) ──────────────────────────────────
+
+@dispatch_bp.route("/decision/<load_id>/<action>")
+def dispatch_decision(load_id, action):
+    token = request.args.get("token", "")
+
+    if action not in notifications.DISPATCH_ACTIONS:
+        return render_template(
+            "dispatch_decision.html",
+            success=False,
+            error=f"Unknown action: {action}",
+            load_id=load_id,
+        ), 400
+
+    if not notifications.verify_token(load_id, action, token):
+        return render_template(
+            "dispatch_decision.html",
+            success=False,
+            error="Invalid or expired token.",
+            load_id=load_id,
+        ), 403
+
+    load = services.get_load(load_id)
+    if not load:
+        return render_template(
+            "dispatch_decision.html",
+            success=False,
+            error="Load not found.",
+            load_id=load_id,
+        ), 404
+
+    label, _ = notifications.DISPATCH_ACTIONS[action]
+
+    if action == "escalate":
+        services.open_exception(
+            load_id=load_id,
+            exception_type="other",
+            severity="high",
+            description="Escalated via email action by reviewer",
+        )
+    elif action == "flag_review":
+        services.open_exception(
+            load_id=load_id,
+            exception_type="other",
+            severity="medium",
+            description="Flagged for review via email action by reviewer",
+        )
+
+    return render_template(
+        "dispatch_decision.html",
+        success=True,
+        load_id=load_id,
+        action_label=label,
+        load=load,
+    )
