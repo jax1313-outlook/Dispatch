@@ -35,11 +35,40 @@ def card_action():
         "PURSUE": "PURSUE",
         "PASS": "PASS",
         "WATCH": "WATCH",
+        "BOOK": "BOOKED",
     }
 
     new_status = status_map.get(action)
     if not new_status:
         return jsonify({"error": f"Invalid action: {action}"}), 400
+
+    if action == "BOOK":
+        if entry.get("engine_load_id"):
+            return jsonify({"error": "Load already booked", "engine_load_id": entry["engine_load_id"]}), 409
+        if entry.get("source_type") != "dispatch":
+            return jsonify({"error": "Only dispatch entries can be booked"}), 400
+
+        booking_conflicts = conflict.check_booking_conflicts(entry["card_data"], sandbox_id)
+
+        from dispatch import services as dispatch_svc
+        cd = entry["card_data"]
+        engine_load = dispatch_svc.create_load(
+            customer=cd.get("broker", cd.get("broker_shipper", entry.get("title", ""))),
+            broker_shipper=cd.get("broker", ""),
+            pickup_location=cd.get("origin", ""),
+            delivery_location=cd.get("destination", ""),
+            pickup_datetime=_extract_window_start(cd.get("pickup_window", "")),
+            delivery_datetime=_extract_window_start(cd.get("delivery_window", "")),
+            equipment=cd.get("equipment_required", ""),
+            notes=_build_booking_notes(cd, entry),
+        )
+        sandbox.link_engine_load(sandbox_id, engine_load["load_id"])
+        updated = sandbox.update_status(sandbox_id, "BOOKED",
+                                        note=f"Booked as engine load {engine_load['load_id']}")
+        resp = {"status": "ok", "entry": updated, "engine_load": engine_load}
+        if booking_conflicts:
+            resp["warnings"] = [c["explanation"] for c in booking_conflicts]
+        return jsonify(resp)
 
     updated = sandbox.update_status(sandbox_id, new_status)
 
@@ -300,3 +329,55 @@ def intelligence_update():
         return jsonify({"status": "ok", "record": record})
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
+
+
+# ---- Engine Sync API ----
+
+@api_bp.route("/sync-engine", methods=["POST"])
+def sync_engine_status():
+    """Sync engine load statuses back to linked sandbox entries."""
+    from dispatch import services as dispatch_svc
+
+    all_entries = sandbox.get_all()
+    synced = []
+    for sid, entry in all_entries.items():
+        engine_load_id = entry.get("engine_load_id")
+        if not engine_load_id:
+            continue
+        load = dispatch_svc.get_load(engine_load_id)
+        if not load:
+            continue
+        current_engine_status = entry.get("card_data", {}).get("engine_status")
+        if current_engine_status != load["status"]:
+            sandbox.update_engine_status(sid, load["status"])
+            synced.append({"sandbox_id": sid, "engine_status": load["status"]})
+    return jsonify({"status": "ok", "synced": synced, "count": len(synced)})
+
+
+# ---- Helpers ----
+
+def _extract_window_start(window: str) -> str:
+    """Extract start datetime from a window like '2026-07-30 06:00 - 10:00'."""
+    if not window:
+        return ""
+    parts = window.split(" - ")
+    return parts[0].strip()
+
+
+def _build_booking_notes(cd: dict, entry: dict) -> str:
+    """Build engine load notes from card data."""
+    parts = []
+    source_id = entry.get("source_id", "")
+    if source_id:
+        parts.append(f"Booked from load board: {source_id}")
+    if cd.get("rate"):
+        parts.append(f"Rate: ${cd['rate']}")
+    if cd.get("rpm"):
+        parts.append(f"RPM: ${cd['rpm']}")
+    if cd.get("distance_miles"):
+        parts.append(f"Distance: {cd['distance_miles']} mi")
+    if cd.get("weight_lbs"):
+        parts.append(f"Weight: {cd['weight_lbs']} lbs")
+    if cd.get("detention_history"):
+        parts.append(f"Detention: {cd['detention_history']}")
+    return " | ".join(parts)

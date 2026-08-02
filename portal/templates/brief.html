@@ -129,6 +129,18 @@
     </section>
     {% endif %}
 
+    {% if entry.engine_load_id %}
+    <section class="brief-section">
+        <h3>Engine Load</h3>
+        <div class="brief-fields">
+            <div><strong>Load ID:</strong> <a href="{{ url_for('pages.dispatch_detail', load_id=entry.engine_load_id) }}">{{ entry.engine_load_id }}</a></div>
+            {% if cd.engine_status %}
+            <div><strong>Engine Status:</strong> <span class="status-tag dispatch-{{ cd.engine_status }}">{{ cd.engine_status|replace('_', ' ') }}</span></div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
     <section class="brief-section">
         <h3>Position / HOS Assessment</h3>
         <div class="brief-fields">
@@ -216,6 +228,9 @@
             <button class="btn btn-danger" onclick="cardAction('{{ entry.id }}', 'pass')">Pass</button>
             <button class="btn btn-warning" onclick="cardAction('{{ entry.id }}', 'watch')">Watch</button>
             <button class="btn" onclick="createInquiry('{{ entry.id }}')">Send Inquiry Draft</button>
+            {% if entry.source_type == 'dispatch' and not entry.engine_load_id %}
+            <button class="btn btn-book" onclick="bookLoad('{{ entry.id }}')">Book Load</button>
+            {% endif %}
             <div class="publisher-triggers">
                 <span>Trigger Publisher:</span>
                 {% for ptype in publisher_action_types %}

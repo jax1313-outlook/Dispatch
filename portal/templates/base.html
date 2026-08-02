@@ -98,6 +98,15 @@
             });
     }
 
+    function bookLoad(sandboxId) {
+        if (!confirm('Book this load? This will create an engine load for tracking.')) return;
+        apiPost('/api/action', {sandbox_id: sandboxId, action: 'book'})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
     function libraryAdd(section) {
         var name = prompt('Record name:');
         if (!name) return;

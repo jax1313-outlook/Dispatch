@@ -5,14 +5,9 @@ Reads from pipeline layers without modifying them.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from cin_lite import acquisition, processing
 from cin_lite.agents import summarizer, router
 
-
-DISPATCH_SAMPLE_DIR = Path(__file__).resolve().parent / "sample_dispatch_data"
 
 SCORE_HIGH_THRESHOLD = 90
 
@@ -58,21 +53,17 @@ def load_and_process_sam() -> list[dict]:
 
 
 def load_dispatch_data() -> list[dict]:
-    """Load dispatch/load data from sample files and run scoring."""
+    """Acquire dispatch/load data and run scoring on each load."""
+    from dispatch.acquisition import acquire
     from dispatch.scoring import score_load
 
-    loads: list[dict] = []
-    if DISPATCH_SAMPLE_DIR.exists():
-        for path in sorted(DISPATCH_SAMPLE_DIR.glob("*.json")):
-            with path.open(encoding="utf-8") as fh:
-                data = json.load(fh)
-            data.setdefault("_source_file", path.name)
-            scoring = score_load(data)
-            data["deadhead_miles"] = scoring.get("deadhead_miles")
-            data["fuel_estimate"] = scoring.get("fuel_estimate")
-            data["score"] = scoring["score"]
-            data["_scoring"] = scoring
-            loads.append(data)
+    loads = acquire()
+    for data in loads:
+        scoring = score_load(data)
+        data["deadhead_miles"] = scoring.get("deadhead_miles")
+        data["fuel_estimate"] = scoring.get("fuel_estimate")
+        data["score"] = scoring["score"]
+        data["_scoring"] = scoring
     return loads
 
 
