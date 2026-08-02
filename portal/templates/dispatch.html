@@ -3,6 +3,7 @@
 {% block page_title %}Dispatch{% endblock %}
 {% block page_actions %}
 <button class="btn btn-sm btn-success" onclick="toggleNewLoadForm()">+ New Load</button>
+<button class="btn btn-sm" onclick="toggleImportForm()">Import CSV</button>
 <a href="{{ url_for('pages.dispatch', refresh=1) }}" class="btn btn-sm">Refresh Board</a>
 {% endblock %}
 
@@ -87,6 +88,25 @@
         <button type="submit" class="btn btn-success">Create Load</button>
         <button type="button" class="btn" onclick="toggleNewLoadForm()">Cancel</button>
     </form>
+</div>
+
+<div id="import-csv-form" class="brief-section" style="display:none;margin-bottom:20px;">
+    <h3>Import Loads from CSV</h3>
+    <p style="font-size:0.85em;color:#666;margin-bottom:8px;">
+        Required column: <strong>customer</strong>. Optional: broker_shipper, pickup_location, delivery_location, pickup_datetime, delivery_datetime, equipment, driver, notes.
+    </p>
+    <form onsubmit="importCSV(event)" enctype="multipart/form-data">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+            <div>
+                <input type="file" id="csv-file" accept=".csv" required style="padding:4px;">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary btn-sm">Upload &amp; Import</button>
+                <button type="button" class="btn btn-sm" onclick="toggleImportForm()">Cancel</button>
+            </div>
+        </div>
+    </form>
+    <div id="import-result" style="display:none;margin-top:10px;"></div>
 </div>
 
 {# ── Stalled Load Alert ───────────────────────────────────────────── #}
@@ -381,6 +401,39 @@ function sendStallAlerts() {
         if (r.error) { alert(r.error); return; }
         alert('Sent ' + r.notified + ' stall alert(s).');
     });
+}
+
+function toggleImportForm() {
+    var f = document.getElementById('import-csv-form');
+    f.style.display = f.style.display === 'none' ? '' : 'none';
+    document.getElementById('import-result').style.display = 'none';
+}
+
+function importCSV(e) {
+    e.preventDefault();
+    var fileInput = document.getElementById('csv-file');
+    if (!fileInput.files.length) { alert('Select a CSV file.'); return; }
+    var formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    fetch('/api/dispatch/loads/import', {method: 'POST', body: formData})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var resultDiv = document.getElementById('import-result');
+            if (data.error) {
+                resultDiv.innerHTML = '<span style="color:#c62828;">Error: ' + data.error + '</span>';
+                resultDiv.style.display = '';
+                return;
+            }
+            var html = '<strong>' + data.created + ' load(s) imported.</strong>';
+            if (data.errors && data.errors.length) {
+                html += '<br><span style="color:#e65100;">' + data.errors.length + ' error(s):</span><ul style="margin:4px 0;">';
+                data.errors.forEach(function(err) { html += '<li style="font-size:0.85em;">' + err + '</li>'; });
+                html += '</ul>';
+            }
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = '';
+            if (data.created > 0) setTimeout(function() { location.reload(); }, 2000);
+        });
 }
 
 </script>

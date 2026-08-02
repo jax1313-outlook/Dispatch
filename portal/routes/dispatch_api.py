@@ -1117,3 +1117,50 @@ def global_search():
     results = services.global_search(q)
     total = sum(len(v) for v in results.values())
     return jsonify({"status": "ok", "query": q, "total": total, **results})
+
+
+# ── CSV Import ───────────────────────────────────────────────────────
+
+_IMPORT_REQUIRED = {"customer"}
+_IMPORT_FIELDS = {
+    "customer", "broker_shipper", "pickup_location", "delivery_location",
+    "pickup_datetime", "delivery_datetime", "equipment", "driver", "notes",
+}
+
+
+@dispatch_bp.route("/loads/import", methods=["POST"])
+def import_loads_csv():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "file is required"}), 400
+
+    try:
+        text = f.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return jsonify({"error": "File must be UTF-8 encoded CSV"}), 400
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        return jsonify({"error": "CSV file is empty or has no headers"}), 400
+
+    headers = {h.strip().lower() for h in reader.fieldnames}
+    missing = _IMPORT_REQUIRED - headers
+    if missing:
+        return jsonify({"error": f"Missing required columns: {', '.join(sorted(missing))}"}), 400
+
+    created = 0
+    errors = []
+    for i, row in enumerate(reader, start=2):
+        cleaned = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
+        customer = cleaned.get("customer", "")
+        if not customer:
+            errors.append(f"Row {i}: customer is required")
+            continue
+        kwargs = {k: cleaned[k] for k in _IMPORT_FIELDS & set(cleaned) if cleaned[k]}
+        try:
+            services.create_load(**kwargs)
+            created += 1
+        except ValueError as exc:
+            errors.append(f"Row {i}: {exc}")
+
+    return jsonify({"status": "ok", "created": created, "errors": errors})
