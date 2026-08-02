@@ -48,16 +48,33 @@ def get_load(load_id: str) -> dict | None:
     return dict_from_row(row) if row else None
 
 
-def list_loads(status: str | None = None) -> list[dict]:
+def list_loads(
+    status: str | None = None,
+    customer: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list = []
+    if status:
+        clauses.append("status=?")
+        params.append(status)
+    if customer:
+        clauses.append("customer LIKE ?")
+        params.append(f"%{customer}%")
+    if date_from:
+        clauses.append("created_at >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("created_at <= ?")
+        params.append(date_to + "T23:59:59Z" if "T" not in date_to else date_to)
+    where = " AND ".join(clauses)
+    sql = "SELECT * FROM loads"
+    if where:
+        sql += f" WHERE {where}"
+    sql += " ORDER BY updated_at DESC"
     with get_connection() as conn:
-        if status:
-            rows = conn.execute(
-                "SELECT * FROM loads WHERE status=? ORDER BY updated_at DESC", (status,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM loads ORDER BY updated_at DESC"
-            ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict_from_row(r) for r in rows]
 
 

@@ -127,8 +127,16 @@ def get_load(load_id: str) -> dict | None:
     return store.get_load(load_id)
 
 
-def list_loads(status: str | None = None) -> list[dict]:
-    return store.list_loads(status=status)
+def list_loads(
+    status: str | None = None,
+    customer: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict]:
+    return store.list_loads(
+        status=status, customer=customer,
+        date_from=date_from, date_to=date_to,
+    )
 
 
 def update_load(load_id: str, **fields) -> dict | None:

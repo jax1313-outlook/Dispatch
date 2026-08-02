@@ -37,7 +37,13 @@ def list_loads():
     status = request.args.get("status")
     if status and status not in LOAD_STATUSES:
         return jsonify({"error": f"Invalid status: {status}"}), 400
-    loads = services.list_loads(status=status)
+    customer = request.args.get("customer")
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    loads = services.list_loads(
+        status=status, customer=customer,
+        date_from=date_from, date_to=date_to,
+    )
     return jsonify({"status": "ok", "loads": loads, "count": len(loads)})
 
 

@@ -96,7 +96,15 @@ def dispatch():
     from dispatch.models import LOAD_STATUSES
 
     status_filter = request.args.get("status")
-    engine_loads = dispatch_svc.list_loads(status=status_filter)
+    customer_search = request.args.get("customer", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    engine_loads = dispatch_svc.list_loads(
+        status=status_filter,
+        customer=customer_search or None,
+        date_from=date_from or None,
+        date_to=date_to or None,
+    )
     fin_dashboard = dispatch_svc.get_financial_dashboard()
 
     all_entries = sandbox.get_all()
@@ -136,6 +144,9 @@ def dispatch():
         fin_dashboard=fin_dashboard,
         active_drivers=active_drivers,
         active_equipment=active_equipment,
+        customer_search=customer_search,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
