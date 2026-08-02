@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Decision — {{ contract_id }}{% endblock %}
+{% block page_title %}Contract Decision{% endblock %}
+
+{% block body %}
+{% if success %}
+<div class="card" style="border-left:4px solid #2e7d32;padding:24px;margin-bottom:20px;">
+    <h2 style="color:#2e7d32;margin-top:0;">Decision Recorded</h2>
+    <table style="margin-bottom:16px;">
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Contract</td>
+            <td style="padding:4px 0;">{{ title }}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Contract ID</td>
+            <td style="padding:4px 0;"><strong>{{ contract_id }}</strong></td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Action</td>
+            <td style="padding:4px 0;"><strong>{{ action_label }}</strong></td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Routed to</td>
+            <td style="padding:4px 0;">{{ route }}</td></tr>
+    </table>
+
+    {% if proposal %}
+    <div style="background:#e3f2fd;padding:12px 16px;border-radius:4px;">
+        <strong>Proposal Triggered</strong><br>
+        Proposal ID: {{ proposal.proposal_id }}<br>
+        Email: {{ proposal.email_status }}
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card" style="border-left:4px solid #c62828;padding:24px;">
+    <h2 style="color:#c62828;margin-top:0;">Decision Failed</h2>
+    <p>{{ error }}</p>
+    <p style="color:#666;font-size:14px;">Contract ID: {{ contract_id }}</p>
+</div>
+{% endif %}
+{% endblock %}

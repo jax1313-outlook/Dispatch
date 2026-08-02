@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository is in the **planning stage**. The authoritative specification is
+Phase 1 is **implemented**. The authoritative specification is
 `Final_Architecture_for_Hybrid_CIN-Lite_System (1).docx` — read it before generating code.
-There is no application code yet; the sections below describe the architecture all code must follow.
+The sections below describe the architecture all code must follow.
 
 ## What this is
 
@@ -41,9 +41,14 @@ logic into a monolith.
 
 ### Email control system
 
-Checkbox-driven email interface. The five actions are: Approve for archive, Approve for proposal,
-Reject, Flag for review, Request deeper analysis. Keep this logic **clean and deterministic** — the
-email response maps directly to an archive/routing action.
+Checkbox-driven HTML email interface. The five actions are: Approve for archive, Approve for
+proposal, Reject, Flag for review, Request deeper analysis. Each action renders as a styled
+button linking to the portal's decision endpoint (`/api/decision/<id>/<action>?token=…`).
+Tokens are HMAC-SHA256 signed. Keep this logic **clean and deterministic** — the email response
+maps directly to an archive/routing action.
+
+Flow: pipeline stores a pending decision → sends HTML email → reviewer clicks action →
+portal archives + routes → confirmation page.
 
 ### Archive structure
 
@@ -56,6 +61,7 @@ Each contract gets a unique ID and a full metadata bundle. Folder layout:
   /Intelligence   rule-module JSON outputs
   /Summaries      generated summaries
   /Routing        routing decisions
+  /Pending        decisions awaiting reviewer action (transient)
 ```
 
 ## Tech stack

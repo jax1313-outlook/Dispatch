@@ -19,6 +19,8 @@ Configuration (environment):
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import smtplib
 import ssl
@@ -29,6 +31,21 @@ from pathlib import Path
 from cin_lite import archive, control
 
 _OUTBOX = archive.ARCHIVE_ROOT / "Outbox"
+
+
+def _secret() -> bytes:
+    return os.environ.get("CIN_LITE_EMAIL_SECRET", "cin-lite-dev-secret").encode()
+
+
+def make_token(contract_id: str, action: str) -> str:
+    """HMAC-SHA256 token for an email action link."""
+    return hmac.new(_secret(), f"{contract_id}:{action}".encode(), hashlib.sha256).hexdigest()
+
+
+def verify_token(contract_id: str, action: str, token: str) -> bool:
+    """Constant-time verification of an email action token."""
+    expected = make_token(contract_id, action)
+    return hmac.compare_digest(expected, token)
 
 
 def domain() -> str:
@@ -50,12 +67,14 @@ def queue_address(queue: str | None) -> str | None:
     return f"{queue}@{domain()}"
 
 
-def _build(to: list[str], subject: str, body: str) -> EmailMessage:
+def _build(to: list[str], subject: str, body: str, html: str | None = None) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = from_address()
     msg["To"] = ", ".join(to)
     msg["Subject"] = subject
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
     return msg
 
 
@@ -101,6 +120,21 @@ def _decision_recipients(decision: dict) -> list[str]:
     if queue_addr and queue_addr not in addrs:
         addrs.append(queue_addr)
     return addrs
+
+
+def deliver_checkpoint(
+    contract: dict,
+    contract_id: str,
+    text_body: str,
+    html_body: str,
+) -> str:
+    """Send the checkpoint email (HTML with action buttons + text fallback)."""
+    subject = f"[CIN-Lite] Decision Required — {contract.get('title', contract_id)}"
+    to = [reviewer_address()]
+    return _send_or_write(
+        f"{contract_id}-checkpoint",
+        _build(to, subject, text_body, html=html_body),
+    )
 
 
 def deliver_decision(
