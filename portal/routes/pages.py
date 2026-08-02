@@ -238,6 +238,17 @@ def profitability():
     )
 
 
+@pages_bp.route("/email-templates")
+def email_templates():
+    from dispatch.notifications import EMAIL_TEMPLATES
+    template_key = request.args.get("template", "dispatched")
+    return render_template(
+        "email_templates.html",
+        templates=EMAIL_TEMPLATES,
+        selected=template_key,
+    )
+
+
 @pages_bp.route("/calendar")
 def load_calendar():
     from dispatch import services as dispatch_svc

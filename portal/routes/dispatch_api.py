@@ -1558,3 +1558,23 @@ def load_profitability():
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify(result)
+
+
+# ── Email Template Preview ───────────────────────────────────────────
+
+
+@dispatch_bp.route("/email-preview", methods=["GET"])
+def email_preview_list():
+    from dispatch.notifications import EMAIL_TEMPLATES
+    return jsonify(EMAIL_TEMPLATES)
+
+
+@dispatch_bp.route("/email-preview/<template_key>", methods=["GET"])
+def email_preview(template_key):
+    from dispatch.notifications import preview_notification
+    result = preview_notification(template_key)
+    if not result:
+        return jsonify({"error": "unknown template"}), 404
+    if request.args.get("raw") == "1":
+        return result["html"], 200, {"Content-Type": "text/html"}
+    return jsonify(result)
