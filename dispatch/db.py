@@ -221,6 +221,37 @@ CREATE TABLE IF NOT EXISTS lane_templates (
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ifta_trip_legs (
+    leg_id          TEXT PRIMARY KEY,
+    load_id         TEXT NOT NULL DEFAULT '',
+    jurisdiction    TEXT NOT NULL,
+    miles           REAL NOT NULL DEFAULT 0,
+    date            TEXT NOT NULL,
+    vehicle_id      TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_legs_date ON ifta_trip_legs(date);
+CREATE INDEX IF NOT EXISTS idx_ifta_legs_jurisdiction ON ifta_trip_legs(jurisdiction);
+CREATE INDEX IF NOT EXISTS idx_ifta_legs_vehicle ON ifta_trip_legs(vehicle_id);
+
+CREATE TABLE IF NOT EXISTS ifta_fuel_purchases (
+    purchase_id     TEXT PRIMARY KEY,
+    jurisdiction    TEXT NOT NULL,
+    date            TEXT NOT NULL,
+    gallons         REAL NOT NULL DEFAULT 0,
+    amount          REAL NOT NULL DEFAULT 0,
+    vehicle_id      TEXT NOT NULL DEFAULT '',
+    vendor          TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_fuel_date ON ifta_fuel_purchases(date);
+CREATE INDEX IF NOT EXISTS idx_ifta_fuel_jurisdiction ON ifta_fuel_purchases(jurisdiction);
+CREATE INDEX IF NOT EXISTS idx_ifta_fuel_vehicle ON ifta_fuel_purchases(vehicle_id);
 """
 
 

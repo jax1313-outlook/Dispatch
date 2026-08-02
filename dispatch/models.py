@@ -528,6 +528,79 @@ class DetentionEvent:
         return d
 
 
+IFTA_JURISDICTIONS = [
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+    "DC",
+    "AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE",
+    "QC", "SK", "YT",
+]
+
+IFTA_QUARTERS = ["Q1", "Q2", "Q3", "Q4"]
+
+
+@dataclass
+class IFTATripLeg:
+    leg_id: str = ""
+    load_id: str = ""
+    jurisdiction: str = ""
+    miles: float = 0.0
+    date: str = ""
+    vehicle_id: str = ""
+    notes: str = ""
+    created_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.leg_id:
+            self.leg_id = _gen_id("IFTA")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.date:
+            self.date = _utc_now()[:10]
+        if self.jurisdiction:
+            _validate_choice(self.jurisdiction, IFTA_JURISDICTIONS, "jurisdiction")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class IFTAFuelPurchase:
+    purchase_id: str = ""
+    jurisdiction: str = ""
+    date: str = ""
+    gallons: float = 0.0
+    amount: float = 0.0
+    vehicle_id: str = ""
+    vendor: str = ""
+    notes: str = ""
+    created_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.purchase_id:
+            self.purchase_id = _gen_id("FUEL")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.date:
+            self.date = _utc_now()[:10]
+        if self.jurisdiction:
+            _validate_choice(self.jurisdiction, IFTA_JURISDICTIONS, "jurisdiction")
+
+    @property
+    def price_per_gallon(self) -> float:
+        if self.gallons > 0:
+            return round(self.amount / self.gallons, 4)
+        return 0.0
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["price_per_gallon"] = self.price_per_gallon
+        return d
+
+
 @dataclass
 class LaneTemplate:
     template_id: str = ""

@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+{% block title %}IFTA — L2-COS Portal{% endblock %}
+{% block page_title %}IFTA Mileage & Fuel Report — {{ report.quarter_label }}{% endblock %}
+{% block page_actions %}
+<button class="btn btn-sm btn-success" onclick="toggleForm('add-trip-form')">+ Trip Leg</button>
+<button class="btn btn-sm btn-success" onclick="toggleForm('add-fuel-form')">+ Fuel Purchase</button>
+{% endblock %}
+
+{% block body %}
+<style>
+.ifta-filters { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px; padding:12px; background:#f8f9fa; border-radius:4px; }
+.ifta-filters label { font-size:12px; font-weight:600; color:#555; display:block; margin-bottom:2px; }
+.ifta-filters select, .ifta-filters input { padding:4px 8px; border:1px solid #ccc; border-radius:3px; font-size:13px; }
+.ifta-summary { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.ifta-summary .summary-card { flex:1; min-width:140px; }
+.ifta-report-table { width:100%; border-collapse:collapse; font-size:13px; }
+.ifta-report-table th { background:#34495e; color:#fff; padding:8px 10px; text-align:left; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; }
+.ifta-report-table td { padding:6px 10px; border-bottom:1px solid #eee; }
+.ifta-report-table tr:hover { background:#f5f8ff; }
+.ifta-report-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+.ifta-report-table tfoot td { font-weight:700; border-top:2px solid #34495e; background:#f8f9fa; }
+.ifta-net-positive { color:#27ae60; }
+.ifta-net-negative { color:#e74c3c; }
+.ifta-entries { margin-top:24px; }
+.ifta-entries h3 { margin-bottom:8px; font-size:15px; color:#2c3e50; }
+.ifta-entry-card { background:#fff; border:1px solid #e0e0e0; border-radius:4px; padding:10px 14px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; }
+.ifta-entry-info { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+.ifta-entry-info .tag { background:#e8f4fd; color:#2980b9; padding:2px 8px; border-radius:3px; font-size:12px; font-weight:600; }
+.ifta-entry-info .tag-fuel { background:#fef9e7; color:#d4ac0d; }
+.ifta-entry-actions { display:flex; gap:6px; }
+.hidden-form { display:none; background:#fff; border:1px solid #ddd; border-radius:4px; padding:16px; margin-bottom:16px; }
+.hidden-form.visible { display:block; }
+.form-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+.form-row .field { flex:1; min-width:150px; }
+.form-row label { display:block; font-size:12px; font-weight:600; color:#555; margin-bottom:2px; }
+.form-row input, .form-row select { width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:3px; font-size:13px; box-sizing:border-box; }
+.print-section { margin-top:24px; padding:16px; background:#fff; border:1px solid #ddd; border-radius:4px; }
+.print-section h3 { margin-bottom:12px; }
+@media print {
+  .no-print { display:none !important; }
+  .ifta-report-table { font-size:11px; }
+  .ifta-report-table th { background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+</style>
+
+{# ── Quarter/Vehicle Filter ──────────────────────────────────────── #}
+<form class="ifta-filters no-print" method="get">
+  <div>
+    <label>Year</label>
+    <input type="number" name="year" value="{{ sel_year }}" min="2020" max="2099" style="width:80px;">
+  </div>
+  <div>
+    <label>Quarter</label>
+    <select name="quarter">
+      {% for q in [1,2,3,4] %}
+      <option value="{{ q }}" {% if sel_quarter == q %}selected{% endif %}>Q{{ q }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Vehicle</label>
+    <select name="vehicle_id">
+      <option value="">All Vehicles</option>
+      {% for eq in equipment %}
+      <option value="{{ eq.equipment_id }}" {% if sel_vehicle == eq.equipment_id %}selected{% endif %}>{{ eq.unit_number or eq.equipment_id }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-sm btn-primary">View Report</button>
+</form>
+
+{# ── Summary Cards ───────────────────────────────────────────────── #}
+<div class="ifta-summary">
+  <div class="summary-card">
+    <span class="summary-number">{{ report.total_miles|round(1) }}</span>
+    <span class="summary-label">Total Miles</span>
+  </div>
+  <div class="summary-card" style="border-left:4px solid #2980b9;">
+    <span class="summary-number">{{ report.total_gallons|round(2) }}</span>
+    <span class="summary-label">Total Gallons</span>
+  </div>
+  <div class="summary-card" style="border-left:4px solid #27ae60;">
+    <span class="summary-number">{{ report.fleet_mpg|round(2) }}</span>
+    <span class="summary-label">Fleet MPG</span>
+  </div>
+  <div class="summary-card">
+    <span class="summary-number">{{ report.jurisdictions|length }}</span>
+    <span class="summary-label">Jurisdictions</span>
+  </div>
+  <div class="summary-card">
+    <span class="summary-number">{{ report.trip_leg_count }}</span>
+    <span class="summary-label">Trip Legs</span>
+  </div>
+  <div class="summary-card">
+    <span class="summary-number">{{ report.fuel_purchase_count }}</span>
+    <span class="summary-label">Fuel Purchases</span>
+  </div>
+</div>
+
+{# ── Add Trip Leg Form ───────────────────────────────────────────── #}
+<div id="add-trip-form" class="hidden-form no-print">
+  <h3>Add Trip Leg</h3>
+  <div class="form-row">
+    <div class="field">
+      <label>Jurisdiction</label>
+      <select id="trip-jurisdiction">
+        <option value="">Select...</option>
+        {% for j in jurisdictions %}
+        <option value="{{ j }}">{{ j }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Miles</label>
+      <input type="number" id="trip-miles" step="0.1" min="0" placeholder="0.0">
+    </div>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="trip-date">
+    </div>
+    <div class="field">
+      <label>Vehicle</label>
+      <select id="trip-vehicle">
+        <option value="">Select...</option>
+        {% for eq in equipment %}
+        <option value="{{ eq.equipment_id }}">{{ eq.unit_number or eq.equipment_id }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label>Load ID (optional)</label>
+      <input type="text" id="trip-load-id" placeholder="LOAD-...">
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <input type="text" id="trip-notes" placeholder="Optional notes">
+    </div>
+  </div>
+  <button class="btn btn-sm btn-primary" onclick="addTripLeg()">Save Trip Leg</button>
+  <button class="btn btn-sm" onclick="toggleForm('add-trip-form')">Cancel</button>
+</div>
+
+{# ── Add Fuel Purchase Form ──────────────────────────────────────── #}
+<div id="add-fuel-form" class="hidden-form no-print">
+  <h3>Add Fuel Purchase</h3>
+  <div class="form-row">
+    <div class="field">
+      <label>Jurisdiction</label>
+      <select id="fuel-jurisdiction">
+        <option value="">Select...</option>
+        {% for j in jurisdictions %}
+        <option value="{{ j }}">{{ j }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Gallons</label>
+      <input type="number" id="fuel-gallons" step="0.001" min="0" placeholder="0.000">
+    </div>
+    <div class="field">
+      <label>Amount ($)</label>
+      <input type="number" id="fuel-amount" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="fuel-date">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label>Vehicle</label>
+      <select id="fuel-vehicle">
+        <option value="">Select...</option>
+        {% for eq in equipment %}
+        <option value="{{ eq.equipment_id }}">{{ eq.unit_number or eq.equipment_id }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Vendor / Station</label>
+      <input type="text" id="fuel-vendor" placeholder="e.g. Pilot, Love's">
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <input type="text" id="fuel-notes" placeholder="Optional notes">
+    </div>
+  </div>
+  <button class="btn btn-sm btn-primary" onclick="addFuelPurchase()">Save Fuel Purchase</button>
+  <button class="btn btn-sm" onclick="toggleForm('add-fuel-form')">Cancel</button>
+</div>
+
+{# ── Quarterly Report Table (Publisher-ready) ────────────────────── #}
+<div class="print-section">
+  <h3>IFTA Quarterly Report — {{ report.quarter_label }}
+    {% if report.vehicle_id %} ({{ report.vehicle_id }}){% endif %}
+    <button class="btn btn-sm no-print" onclick="window.print()" style="margin-left:12px;">Print / PDF</button>
+    <button class="btn btn-sm no-print" onclick="exportCSV()" style="margin-left:4px;">Export CSV</button>
+  </h3>
+  <p style="font-size:12px;color:#777;margin-bottom:12px;">
+    Period: {{ report.date_from }} to {{ report.date_to }} &nbsp;|&nbsp;
+    Fleet MPG: {{ report.fleet_mpg|round(4) }}
+  </p>
+
+  {% if report.jurisdictions %}
+  <div style="overflow-x:auto;">
+  <table class="ifta-report-table" id="ifta-table">
+    <thead>
+      <tr>
+        <th>Jurisdiction</th>
+        <th class="num">Miles</th>
+        <th class="num">Taxable Gallons</th>
+        <th class="num">Fuel Purchased (gal)</th>
+        <th class="num">Fuel Cost ($)</th>
+        <th class="num">Net Taxable Gallons</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in report.jurisdictions %}
+      <tr>
+        <td><strong>{{ j.jurisdiction }}</strong></td>
+        <td class="num">{{ "%.2f"|format(j.miles) }}</td>
+        <td class="num">{{ "%.4f"|format(j.taxable_gallons) }}</td>
+        <td class="num">{{ "%.4f"|format(j.fuel_gallons) }}</td>
+        <td class="num">${{ "%.2f"|format(j.fuel_amount) }}</td>
+        <td class="num {% if j.net_taxable_gallons > 0 %}ifta-net-negative{% elif j.net_taxable_gallons < 0 %}ifta-net-positive{% endif %}">
+          {{ "%.4f"|format(j.net_taxable_gallons) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>TOTAL</td>
+        <td class="num">{{ "%.2f"|format(report.total_miles) }}</td>
+        <td class="num">{{ "%.4f"|format(report.total_gallons) }}</td>
+        <td class="num">{{ "%.4f"|format(report.total_gallons) }}</td>
+        <td class="num">&mdash;</td>
+        <td class="num">&mdash;</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  {% else %}
+  <p style="color:#999;font-style:italic;">No trip legs or fuel purchases recorded for this quarter. Add data using the buttons above.</p>
+  {% endif %}
+</div>
+
+{# ── Recent Trip Legs ────────────────────────────────────────────── #}
+<div class="ifta-entries no-print" id="trip-legs-section">
+  <h3>Trip Legs ({{ report.quarter_label }})</h3>
+  <div id="trip-legs-list">Loading...</div>
+</div>
+
+{# ── Recent Fuel Purchases ──────────────────────────────────────── #}
+<div class="ifta-entries no-print" id="fuel-purchases-section">
+  <h3>Fuel Purchases ({{ report.quarter_label }})</h3>
+  <div id="fuel-purchases-list">Loading...</div>
+</div>
+
+<script>
+const API = '/api/dispatch/ifta';
+const QTR_FROM = '{{ report.date_from }}';
+const QTR_TO = '{{ report.date_to }}';
+
+function toggleForm(id) {
+  document.getElementById(id).classList.toggle('visible');
+}
+
+function addTripLeg() {
+  const payload = {
+    jurisdiction: document.getElementById('trip-jurisdiction').value,
+    miles: parseFloat(document.getElementById('trip-miles').value) || 0,
+    date: document.getElementById('trip-date').value,
+    vehicle_id: document.getElementById('trip-vehicle').value,
+    load_id: document.getElementById('trip-load-id').value,
+    notes: document.getElementById('trip-notes').value,
+  };
+  if (!payload.jurisdiction) { alert('Select a jurisdiction'); return; }
+  if (!payload.miles) { alert('Enter miles'); return; }
+  fetch(API + '/trip-legs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => location.reload())
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function addFuelPurchase() {
+  const payload = {
+    jurisdiction: document.getElementById('fuel-jurisdiction').value,
+    gallons: parseFloat(document.getElementById('fuel-gallons').value) || 0,
+    amount: parseFloat(document.getElementById('fuel-amount').value) || 0,
+    date: document.getElementById('fuel-date').value,
+    vehicle_id: document.getElementById('fuel-vehicle').value,
+    vendor: document.getElementById('fuel-vendor').value,
+    notes: document.getElementById('fuel-notes').value,
+  };
+  if (!payload.jurisdiction) { alert('Select a jurisdiction'); return; }
+  if (!payload.gallons) { alert('Enter gallons'); return; }
+  fetch(API + '/fuel-purchases', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => location.reload())
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function deleteTripLeg(id) {
+  if (!confirm('Delete this trip leg?')) return;
+  fetch(API + '/trip-legs/' + id, {method:'DELETE'})
+    .then(() => location.reload());
+}
+
+function deleteFuelPurchase(id) {
+  if (!confirm('Delete this fuel purchase?')) return;
+  fetch(API + '/fuel-purchases/' + id, {method:'DELETE'})
+    .then(() => location.reload());
+}
+
+function loadTripLegs() {
+  fetch(API + '/trip-legs?date_from=' + QTR_FROM + '&date_to=' + QTR_TO)
+    .then(r => r.json())
+    .then(legs => {
+      const el = document.getElementById('trip-legs-list');
+      if (!legs.length) { el.innerHTML = '<p style="color:#999;font-style:italic;">No trip legs this quarter.</p>'; return; }
+      el.innerHTML = legs.map(l => `
+        <div class="ifta-entry-card">
+          <div class="ifta-entry-info">
+            <span class="tag">${l.jurisdiction}</span>
+            <span>${l.miles} mi</span>
+            <span style="color:#888">${l.date}</span>
+            ${l.vehicle_id ? '<span style="color:#888">'+l.vehicle_id+'</span>' : ''}
+            ${l.load_id ? '<span style="color:#888">'+l.load_id+'</span>' : ''}
+            ${l.notes ? '<span style="color:#aaa">'+l.notes+'</span>' : ''}
+          </div>
+          <div class="ifta-entry-actions">
+            <button class="btn btn-sm btn-danger" onclick="deleteTripLeg('${l.leg_id}')">Delete</button>
+          </div>
+        </div>`).join('');
+    });
+}
+
+function loadFuelPurchases() {
+  fetch(API + '/fuel-purchases?date_from=' + QTR_FROM + '&date_to=' + QTR_TO)
+    .then(r => r.json())
+    .then(purchases => {
+      const el = document.getElementById('fuel-purchases-list');
+      if (!purchases.length) { el.innerHTML = '<p style="color:#999;font-style:italic;">No fuel purchases this quarter.</p>'; return; }
+      el.innerHTML = purchases.map(p => `
+        <div class="ifta-entry-card">
+          <div class="ifta-entry-info">
+            <span class="tag tag-fuel">${p.jurisdiction}</span>
+            <span>${p.gallons} gal</span>
+            <span>$${p.amount.toFixed(2)}</span>
+            <span style="color:#888">${p.date}</span>
+            ${p.vehicle_id ? '<span style="color:#888">'+p.vehicle_id+'</span>' : ''}
+            ${p.vendor ? '<span style="color:#aaa">'+p.vendor+'</span>' : ''}
+          </div>
+          <div class="ifta-entry-actions">
+            <button class="btn btn-sm btn-danger" onclick="deleteFuelPurchase('${p.purchase_id}')">Delete</button>
+          </div>
+        </div>`).join('');
+    });
+}
+
+function exportCSV() {
+  const table = document.getElementById('ifta-table');
+  if (!table) { alert('No data to export'); return; }
+  let csv = [];
+  for (const row of table.rows) {
+    const cols = [];
+    for (const cell of row.cells) {
+      cols.push('"' + cell.textContent.trim().replace(/"/g, '""') + '"');
+    }
+    csv.push(cols.join(','));
+  }
+  const blob = new Blob([csv.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'IFTA_{{ report.quarter_label|replace(" ","_") }}.csv';
+  a.click();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadTripLegs();
+  loadFuelPurchases();
+});
+</script>
+{% endblock %}
