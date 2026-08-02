@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Driver {{ driver.name }} — L2-COS Portal{% endblock %}
+{% block page_title %}Driver Detail{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('pages.fleet') }}" class="btn btn-sm">&larr; Back to Fleet</a>
+<button class="btn btn-sm btn-danger" onclick="deleteDriver('{{ driver.driver_id }}')">Delete Driver</button>
+{% endblock %}
+
+{% block body %}
+<div class="brief-container">
+
+{# ── Driver Info ──────────────────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Driver Information</h3>
+        <button class="btn btn-sm btn-primary" id="edit-btn" onclick="toggleEdit()">Edit</button>
+    </div>
+
+    <div id="driver-view">
+        <div class="brief-fields">
+            <div><strong>Driver ID:</strong> {{ driver.driver_id }}</div>
+            <div><strong>Status:</strong> <span class="status-tag fleet-{{ driver.status }}">{{ driver.status|replace('_', ' ') }}</span></div>
+            <div><strong>Name:</strong> {{ driver.name }}</div>
+            <div><strong>License Number:</strong> {{ driver.license_number or '—' }}</div>
+            <div><strong>License Class:</strong> {{ ('Class ' + driver.license_class) if driver.license_class else '—' }}</div>
+            <div><strong>Phone:</strong> {{ driver.phone or '—' }}</div>
+            <div><strong>Email:</strong> {{ driver.email or '—' }}</div>
+            <div><strong>Hire Date:</strong> {{ driver.hire_date or '—' }}</div>
+            <div class="full-width"><strong>Notes:</strong> {{ driver.notes or '—' }}</div>
+            <div><strong>Created:</strong> {{ driver.created_at[:16] if driver.created_at else '—' }}</div>
+            <div><strong>Updated:</strong> {{ driver.updated_at[:16] if driver.updated_at else '—' }}</div>
+        </div>
+    </div>
+
+    <div id="driver-edit" style="display:none;">
+        <form onsubmit="saveDriver(event, '{{ driver.driver_id }}')">
+            <div class="brief-fields" style="margin-bottom:12px;">
+                <div><strong>Driver ID:</strong> {{ driver.driver_id }}</div>
+                <div><label><strong>Status</strong><br>
+                    <select name="status" style="width:100%;padding:4px 8px;">
+                        {% for s in driver_statuses %}
+                        <option value="{{ s }}" {% if driver.status == s %}selected{% endif %}>{{ s|replace('_', ' ')|title }}</option>
+                        {% endfor %}
+                    </select></label></div>
+                <div><label><strong>Name *</strong><br>
+                    <input type="text" name="name" value="{{ driver.name }}" required style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>License Number</strong><br>
+                    <input type="text" name="license_number" value="{{ driver.license_number or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>License Class</strong><br>
+                    <select name="license_class" style="width:100%;padding:4px 8px;">
+                        <option value="">—</option>
+                        {% for lc in license_classes %}
+                        <option value="{{ lc }}" {% if driver.license_class == lc %}selected{% endif %}>Class {{ lc }}</option>
+                        {% endfor %}
+                    </select></label></div>
+                <div><label><strong>Phone</strong><br>
+                    <input type="text" name="phone" value="{{ driver.phone or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Email</strong><br>
+                    <input type="email" name="email" value="{{ driver.email or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                <div><label><strong>Hire Date</strong><br>
+                    <input type="date" name="hire_date" value="{{ driver.hire_date or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                <div class="full-width"><label><strong>Notes</strong><br>
+                    <textarea name="notes" rows="2" style="width:100%;padding:4px 8px;">{{ driver.notes or '' }}</textarea></label></div>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-sm btn-success">Save</button>
+                <button type="button" class="btn btn-sm" onclick="toggleEdit()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Current Assignment ───────────────────────────────────────────── #}
+<div class="brief-section">
+    <h3>Current Assignment</h3>
+    {% if active_load %}
+    <div class="brief-fields">
+        <div><strong>Load:</strong> <a href="{{ url_for('pages.dispatch_detail', load_id=active_load.load_id) }}">{{ active_load.load_id[:12] }}</a></div>
+        <div><strong>Customer:</strong> {{ active_load.customer }}</div>
+        <div><strong>Status:</strong> <span class="status-tag dispatch-{{ active_load.status }}">{{ active_load.status|replace('_', ' ') }}</span></div>
+        <div><strong>Pickup:</strong> {{ active_load.pickup_location or '—' }}</div>
+        <div><strong>Delivery:</strong> {{ active_load.delivery_location or '—' }}</div>
+    </div>
+    {% else %}
+    <p style="color:#999;font-size:0.9em;">No active assignment.</p>
+    {% endif %}
+</div>
+
+{# ── Load History ─────────────────────────────────────────────────── #}
+<div class="card-section">
+    <h2>Load History ({{ load_history|length }})</h2>
+    {% if load_history %}
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Load ID</th>
+                <th>Customer</th>
+                <th>Pickup</th>
+                <th>Delivery</th>
+                <th>Status</th>
+                <th>Updated</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ld in load_history %}
+            <tr>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}">{{ ld.load_id[:12] }}</a></td>
+                <td>{{ ld.customer }}</td>
+                <td>{{ ld.pickup_location or '—' }}</td>
+                <td>{{ ld.delivery_location or '—' }}</td>
+                <td><span class="status-tag dispatch-{{ ld.status }}">{{ ld.status|replace('_', ' ') }}</span></td>
+                <td>{{ ld.updated_at[:16] if ld.updated_at else '—' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No load history for this driver.</p>
+    </div>
+    {% endif %}
+</div>
+
+</div>
+
+<script>
+function toggleEdit() {
+    var view = document.getElementById('driver-view');
+    var edit = document.getElementById('driver-edit');
+    var btn = document.getElementById('edit-btn');
+    if (edit.style.display === 'none') {
+        view.style.display = 'none';
+        edit.style.display = '';
+        btn.style.display = 'none';
+    } else {
+        view.style.display = '';
+        edit.style.display = 'none';
+        btn.style.display = '';
+    }
+}
+
+function saveDriver(e, driverId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { data[k] = v; });
+    apiPatch('/api/dispatch/drivers/' + driverId, data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function deleteDriver(driverId) {
+    if (!confirm('Delete this driver? This cannot be undone.')) return;
+    fetch('/api/dispatch/drivers/' + driverId, {method: 'DELETE'}).then(function(r) {
+        return r.json();
+    }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        window.location.href = '{{ url_for("pages.fleet") }}';
+    });
+}
+</script>
+{% endblock %}

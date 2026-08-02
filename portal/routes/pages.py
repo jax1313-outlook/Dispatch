@@ -235,6 +235,44 @@ def fleet():
     )
 
 
+@pages_bp.route("/fleet/driver/<driver_id>")
+def driver_detail(driver_id):
+    from dispatch import services as dispatch_svc, store as dispatch_store
+    from dispatch.models import DRIVER_STATUSES, LICENSE_CLASSES
+    driver = dispatch_svc.get_driver(driver_id)
+    if not driver:
+        return "Driver not found", 404
+    active_load = dispatch_store.get_active_load_for_driver(driver_id)
+    load_history = dispatch_store.get_loads_for_driver(driver_id)
+    return render_template(
+        "driver_detail.html",
+        driver=driver,
+        active_load=active_load,
+        load_history=load_history,
+        driver_statuses=DRIVER_STATUSES,
+        license_classes=LICENSE_CLASSES,
+    )
+
+
+@pages_bp.route("/fleet/equipment/<equipment_id>")
+def equipment_detail(equipment_id):
+    from dispatch import services as dispatch_svc, store as dispatch_store
+    from dispatch.models import EQUIPMENT_TYPES, EQUIPMENT_STATUSES
+    equip = dispatch_svc.get_equipment(equipment_id)
+    if not equip:
+        return "Equipment not found", 404
+    active_load = dispatch_store.get_active_load_for_equipment(equipment_id)
+    load_history = dispatch_store.get_loads_for_equipment(equipment_id)
+    return render_template(
+        "equipment_detail.html",
+        equip=equip,
+        active_load=active_load,
+        load_history=load_history,
+        equipment_types=EQUIPMENT_TYPES,
+        equipment_statuses=EQUIPMENT_STATUSES,
+    )
+
+
 @pages_bp.route("/billing")
 def billing():
     from dispatch import services as dispatch_svc

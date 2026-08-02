@@ -138,7 +138,7 @@
         {% for drv in drivers %}
             {% set drv_load = assignments.driver_loads.get(drv.driver_id) %}
             <tr>
-                <td><strong>{{ drv.name }}</strong></td>
+                <td><a href="{{ url_for('pages.driver_detail', driver_id=drv.driver_id) }}" style="font-weight:600;">{{ drv.name }}</a></td>
                 <td>{{ drv.license_number or '—' }}</td>
                 <td>{{ drv.license_class or '—' }}</td>
                 <td>{{ drv.phone or '—' }}</td>
@@ -241,7 +241,7 @@
         {% for eqp in equipment %}
             {% set eqp_load = assignments.equipment_loads.get(eqp.equipment_id) %}
             <tr>
-                <td><strong>{{ eqp.unit_number }}</strong></td>
+                <td><a href="{{ url_for('pages.equipment_detail', equipment_id=eqp.equipment_id) }}" style="font-weight:600;">{{ eqp.unit_number }}</a></td>
                 <td>{{ eqp.equipment_type|replace('_', ' ')|title }}</td>
                 <td>{{ eqp.make }} {{ eqp.model }}</td>
                 <td>{{ eqp.year or '—' }}</td>
