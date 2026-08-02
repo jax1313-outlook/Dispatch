@@ -121,6 +121,8 @@ def dispatch():
     _sync_booked_entries(dispatch_entries)
 
     entries_sorted = sorted(dispatch_entries.values(), key=_priority_key, reverse=True)
+    active_drivers = dispatch_svc.list_drivers(status="active")
+    active_equipment = dispatch_svc.list_equipment(status="active")
     return render_template(
         "dispatch.html",
         entries=entries_sorted,
@@ -130,6 +132,8 @@ def dispatch():
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
         fin_dashboard=fin_dashboard,
+        active_drivers=active_drivers,
+        active_equipment=active_equipment,
     )
 
 

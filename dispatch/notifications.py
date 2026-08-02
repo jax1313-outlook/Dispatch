@@ -108,6 +108,7 @@ def _render_notification(
         "exception": "#c62828",
         "delivered": "#2e7d32",
         "pod_generated": "#1565c0",
+        "dispatched": "#2e7d32",
         "archived": "#6a1b9a",
         "invoice_created": "#1b5e20",
         "payment_received": "#2e7d32",
@@ -155,6 +156,35 @@ def _render_notification(
 </div>"""
 
     return text, html
+
+
+def notify_dispatched(load: dict) -> str:
+    """Send notification when a load is dispatched (auto or manual)."""
+    esc = _html.escape
+    driver = load.get("driver", "")
+    equipment = load.get("equipment", "")
+
+    detail = f"""\
+<div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;margin-bottom:16px;">
+    <strong>Load Dispatched</strong><br>
+    Driver: {esc(driver) or 'Not assigned'}<br>
+    Equipment: {esc(equipment) or 'Not assigned'}
+</div>
+<p style="color:#666;font-size:13px;">
+    The load has been dispatched and is ready for pickup.
+</p>"""
+
+    text, html = _render_notification(
+        load,
+        event_type="dispatched",
+        headline="Load Dispatched",
+        detail_html=detail,
+        recommended="acknowledge",
+    )
+
+    subject = f"[DISPATCH] Dispatched — {load.get('customer', load['load_id'])}"
+    msg = _build([reviewer_address()], subject, text, html=html)
+    return _send_or_write(f"dispatch-dispatched-{load['load_id']}", msg)
 
 
 def notify_exception(load: dict, exception: dict) -> str:

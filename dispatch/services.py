@@ -40,6 +40,33 @@ _MILESTONE_TO_STATUS = {
     "completed": "completed",
 }
 
+_VALID_TRANSITIONS: dict[str, set[str]] = {
+    "created": {"dispatched", "cancelled"},
+    "dispatched": {"en_route_pickup", "cancelled"},
+    "en_route_pickup": {"at_pickup", "cancelled"},
+    "at_pickup": {"picked_up", "cancelled"},
+    "picked_up": {"in_transit"},
+    "in_transit": {"at_delivery"},
+    "at_delivery": {"delivered"},
+    "delivered": {"completed", "archived"},
+    "completed": {"archived"},
+    "archived": set(),
+    "cancelled": set(),
+}
+
+
+def validate_status_transition(current: str, target: str) -> None:
+    if current == target:
+        return
+    allowed = _VALID_TRANSITIONS.get(current, set())
+    if target not in allowed:
+        allowed_list = ", ".join(sorted(allowed)) if allowed else "none"
+        raise ValueError(
+            f"Invalid status transition: {current} -> {target}. "
+            f"Allowed from {current}: {allowed_list}"
+        )
+
+
 _MILESTONE_NEXT = {
     "dispatched": "en_route_pickup",
     "en_route_pickup": "arrived_pickup",
@@ -109,6 +136,10 @@ def update_load(load_id: str, **fields) -> dict | None:
         _validate_driver_assignment(fields["driver_id"])
     if "equipment_id" in fields and fields["equipment_id"]:
         _validate_equipment_assignment(fields["equipment_id"])
+    if "status" in fields:
+        current = store.get_load(load_id)
+        if current:
+            validate_status_transition(current["status"], fields["status"])
     return store.update_load(load_id, **fields)
 
 
@@ -119,7 +150,9 @@ def assign_driver(load_id: str, driver_id: str) -> dict | None:
         raise ValueError(f"Load not found: {load_id}")
     _validate_driver_assignment(driver_id)
     drv = store.get_driver(driver_id)
-    return store.update_load(load_id, driver_id=driver_id, driver=drv["name"])
+    store.update_load(load_id, driver_id=driver_id, driver=drv["name"])
+    _try_auto_dispatch(load_id)
+    return store.get_load(load_id)
 
 
 def unassign_driver(load_id: str) -> dict | None:
@@ -138,7 +171,9 @@ def assign_equipment(load_id: str, equipment_id: str) -> dict | None:
     _validate_equipment_assignment(equipment_id)
     eqp = store.get_equipment(equipment_id)
     label = f"{eqp['unit_number']} ({eqp['equipment_type']})"
-    return store.update_load(load_id, equipment_id=equipment_id, equipment=label)
+    store.update_load(load_id, equipment_id=equipment_id, equipment=label)
+    _try_auto_dispatch(load_id)
+    return store.get_load(load_id)
 
 
 def unassign_equipment(load_id: str) -> dict | None:
@@ -163,6 +198,33 @@ def _validate_equipment_assignment(equipment_id: str) -> None:
         raise ValueError(f"Equipment not found: {equipment_id}")
     if eqp["status"] != "active":
         raise ValueError(f"Equipment {equipment_id} is not active (status: {eqp['status']})")
+
+
+def _try_auto_dispatch(load_id: str) -> None:
+    load = store.get_load(load_id)
+    if not load or load["status"] != "created":
+        return
+    if not load.get("driver_id") or not load.get("equipment_id"):
+        return
+    store.update_load(load_id, status="dispatched")
+    ms = MilestoneEvent(
+        load_id=load_id,
+        event_type="dispatched",
+        source="system",
+        note="Auto-dispatched: driver and equipment assigned",
+        event_time=_utc_now(),
+    )
+    store.create_milestone(ms)
+    vis = LoadVisibilityRecord(
+        load_id=load_id,
+        current_status="dispatched",
+        last_milestone="dispatched",
+        next_expected_milestone="en_route_pickup",
+    )
+    store.upsert_visibility(vis)
+    updated = store.get_load(load_id)
+    if updated:
+        notifications.notify_dispatched(updated)
 
 
 def get_visibility(load_id: str) -> dict | None:
