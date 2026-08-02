@@ -1082,8 +1082,8 @@ def add_activity(
     return store.create_activity(activity)
 
 
-def list_activities(load_id: str) -> list[dict]:
-    return store.list_activities(load_id)
+def list_activities(load_id: str, activity_type: str | None = None) -> list[dict]:
+    return store.list_activities(load_id, activity_type=activity_type)
 
 
 def delete_activity(activity_id: str) -> bool:

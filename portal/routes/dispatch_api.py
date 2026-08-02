@@ -1083,7 +1083,11 @@ def list_activities(load_id):
     load = services.get_load(load_id)
     if not load:
         return jsonify({"error": "Load not found"}), 404
-    return jsonify(services.list_activities(load_id))
+    activity_type = request.args.get("type")
+    if activity_type and activity_type not in ACTIVITY_TYPES:
+        return jsonify({"error": f"Invalid type. Must be one of {ACTIVITY_TYPES}"}), 400
+    items = services.list_activities(load_id, activity_type=activity_type)
+    return jsonify(items)
 
 
 @dispatch_bp.route("/loads/<load_id>/activities", methods=["POST"])

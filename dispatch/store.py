@@ -948,12 +948,18 @@ def create_activity(activity: LoadActivity) -> dict:
     return d
 
 
-def list_activities(load_id: str) -> list[dict]:
+def list_activities(
+    load_id: str,
+    activity_type: str | None = None,
+) -> list[dict]:
+    clauses = ["load_id=?"]
+    params: list = [load_id]
+    if activity_type:
+        clauses.append("activity_type=?")
+        params.append(activity_type)
+    sql = f"SELECT * FROM activities WHERE {' AND '.join(clauses)} ORDER BY created_at DESC"
     with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM activities WHERE load_id=? ORDER BY created_at DESC",
-            (load_id,),
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict_from_row(r) for r in rows]
 
 
