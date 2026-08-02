@@ -34,6 +34,37 @@ from dispatch.models import (
 dispatch_bp = Blueprint("dispatch_api", __name__)
 
 
+def _get_page_params():
+    raw_page = request.args.get("page")
+    if raw_page is None:
+        return None, None
+    try:
+        page = int(raw_page)
+    except (ValueError, TypeError):
+        return None, None
+    raw_pp = request.args.get("per_page")
+    per_page = int(raw_pp) if raw_pp else None
+    return page, per_page
+
+
+def _paginated_response(result, collection_key):
+    if isinstance(result, dict) and "items" in result:
+        return jsonify({
+            "status": "ok",
+            collection_key: result["items"],
+            "count": len(result["items"]),
+            "total": result["total"],
+            "page": result["page"],
+            "per_page": result["per_page"],
+            "pages": result["pages"],
+        })
+    return jsonify({
+        "status": "ok",
+        collection_key: result,
+        "count": len(result),
+    })
+
+
 # ── Loads ─────────────────────────────────────────────────────────────
 
 @dispatch_bp.route("/loads", methods=["GET"])
@@ -44,11 +75,13 @@ def list_loads():
     customer = request.args.get("customer")
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
+    page, per_page = _get_page_params()
     loads = services.list_loads(
         status=status, customer=customer,
         date_from=date_from, date_to=date_to,
+        page=page, per_page=per_page,
     )
-    return jsonify({"status": "ok", "loads": loads, "count": len(loads)})
+    return _paginated_response(loads, "loads")
 
 
 @dispatch_bp.route("/loads", methods=["POST"])
@@ -344,14 +377,20 @@ def list_all_exceptions():
     exc_type = request.args.get("exception_type")
     if exc_type and exc_type not in EXCEPTION_TYPES:
         return jsonify({"error": f"Invalid exception_type: {exc_type}"}), 400
-    items = services.list_exceptions(status=status)
-    if severity:
-        items = [e for e in items if e.get("severity") == severity]
-    if exc_type:
-        items = [e for e in items if e.get("exception_type") == exc_type]
-    return jsonify({
-        "status": "ok", "exceptions": items, "count": len(items),
-    })
+    page, per_page = _get_page_params()
+    items = services.list_exceptions(status=status, page=page, per_page=per_page)
+    if isinstance(items, dict) and "items" in items:
+        if severity:
+            items["items"] = [e for e in items["items"] if e.get("severity") == severity]
+        if exc_type:
+            items["items"] = [e for e in items["items"] if e.get("exception_type") == exc_type]
+        items["count"] = len(items["items"])
+    else:
+        if severity:
+            items = [e for e in items if e.get("severity") == severity]
+        if exc_type:
+            items = [e for e in items if e.get("exception_type") == exc_type]
+    return _paginated_response(items, "exceptions")
 
 
 # ── POD Packages ──────────────────────────────────────────────────────
@@ -633,14 +672,16 @@ def list_settlements():
     status = request.args.get("payment_status")
     if status and status not in SETTLEMENT_STATUSES:
         return jsonify({"error": f"Invalid payment_status: {status}"}), 400
+    page, per_page = _get_page_params()
     items = services.list_settlements(
         payment_status=status,
         customer=request.args.get("customer") or None,
         date_from=request.args.get("date_from") or None,
         date_to=request.args.get("date_to") or None,
         invoice_number=request.args.get("invoice") or None,
+        page=page, per_page=per_page,
     )
-    return jsonify({"status": "ok", "settlements": items, "count": len(items)})
+    return _paginated_response(items, "settlements")
 
 
 # ── Financial Dashboard ──────────────────────────────────────────────
@@ -671,8 +712,9 @@ def list_drivers():
     if status and status not in DRIVER_STATUSES:
         return jsonify({"error": f"Invalid status: {status}"}), 400
     name = request.args.get("name")
-    drivers = services.list_drivers(status=status, name=name)
-    return jsonify({"status": "ok", "drivers": drivers, "count": len(drivers)})
+    page, per_page = _get_page_params()
+    drivers = services.list_drivers(status=status, name=name, page=page, per_page=per_page)
+    return _paginated_response(drivers, "drivers")
 
 
 @dispatch_bp.route("/drivers", methods=["POST"])
@@ -735,10 +777,12 @@ def list_equipment():
     if eq_type and eq_type not in EQUIPMENT_TYPES:
         return jsonify({"error": f"Invalid equipment_type: {eq_type}"}), 400
     unit_number = request.args.get("unit_number")
+    page, per_page = _get_page_params()
     items = services.list_equipment(
         status=status, equipment_type=eq_type, unit_number=unit_number,
+        page=page, per_page=per_page,
     )
-    return jsonify({"status": "ok", "equipment": items, "count": len(items)})
+    return _paginated_response(items, "equipment")
 
 
 @dispatch_bp.route("/equipment", methods=["POST"])
