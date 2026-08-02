@@ -144,6 +144,32 @@
     </div>
 </div>
 
+{# ── Status Progress ───────────────────────────────────────────────── #}
+{% set lifecycle = ['created', 'dispatched', 'en_route_pickup', 'at_pickup', 'picked_up', 'in_transit', 'at_delivery', 'delivered', 'completed', 'archived'] %}
+{% set current_idx = lifecycle.index(load.status) if load.status in lifecycle else -1 %}
+<div class="brief-section">
+    <h3>Status Progress</h3>
+    <div class="load-stepper">
+        {% if load.status == 'cancelled' %}
+            {% for step in lifecycle %}
+            <div class="step {% if loop.index0 == 0 %}cancelled{% endif %}">
+                <div class="step-line"></div>
+                <div class="step-dot"></div>
+                <div class="step-label">{% if loop.index0 == 0 %}cancelled{% else %}{{ step|replace('_', ' ') }}{% endif %}</div>
+            </div>
+            {% endfor %}
+        {% else %}
+            {% for step in lifecycle %}
+            <div class="step {% if loop.index0 < current_idx %}completed{% elif loop.index0 == current_idx %}current{% endif %}">
+                <div class="step-line"></div>
+                <div class="step-dot"></div>
+                <div class="step-label">{{ step|replace('_', ' ') }}</div>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+
 {# ── Visibility ────────────────────────────────────────────────────── #}
 {% if visibility %}
 <div class="brief-section">
