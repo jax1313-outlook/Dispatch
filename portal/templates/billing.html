@@ -42,6 +42,32 @@
         <button class="btn btn-sm btn-warning" onclick="runAgingCheck()" title="Scan invoiced settlements for overdue payments" style="margin-left:auto;">Run Aging Check</button>
     </div>
 
+    <form method="get" action="{{ url_for('pages.billing') }}" style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+        <div>
+            <label style="font-size:0.85em;"><strong>Customer</strong><br>
+            <input type="text" name="customer" value="{{ customer_search }}" placeholder="Search customer..." style="padding:4px 8px;width:150px;"></label>
+        </div>
+        <div>
+            <label style="font-size:0.85em;"><strong>Invoice #</strong><br>
+            <input type="text" name="invoice" value="{{ invoice_search }}" placeholder="Search invoice..." style="padding:4px 8px;width:130px;"></label>
+        </div>
+        <div>
+            <label style="font-size:0.85em;"><strong>From</strong><br>
+            <input type="date" name="date_from" value="{{ date_from }}" style="padding:4px 8px;"></label>
+        </div>
+        <div>
+            <label style="font-size:0.85em;"><strong>To</strong><br>
+            <input type="date" name="date_to" value="{{ date_to }}" style="padding:4px 8px;"></label>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-sm btn-primary">Search</button>
+            {% if customer_search or invoice_search or date_from or date_to %}
+            <a href="{{ url_for('pages.billing', status=status_filter or '') }}" class="btn btn-sm">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+
     {% if settlements %}
     <table class="data-table">
         <thead>

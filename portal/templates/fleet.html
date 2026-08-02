@@ -154,14 +154,28 @@
                     <span style="color:#999;font-size:12px;">—</span>
                     {% endif %}
                 </td>
-                <td>
+                <td style="white-space:nowrap;">
                     {% if drv.status == 'active' %}
-                    <button class="btn btn-sm btn-warning" onclick="updateDriverStatus('{{ drv.driver_id }}', 'inactive')">Deactivate</button>
+                    <button class="btn btn-xs btn-warning" onclick="updateDriverStatus('{{ drv.driver_id }}', 'inactive')">Deactivate</button>
                     {% elif drv.status == 'inactive' %}
-                    <button class="btn btn-sm btn-success" onclick="updateDriverStatus('{{ drv.driver_id }}', 'active')">Activate</button>
+                    <button class="btn btn-xs btn-success" onclick="updateDriverStatus('{{ drv.driver_id }}', 'active')">Activate</button>
                     {% elif drv.status == 'on_leave' %}
-                    <button class="btn btn-sm btn-success" onclick="updateDriverStatus('{{ drv.driver_id }}', 'active')">Return</button>
+                    <button class="btn btn-xs btn-success" onclick="updateDriverStatus('{{ drv.driver_id }}', 'active')">Return</button>
                     {% endif %}
+                    <button class="btn btn-xs" onclick="toggleDriverEdit('{{ drv.driver_id }}')">Edit</button>
+                    <button class="btn btn-xs btn-danger" onclick="deleteDriver('{{ drv.driver_id }}')">Delete</button>
+                </td>
+            </tr>
+            <tr id="edit-driver-{{ drv.driver_id }}" style="display:none;background:#f8f9fa;">
+                <td colspan="7">
+                    <form onsubmit="saveDriverEdit(event, '{{ drv.driver_id }}')" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;padding:6px 0;">
+                        <label style="font-size:0.8em;">Phone<br><input type="text" name="phone" value="{{ drv.phone or '' }}" style="padding:3px 6px;width:120px;"></label>
+                        <label style="font-size:0.8em;">Email<br><input type="email" name="email" value="{{ drv.email or '' }}" style="padding:3px 6px;width:160px;"></label>
+                        <label style="font-size:0.8em;">License #<br><input type="text" name="license_number" value="{{ drv.license_number or '' }}" style="padding:3px 6px;width:120px;"></label>
+                        <label style="font-size:0.8em;">Notes<br><input type="text" name="notes" value="{{ drv.notes or '' }}" style="padding:3px 6px;width:180px;"></label>
+                        <button type="submit" class="btn btn-xs btn-success">Save</button>
+                        <button type="button" class="btn btn-xs" onclick="toggleDriverEdit('{{ drv.driver_id }}')">Cancel</button>
+                    </form>
                 </td>
             </tr>
         {% endfor %}
@@ -244,14 +258,30 @@
                     <span style="color:#999;font-size:12px;">—</span>
                     {% endif %}
                 </td>
-                <td>
+                <td style="white-space:nowrap;">
                     {% if eqp.status == 'active' %}
-                    <button class="btn btn-sm btn-warning" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'maintenance')">Maintenance</button>
+                    <button class="btn btn-xs btn-warning" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'maintenance')">Maintenance</button>
                     {% elif eqp.status == 'maintenance' %}
-                    <button class="btn btn-sm btn-success" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'active')">Return</button>
+                    <button class="btn btn-xs btn-success" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'active')">Return</button>
                     {% elif eqp.status == 'inactive' %}
-                    <button class="btn btn-sm btn-success" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'active')">Activate</button>
+                    <button class="btn btn-xs btn-success" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'active')">Activate</button>
                     {% endif %}
+                    <button class="btn btn-xs" onclick="toggleEquipmentEdit('{{ eqp.equipment_id }}')">Edit</button>
+                    <button class="btn btn-xs btn-danger" onclick="deleteEquipment('{{ eqp.equipment_id }}')">Delete</button>
+                </td>
+            </tr>
+            <tr id="edit-equip-{{ eqp.equipment_id }}" style="display:none;background:#f8f9fa;">
+                <td colspan="8">
+                    <form onsubmit="saveEquipmentEdit(event, '{{ eqp.equipment_id }}')" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;padding:6px 0;">
+                        <label style="font-size:0.8em;">VIN<br><input type="text" name="vin" value="{{ eqp.vin or '' }}" style="padding:3px 6px;width:160px;"></label>
+                        <label style="font-size:0.8em;">License Plate<br><input type="text" name="license_plate" value="{{ eqp.license_plate or '' }}" style="padding:3px 6px;width:120px;"></label>
+                        <label style="font-size:0.8em;">Make<br><input type="text" name="make" value="{{ eqp.make or '' }}" style="padding:3px 6px;width:100px;"></label>
+                        <label style="font-size:0.8em;">Model<br><input type="text" name="model" value="{{ eqp.model or '' }}" style="padding:3px 6px;width:100px;"></label>
+                        <label style="font-size:0.8em;">Year<br><input type="text" name="year" value="{{ eqp.year or '' }}" style="padding:3px 6px;width:60px;"></label>
+                        <label style="font-size:0.8em;">Notes<br><input type="text" name="notes" value="{{ eqp.notes or '' }}" style="padding:3px 6px;width:160px;"></label>
+                        <button type="submit" class="btn btn-xs btn-success">Save</button>
+                        <button type="button" class="btn btn-xs" onclick="toggleEquipmentEdit('{{ eqp.equipment_id }}')">Cancel</button>
+                    </form>
                 </td>
             </tr>
         {% endfor %}
@@ -307,22 +337,64 @@ function createEquipment(e) {
 }
 
 function updateDriverStatus(driverId, status) {
-    fetch('/api/dispatch/drivers/' + driverId, {
-        method: 'PATCH',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({status: status})
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    apiPatch('/api/dispatch/drivers/' + driverId, {status: status}).then(function(data) {
         if (data.error) { alert(data.error); return; }
         location.reload();
     });
 }
 
 function updateEquipmentStatus(equipId, status) {
-    fetch('/api/dispatch/equipment/' + equipId, {
-        method: 'PATCH',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({status: status})
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    apiPatch('/api/dispatch/equipment/' + equipId, {status: status}).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function toggleDriverEdit(driverId) {
+    var row = document.getElementById('edit-driver-' + driverId);
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function saveDriverEdit(e, driverId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { data[k] = v; });
+    apiPatch('/api/dispatch/drivers/' + driverId, data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function deleteDriver(driverId) {
+    if (!confirm('Delete this driver? This cannot be undone.')) return;
+    fetch('/api/dispatch/drivers/' + driverId, {method: 'DELETE'}).then(function(r) {
+        return r.json();
+    }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function toggleEquipmentEdit(equipId) {
+    var row = document.getElementById('edit-equip-' + equipId);
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function saveEquipmentEdit(e, equipId) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { data[k] = v; });
+    apiPatch('/api/dispatch/equipment/' + equipId, data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function deleteEquipment(equipId) {
+    if (!confirm('Delete this equipment unit? This cannot be undone.')) return;
+    fetch('/api/dispatch/equipment/' + equipId, {method: 'DELETE'}).then(function(r) {
+        return r.json();
+    }).then(function(data) {
         if (data.error) { alert(data.error); return; }
         location.reload();
     });
