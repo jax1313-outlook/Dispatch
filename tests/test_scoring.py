@@ -306,12 +306,13 @@ class TestSandboxScoring:
 
     def test_helpers_load_dispatch_runs_scoring(self, tmp_path, monkeypatch):
         import json
+        from dispatch import acquisition
         from portal import helpers
 
         sample_dir = tmp_path / "samples"
         sample_dir.mkdir()
         (sample_dir / "test.json").write_text(json.dumps(SAMPLE_LOAD_GOOD))
-        monkeypatch.setattr(helpers, "DISPATCH_SAMPLE_DIR", sample_dir)
+        monkeypatch.setattr(acquisition, "_DEFAULT_SAMPLE_DIR", sample_dir)
 
         loads = helpers.load_dispatch_data()
         assert len(loads) == 1
