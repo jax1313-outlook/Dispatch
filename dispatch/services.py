@@ -247,15 +247,24 @@ def list_exceptions(
     return store.list_exceptions(load_id=load_id, status=status)
 
 
+_POD_ELIGIBLE_STATUSES = {"delivered", "completed", "archived"}
+
+
 def generate_pod(
     load_id: str,
     recipient: str = "",
     notes: str = "",
     evidence_ids: list[str] | None = None,
+    require_delivered: bool = True,
 ) -> dict:
     load = store.get_load(load_id)
     if not load:
         raise ValueError(f"Load not found: {load_id}")
+
+    if require_delivered and load["status"] not in _POD_ELIGIBLE_STATUSES:
+        raise ValueError(
+            f"Load must be delivered before generating POD (current: {load['status']})"
+        )
 
     if evidence_ids is None:
         all_ev = store.list_evidence(load_id)
@@ -268,7 +277,19 @@ def generate_pod(
         notes=notes,
         status="complete",
     )
-    return store.create_pod(pod)
+    result = store.create_pod(pod)
+
+    milestones = store.list_milestones(load_id)
+    has_pod_milestone = any(m["event_type"] == "pod_received" for m in milestones)
+    if not has_pod_milestone:
+        add_milestone(
+            load_id=load_id,
+            event_type="pod_received",
+            source="system",
+            note=f"POD generated: {pod.pod_id}",
+        )
+
+    return result
 
 
 def get_pod(pod_id: str) -> dict | None:

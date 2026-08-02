@@ -228,7 +228,9 @@ def generate_pod(load_id):
             evidence_ids=data.get("evidence_ids"),
         )
     except ValueError as e:
-        return jsonify({"error": str(e)}), 404
+        msg = str(e)
+        status = 404 if "not found" in msg.lower() else 409
+        return jsonify({"error": msg}), status
     return jsonify({"status": "ok", "pod": pod}), 201
 
 

@@ -44,6 +44,17 @@ def dispatched_load(sample_load):
     return sample_load
 
 
+@pytest.fixture
+def delivered_load(dispatched_load):
+    load_id = dispatched_load["load_id"]
+    services.add_milestone(load_id, "arrived_pickup")
+    services.add_milestone(load_id, "loaded")
+    services.add_milestone(load_id, "departed_pickup")
+    services.add_milestone(load_id, "arrived_delivery")
+    services.add_milestone(load_id, "delivered", location="Savannah, GA")
+    return dispatched_load
+
+
 # ── Model tests ───────────────────────────────────────────────────────
 
 class TestModels:
@@ -418,8 +429,8 @@ class TestServices:
         assert len(services.list_exceptions(load_id=load_id)) == 2
         assert len(services.list_exceptions(load_id=load_id, status="open")) == 2
 
-    def test_generate_pod(self, sample_load):
-        load_id = sample_load["load_id"]
+    def test_generate_pod(self, delivered_load):
+        load_id = delivered_load["load_id"]
         services.attach_evidence(load_id, evidence_type="bol", description="BOL")
         services.attach_evidence(load_id, evidence_type="pod", description="POD Photo")
         pod = services.generate_pod(load_id, recipient="broker@example.com")
@@ -431,21 +442,33 @@ class TestServices:
         with pytest.raises(ValueError, match="Load not found"):
             services.generate_pod("NONEXISTENT")
 
-    def test_generate_pod_with_specific_evidence(self, sample_load):
-        load_id = sample_load["load_id"]
+    def test_generate_pod_requires_delivered(self, sample_load):
+        with pytest.raises(ValueError, match="must be delivered"):
+            services.generate_pod(sample_load["load_id"])
+
+    def test_generate_pod_with_specific_evidence(self, delivered_load):
+        load_id = delivered_load["load_id"]
         ev1 = services.attach_evidence(load_id, evidence_type="bol", description="BOL")
         services.attach_evidence(load_id, evidence_type="photo", description="Photo")
         pod = services.generate_pod(load_id, evidence_ids=[ev1["evidence_id"]])
         assert len(pod["evidence_ids"]) == 1
 
-    def test_list_pods(self, sample_load):
-        load_id = sample_load["load_id"]
+    def test_generate_pod_adds_milestone(self, delivered_load):
+        load_id = delivered_load["load_id"]
+        services.generate_pod(load_id)
+        milestones = services.get_timeline(load_id)
+        pod_ms = [m for m in milestones if m["event_type"] == "pod_received"]
+        assert len(pod_ms) == 1
+        assert pod_ms[0]["source"] == "system"
+
+    def test_list_pods(self, delivered_load):
+        load_id = delivered_load["load_id"]
         services.generate_pod(load_id)
         pods = services.list_pods(load_id)
         assert len(pods) == 1
 
-    def test_archive_load(self, sample_load):
-        load_id = sample_load["load_id"]
+    def test_archive_load(self, delivered_load):
+        load_id = delivered_load["load_id"]
         services.attach_evidence(load_id, evidence_type="pod", description="POD")
         services.generate_pod(load_id)
         ret = services.archive_load(load_id)
@@ -572,6 +595,12 @@ class TestDispatchAPI:
         data = {"customer": "API Test Co", "pickup_location": "JAX, FL"}
         data.update(overrides)
         return client.post("/api/dispatch/loads", json=data)
+
+    def _deliver_load(self, client, load_id):
+        for evt in ("dispatched", "arrived_pickup", "loaded",
+                     "departed_pickup", "arrived_delivery", "delivered"):
+            client.post(f"/api/dispatch/loads/{load_id}/milestones",
+                        json={"event_type": evt})
 
     def test_create_load(self, client):
         resp = self._create_load(client)
@@ -790,6 +819,7 @@ class TestDispatchAPI:
 
     def test_generate_pod(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/evidence", json={
             "evidence_type": "pod", "description": "POD",
         })
@@ -805,6 +835,7 @@ class TestDispatchAPI:
 
     def test_list_pods(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/pod", json={})
         resp = client.get(f"/api/dispatch/loads/{load_id}/pod")
         assert resp.status_code == 200
@@ -843,3 +874,149 @@ class TestDispatchAPI:
     def test_get_retention_not_found(self, client):
         resp = client.get("/api/dispatch/retention/NONEXISTENT")
         assert resp.status_code == 404
+
+
+class TestDispatchEndToEnd:
+    """Full lifecycle: create → dispatch → deliver → POD → archive."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, tmp_path):
+        db.set_db_path(tmp_path / "e2e.db")
+        yield
+        db.set_db_path(None)
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    def test_full_lifecycle(self, client):
+        # 1. Create load
+        resp = client.post("/api/dispatch/loads", json={
+            "customer": "E2E Freight Co",
+            "pickup_location": "Atlanta, GA",
+            "delivery_location": "Savannah, GA",
+            "driver": "Driver Mike",
+            "equipment": "53ft Dry Van",
+        })
+        assert resp.status_code == 201
+        load = resp.get_json()["load"]
+        load_id = load["load_id"]
+        assert load["status"] == "created"
+
+        # 2. Verify visibility record was created
+        resp = client.get(f"/api/dispatch/loads/{load_id}/visibility")
+        assert resp.status_code == 200
+        vis = resp.get_json()["visibility"]
+        assert vis["current_status"] == "created"
+        assert vis["next_expected_milestone"] == "dispatched"
+
+        # 3. Walk through milestone chain
+        milestones = [
+            ("dispatched", "dispatched"),
+            ("en_route_pickup", "en_route_pickup"),
+            ("arrived_pickup", "at_pickup"),
+            ("loaded", "picked_up"),
+            ("departed_pickup", "in_transit"),
+            ("in_transit", "in_transit"),
+            ("arrived_delivery", "at_delivery"),
+            ("delivered", "delivered"),
+        ]
+        for event_type, expected_status in milestones:
+            resp = client.post(f"/api/dispatch/loads/{load_id}/milestones", json={
+                "event_type": event_type,
+                "source": "driver",
+                "location": "On Route",
+            })
+            assert resp.status_code == 201
+
+            load_resp = client.get(f"/api/dispatch/loads/{load_id}")
+            assert load_resp.get_json()["load"]["status"] == expected_status
+
+        # 4. Verify full timeline
+        resp = client.get(f"/api/dispatch/loads/{load_id}/milestones")
+        assert resp.status_code == 200
+        assert resp.get_json()["count"] == 8
+
+        # 5. Attach evidence
+        resp = client.post(f"/api/dispatch/loads/{load_id}/evidence", json={
+            "evidence_type": "pod",
+            "description": "Signed delivery receipt",
+            "uploaded_by": "Driver Mike",
+        })
+        assert resp.status_code == 201
+        ev_id = resp.get_json()["evidence"]["evidence_id"]
+
+        resp = client.post(f"/api/dispatch/loads/{load_id}/evidence", json={
+            "evidence_type": "photo",
+            "description": "Dock photo",
+        })
+        assert resp.status_code == 201
+
+        resp = client.get(f"/api/dispatch/loads/{load_id}/evidence")
+        assert resp.get_json()["count"] == 2
+
+        # 6. Open and resolve an exception
+        resp = client.post(f"/api/dispatch/loads/{load_id}/exceptions", json={
+            "exception_type": "damage",
+            "severity": "low",
+            "description": "Minor pallet scratch",
+        })
+        assert resp.status_code == 201
+        exc_id = resp.get_json()["exception"]["exception_id"]
+
+        vis = client.get(f"/api/dispatch/loads/{load_id}/visibility").get_json()["visibility"]
+        assert vis["exception_flag"] is True
+
+        resp = client.post(f"/api/dispatch/exceptions/{exc_id}/resolve", json={
+            "resolution_note": "Cosmetic only, customer accepted",
+        })
+        assert resp.status_code == 200
+        assert resp.get_json()["exception"]["status"] == "resolved"
+
+        vis = client.get(f"/api/dispatch/loads/{load_id}/visibility").get_json()["visibility"]
+        assert vis["exception_flag"] is False
+
+        # 7. Generate POD package
+        resp = client.post(f"/api/dispatch/loads/{load_id}/pod", json={
+            "recipient": "billing@e2efreight.com",
+            "notes": "Complete delivery",
+            "evidence_ids": [ev_id],
+        })
+        assert resp.status_code == 201
+        pod = resp.get_json()["pod"]
+        assert pod["status"] == "complete"
+        assert ev_id in pod["evidence_ids"]
+
+        # pod_received milestone auto-added
+        timeline = client.get(f"/api/dispatch/loads/{load_id}/milestones").get_json()
+        assert any(m["event_type"] == "pod_received" for m in timeline["milestones"])
+
+        # 8. Archive load
+        resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
+        assert resp.status_code == 201
+        ret = resp.get_json()["retention"]
+        assert ret["load_id"] == load_id
+        assert ret["final_status"] == "delivered"
+        assert len(ret["evidence_index"]) == 2
+
+        # Load status updated to archived
+        load = client.get(f"/api/dispatch/loads/{load_id}").get_json()["load"]
+        assert load["status"] == "archived"
+
+        # 9. Verify retention record retrievable
+        resp = client.get(f"/api/dispatch/retention/{load_id}")
+        assert resp.status_code == 200
+
+        # 10. Verify full bundle
+        resp = client.get(f"/api/dispatch/loads/{load_id}/bundle")
+        assert resp.status_code == 200
+        bundle = resp.get_json()
+        assert bundle["load"]["status"] == "archived"
+        assert len(bundle["milestones"]) == 9  # 8 manual + 1 pod_received
+        assert len(bundle["evidence"]) == 2
+        assert len(bundle["pods"]) == 1
+        assert bundle["retention"] is not None

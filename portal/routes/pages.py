@@ -21,6 +21,8 @@ def index():
 
 @pages_bp.route("/home")
 def home():
+    from dispatch import services as dispatch_svc
+
     all_entries = sandbox.get_all()
     sam_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "sam"}
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
@@ -33,6 +35,9 @@ def home():
 
     pending_items = pending.list_pending()
 
+    all_engine_loads = dispatch_svc.list_loads()
+    active_engine = [l for l in all_engine_loads if l["status"] not in ("archived", "cancelled", "completed")]
+
     return render_template(
         "home.html",
         sam_cards=sam_sorted,
@@ -42,6 +47,7 @@ def home():
         archive_count=arc_model.total_count(),
         intel_count=intel_model.total_count(),
         pending_count=len(pending_items),
+        engine_load_count=len(active_engine),
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
@@ -205,11 +211,16 @@ def archive_view():
             "records": all_archive.get(key, []),
         })
     pipeline_archived = cin_archive.list_contracts()
+
+    from dispatch import services as dispatch_svc
+    dispatch_archived = dispatch_svc.list_retentions()
+
     return render_template(
         "archive.html",
         sections=sections,
         sandbox_archived=sandbox_archived,
         pipeline_archived=pipeline_archived,
+        dispatch_archived=dispatch_archived,
     )
 
 
