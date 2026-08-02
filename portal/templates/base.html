@@ -145,6 +145,18 @@
                 location.reload();
             });
     }
+
+    function runAgingCheck() {
+        apiPost('/api/dispatch/settlements/aging', {})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                var msg = data.count > 0
+                    ? data.count + ' settlement(s) marked overdue.'
+                    : 'No overdue settlements found.';
+                alert(msg);
+                if (data.count > 0) location.reload();
+            });
+    }
     </script>
 </body>
 </html>
