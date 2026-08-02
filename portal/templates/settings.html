@@ -22,11 +22,37 @@
     <table class="data-table">
         <thead><tr><th>Integration</th><th>Status</th></tr></thead>
         <tbody>
-            <tr><td>SAM.gov API</td><td>{{ 'Configured' if config.SECRET_KEY != 'dev-portal-key-change-in-production' else 'Not configured (using sample data)' }}</td></tr>
-            <tr><td>SMTP Email</td><td>Not configured (drafts only)</td></tr>
+            <tr><td>SAM.gov API</td><td>{{ 'Configured' if cin_config.sam_api_key else 'Not configured (using sample data)' }}</td></tr>
+            <tr><td>SMTP Email</td><td>{{ 'Configured (' + cin_config.smtp_host + ')' if cin_config.smtp_host else 'Not configured (writing .eml files)' }}</td></tr>
+            <tr><td>Claude API</td><td>{{ 'Configured' if cin_config.anthropic_key else 'Not configured (using deterministic fallbacks)' }}</td></tr>
             <tr><td>Motive / Samsara</td><td>Not connected (future)</td></tr>
             <tr><td>QuickBooks</td><td>Not connected (future)</td></tr>
             <tr><td>DocuSign</td><td>Not connected (future)</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
+    <h2>CIN-Lite Acquisition</h2>
+    <table class="data-table">
+        <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
+        <tbody>
+            <tr><td>SAM Limit</td><td>{{ cin_config.sam_limit }}</td><td>CIN_LITE_SAM_LIMIT</td></tr>
+            <tr><td>NAICS Filter</td><td>{{ cin_config.sam_naics or 'None (all)' }}</td><td>CIN_LITE_SAM_NAICS</td></tr>
+            <tr><td>Procurement Type</td><td>{{ cin_config.sam_ptype or 'None (all)' }}</td><td>CIN_LITE_SAM_PTYPE</td></tr>
+            <tr><td>Fetch Descriptions</td><td>{{ 'Yes' if cin_config.sam_fetch_desc else 'No' }}</td><td>CIN_LITE_SAM_FETCH_DESCRIPTION</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
+    <h2>Email Delivery</h2>
+    <table class="data-table">
+        <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
+        <tbody>
+            <tr><td>From Address</td><td>{{ cin_config.email_from }}</td><td>CIN_LITE_EMAIL_FROM</td></tr>
+            <tr><td>Reviewer Address</td><td>{{ cin_config.email_reviewer }}</td><td>CIN_LITE_EMAIL_REVIEWER</td></tr>
+            <tr><td>Domain</td><td>{{ cin_config.email_domain }}</td><td>CIN_LITE_EMAIL_DOMAIN</td></tr>
         </tbody>
     </table>
 </section>

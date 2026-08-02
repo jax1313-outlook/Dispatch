@@ -236,8 +236,23 @@ def pending_decisions():
 
 @pages_bp.route("/settings")
 def settings():
+    import os
     from portal.config import Config
-    return render_template("settings.html", config=Config)
+    from cin_lite import email_delivery
+
+    cin_config = {
+        "sam_api_key": bool(os.environ.get("CIN_LITE_SAM_API_KEY")),
+        "sam_limit": os.environ.get("CIN_LITE_SAM_LIMIT", "10"),
+        "sam_naics": os.environ.get("CIN_LITE_SAM_NAICS", ""),
+        "sam_ptype": os.environ.get("CIN_LITE_SAM_PTYPE", ""),
+        "sam_fetch_desc": os.environ.get("CIN_LITE_SAM_FETCH_DESCRIPTION", "1") == "1",
+        "smtp_host": os.environ.get("CIN_LITE_SMTP_HOST", ""),
+        "anthropic_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "email_from": email_delivery.from_address(),
+        "email_reviewer": email_delivery.reviewer_address(),
+        "email_domain": email_delivery.domain(),
+    }
+    return render_template("settings.html", config=Config, cin_config=cin_config)
 
 
 def _priority_key(entry: dict) -> tuple:

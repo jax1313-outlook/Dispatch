@@ -549,6 +549,37 @@ class TestPageRendering:
     def test_settings_renders(self, client):
         resp = client.get("/settings")
         assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "SAM.gov API" in html
+        assert "SMTP Email" in html
+        assert "Claude API" in html
+        assert "CIN-Lite Acquisition" in html
+        assert "Email Delivery" in html
+
+    def test_brief_shows_intelligence_modules(self, client):
+        from portal.models import sandbox
+        intel = {
+            "set_aside_detection": {
+                "module": "set_aside_detection", "version": "1.0",
+                "flags": ["8a_set_aside"], "findings": {},
+                "summary": "8(a) set-aside detected",
+                "score": None, "deterministic": True,
+            },
+        }
+        sandbox.create_entry(
+            source_type="sam", source_id="INTEL-BRIEF",
+            title="Intel Brief Test",
+            card_data={"solicitation_number": "SOL-IB"},
+            intelligence=intel, flags=["8a_set_aside"],
+        )
+        entries = sandbox.get_all()
+        entry_id = [k for k, v in entries.items() if v["source_id"] == "INTEL-BRIEF"][0]
+        resp = client.get(f"/brief/{entry_id}")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "Intelligence Modules" in html
+        assert "Set Aside Detection" in html
+        assert "8a_set_aside" in html
 
     def test_archive_renders(self, client):
         resp = client.get("/archive")

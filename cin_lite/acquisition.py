@@ -70,10 +70,12 @@ def _http_get(url: str, params: dict) -> bytes:
 
 def _acquire_sam(api_key: str) -> list[dict]:
     today = datetime.now(timezone.utc)
-    params = {
+    page_size = int(os.environ.get("CIN_LITE_SAM_LIMIT", "10"))
+    fetch_desc = os.environ.get("CIN_LITE_SAM_FETCH_DESCRIPTION", "1") == "1"
+
+    base_params = {
         "api_key": api_key,
-        "limit": os.environ.get("CIN_LITE_SAM_LIMIT", "10"),
-        "offset": "0",
+        "limit": str(page_size),
         "postedFrom": os.environ.get(
             "CIN_LITE_SAM_POSTED_FROM", (today - timedelta(days=7)).strftime("%m/%d/%Y")
         ),
@@ -82,21 +84,38 @@ def _acquire_sam(api_key: str) -> list[dict]:
         "ptype": os.environ.get("CIN_LITE_SAM_PTYPE"),
     }
 
-    try:
-        body = _http_get(SAM_SEARCH_URL, params)
-        data = json.loads(body)
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")[:300]
-        print(f"cin_lite: SAM.gov request failed (HTTP {exc.code}): {detail}", file=sys.stderr)
-        print("cin_lite: falling back to local sample_data.", file=sys.stderr)
-        return _acquire_local()
-    except Exception as exc:  # network/parse failure — keep the pipeline running
-        print(f"cin_lite: SAM.gov acquisition failed ({exc}); falling back to local.", file=sys.stderr)
-        return _acquire_local()
+    all_opportunities: list[dict] = []
+    offset = 0
+    _MAX_PAGES = 10
 
-    opportunities = data.get("opportunitiesData", [])
-    fetch_desc = os.environ.get("CIN_LITE_SAM_FETCH_DESCRIPTION", "1") == "1"
-    return [_map_opportunity(opp, api_key, fetch_desc) for opp in opportunities]
+    for _ in range(_MAX_PAGES):
+        params = {**base_params, "offset": str(offset)}
+        try:
+            body = _http_get(SAM_SEARCH_URL, params)
+            data = json.loads(body)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")[:300]
+            print(f"cin_lite: SAM.gov request failed (HTTP {exc.code}): {detail}", file=sys.stderr)
+            if not all_opportunities:
+                print("cin_lite: falling back to local sample_data.", file=sys.stderr)
+                return _acquire_local()
+            break
+        except Exception as exc:
+            print(f"cin_lite: SAM.gov acquisition failed ({exc})", file=sys.stderr)
+            if not all_opportunities:
+                print("cin_lite: falling back to local sample_data.", file=sys.stderr)
+                return _acquire_local()
+            break
+
+        page = data.get("opportunitiesData", [])
+        all_opportunities.extend(page)
+        total = data.get("totalRecords", len(page))
+
+        if len(all_opportunities) >= total or len(page) < page_size:
+            break
+        offset += page_size
+
+    return [_map_opportunity(opp, api_key, fetch_desc) for opp in all_opportunities]
 
 
 def _naics_text(opp: dict) -> str:
