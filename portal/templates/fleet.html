@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}Fleet — L2-COS Portal{% endblock %}
+{% block page_title %}Fleet Management{% endblock %}
+{% block page_actions %}
+<button class="btn btn-sm btn-success" onclick="toggleForm('new-driver-form')">+ Add Driver</button>
+<button class="btn btn-sm btn-success" onclick="toggleForm('new-equipment-form')">+ Add Equipment</button>
+{% endblock %}
+
+{% block body %}
+
+{# ── Fleet Summary ──────────────────────────────────────────────── #}
+<div class="dashboard-summary">
+    <div class="summary-card">
+        <span class="summary-number">{{ summary.total_drivers }}</span>
+        <span class="summary-label">Total Drivers</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #27ae60;">
+        <span class="summary-number">{{ summary.drivers_by_status.get('active', 0) }}</span>
+        <span class="summary-label">Active Drivers</span>
+    </div>
+    <div class="summary-card">
+        <span class="summary-number">{{ summary.total_equipment }}</span>
+        <span class="summary-label">Total Equipment</span>
+    </div>
+    <div class="summary-card" style="border-left:4px solid #2980b9;">
+        <span class="summary-number">{{ summary.equipment_by_status.get('active', 0) }}</span>
+        <span class="summary-label">Active Units</span>
+    </div>
+    {% if summary.equipment_by_status.get('maintenance', 0) %}
+    <div class="summary-card summary-warning">
+        <span class="summary-number">{{ summary.equipment_by_status.get('maintenance', 0) }}</span>
+        <span class="summary-label">In Maintenance</span>
+    </div>
+    {% endif %}
+</div>
+
+{# ── New Driver Form (hidden) ───────────────────────────────────── #}
+<div id="new-driver-form" class="brief-section" style="display:none;margin-bottom:20px;">
+    <h3>Add Driver</h3>
+    <form onsubmit="createDriver(event)">
+        <div class="brief-fields" style="margin-bottom:12px;">
+            <div><label><strong>Name *</strong><br>
+                <input type="text" name="name" required style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>License Number</strong><br>
+                <input type="text" name="license_number" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>License Class</strong><br>
+                <select name="license_class" style="width:100%;padding:4px 8px;">
+                    <option value="">—</option>
+                    {% for lc in license_classes %}
+                    <option value="{{ lc }}">Class {{ lc }}</option>
+                    {% endfor %}
+                </select></label></div>
+            <div><label><strong>Phone</strong><br>
+                <input type="text" name="phone" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Email</strong><br>
+                <input type="email" name="email" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Hire Date</strong><br>
+                <input type="text" name="hire_date" placeholder="YYYY-MM-DD" style="width:100%;padding:4px 8px;"></label></div>
+            <div class="full-width"><label><strong>Notes</strong><br>
+                <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
+        </div>
+        <button type="submit" class="btn btn-success">Add Driver</button>
+        <button type="button" class="btn" onclick="toggleForm('new-driver-form')">Cancel</button>
+    </form>
+</div>
+
+{# ── New Equipment Form (hidden) ────────────────────────────────── #}
+<div id="new-equipment-form" class="brief-section" style="display:none;margin-bottom:20px;">
+    <h3>Add Equipment</h3>
+    <form onsubmit="createEquipment(event)">
+        <div class="brief-fields" style="margin-bottom:12px;">
+            <div><label><strong>Unit Number *</strong><br>
+                <input type="text" name="unit_number" required style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Equipment Type</strong><br>
+                <select name="equipment_type" style="width:100%;padding:4px 8px;">
+                    {% for et in equipment_types %}
+                    <option value="{{ et }}">{{ et|replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select></label></div>
+            <div><label><strong>Make</strong><br>
+                <input type="text" name="make" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Model</strong><br>
+                <input type="text" name="model" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Year</strong><br>
+                <input type="text" name="year" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>VIN</strong><br>
+                <input type="text" name="vin" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>License Plate</strong><br>
+                <input type="text" name="license_plate" style="width:100%;padding:4px 8px;"></label></div>
+            <div class="full-width"><label><strong>Notes</strong><br>
+                <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
+        </div>
+        <button type="submit" class="btn btn-success">Add Equipment</button>
+        <button type="button" class="btn" onclick="toggleForm('new-equipment-form')">Cancel</button>
+    </form>
+</div>
+
+{# ── Drivers Table ──────────────────────────────────────────────── #}
+<div class="card-section">
+    <h2>Drivers ({{ drivers|length }})</h2>
+    {% if drivers %}
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>License</th>
+                <th>Class</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Hire Date</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for drv in drivers %}
+            <tr>
+                <td><strong>{{ drv.name }}</strong></td>
+                <td>{{ drv.license_number or '—' }}</td>
+                <td>{{ drv.license_class or '—' }}</td>
+                <td>{{ drv.phone or '—' }}</td>
+                <td>{{ drv.email or '—' }}</td>
+                <td><span class="status-tag fleet-{{ drv.status }}">{{ drv.status|replace('_', ' ') }}</span></td>
+                <td>{{ drv.hire_date or '—' }}</td>
+                <td>
+                    {% if drv.status == 'active' %}
+                    <button class="btn btn-sm btn-warning" onclick="updateDriverStatus('{{ drv.driver_id }}', 'inactive')">Deactivate</button>
+                    {% elif drv.status == 'inactive' %}
+                    <button class="btn btn-sm btn-success" onclick="updateDriverStatus('{{ drv.driver_id }}', 'active')">Activate</button>
+                    {% elif drv.status == 'on_leave' %}
+                    <button class="btn btn-sm btn-success" onclick="updateDriverStatus('{{ drv.driver_id }}', 'active')">Return</button>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No drivers registered. Click <strong>+ Add Driver</strong> to add one.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ── Equipment Table ────────────────────────────────────────────── #}
+<div class="card-section">
+    <h2>Equipment ({{ equipment|length }})</h2>
+    {% if equipment %}
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Unit #</th>
+                <th>Type</th>
+                <th>Make / Model</th>
+                <th>Year</th>
+                <th>VIN</th>
+                <th>Plate</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for eqp in equipment %}
+            <tr>
+                <td><strong>{{ eqp.unit_number }}</strong></td>
+                <td>{{ eqp.equipment_type|replace('_', ' ')|title }}</td>
+                <td>{{ eqp.make }} {{ eqp.model }}</td>
+                <td>{{ eqp.year or '—' }}</td>
+                <td>{{ eqp.vin or '—' }}</td>
+                <td>{{ eqp.license_plate or '—' }}</td>
+                <td><span class="status-tag fleet-{{ eqp.status }}">{{ eqp.status }}</span></td>
+                <td>
+                    {% if eqp.status == 'active' %}
+                    <button class="btn btn-sm btn-warning" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'maintenance')">Maintenance</button>
+                    {% elif eqp.status == 'maintenance' %}
+                    <button class="btn btn-sm btn-success" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'active')">Return</button>
+                    {% elif eqp.status == 'inactive' %}
+                    <button class="btn btn-sm btn-success" onclick="updateEquipmentStatus('{{ eqp.equipment_id }}', 'active')">Activate</button>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No equipment registered. Click <strong>+ Add Equipment</strong> to add one.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ── Active Equipment by Type ───────────────────────────────────── #}
+{% if summary.active_equipment_by_type %}
+<div class="card-section">
+    <h2>Active Equipment by Type</h2>
+    <div class="dashboard-summary">
+        {% for etype, count in summary.active_equipment_by_type.items() %}
+        <div class="summary-card">
+            <span class="summary-number">{{ count }}</span>
+            <span class="summary-label">{{ etype|replace('_', ' ')|title }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+function toggleForm(id) {
+    var f = document.getElementById(id);
+    f.style.display = f.style.display === 'none' ? '' : 'none';
+}
+
+function createDriver(e) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    apiPost('/api/dispatch/drivers', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function createEquipment(e) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    apiPost('/api/dispatch/equipment', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function updateDriverStatus(driverId, status) {
+    fetch('/api/dispatch/drivers/' + driverId, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: status})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function updateEquipmentStatus(equipId, status) {
+    fetch('/api/dispatch/equipment/' + equipId, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: status})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+</script>
+{% endblock %}

@@ -137,6 +137,35 @@ CREATE TABLE IF NOT EXISTS settlements (
     notes           TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS drivers (
+    driver_id       TEXT PRIMARY KEY,
+    name            TEXT NOT NULL DEFAULT '',
+    license_number  TEXT NOT NULL DEFAULT '',
+    license_class   TEXT NOT NULL DEFAULT '',
+    phone           TEXT NOT NULL DEFAULT '',
+    email           TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'active',
+    hire_date       TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS equipment (
+    equipment_id    TEXT PRIMARY KEY,
+    unit_number     TEXT NOT NULL DEFAULT '',
+    equipment_type  TEXT NOT NULL DEFAULT 'dry_van',
+    make            TEXT NOT NULL DEFAULT '',
+    model           TEXT NOT NULL DEFAULT '',
+    year            TEXT NOT NULL DEFAULT '',
+    vin             TEXT NOT NULL DEFAULT '',
+    license_plate   TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'active',
+    notes           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_milestones_load ON milestones(load_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_load ON evidence(load_id);
 CREATE INDEX IF NOT EXISTS idx_exceptions_load ON exceptions(load_id);
@@ -145,6 +174,9 @@ CREATE INDEX IF NOT EXISTS idx_loads_status ON loads(status);
 CREATE INDEX IF NOT EXISTS idx_rate_conf_load ON rate_confirmations(load_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_load ON expenses(load_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_status ON settlements(payment_status);
+CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
+CREATE INDEX IF NOT EXISTS idx_equipment_status ON equipment(status);
+CREATE INDEX IF NOT EXISTS idx_equipment_type ON equipment(equipment_type);
 """
 
 

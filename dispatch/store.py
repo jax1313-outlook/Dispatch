@@ -6,6 +6,8 @@ import json
 
 from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
 from dispatch.models import (
+    Driver,
+    Equipment,
     EvidenceItem,
     ExceptionNotice,
     Expense,
@@ -536,3 +538,149 @@ def list_settlements(payment_status: str | None = None) -> list[dict]:
         stl = Settlement(**d)
         results.append(stl.to_dict())
     return results
+
+
+# ── Driver ──────────────────────────────────────────────────────────
+
+def create_driver(drv: Driver) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO drivers
+               (driver_id, name, license_number, license_class, phone,
+                email, status, hire_date, notes, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (drv.driver_id, drv.name, drv.license_number,
+             drv.license_class, drv.phone, drv.email,
+             drv.status, drv.hire_date, drv.notes,
+             drv.created_at, drv.updated_at),
+        )
+    return drv.to_dict()
+
+
+def get_driver(driver_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM drivers WHERE driver_id=?", (driver_id,)
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_drivers(status: str | None = None) -> list[dict]:
+    with get_connection() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM drivers WHERE status=? ORDER BY name ASC",
+                (status,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM drivers ORDER BY name ASC"
+            ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def update_driver(driver_id: str, **fields) -> dict | None:
+    existing = get_driver(driver_id)
+    if not existing:
+        return None
+    allowed = {
+        "name", "license_number", "license_class", "phone",
+        "email", "status", "hire_date", "notes",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    from dispatch.models import _utc_now
+    updates["updated_at"] = _utc_now()
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [driver_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE drivers SET {set_clause} WHERE driver_id=?", values
+        )
+    return get_driver(driver_id)
+
+
+def delete_driver(driver_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM drivers WHERE driver_id=?", (driver_id,)
+        )
+    return cur.rowcount > 0
+
+
+# ── Equipment ───────────────────────────────────────────────────────
+
+def create_equipment(eqp: Equipment) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO equipment
+               (equipment_id, unit_number, equipment_type, make, model,
+                year, vin, license_plate, status, notes,
+                created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (eqp.equipment_id, eqp.unit_number, eqp.equipment_type,
+             eqp.make, eqp.model, eqp.year, eqp.vin,
+             eqp.license_plate, eqp.status, eqp.notes,
+             eqp.created_at, eqp.updated_at),
+        )
+    return eqp.to_dict()
+
+
+def get_equipment(equipment_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM equipment WHERE equipment_id=?", (equipment_id,)
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_equipment(
+    status: str | None = None,
+    equipment_type: str | None = None,
+) -> list[dict]:
+    with get_connection() as conn:
+        clauses: list[str] = []
+        params: list[str] = []
+        if status:
+            clauses.append("status=?")
+            params.append(status)
+        if equipment_type:
+            clauses.append("equipment_type=?")
+            params.append(equipment_type)
+        sql = "SELECT * FROM equipment"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY unit_number ASC"
+        rows = conn.execute(sql, params).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+def update_equipment(equipment_id: str, **fields) -> dict | None:
+    existing = get_equipment(equipment_id)
+    if not existing:
+        return None
+    allowed = {
+        "unit_number", "equipment_type", "make", "model", "year",
+        "vin", "license_plate", "status", "notes",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    from dispatch.models import _utc_now
+    updates["updated_at"] = _utc_now()
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [equipment_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE equipment SET {set_clause} WHERE equipment_id=?", values
+        )
+    return get_equipment(equipment_id)
+
+
+def delete_equipment(equipment_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM equipment WHERE equipment_id=?", (equipment_id,)
+        )
+    return cur.rowcount > 0

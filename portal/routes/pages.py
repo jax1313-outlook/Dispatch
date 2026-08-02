@@ -38,6 +38,8 @@ def home():
     all_engine_loads = dispatch_svc.list_loads()
     active_engine = [l for l in all_engine_loads if l["status"] not in ("archived", "cancelled", "completed")]
 
+    fleet_summary = dispatch_svc.get_fleet_summary()
+
     return render_template(
         "home.html",
         sam_cards=sam_sorted,
@@ -48,6 +50,7 @@ def home():
         intel_count=intel_model.total_count(),
         pending_count=len(pending_items),
         engine_load_count=len(active_engine),
+        fleet_summary=fleet_summary,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
@@ -151,6 +154,30 @@ def dispatch_detail(load_id):
         settlement_statuses=SETTLEMENT_STATUSES,
         payment_methods=PAYMENT_METHODS,
         **bundle,
+    )
+
+
+@pages_bp.route("/fleet")
+def fleet():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import (
+        DRIVER_STATUSES, LICENSE_CLASSES,
+        EQUIPMENT_TYPES, EQUIPMENT_STATUSES,
+    )
+
+    drivers = dispatch_svc.list_drivers()
+    equipment = dispatch_svc.list_equipment()
+    summary = dispatch_svc.get_fleet_summary()
+
+    return render_template(
+        "fleet.html",
+        drivers=drivers,
+        equipment=equipment,
+        summary=summary,
+        driver_statuses=DRIVER_STATUSES,
+        license_classes=LICENSE_CLASSES,
+        equipment_types=EQUIPMENT_TYPES,
+        equipment_statuses=EQUIPMENT_STATUSES,
     )
 
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 from dispatch.models import (
     EXCEPTION_STATUSES,
     LOAD_STATUSES,
+    Driver,
+    Equipment,
     EvidenceItem,
     ExceptionNotice,
     Expense,
@@ -608,6 +610,136 @@ def check_overdue_settlements() -> list[dict]:
             newly_overdue.append(updated)
 
     return newly_overdue
+
+
+# ── Driver Management ───────────────────────────────────────────────
+
+
+def create_driver(
+    name: str,
+    license_number: str = "",
+    license_class: str = "",
+    phone: str = "",
+    email: str = "",
+    hire_date: str = "",
+    notes: str = "",
+) -> dict:
+    drv = Driver(
+        name=name,
+        license_number=license_number,
+        license_class=license_class,
+        phone=phone,
+        email=email,
+        hire_date=hire_date,
+        notes=notes,
+    )
+    return store.create_driver(drv)
+
+
+def get_driver(driver_id: str) -> dict | None:
+    return store.get_driver(driver_id)
+
+
+def list_drivers(status: str | None = None) -> list[dict]:
+    return store.list_drivers(status=status)
+
+
+def update_driver(driver_id: str, **fields) -> dict | None:
+    return store.update_driver(driver_id, **fields)
+
+
+def deactivate_driver(driver_id: str) -> dict | None:
+    return store.update_driver(driver_id, status="inactive")
+
+
+def delete_driver(driver_id: str) -> bool:
+    return store.delete_driver(driver_id)
+
+
+def get_driver_by_name(name: str) -> dict | None:
+    """Look up a driver by exact name match."""
+    all_drivers = store.list_drivers(status="active")
+    for d in all_drivers:
+        if d["name"] == name:
+            return d
+    return None
+
+
+# ── Equipment Management ────────────────────────────────────────────
+
+
+def create_equipment(
+    unit_number: str,
+    equipment_type: str = "dry_van",
+    make: str = "",
+    model: str = "",
+    year: str = "",
+    vin: str = "",
+    license_plate: str = "",
+    notes: str = "",
+) -> dict:
+    eqp = Equipment(
+        unit_number=unit_number,
+        equipment_type=equipment_type,
+        make=make,
+        model=model,
+        year=year,
+        vin=vin,
+        license_plate=license_plate,
+        notes=notes,
+    )
+    return store.create_equipment(eqp)
+
+
+def get_equipment(equipment_id: str) -> dict | None:
+    return store.get_equipment(equipment_id)
+
+
+def list_equipment(
+    status: str | None = None,
+    equipment_type: str | None = None,
+) -> list[dict]:
+    return store.list_equipment(status=status, equipment_type=equipment_type)
+
+
+def update_equipment(equipment_id: str, **fields) -> dict | None:
+    return store.update_equipment(equipment_id, **fields)
+
+
+def retire_equipment(equipment_id: str) -> dict | None:
+    return store.update_equipment(equipment_id, status="retired")
+
+
+def delete_equipment(equipment_id: str) -> bool:
+    return store.delete_equipment(equipment_id)
+
+
+def get_fleet_summary() -> dict:
+    """Aggregate fleet stats: active/inactive counts for drivers and equipment."""
+    drivers = store.list_drivers()
+    equipment = store.list_equipment()
+
+    driver_by_status = {}
+    for d in drivers:
+        s = d["status"]
+        driver_by_status[s] = driver_by_status.get(s, 0) + 1
+
+    equip_by_status = {}
+    equip_by_type = {}
+    for e in equipment:
+        s = e["status"]
+        equip_by_status[s] = equip_by_status.get(s, 0) + 1
+        if s == "active":
+            t = e["equipment_type"]
+            equip_by_type[t] = equip_by_type.get(t, 0) + 1
+
+    return {
+        "total_drivers": len(drivers),
+        "drivers_by_status": driver_by_status,
+        "total_equipment": len(equipment),
+        "equipment_by_status": equip_by_status,
+        "active_equipment_by_type": equip_by_type,
+    }
 
 
 def get_load_bundle(load_id: str) -> dict | None:
