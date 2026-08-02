@@ -622,17 +622,41 @@ def update_settlement(load_id: str, **fields) -> dict | None:
     return get_settlement(load_id)
 
 
-def list_settlements(payment_status: str | None = None) -> list[dict]:
+def list_settlements(
+    payment_status: str | None = None,
+    customer: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    invoice_number: str | None = None,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list = []
+    if payment_status:
+        clauses.append("s.payment_status=?")
+        params.append(payment_status)
+    if customer:
+        clauses.append("l.customer LIKE ?")
+        params.append(f"%{customer}%")
+    if date_from:
+        clauses.append("s.invoice_date >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("s.invoice_date <= ?")
+        params.append(date_to + "T23:59:59" if "T" not in date_to else date_to)
+    if invoice_number:
+        clauses.append("s.invoice_number LIKE ?")
+        params.append(f"%{invoice_number}%")
+    where = " AND ".join(clauses)
+    needs_join = customer is not None
+    if needs_join:
+        sql = "SELECT s.* FROM settlements s JOIN loads l ON s.load_id = l.load_id"
+    else:
+        sql = "SELECT s.* FROM settlements s"
+    if where:
+        sql += " WHERE " + where
+    sql += " ORDER BY s.invoice_date DESC"
     with get_connection() as conn:
-        if payment_status:
-            rows = conn.execute(
-                "SELECT * FROM settlements WHERE payment_status=? ORDER BY invoice_date DESC",
-                (payment_status,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM settlements ORDER BY invoice_date DESC"
-            ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     results = []
     for r in rows:
         d = dict_from_row(r)

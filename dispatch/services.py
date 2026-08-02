@@ -726,8 +726,20 @@ def get_settlement(load_id: str) -> dict | None:
     return store.get_settlement(load_id)
 
 
-def list_settlements(payment_status: str | None = None) -> list[dict]:
-    return store.list_settlements(payment_status=payment_status)
+def list_settlements(
+    payment_status: str | None = None,
+    customer: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    invoice_number: str | None = None,
+) -> list[dict]:
+    return store.list_settlements(
+        payment_status=payment_status,
+        customer=customer,
+        date_from=date_from,
+        date_to=date_to,
+        invoice_number=invoice_number,
+    )
 
 
 def get_financial_dashboard() -> dict:

@@ -237,8 +237,17 @@ def billing():
     from dispatch.models import SETTLEMENT_STATUSES
 
     status_filter = request.args.get("status")
+    customer_search = request.args.get("customer", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    invoice_search = request.args.get("invoice", "").strip()
+
     settlements = dispatch_svc.list_settlements(
         payment_status=status_filter if status_filter else None,
+        customer=customer_search or None,
+        date_from=date_from or None,
+        date_to=date_to or None,
+        invoice_number=invoice_search or None,
     )
 
     loads_by_id: dict[str, dict] = {}
@@ -258,6 +267,10 @@ def billing():
         settlements=settlements,
         settlement_statuses=SETTLEMENT_STATUSES,
         status_filter=status_filter or "",
+        customer_search=customer_search,
+        date_from=date_from,
+        date_to=date_to,
+        invoice_search=invoice_search,
         fin_dashboard=fin_dashboard,
         disputed_count=disputed_count,
         written_off_count=written_off_count,
