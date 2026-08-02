@@ -165,10 +165,22 @@
         {% endfor %}
     </div>
     {% if engine_loads %}
+    <div id="batch-bar" style="display:none;margin-bottom:10px;padding:8px 12px;background:#eef5ff;border:1px solid #b8d4f0;border-radius:4px;display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+        <strong id="batch-count">0 selected</strong>
+        <select id="batch-status" style="padding:4px 8px;">
+            <option value="">— Advance to —</option>
+            {% for s in load_statuses %}
+            <option value="{{ s }}">{{ s|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-success" onclick="batchAdvance()">Apply</button>
+        <button class="btn btn-sm" onclick="clearBatchSelection()">Clear</button>
+    </div>
     <div style="overflow-x:auto;">
     <table class="data-table">
         <thead>
             <tr>
+                <th><input type="checkbox" id="batch-select-all" onchange="toggleSelectAll(this)"></th>
                 <th>Load ID</th>
                 <th>Customer</th>
                 <th>Status</th>
@@ -184,6 +196,7 @@
         {% for load in engine_loads %}
             {% set is_stalled = load.load_id in stalled_ids %}
             <tr {% if is_stalled %}style="border-left:3px solid #e74c3c;"{% endif %}>
+                <td><input type="checkbox" class="batch-check" value="{{ load.load_id }}" onchange="updateBatchBar()"></td>
                 <td><a href="{{ url_for('pages.dispatch_detail', load_id=load.load_id) }}">{{ load.load_id[:12] }}...</a></td>
                 <td>{{ load.customer }}</td>
                 <td><span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></td>
@@ -319,6 +332,47 @@ function createLoad(e) {
     });
 }
 
+function getSelectedLoadIds() {
+    return Array.from(document.querySelectorAll('.batch-check:checked')).map(function(cb) { return cb.value; });
+}
+
+function updateBatchBar() {
+    var ids = getSelectedLoadIds();
+    var bar = document.getElementById('batch-bar');
+    var count = document.getElementById('batch-count');
+    if (ids.length > 0) {
+        bar.style.display = 'flex';
+        count.textContent = ids.length + ' selected';
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function toggleSelectAll(master) {
+    document.querySelectorAll('.batch-check').forEach(function(cb) { cb.checked = master.checked; });
+    updateBatchBar();
+}
+
+function clearBatchSelection() {
+    document.querySelectorAll('.batch-check').forEach(function(cb) { cb.checked = false; });
+    document.getElementById('batch-select-all').checked = false;
+    updateBatchBar();
+}
+
+function batchAdvance() {
+    var ids = getSelectedLoadIds();
+    var status = document.getElementById('batch-status').value;
+    if (!ids.length) { alert('Select at least one load.'); return; }
+    if (!status) { alert('Choose a target status.'); return; }
+    if (!confirm('Advance ' + ids.length + ' load(s) to "' + status.replace(/_/g, ' ') + '"?')) return;
+    apiPost('/api/dispatch/loads/batch-status', {load_ids: ids, status: status}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        var msg = r.updated + ' load(s) updated.';
+        if (r.errors && r.errors.length) msg += '\n\nErrors:\n' + r.errors.join('\n');
+        alert(msg);
+        location.reload();
+    });
+}
 
 </script>
 {% endblock %}

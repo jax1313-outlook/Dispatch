@@ -874,6 +874,32 @@ def dispatch_decision(load_id, action):
     )
 
 
+# ── Batch Status Update ──────────────────────────────────────────────
+
+
+@dispatch_bp.route("/loads/batch-status", methods=["POST"])
+def batch_status_update():
+    data = request.get_json(force=True)
+    load_ids = data.get("load_ids", [])
+    status = data.get("status", "")
+    if not load_ids or not isinstance(load_ids, list):
+        return jsonify({"error": "load_ids list is required"}), 400
+    if not status:
+        return jsonify({"error": "status is required"}), 400
+    updated = 0
+    errors = []
+    for lid in load_ids:
+        try:
+            result = services.update_load(lid, status=status)
+            if result:
+                updated += 1
+            else:
+                errors.append(f"{lid}: not found")
+        except ValueError as exc:
+            errors.append(f"{lid}: {exc}")
+    return jsonify({"updated": updated, "errors": errors})
+
+
 # ── CSV Export ───────────────────────────────────────────────────────
 
 _LOAD_CSV_COLUMNS = [
