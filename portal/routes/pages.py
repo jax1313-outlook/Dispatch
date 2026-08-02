@@ -241,6 +241,18 @@ def pending_decisions():
     )
 
 
+@pages_bp.route("/queues")
+def queues():
+    from cin_lite.pipeline import routing_history
+    review_queue = routing_history(route_filter="HUMAN_REVIEW")
+    analysis_queue = routing_history(route_filter="DEEP_ANALYSIS_QUEUE")
+    return render_template(
+        "queues.html",
+        review_queue=review_queue,
+        analysis_queue=analysis_queue,
+    )
+
+
 @pages_bp.route("/settings")
 def settings():
     import os

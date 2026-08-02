@@ -585,6 +585,13 @@ class TestPageRendering:
         resp = client.get("/archive")
         assert resp.status_code == 200
 
+    def test_queues_page_renders(self, client):
+        resp = client.get("/queues")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "Flag for Review" in html
+        assert "Deeper Analysis" in html
+
     def test_archive_shows_pipeline_contracts(self, client, tmp_archive):
         from cin_lite import archive
         contract = {"title": "Pipeline Archived", "solicitation_number": "SOL-ARC",

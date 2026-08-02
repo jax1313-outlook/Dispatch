@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Queues — L2-COS Portal{% endblock %}
+{% block page_title %}Routing Queues{% endblock %}
+
+{% block body %}
+<section class="card-section">
+    <h2>Flag for Review ({{ review_queue|length }})</h2>
+    <p class="section-desc">Contracts flagged for human review before a final decision.</p>
+    {% if review_queue %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Contract ID</th>
+                <th>Title</th>
+                <th>Action</th>
+                <th>Flags</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for rec in review_queue %}
+            <tr>
+                <td><code style="font-size:11px;">{{ rec.contract_id }}</code></td>
+                <td>{{ rec.metadata.title or rec.summary[:60] or '—' }}</td>
+                <td>{{ rec.action_label or rec.action }}</td>
+                <td>{{ rec.flags|length }} flag{{ 's' if rec.flags|length != 1 }}</td>
+                <td>{{ rec.decided_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state-sm"><p>No contracts in the review queue.</p></div>
+    {% endif %}
+</section>
+
+<section class="card-section">
+    <h2>Deeper Analysis ({{ analysis_queue|length }})</h2>
+    <p class="section-desc">Contracts routed for deeper intelligence analysis.</p>
+    {% if analysis_queue %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Contract ID</th>
+                <th>Title</th>
+                <th>Action</th>
+                <th>Flags</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for rec in analysis_queue %}
+            <tr>
+                <td><code style="font-size:11px;">{{ rec.contract_id }}</code></td>
+                <td>{{ rec.metadata.title or rec.summary[:60] or '—' }}</td>
+                <td>{{ rec.action_label or rec.action }}</td>
+                <td>{{ rec.flags|length }} flag{{ 's' if rec.flags|length != 1 }}</td>
+                <td>{{ rec.decided_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state-sm"><p>No contracts in the analysis queue.</p></div>
+    {% endif %}
+</section>
+{% endblock %}

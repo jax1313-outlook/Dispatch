@@ -149,8 +149,11 @@ def resolve_decision(contract_id: str, action: str) -> dict:
     return result
 
 
-def routing_history() -> list[dict]:
-    """Read completed routing decisions from the archive."""
+def routing_history(route_filter: str | None = None) -> list[dict]:
+    """Read completed routing decisions from the archive.
+
+    When *route_filter* is set, only records whose ``route`` matches are returned.
+    """
     routing_dir = archive.ARCHIVE_ROOT / "Routing"
     if not routing_dir.exists():
         return []
@@ -158,5 +161,8 @@ def routing_history() -> list[dict]:
     results = []
     for path in sorted(routing_dir.glob("*.json"), reverse=True):
         with path.open(encoding="utf-8") as fh:
-            results.append(json.load(fh))
+            record = json.load(fh)
+        if route_filter and record.get("route") != route_filter:
+            continue
+        results.append(record)
     return results

@@ -142,6 +142,18 @@ class TestRoutingHistory:
         assert len(history) == 1
         assert history[0]["contract_id"] == "CIN-H-001"
 
+    def test_route_filter(self, tmp_archive):
+        routing_dir = tmp_archive / "Routing"
+        routing_dir.mkdir(parents=True)
+        (routing_dir / "CIN-A.json").write_text(json.dumps(
+            {"contract_id": "CIN-A", "action": "reject", "route": "REJECTED"}))
+        (routing_dir / "CIN-B.json").write_text(json.dumps(
+            {"contract_id": "CIN-B", "action": "flag_review", "route": "HUMAN_REVIEW"}))
+        assert len(routing_history(route_filter="HUMAN_REVIEW")) == 1
+        assert len(routing_history(route_filter="REJECTED")) == 1
+        assert len(routing_history(route_filter="NONEXISTENT")) == 0
+        assert len(routing_history()) == 2
+
 
 # --------------------------------------------------------------------------- pipeline API routes
 
@@ -249,6 +261,22 @@ class TestPipelineAPI:
         resp = client.get("/api/pipeline/history")
         data = resp.get_json()
         assert data["count"] >= 1
+
+    def test_queue_empty(self, client):
+        resp = client.get("/api/pipeline/queue/HUMAN_REVIEW")
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["count"] == 0
+
+    def test_queue_after_flag_review(self, client, tmp_archive):
+        self._seed(tmp_archive)
+        client.post("/api/pipeline/decide", json={
+            "contract_id": "CIN-API-001", "action": "flag_review",
+        })
+        resp = client.get("/api/pipeline/queue/HUMAN_REVIEW")
+        data = resp.get_json()
+        assert data["count"] == 1
+        assert data["records"][0]["route"] == "HUMAN_REVIEW"
 
     def test_archive_list_empty(self, client):
         resp = client.get("/api/pipeline/archive")
