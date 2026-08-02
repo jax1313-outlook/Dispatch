@@ -84,8 +84,24 @@ def test_store_proposal(tmp_archive):
     assert md_path.read_text(encoding="utf-8") == "# Outline\n- a"
 
 
+def test_store_persists_enriched_intelligence(tmp_archive, mapped_contract, intelligence):
+    enriched = {"risk_level": "moderate", "pursuit_readiness": "ready",
+                "strategic_assessment": "Good opportunity."}
+    metadata = archive.store(mapped_contract, intelligence, "s", enriched=enriched)
+    cid = metadata["contract_id"]
+    saved = json.loads((tmp_archive / "Intelligence" / f"{cid}.json").read_text(encoding="utf-8"))
+    assert saved["_enriched"]["risk_level"] == "moderate"
+    assert saved["_enriched"]["strategic_assessment"] == "Good opportunity."
+
+
+def test_store_without_enriched_has_no_key(tmp_archive, mapped_contract, intelligence):
+    metadata = archive.store(mapped_contract, intelligence, "s")
+    cid = metadata["contract_id"]
+    saved = json.loads((tmp_archive / "Intelligence" / f"{cid}.json").read_text(encoding="utf-8"))
+    assert "_enriched" not in saved
+
+
 def test_writes_isolated_to_tmp(tmp_archive, mapped_contract, intelligence):
-    # Sanity: the autouse fixture really redirected writes off the real repo.
     archive.store(mapped_contract, intelligence, "s")
     assert str(tmp_archive).startswith(str(tmp_archive.parent))
     assert archive.ARCHIVE_ROOT == tmp_archive

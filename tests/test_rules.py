@@ -157,6 +157,19 @@ def test_foreign_influence_elevated():
     assert {"export_controlled", "foci_indicator", "section_889", "clearance_required"} <= set(r["flags"])
 
 
+def test_foreign_influence_ear_no_false_positive():
+    from cin_lite.rules import foreign_influence
+
+    contract = {
+        "title": "Personal Protective Equipment",
+        "description": "Supply of ear protection, eye protection, and safety gloves.",
+        "notes": "",
+    }
+    r = foreign_influence.run(contract).to_json()
+    assert "EAR" not in r["findings"]["export_control"]
+    assert "export_controlled" not in r["flags"]
+
+
 # --------------------------------------------------------------------------- acquisition mapping
 
 def test_map_opportunity(sam_opportunity):

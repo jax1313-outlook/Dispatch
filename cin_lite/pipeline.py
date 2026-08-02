@@ -115,8 +115,9 @@ def resolve_decision(contract_id: str, action: str) -> dict:
     summary = record["summary"]
     decision = record["decision"]
     flags = record["flags"]
+    enriched = record.get("enriched")
 
-    metadata = archive.store(contract_data, intelligence, summary)
+    metadata = archive.store(contract_data, intelligence, summary, enriched=enriched)
     archive.record_routing(
         metadata["contract_id"], action, route, metadata, decision,
         action_label=label, flags=flags, summary=summary,

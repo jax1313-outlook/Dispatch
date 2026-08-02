@@ -241,7 +241,7 @@ def pending_decisions():
 @pages_bp.route("/settings")
 def settings():
     import os
-    from portal.config import Config
+    from portal.config import Config, _DEFAULT_SECRET
     from cin_lite import email_delivery
 
     cin_config = {
@@ -257,6 +257,7 @@ def settings():
         "email_domain": email_delivery.domain(),
         "email_secret_set": not email_delivery._using_default_secret(),
         "portal_url": os.environ.get("CIN_LITE_PORTAL_URL", "http://127.0.0.1:8080"),
+        "portal_secret_set": Config.SECRET_KEY != _DEFAULT_SECRET,
     }
     return render_template("settings.html", config=Config, cin_config=cin_config)
 

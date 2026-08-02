@@ -19,7 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from flask import Flask
 
-from portal.config import Config
+from portal.config import Config, check_secret_key
 from portal.routes import register_routes
 
 
@@ -32,6 +32,8 @@ def create_app(config: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if config:
         app.config.update(config)
+    if not app.config.get("TESTING"):
+        check_secret_key()
     register_routes(app)
     return app
 

@@ -41,3 +41,28 @@ def test_main_with_action(capsys, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["run", "--action", "reject"])
     run.main()
     assert "Processed" in capsys.readouterr().out
+
+
+def test_run_handles_error_status(capsys, monkeypatch):
+    from cin_lite import acquisition as acq_mod, processing
+
+    good = {"title": "Good One", "solicitation_number": "SOL-G",
+            "agency": "GSA", "naics_text": "", "description": "ok",
+            "estimated_value": None, "response_date": None, "notes": ""}
+    bad = {"title": "Bad One"}
+
+    monkeypatch.setattr(acq_mod, "acquire", lambda: [good, bad])
+
+    orig = processing.process
+    def blow_up(contract):
+        if contract is bad:
+            raise RuntimeError("boom")
+        return orig(contract)
+    monkeypatch.setattr(processing, "process", blow_up)
+
+    run.run(None)
+    out = capsys.readouterr().out
+    assert "Processed 2 contract(s)" in out
+    assert "ERROR: Bad One" in out
+    assert "boom" in out
+    assert "Good One" in out

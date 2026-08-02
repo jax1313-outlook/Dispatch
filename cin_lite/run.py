@@ -30,6 +30,12 @@ def run(action_override: str | None) -> None:
     print(f"Processed {len(results)} contract(s).\n")
 
     for r in results:
+        if r["status"] == "error":
+            print(f"  ERROR: {r['title']}")
+            print(f"    {r['error']}")
+            print()
+            continue
+
         print(f"  {r['contract_id']}: {r['title']}")
         print(f"    recommendation: {r['recommendation']} (priority {r['priority']})")
         print(f"    flags: {r['flag_count']}")

@@ -13,6 +13,7 @@
             <tr><td>Data Directory</td><td>{{ config.DATA_DIR }}</td><td>PORTAL_DATA_DIR</td></tr>
             <tr><td>Inquiry Threshold</td><td>{{ config.INQUIRY_THRESHOLD }}</td><td>PORTAL_INQUIRY_THRESHOLD</td></tr>
             <tr><td>Inquiry Mode</td><td>{{ config.INQUIRY_MODE }}</td><td>PORTAL_INQUIRY_MODE</td></tr>
+            <tr><td>Secret Key</td><td>{{ 'Configured' if cin_config.portal_secret_set else 'Using default (not production-safe)' }}</td><td>PORTAL_SECRET_KEY</td></tr>
         </tbody>
     </table>
 </section>

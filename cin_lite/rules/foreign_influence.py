@@ -8,14 +8,18 @@ prohibitions (Section 889). Explicit weights keep the score auditable.
 
 from __future__ import annotations
 
+import re
+
 from .base import RuleResult
 
 NAME = "foreign_influence_indicators"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
+
+_EAR_RE = re.compile(r"\bEAR\b")
 
 _EXPORT_CONTROL = {
     "ITAR": ["itar", "international traffic in arms"],
-    "EAR": ["export administration regulations", " ear ", "export-controlled", "export controlled"],
+    "EAR": ["export administration regulations", "export-controlled", "export controlled"],
     "export control": ["export control"],
 }
 _FOCI = ["foreign ownership", "foreign control", "foreign influence", "foci", "foreign owned"]
@@ -39,14 +43,16 @@ _WEIGHTS = {
 
 def _text(contract: dict) -> str:
     parts = [str(contract.get(k, "")) for k in ("title", "description", "naics_text", "notes")]
-    return " ".join(parts).lower()
+    return " ".join(parts)
 
 
 def run(contract: dict) -> RuleResult:
-    text = _text(contract)
+    raw_text = _text(contract)
+    text = raw_text.lower()
 
     export_control = sorted(
-        label for label, needles in _EXPORT_CONTROL.items() if any(n in text for n in needles)
+        label for label, needles in _EXPORT_CONTROL.items()
+        if any(n in text for n in needles) or (label == "EAR" and _EAR_RE.search(raw_text))
     )
     foci = any(n in text for n in _FOCI)
     us_persons = any(n in text for n in _US_PERSONS)

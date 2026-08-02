@@ -82,3 +82,17 @@ def test_claude_invalid_risk_level_falls_back(mapped_contract, intelligence, fla
     install_anthropic(json.dumps(bad))
     result = extractor.extract(mapped_contract, intelligence, flags)
     assert result["risk_level"] in extractor.RISK_LEVELS
+
+
+def test_competitive_factors_from_vendor_and_sub(mapped_contract, intelligence, flags):
+    """Verify the extractor picks up vendor limited_competition and subcontracting signals."""
+    result = extractor.extract(mapped_contract, intelligence, flags)
+    factors_text = " ".join(result["competitive_factors"]).lower()
+    assert "sole-source" in factors_text or "limited-competition" in factors_text
+    assert "subcontracting" in factors_text
+
+
+def test_competitive_factors_jv_mp(mapped_contract, intelligence, flags):
+    result = extractor.extract(mapped_contract, intelligence, flags)
+    factors_text = " ".join(result["competitive_factors"]).lower()
+    assert "jv" in factors_text or "mentor" in factors_text
