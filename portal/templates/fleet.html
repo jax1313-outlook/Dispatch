@@ -34,6 +34,32 @@
     {% endif %}
 </div>
 
+{# ── Fleet Utilization (collapsed by default — expand when fleet grows) #}
+<div class="card-section" id="fleet-utilization" style="display:none;">
+    <h2>Fleet Utilization</h2>
+    <div class="dashboard-summary">
+        <div class="summary-card" style="border-left:4px solid #27ae60;">
+            <span class="summary-number">{{ summary.drivers_assigned }}</span>
+            <span class="summary-label">Drivers Assigned</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-number">{{ summary.drivers_available }}</span>
+            <span class="summary-label">Drivers Available</span>
+        </div>
+        <div class="summary-card" style="border-left:4px solid #2980b9;">
+            <span class="summary-number">{{ summary.equipment_assigned }}</span>
+            <span class="summary-label">Equipment Assigned</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-number">{{ summary.equipment_available }}</span>
+            <span class="summary-label">Equipment Available</span>
+        </div>
+    </div>
+</div>
+<div style="text-align:right;margin-bottom:12px;">
+    <button class="btn btn-xs" onclick="toggleForm('fleet-utilization')" id="util-toggle">Show Utilization</button>
+</div>
+
 {# ── New Driver Form (hidden) ───────────────────────────────────── #}
 <div id="new-driver-form" class="brief-section" style="display:none;margin-bottom:20px;">
     <h3>Add Driver</h3>

@@ -36,6 +36,12 @@
         <span class="summary-number">{{ fleet_summary.drivers_by_status.get('active', 0) }}D / {{ fleet_summary.equipment_by_status.get('active', 0) }}E</span>
         <span class="summary-label">Fleet Active</span>
     </a>
+    {% if stalled_loads %}
+    <a href="#stalled-alert" class="summary-card summary-danger" style="text-decoration:none;color:inherit;">
+        <span class="summary-number">{{ stalled_loads|length }}</span>
+        <span class="summary-label">Stalled Loads</span>
+    </a>
+    {% endif %}
 </div>
 
 {% if fin_dashboard and fin_dashboard.loads_with_rate > 0 %}
@@ -70,7 +76,10 @@
 
 {% if stalled_loads %}
 <div class="card-section" id="stalled-alert">
-    <h2 style="color:#e74c3c;">Stalled Loads ({{ stalled_loads|length }})</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+        <h2 style="color:#e74c3c;margin-bottom:0;">Stalled Loads ({{ stalled_loads|length }})</h2>
+        <button class="btn btn-sm btn-warning" onclick="notifyStalled()">Notify All Stalled</button>
+    </div>
     <table class="data-table" style="margin-top:0.5rem;">
         <thead>
             <tr>
@@ -79,6 +88,7 @@
                 <th>Status</th>
                 <th>Time in Status</th>
                 <th>Threshold</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -89,6 +99,7 @@
                 <td><span class="status-tag status-{{ sl.status }}">{{ sl.status }}</span></td>
                 <td>{{ sl.hours_in_status }}h</td>
                 <td>{{ sl.threshold_hours }}h</td>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=sl.load_id) }}" class="btn btn-xs">View</a></td>
             </tr>
             {% endfor %}
         </tbody>
