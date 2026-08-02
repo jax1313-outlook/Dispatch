@@ -156,7 +156,7 @@ def trigger(
 
     recipient = email_delivery.queue_address(brief["assigned_to"]) or email_delivery.reviewer_address()
     email_status = email_delivery.send(
-        subject=f"[CIN-Lite] Proposal kickoff — {brief['proposal_id']} (priority {brief['priority']})",
+        subject=f"[DISPATCH] Proposal kickoff — {brief['proposal_id']} (priority {brief['priority']})",
         body=_kickoff_email(brief, outline),
         to=[recipient],
         fallback_id=f"{brief['proposal_id']}-kickoff",

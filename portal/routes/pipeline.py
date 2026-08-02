@@ -1,6 +1,6 @@
 """Pipeline API routes — trigger, pending decisions, decide, and history.
 
-Bridges the CIN-Lite pipeline into the portal so it can be triggered and
+Bridges the DISPATCH pipeline into the portal so it can be triggered and
 managed from the web UI or external automation tools (n8n, webhooks).
 """
 
@@ -97,7 +97,7 @@ def queue(route_name: str):
 
 @pipeline_bp.route("/archive", methods=["GET"])
 def archive_list():
-    """List all CIN-Lite archived contracts."""
+    """List all DISPATCH archived contracts."""
     contracts = archive.list_contracts()
     return jsonify({"status": "ok", "contracts": contracts, "count": len(contracts)})
 

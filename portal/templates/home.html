@@ -24,6 +24,10 @@
         <span class="summary-number">{{ intel_count }}</span>
         <span class="summary-label">Intelligence Records</span>
     </div>
+    <a href="{{ url_for('pages.dispatch') }}" class="summary-card" style="text-decoration:none;color:inherit;border-left:4px solid #27ae60;">
+        <span class="summary-number">{{ engine_load_count }}</span>
+        <span class="summary-label">Active Loads</span>
+    </a>
     <a href="{{ url_for('pages.pending_decisions') }}" class="summary-card summary-pending" style="text-decoration:none;color:inherit;">
         <span class="summary-number">{{ pending_count }}</span>
         <span class="summary-label">Pending Decisions</span>

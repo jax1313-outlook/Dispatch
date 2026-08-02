@@ -24,7 +24,7 @@ class _FakeResp:
 
 
 def test_acquire_sam_success(monkeypatch, sam_opportunity):
-    monkeypatch.setenv("CIN_LITE_SAM_API_KEY", "k")
+    monkeypatch.setenv("DISPATCH_SAM_API_KEY", "k")
     payload = json.dumps({"opportunitiesData": [sam_opportunity]}).encode()
     monkeypatch.setattr(acquisition.urllib.request, "urlopen",
                         lambda req, timeout=30: _FakeResp(payload))
@@ -38,7 +38,7 @@ def test_acquire_sam_success(monkeypatch, sam_opportunity):
 
 
 def test_acquire_sam_http_error_falls_back(monkeypatch):
-    monkeypatch.setenv("CIN_LITE_SAM_API_KEY", "k")
+    monkeypatch.setenv("DISPATCH_SAM_API_KEY", "k")
 
     def boom(req, timeout=30):
         raise urllib.error.HTTPError("u", 403, "Forbidden", None, io.BytesIO(b'{"error":"bad key"}'))
@@ -50,7 +50,7 @@ def test_acquire_sam_http_error_falls_back(monkeypatch):
 
 
 def test_acquire_sam_network_error_falls_back(monkeypatch):
-    monkeypatch.setenv("CIN_LITE_SAM_API_KEY", "k")
+    monkeypatch.setenv("DISPATCH_SAM_API_KEY", "k")
 
     def boom(req, timeout=30):
         raise OSError("network down")

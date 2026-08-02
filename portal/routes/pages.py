@@ -21,6 +21,8 @@ def index():
 
 @pages_bp.route("/home")
 def home():
+    from dispatch import services as dispatch_svc
+
     all_entries = sandbox.get_all()
     sam_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "sam"}
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
@@ -33,6 +35,9 @@ def home():
 
     pending_items = pending.list_pending()
 
+    all_engine_loads = dispatch_svc.list_loads()
+    active_engine = [l for l in all_engine_loads if l["status"] not in ("archived", "cancelled", "completed")]
+
     return render_template(
         "home.html",
         sam_cards=sam_sorted,
@@ -42,6 +47,7 @@ def home():
         archive_count=arc_model.total_count(),
         intel_count=intel_model.total_count(),
         pending_count=len(pending_items),
+        engine_load_count=len(active_engine),
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
@@ -81,6 +87,12 @@ def sam():
 
 @pages_bp.route("/dispatch")
 def dispatch():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import LOAD_STATUSES
+
+    status_filter = request.args.get("status")
+    engine_loads = dispatch_svc.list_loads(status=status_filter)
+
     all_entries = sandbox.get_all()
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
 
@@ -103,8 +115,28 @@ def dispatch():
     return render_template(
         "dispatch.html",
         entries=entries_sorted,
+        engine_loads=engine_loads,
+        load_statuses=LOAD_STATUSES,
+        status_filter=status_filter,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
+    )
+
+
+@pages_bp.route("/dispatch/<load_id>")
+def dispatch_detail(load_id):
+    from dispatch import services as dispatch_svc
+    from dispatch.models import MILESTONE_TYPES, MILESTONE_SOURCES, EVIDENCE_TYPES
+
+    bundle = dispatch_svc.get_load_bundle(load_id)
+    if not bundle:
+        return redirect(url_for("pages.dispatch"))
+    return render_template(
+        "dispatch_detail.html",
+        milestone_types=MILESTONE_TYPES,
+        milestone_sources=MILESTONE_SOURCES,
+        evidence_types=EVIDENCE_TYPES,
+        **bundle,
     )
 
 
@@ -179,11 +211,16 @@ def archive_view():
             "records": all_archive.get(key, []),
         })
     pipeline_archived = cin_archive.list_contracts()
+
+    from dispatch import services as dispatch_svc
+    dispatch_archived = dispatch_svc.list_retentions()
+
     return render_template(
         "archive.html",
         sections=sections,
         sandbox_archived=sandbox_archived,
         pipeline_archived=pipeline_archived,
+        dispatch_archived=dispatch_archived,
     )
 
 
@@ -260,18 +297,18 @@ def settings():
     from cin_lite import email_delivery
 
     cin_config = {
-        "sam_api_key": bool(os.environ.get("CIN_LITE_SAM_API_KEY")),
-        "sam_limit": os.environ.get("CIN_LITE_SAM_LIMIT", "10"),
-        "sam_naics": os.environ.get("CIN_LITE_SAM_NAICS", ""),
-        "sam_ptype": os.environ.get("CIN_LITE_SAM_PTYPE", ""),
-        "sam_fetch_desc": os.environ.get("CIN_LITE_SAM_FETCH_DESCRIPTION", "1") == "1",
-        "smtp_host": os.environ.get("CIN_LITE_SMTP_HOST", ""),
+        "sam_api_key": bool(os.environ.get("DISPATCH_SAM_API_KEY")),
+        "sam_limit": os.environ.get("DISPATCH_SAM_LIMIT", "10"),
+        "sam_naics": os.environ.get("DISPATCH_SAM_NAICS", ""),
+        "sam_ptype": os.environ.get("DISPATCH_SAM_PTYPE", ""),
+        "sam_fetch_desc": os.environ.get("DISPATCH_SAM_FETCH_DESCRIPTION", "1") == "1",
+        "smtp_host": os.environ.get("DISPATCH_SMTP_HOST", ""),
         "anthropic_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "email_from": email_delivery.from_address(),
         "email_reviewer": email_delivery.reviewer_address(),
         "email_domain": email_delivery.domain(),
         "email_secret_set": not email_delivery._using_default_secret(),
-        "portal_url": os.environ.get("CIN_LITE_PORTAL_URL", "http://127.0.0.1:8080"),
+        "portal_url": os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080"),
         "portal_secret_set": Config.SECRET_KEY != _DEFAULT_SECRET,
     }
     return render_template("settings.html", config=Config, cin_config=cin_config)

@@ -184,7 +184,7 @@ def test_map_opportunity(sam_opportunity):
 
 
 def test_acquire_falls_back_to_local_without_key():
-    # No CIN_LITE_SAM_API_KEY (scrubbed) -> local sample_data.
+    # No DISPATCH_SAM_API_KEY (scrubbed) -> local sample_data.
     contracts = acquisition.acquire()
     assert isinstance(contracts, list) and contracts
     assert all("title" in c for c in contracts)

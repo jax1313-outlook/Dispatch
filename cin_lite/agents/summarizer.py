@@ -11,7 +11,7 @@ the call fails — so the Phase-1 pipeline still runs end-to-end offline.
 
 Configuration (environment):
     ANTHROPIC_API_KEY   required to use Claude (else deterministic fallback)
-    CIN_LITE_MODEL      optional model override (default: claude-opus-4-8)
+    DISPATCH_MODEL      optional model override (default: claude-opus-4-8)
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ import json
 import os
 import sys
 
-# Default to the latest, most capable Claude model. Override via CIN_LITE_MODEL.
-MODEL = os.environ.get("CIN_LITE_MODEL", "claude-opus-4-8")
+# Default to the latest, most capable Claude model. Override via DISPATCH_MODEL.
+MODEL = os.environ.get("DISPATCH_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 400
 
 _SYSTEM = (
@@ -62,7 +62,7 @@ def summarize(contract: dict, intelligence: dict, flags: list[str]) -> str:
     try:
         import anthropic
     except ImportError:
-        print("cin_lite: `anthropic` not installed; using deterministic summary.", file=sys.stderr)
+        print("dispatch: `anthropic` not installed; using deterministic summary.", file=sys.stderr)
         return _deterministic_summary(contract, flags)
 
     payload = {
@@ -88,6 +88,6 @@ def summarize(contract: dict, intelligence: dict, flags: list[str]) -> str:
         text = "".join(b.text for b in response.content if b.type == "text").strip()
         return text or _deterministic_summary(contract, flags)
     except Exception as exc:  # never break the human-in-the-loop pipeline on a summary
-        print(f"cin_lite: summarization agent failed ({exc}); using deterministic summary.",
+        print(f"dispatch: summarization agent failed ({exc}); using deterministic summary.",
               file=sys.stderr)
         return _deterministic_summary(contract, flags)

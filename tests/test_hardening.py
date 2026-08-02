@@ -52,7 +52,7 @@ class TestConfigurablePortalUrl:
         assert "http://127.0.0.1:8080/api/decision/CIN-001/" in html
 
     def test_env_override(self, monkeypatch):
-        monkeypatch.setenv("CIN_LITE_PORTAL_URL", "https://portal.example.com")
+        monkeypatch.setenv("DISPATCH_PORTAL_URL", "https://portal.example.com")
         html = control.render_html_email(
             {"title": "T"}, {}, "s", [], contract_id="CIN-001",
         )
@@ -60,14 +60,14 @@ class TestConfigurablePortalUrl:
         assert "127.0.0.1" not in html
 
     def test_trailing_slash_stripped(self, monkeypatch):
-        monkeypatch.setenv("CIN_LITE_PORTAL_URL", "https://portal.example.com/")
+        monkeypatch.setenv("DISPATCH_PORTAL_URL", "https://portal.example.com/")
         html = control.render_html_email(
             {"title": "T"}, {}, "s", [], contract_id="CIN-001",
         )
         assert "https://portal.example.com/api/decision/CIN-001/" in html
 
     def test_explicit_base_overrides_env(self, monkeypatch):
-        monkeypatch.setenv("CIN_LITE_PORTAL_URL", "https://portal.example.com")
+        monkeypatch.setenv("DISPATCH_PORTAL_URL", "https://portal.example.com")
         html = control.render_html_email(
             {"title": "T"}, {}, "s", [],
             action_url_base="http://custom:9090/decide",
@@ -81,5 +81,5 @@ class TestHmacSecretWarning:
         assert email_delivery._using_default_secret() is True
 
     def test_using_default_secret_false(self, monkeypatch):
-        monkeypatch.setenv("CIN_LITE_EMAIL_SECRET", "production-secret")
+        monkeypatch.setenv("DISPATCH_EMAIL_SECRET", "production-secret")
         assert email_delivery._using_default_secret() is False

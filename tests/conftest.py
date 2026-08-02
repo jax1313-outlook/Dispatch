@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the CIN-Lite test suite.
+"""Shared pytest fixtures for the DISPATCH test suite.
 
 Guarantees deterministic, side-effect-free tests:
 - scrubs every integration env var so agents take their deterministic fallback
@@ -18,24 +18,24 @@ from cin_lite import acquisition, processing
 
 _ENV_VARS = [
     "ANTHROPIC_API_KEY",
-    "CIN_LITE_MODEL",
-    "CIN_LITE_SAM_API_KEY",
-    "CIN_LITE_SAM_LIMIT",
-    "CIN_LITE_SAM_POSTED_FROM",
-    "CIN_LITE_SAM_POSTED_TO",
-    "CIN_LITE_SAM_NAICS",
-    "CIN_LITE_SAM_PTYPE",
-    "CIN_LITE_SAM_FETCH_DESCRIPTION",
-    "CIN_LITE_SMTP_HOST",
-    "CIN_LITE_SMTP_PORT",
-    "CIN_LITE_SMTP_USER",
-    "CIN_LITE_SMTP_PASSWORD",
-    "CIN_LITE_SMTP_STARTTLS",
-    "CIN_LITE_EMAIL_FROM",
-    "CIN_LITE_EMAIL_REVIEWER",
-    "CIN_LITE_EMAIL_DOMAIN",
-    "CIN_LITE_EMAIL_SECRET",
-    "CIN_LITE_PORTAL_URL",
+    "DISPATCH_MODEL",
+    "DISPATCH_SAM_API_KEY",
+    "DISPATCH_SAM_LIMIT",
+    "DISPATCH_SAM_POSTED_FROM",
+    "DISPATCH_SAM_POSTED_TO",
+    "DISPATCH_SAM_NAICS",
+    "DISPATCH_SAM_PTYPE",
+    "DISPATCH_SAM_FETCH_DESCRIPTION",
+    "DISPATCH_SMTP_HOST",
+    "DISPATCH_SMTP_PORT",
+    "DISPATCH_SMTP_USER",
+    "DISPATCH_SMTP_PASSWORD",
+    "DISPATCH_SMTP_STARTTLS",
+    "DISPATCH_EMAIL_FROM",
+    "DISPATCH_EMAIL_REVIEWER",
+    "DISPATCH_EMAIL_DOMAIN",
+    "DISPATCH_EMAIL_SECRET",
+    "DISPATCH_PORTAL_URL",
 ]
 
 

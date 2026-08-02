@@ -1,7 +1,7 @@
 [project]
 name = "cin-hybrid"
 version = "0.1.0"
-description = "Hybrid CIN-Lite System — contract intelligence, rule-based processing, and archive platform"
+description = "DISPATCH — contract intelligence, rule-based processing, and archive platform"
 requires-python = ">=3.11"
 dependencies = [
     "flask>=3.0",
@@ -13,6 +13,6 @@ agents = ["anthropic>=0.40"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-cin-lite = "cin_lite.run:main"
+dispatch = "cin_lite.run:main"
 cin-portal = "portal.app:create_app"
 cin-sync = "sync.cli:main"

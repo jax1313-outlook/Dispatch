@@ -250,6 +250,39 @@ body {
 .status-closed { background: #eee; color: #888; }
 .status-placeholder { background: #fff3cd; color: #856404; }
 
+/* ---------- Dispatch Engine Statuses ---------- */
+.dispatch-created { background: #e8f4fd; color: #2471a3; }
+.dispatch-dispatched { background: #d1f2eb; color: #148f77; }
+.dispatch-en_route_pickup { background: #d1f2eb; color: #148f77; }
+.dispatch-at_pickup { background: #fef9e7; color: #b7950b; }
+.dispatch-picked_up { background: #fef9e7; color: #b7950b; }
+.dispatch-in_transit { background: #d4e6f1; color: #2e4053; }
+.dispatch-at_delivery { background: #fef9e7; color: #b7950b; }
+.dispatch-delivered { background: #d5f5e3; color: #1e8449; }
+.dispatch-completed { background: #82e0aa; color: #145a32; }
+.dispatch-archived { background: #f5f5f5; color: #999; }
+.dispatch-cancelled { background: #fdedec; color: #c0392b; }
+.dispatch-complete { background: #d5f5e3; color: #1e8449; }
+.dispatch-active { background: #e8f4fd; color: #2471a3; }
+
+/* ---------- Dispatch Visibility Bar ---------- */
+.dispatch-visibility {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+.vis-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.vis-label {
+    font-size: 11px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .equip-ok { color: #27ae60; font-weight: 700; margin-left: 4px; }
 .equip-bad { color: #e74c3c; font-weight: 700; margin-left: 4px; }
 

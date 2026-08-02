@@ -7,14 +7,14 @@ outbound mail via stdlib `smtplib`, so it works with any provider's SMTP relay
 or sending fails, so the pipeline still runs end-to-end offline.
 
 Configuration (environment):
-    CIN_LITE_SMTP_HOST       SMTP server host (its presence enables real sending)
-    CIN_LITE_SMTP_PORT       default 587
-    CIN_LITE_SMTP_USER       SMTP username (optional)
-    CIN_LITE_SMTP_PASSWORD   SMTP password (optional)
-    CIN_LITE_SMTP_STARTTLS   "1"/"0", default "1"
-    CIN_LITE_EMAIL_FROM      From address (default cin-lite@<domain>)
-    CIN_LITE_EMAIL_REVIEWER  Reviewer address (always receives decision emails)
-    CIN_LITE_EMAIL_DOMAIN    domain for queue recipient addresses (default cin-lite.local)
+    DISPATCH_SMTP_HOST       SMTP server host (its presence enables real sending)
+    DISPATCH_SMTP_PORT       default 587
+    DISPATCH_SMTP_USER       SMTP username (optional)
+    DISPATCH_SMTP_PASSWORD   SMTP password (optional)
+    DISPATCH_SMTP_STARTTLS   "1"/"0", default "1"
+    DISPATCH_EMAIL_FROM      From address (default dispatch@<domain>)
+    DISPATCH_EMAIL_REVIEWER  Reviewer address (always receives decision emails)
+    DISPATCH_EMAIL_DOMAIN    domain for queue recipient addresses (default dispatch.local)
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ _OUTBOX = archive.ARCHIVE_ROOT / "Outbox"
 
 
 def _secret() -> bytes:
-    return os.environ.get("CIN_LITE_EMAIL_SECRET", "cin-lite-dev-secret").encode()
+    return os.environ.get("DISPATCH_EMAIL_SECRET", "dispatch-dev-secret").encode()
 
 
 def make_token(contract_id: str, action: str) -> str:
@@ -50,15 +50,15 @@ def verify_token(contract_id: str, action: str, token: str) -> bool:
 
 
 def domain() -> str:
-    return os.environ.get("CIN_LITE_EMAIL_DOMAIN", "cin-lite.local")
+    return os.environ.get("DISPATCH_EMAIL_DOMAIN", "dispatch.local")
 
 
 def from_address() -> str:
-    return os.environ.get("CIN_LITE_EMAIL_FROM", f"cin-lite@{domain()}")
+    return os.environ.get("DISPATCH_EMAIL_FROM", f"dispatch@{domain()}")
 
 
 def reviewer_address() -> str:
-    return os.environ.get("CIN_LITE_EMAIL_REVIEWER", f"reviewer@{domain()}")
+    return os.environ.get("DISPATCH_EMAIL_REVIEWER", f"reviewer@{domain()}")
 
 
 def queue_address(queue: str | None) -> str | None:
@@ -87,33 +87,33 @@ def _write_fallback(fallback_id: str, msg: EmailMessage) -> Path:
 
 
 def _using_default_secret() -> bool:
-    return not os.environ.get("CIN_LITE_EMAIL_SECRET")
+    return not os.environ.get("DISPATCH_EMAIL_SECRET")
 
 
 def _send_or_write(fallback_id: str, msg: EmailMessage) -> str:
     """Send via SMTP if configured, else write the message to Archive/Outbox."""
-    host = os.environ.get("CIN_LITE_SMTP_HOST")
+    host = os.environ.get("DISPATCH_SMTP_HOST")
     if not host:
         path = _write_fallback(fallback_id, msg)
         return f"not sent (SMTP not configured); written to {path}"
 
     if _using_default_secret():
-        print("cin_lite: WARNING — sending emails with the default HMAC secret; "
-              "set CIN_LITE_EMAIL_SECRET for production use.", file=sys.stderr)
+        print("dispatch: WARNING — sending emails with the default HMAC secret; "
+              "set DISPATCH_EMAIL_SECRET for production use.", file=sys.stderr)
 
-    port = int(os.environ.get("CIN_LITE_SMTP_PORT", "587"))
+    port = int(os.environ.get("DISPATCH_SMTP_PORT", "587"))
     try:
         with smtplib.SMTP(host, port, timeout=30) as server:
-            if os.environ.get("CIN_LITE_SMTP_STARTTLS", "1") == "1":
+            if os.environ.get("DISPATCH_SMTP_STARTTLS", "1") == "1":
                 server.starttls(context=ssl.create_default_context())
-            user = os.environ.get("CIN_LITE_SMTP_USER")
+            user = os.environ.get("DISPATCH_SMTP_USER")
             if user:
-                server.login(user, os.environ.get("CIN_LITE_SMTP_PASSWORD", ""))
+                server.login(user, os.environ.get("DISPATCH_SMTP_PASSWORD", ""))
             server.send_message(msg)
         return f"sent via {host} to {msg['To']}"
     except Exception as exc:  # never break the pipeline on delivery
         path = _write_fallback(fallback_id, msg)
-        print(f"cin_lite: email delivery failed ({exc}); written to {path}", file=sys.stderr)
+        print(f"dispatch: email delivery failed ({exc}); written to {path}", file=sys.stderr)
         return f"delivery failed ({exc}); written to {path}"
 
 
@@ -138,7 +138,7 @@ def deliver_checkpoint(
     html_body: str,
 ) -> str:
     """Send the checkpoint email (HTML with action buttons + text fallback)."""
-    subject = f"[CIN-Lite] Decision Required — {contract.get('title', contract_id)}"
+    subject = f"[DISPATCH] Decision Required — {contract.get('title', contract_id)}"
     to = [reviewer_address()]
     return _send_or_write(
         f"{contract_id}-checkpoint",
@@ -175,7 +175,7 @@ def _render_decision_html(
     return f"""\
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#333;">
     <div style="background:{action_color};color:#fff;padding:16px 24px;">
-        <h1 style="margin:0;font-size:20px;">CIN-Lite — Decision Recorded</h1>
+        <h1 style="margin:0;font-size:20px;">DISPATCH — Decision Recorded</h1>
     </div>
 
     <div style="padding:20px 24px;border:1px solid #ddd;border-top:none;">
@@ -213,7 +213,7 @@ def _render_decision_html(
     </div>
 
     <div style="padding:12px 24px;font-size:11px;color:#999;border:1px solid #ddd;border-top:none;">
-        CIN-Lite Hybrid System &mdash; Contract ID: {contract_id}
+        DISPATCH &mdash; Contract ID: {contract_id}
     </div>
 </div>"""
 
@@ -230,7 +230,7 @@ def deliver_decision(
     """Send the decision confirmation email (HTML + text fallback)."""
     label = control.ACTIONS.get(action, (action, route))[0]
     priority = decision.get("priority", "n/a")
-    subject = f"[CIN-Lite] {contract_id} — {label} (priority {priority})"
+    subject = f"[DISPATCH] {contract_id} — {label} (priority {priority})"
     body = "\n".join(
         [
             f"Contract   : {contract.get('title')}",

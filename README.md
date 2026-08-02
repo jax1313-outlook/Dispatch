@@ -1,4 +1,4 @@
-# Hybrid CIN-Lite System
+# DISPATCH
 
 [![CI](https://github.com/jax1313-outlook/cin-hybrid/actions/workflows/ci.yml/badge.svg)](https://github.com/jax1313-outlook/cin-hybrid/actions/workflows/ci.yml)
 

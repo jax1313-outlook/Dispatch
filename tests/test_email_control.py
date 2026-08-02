@@ -35,9 +35,9 @@ class TestTokens:
         assert email_delivery.verify_token("CIN-002", "reject", "bad" * 16) is False
 
     def test_custom_secret(self, monkeypatch):
-        monkeypatch.setenv("CIN_LITE_EMAIL_SECRET", "my-secret")
+        monkeypatch.setenv("DISPATCH_EMAIL_SECRET", "my-secret")
         t1 = email_delivery.make_token("CIN-003", "reject")
-        monkeypatch.setenv("CIN_LITE_EMAIL_SECRET", "other-secret")
+        monkeypatch.setenv("DISPATCH_EMAIL_SECRET", "other-secret")
         t2 = email_delivery.make_token("CIN-003", "reject")
         assert t1 != t2
 

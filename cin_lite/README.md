@@ -1,6 +1,6 @@
-# CIN-Lite — Phase 1 skeleton
+# DISPATCH — Phase 1 skeleton
 
-A runnable implementation of the Hybrid CIN-Lite pipeline described in
+A runnable implementation of the DISPATCH pipeline described in
 `../Final_Architecture_for_Hybrid_CIN-Lite_System (1).docx`. Runs with zero setup
 on bundled sample data; configure environment variables to switch on the real
 integrations (SAM.gov acquisition, Claude summarization + routing, SMTP delivery).
@@ -91,15 +91,15 @@ Get a free key at <https://open.gsa.gov/api/get-opportunities-public-api/> (an
 api.data.gov key), then:
 
 ```bash
-export CIN_LITE_SAM_API_KEY=...           # presence switches acquisition to SAM.gov
-export CIN_LITE_SAM_LIMIT=10              # max opportunities (default 10)
-export CIN_LITE_SAM_NAICS=541512         # optional NAICS filter
-export CIN_LITE_SAM_PTYPE=o              # optional procurement-type filter
+export DISPATCH_SAM_API_KEY=...           # presence switches acquisition to SAM.gov
+export DISPATCH_SAM_LIMIT=10              # max opportunities (default 10)
+export DISPATCH_SAM_NAICS=541512         # optional NAICS filter
+export DISPATCH_SAM_PTYPE=o              # optional procurement-type filter
 python -m cin_lite.run --action approve_proposal
 ```
 
-By default it pulls the last 7 days (override with `CIN_LITE_SAM_POSTED_FROM` /
-`CIN_LITE_SAM_POSTED_TO`, `MM/DD/YYYY`). When the key is unset — or a request
+By default it pulls the last 7 days (override with `DISPATCH_SAM_POSTED_FROM` /
+`DISPATCH_SAM_POSTED_TO`, `MM/DD/YYYY`). When the key is unset — or a request
 fails — it falls back to local `sample_data/*.json`, so the zero-setup demo still
 runs. Note: SAM solicitations rarely publish an estimated value, so a missing
 value is treated as informational (not a routing anomaly).
@@ -138,7 +138,7 @@ python -m cin_lite.run --action approve_proposal
 
 Without an API key (or without the `anthropic` package), it falls back to a
 deterministic summary so the pipeline still runs end-to-end offline. Override the
-model with `CIN_LITE_MODEL`.
+model with `DISPATCH_MODEL`.
 
 ## Routing-decision agent (Claude — real)
 
@@ -169,19 +169,19 @@ and to the routing queue's address (`<queue>@<domain>`, unless the recipient is
 Enable it with environment variables:
 
 ```bash
-export CIN_LITE_SMTP_HOST=smtp.sendgrid.net   # presence enables real sending
-export CIN_LITE_SMTP_PORT=587                  # default 587
-export CIN_LITE_SMTP_USER=apikey
-export CIN_LITE_SMTP_PASSWORD=...              # provider credential
-export CIN_LITE_EMAIL_FROM=cin-lite@yourdomain.com
-export CIN_LITE_EMAIL_REVIEWER=lead@yourdomain.com
-export CIN_LITE_EMAIL_DOMAIN=yourdomain.com    # for queue recipient addresses
+export DISPATCH_SMTP_HOST=smtp.sendgrid.net   # presence enables real sending
+export DISPATCH_SMTP_PORT=587                  # default 587
+export DISPATCH_SMTP_USER=apikey
+export DISPATCH_SMTP_PASSWORD=...              # provider credential
+export DISPATCH_EMAIL_FROM=dispatch@yourdomain.com
+export DISPATCH_EMAIL_REVIEWER=lead@yourdomain.com
+export DISPATCH_EMAIL_DOMAIN=yourdomain.com    # for queue recipient addresses
 ```
 
-PowerShell: `$env:CIN_LITE_SMTP_HOST="smtp.sendgrid.net"` (etc.). STARTTLS is on by
-default; set `CIN_LITE_SMTP_STARTTLS=0` to disable.
+PowerShell: `$env:DISPATCH_SMTP_HOST="smtp.sendgrid.net"` (etc.). STARTTLS is on by
+default; set `DISPATCH_SMTP_STARTTLS=0` to disable.
 
-When `CIN_LITE_SMTP_HOST` is unset — or a send fails — the composed message is
+When `DISPATCH_SMTP_HOST` is unset — or a send fails — the composed message is
 written to `Archive/Outbox/<id>.eml` (a standard RFC-822 file) and the pipeline
 continues. This keeps the offline, zero-setup path intact.
 

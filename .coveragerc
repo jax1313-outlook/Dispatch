@@ -1,5 +1,7 @@
 [run]
-source = cin_lite
+source =
+    cin_lite
+    dispatch
 branch = False
 
 [report]

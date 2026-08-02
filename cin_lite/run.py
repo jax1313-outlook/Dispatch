@@ -50,7 +50,7 @@ def run(action_override: str | None) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Hybrid CIN-Lite — Phase 1 pipeline")
+    parser = argparse.ArgumentParser(description="DISPATCH — Phase 1 pipeline")
     parser.add_argument(
         "--action",
         choices=list(control.ACTIONS),

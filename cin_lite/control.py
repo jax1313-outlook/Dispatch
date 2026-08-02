@@ -33,7 +33,7 @@ def render_email(
     """Render the checkbox-driven control email as plain text."""
     lines = [
         "=" * 64,
-        "CIN-Lite — Contract Control Email",
+        "DISPATCH — Contract Control Email",
         "=" * 64,
         f"Title       : {contract.get('title')}",
         f"Agency      : {contract.get('agency')}",
@@ -110,7 +110,7 @@ def render_html_email(
 
     if not action_url_base:
         action_url_base = os.environ.get(
-            "CIN_LITE_PORTAL_URL", "http://127.0.0.1:8080"
+            "DISPATCH_PORTAL_URL", "http://127.0.0.1:8080"
         ).rstrip("/") + "/api/decision"
 
     def _link(action: str) -> str:
@@ -187,7 +187,7 @@ def render_html_email(
     return f"""\
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#333;">
     <div style="background:#1a237e;color:#fff;padding:16px 24px;">
-        <h1 style="margin:0;font-size:20px;">CIN-Lite — Contract Decision Required</h1>
+        <h1 style="margin:0;font-size:20px;">DISPATCH — Contract Decision Required</h1>
     </div>
 
     <div style="padding:20px 24px;border:1px solid #ddd;border-top:none;">
@@ -227,7 +227,7 @@ def render_html_email(
     </div>
 
     <div style="padding:12px 24px;font-size:11px;color:#999;border:1px solid #ddd;border-top:none;">
-        CIN-Lite Hybrid System &mdash; Contract ID: {contract_id}
+        DISPATCH &mdash; Contract ID: {contract_id}
     </div>
 </div>"""
 

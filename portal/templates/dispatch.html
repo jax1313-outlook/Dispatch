@@ -1,87 +1,189 @@
 {% extends "base.html" %}
 {% block title %}Dispatch — L2-COS Portal{% endblock %}
-{% block page_title %}Dispatch / Load Board{% endblock %}
+{% block page_title %}Dispatch{% endblock %}
 {% block page_actions %}
-<a href="{{ url_for('pages.dispatch', refresh=1) }}" class="btn btn-sm">Refresh Data</a>
+<button class="btn btn-sm btn-success" onclick="toggleNewLoadForm()">+ New Load</button>
+<a href="{{ url_for('pages.dispatch', refresh=1) }}" class="btn btn-sm">Refresh Board</a>
 {% endblock %}
 
 {% block body %}
-{% if entries %}
-<div class="card-grid">
-{% for entry in entries %}
-    {% set vis = card_visual(entry.score) %}
-    {% set cd = entry.card_data %}
-    <div class="card card-dispatch">
-        <div class="card-header {{ vis.css }}">
-            <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
-            <span class="card-score">Score {{ format_score(entry.score) }}</span>
+
+{# ── New Load Form (hidden) ───────────────────────────────────────── #}
+<div id="new-load-form" class="brief-section" style="display:none;margin-bottom:20px;">
+    <h3>Create New Load</h3>
+    <form onsubmit="createLoad(event)">
+        <div class="brief-fields" style="margin-bottom:12px;">
+            <div><label><strong>Customer *</strong><br>
+                <input type="text" name="customer" required style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Broker / Shipper</strong><br>
+                <input type="text" name="broker_shipper" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Pickup Location</strong><br>
+                <input type="text" name="pickup_location" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Delivery Location</strong><br>
+                <input type="text" name="delivery_location" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Pickup Date/Time</strong><br>
+                <input type="text" name="pickup_datetime" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Delivery Date/Time</strong><br>
+                <input type="text" name="delivery_datetime" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Equipment</strong><br>
+                <input type="text" name="equipment" style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Driver</strong><br>
+                <input type="text" name="driver" style="width:100%;padding:4px 8px;"></label></div>
+            <div class="full-width"><label><strong>Notes</strong><br>
+                <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
         </div>
-        <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
-        <div class="card-meta">
-            <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
-        </div>
-        <div class="card-fields two-col">
-            <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
-            <div><strong>Destination:</strong> {{ cd.destination or 'Unknown' }}</div>
-            <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
-            <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}{% if cd.rpm %} | <strong>RPM:</strong> ${{ cd.rpm }}{% endif %}</div>
-            <div><strong>Pickup:</strong> {{ cd.pickup_window or 'Unknown' }}</div>
-            <div><strong>Delivery:</strong> {{ cd.delivery_window or 'Unknown' }}</div>
-            <div><strong>Equipment:</strong> {{ cd.equipment_required or 'Unknown' }}
-                {% if cd.equipment_match == 'match' %}<span class="equip-ok">&#10003;</span>
-                {% elif cd.equipment_match == 'mismatch' %}<span class="equip-bad">&#10007;</span>
+        <button type="submit" class="btn btn-success">Create Load</button>
+        <button type="button" class="btn" onclick="toggleNewLoadForm()">Cancel</button>
+    </form>
+</div>
+
+{# ── Active Loads (Dispatch Engine) ───────────────────────────────── #}
+<div class="card-section">
+    <h2>Active Loads ({{ engine_loads|length }})</h2>
+    <div style="margin-bottom:10px;display:flex;gap:4px;flex-wrap:wrap;">
+        <a href="{{ url_for('pages.dispatch') }}" class="btn btn-sm {% if not status_filter %}btn-primary{% endif %}">All</a>
+        {% for s in load_statuses %}
+        <a href="{{ url_for('pages.dispatch', status=s) }}"
+           class="btn btn-sm {% if status_filter == s %}btn-primary{% endif %}">{{ s|replace('_', ' ')|title }}</a>
+        {% endfor %}
+    </div>
+    {% if engine_loads %}
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Load ID</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Pickup</th>
+                <th>Delivery</th>
+                <th>Driver</th>
+                <th>Updated</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for load in engine_loads %}
+            <tr>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=load.load_id) }}">{{ load.load_id[:12] }}...</a></td>
+                <td>{{ load.customer }}</td>
+                <td><span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></td>
+                <td>{{ load.pickup_location or '—' }}</td>
+                <td>{{ load.delivery_location or '—' }}</td>
+                <td>{{ load.driver or '—' }}</td>
+                <td>{{ load.updated_at[:16] if load.updated_at else '—' }}</td>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=load.load_id) }}" class="btn btn-sm">View</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No loads{% if status_filter %} with status "{{ status_filter }}"{% endif %}. Click <strong>+ New Load</strong> to create one.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ── Load Board (Opportunities) ───────────────────────────────────── #}
+<div class="card-section">
+    <h2>Load Board — Opportunities ({{ entries|length }})</h2>
+    <p class="section-desc">Incoming load opportunities from brokers and load boards.</p>
+    {% if entries %}
+    <div class="card-grid">
+    {% for entry in entries %}
+        {% set vis = card_visual(entry.score) %}
+        {% set cd = entry.card_data %}
+        <div class="card card-dispatch">
+            <div class="card-header {{ vis.css }}">
+                <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
+                <span class="card-score">Score {{ format_score(entry.score) }}</span>
+            </div>
+            <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
+            <div class="card-meta">
+                <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+            </div>
+            <div class="card-fields two-col">
+                <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
+                <div><strong>Destination:</strong> {{ cd.destination or 'Unknown' }}</div>
+                <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
+                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}{% if cd.rpm %} | <strong>RPM:</strong> ${{ cd.rpm }}{% endif %}</div>
+                <div><strong>Pickup:</strong> {{ cd.pickup_window or 'Unknown' }}</div>
+                <div><strong>Delivery:</strong> {{ cd.delivery_window or 'Unknown' }}</div>
+                <div><strong>Equipment:</strong> {{ cd.equipment_required or 'Unknown' }}
+                    {% if cd.equipment_match == 'match' %}<span class="equip-ok">&#10003;</span>
+                    {% elif cd.equipment_match == 'mismatch' %}<span class="equip-bad">&#10007;</span>
+                    {% endif %}
+                </div>
+                <div><strong>Weight:</strong> {{ '%s lbs'|format(cd.weight_lbs|int) if cd.weight_lbs else 'Unknown' }}</div>
+                {% if cd.source_link %}
+                <div><strong>Source:</strong> <a href="{{ cd.source_link }}" target="_blank" rel="noopener">View Source</a></div>
+                {% else %}
+                <div><strong>Source:</strong> Unknown</div>
+                {% endif %}
+                <div><strong>Distance:</strong> {{ '%s mi'|format(cd.distance_miles) if cd.distance_miles else 'Unknown' }}</div>
+            </div>
+
+            <div class="card-indicators">
+                {% if cd.detention_history %}
+                <span class="indicator" title="Detention History">&#128337; {{ cd.detention_history }}</span>
+                {% endif %}
+                {% if cd.location_intelligence %}
+                <span class="indicator" title="Location Intel">&#128205; {{ cd.location_intelligence }}</span>
+                {% endif %}
+                {% if cd.broker_intelligence %}
+                <span class="indicator" title="Broker Intel">&#128188; {{ cd.broker_intelligence }}</span>
                 {% endif %}
             </div>
-            <div><strong>Weight:</strong> {{ '%s lbs'|format(cd.weight_lbs|int) if cd.weight_lbs else 'Unknown' }}</div>
-            {% if cd.source_link %}
-            <div><strong>Source:</strong> <a href="{{ cd.source_link }}" target="_blank" rel="noopener">View Source</a></div>
-            {% else %}
-            <div><strong>Source:</strong> Unknown</div>
-            {% endif %}
-            <div><strong>Distance:</strong> {{ '%s mi'|format(cd.distance_miles) if cd.distance_miles else 'Unknown' }}</div>
-        </div>
 
-        <div class="card-indicators">
-            {% if cd.detention_history %}
-            <span class="indicator" title="Detention History">&#128337; {{ cd.detention_history }}</span>
-            {% endif %}
-            {% if cd.location_intelligence %}
-            <span class="indicator" title="Location Intel">&#128205; {{ cd.location_intelligence }}</span>
-            {% endif %}
-            {% if cd.broker_intelligence %}
-            <span class="indicator" title="Broker Intel">&#128188; {{ cd.broker_intelligence }}</span>
-            {% endif %}
-        </div>
+            <div class="card-considerations">
+                <small>
+                    <strong>Operational Considerations:</strong>
+                    Position Impact: {{ entry.position_impact or 'Unknown' }} |
+                    HOS Risk: {{ entry.hos_risk or 'Unknown' }} |
+                    Return Route: {{ entry.return_home_required or 'Unknown' }} |
+                    Deadhead: {{ cd.deadhead_miles ~ ' mi' if cd.deadhead_miles else 'Unknown' }} |
+                    Fuel Est: {{ '$' ~ cd.fuel_estimate if cd.fuel_estimate else 'Unknown' }}
+                </small>
+            </div>
 
-        <div class="card-considerations">
-            <small>
-                <strong>Operational Considerations:</strong>
-                Position Impact: {{ entry.position_impact or 'Unknown' }} |
-                HOS Risk: {{ entry.hos_risk or 'Unknown' }} |
-                Return Route: {{ entry.return_home_required or 'Unknown' }} |
-                Deadhead: {{ cd.deadhead_miles ~ ' mi' if cd.deadhead_miles else 'Unknown' }} |
-                Fuel Est: {{ '$' ~ cd.fuel_estimate if cd.fuel_estimate else 'Unknown' }}
-            </small>
+            <div class="card-actions">
+                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Open Brief</a>
+                {% if cd.source_link %}
+                <a href="{{ cd.source_link }}" target="_blank" rel="noopener" class="btn btn-sm">Open Source</a>
+                {% endif %}
+                <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
+                <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
+                <button class="btn btn-sm btn-danger" onclick="cardAction('{{ entry.id }}', 'pass')">Pass</button>
+                <button class="btn btn-sm btn-warning" onclick="cardAction('{{ entry.id }}', 'watch')">Watch</button>
+                <button class="btn btn-sm" onclick="createInquiry('{{ entry.id }}')">Send Inquiry Draft</button>
+                <button class="btn btn-sm btn-purple" onclick="triggerPublisher('{{ entry.id }}', 'Broker Packet Required')">Trigger Publisher</button>
+            </div>
         </div>
-
-        <div class="card-actions">
-            <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Open Brief</a>
-            {% if cd.source_link %}
-            <a href="{{ cd.source_link }}" target="_blank" rel="noopener" class="btn btn-sm">Open Source</a>
-            {% endif %}
-            <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
-            <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
-            <button class="btn btn-sm btn-danger" onclick="cardAction('{{ entry.id }}', 'pass')">Pass</button>
-            <button class="btn btn-sm btn-warning" onclick="cardAction('{{ entry.id }}', 'watch')">Watch</button>
-            <button class="btn btn-sm" onclick="createInquiry('{{ entry.id }}')">Send Inquiry Draft</button>
-            <button class="btn btn-sm btn-purple" onclick="triggerPublisher('{{ entry.id }}', 'Broker Packet Required')">Trigger Publisher</button>
-        </div>
+    {% endfor %}
     </div>
-{% endfor %}
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No opportunities loaded. <a href="{{ url_for('pages.dispatch', refresh=1) }}">Load sample data</a>.</p>
+    </div>
+    {% endif %}
 </div>
-{% else %}
-<div class="empty-state">
-    <p>No dispatch loads loaded. <a href="{{ url_for('pages.dispatch', refresh=1) }}">Load data</a>.</p>
-</div>
-{% endif %}
+
+<script>
+function toggleNewLoadForm() {
+    var f = document.getElementById('new-load-form');
+    f.style.display = f.style.display === 'none' ? '' : 'none';
+}
+
+function createLoad(e) {
+    e.preventDefault();
+    var form = e.target;
+    var data = {};
+    new FormData(form).forEach(function(v, k) { if (v) data[k] = v; });
+    apiPost('/api/dispatch/loads', data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+</script>
 {% endblock %}

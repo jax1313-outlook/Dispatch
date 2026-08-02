@@ -38,7 +38,7 @@ def process_contracts(action_override: str | None = None) -> list[dict]:
             result = _process_single(contract, action_override)
         except Exception as exc:
             title = contract.get("title", "unknown")
-            print(f"cin_lite: pipeline error for '{title}': {exc}", file=sys.stderr)
+            print(f"dispatch: pipeline error for '{title}': {exc}", file=sys.stderr)
             results.append({
                 "contract_id": None,
                 "title": title,

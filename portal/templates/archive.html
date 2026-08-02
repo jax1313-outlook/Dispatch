@@ -39,8 +39,8 @@
 
 {% if pipeline_archived %}
 <section class="card-section">
-    <h2>CIN-Lite Pipeline Archive ({{ pipeline_archived|length }})</h2>
-    <p class="section-desc">Contracts processed through the CIN-Lite acquisition pipeline and archived after a decision.</p>
+    <h2>DISPATCH Pipeline Archive ({{ pipeline_archived|length }})</h2>
+    <p class="section-desc">Contracts processed through the DISPATCH acquisition pipeline and archived after a decision.</p>
     <table class="data-table">
         <thead>
             <tr>
@@ -61,6 +61,39 @@
                 <td>{{ rec.solicitation_number or '—' }}</td>
                 <td>{% if rec.estimated_value %}${{ "{:,.0f}".format(rec.estimated_value) }}{% else %}—{% endif %}</td>
                 <td>{{ rec.processed_at or '—' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if dispatch_archived %}
+<section class="card-section">
+    <h2>Dispatch Retention Archive ({{ dispatch_archived|length }})</h2>
+    <p class="section-desc">Loads archived through the Dispatch Data Engine after completing their lifecycle.</p>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Archive ID</th>
+                <th>Load ID</th>
+                <th>Final Status</th>
+                <th>Evidence</th>
+                <th>POD</th>
+                <th>Archived</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ret in dispatch_archived %}
+            <tr>
+                <td><code style="font-size:11px;">{{ ret.archive_id[:16] }}...</code></td>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ret.load_id) }}">{{ ret.load_id[:16] }}...</a></td>
+                <td><span class="status-tag dispatch-{{ ret.final_status }}">{{ ret.final_status|replace('_', ' ') }}</span></td>
+                <td>{{ ret.evidence_index|length if ret.evidence_index else 0 }} items</td>
+                <td>{{ ret.pod_package_id[:12] ~ '...' if ret.pod_package_id else '—' }}</td>
+                <td>{{ ret.archived_at[:16] if ret.archived_at else '—' }}</td>
+                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ret.load_id) }}" class="btn btn-sm">View</a></td>
             </tr>
         {% endfor %}
         </tbody>

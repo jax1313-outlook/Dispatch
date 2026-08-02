@@ -34,14 +34,14 @@
 </section>
 
 <section class="card-section">
-    <h2>CIN-Lite Acquisition</h2>
+    <h2>DISPATCH Acquisition</h2>
     <table class="data-table">
         <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
         <tbody>
-            <tr><td>SAM Limit</td><td>{{ cin_config.sam_limit }}</td><td>CIN_LITE_SAM_LIMIT</td></tr>
-            <tr><td>NAICS Filter</td><td>{{ cin_config.sam_naics or 'None (all)' }}</td><td>CIN_LITE_SAM_NAICS</td></tr>
-            <tr><td>Procurement Type</td><td>{{ cin_config.sam_ptype or 'None (all)' }}</td><td>CIN_LITE_SAM_PTYPE</td></tr>
-            <tr><td>Fetch Descriptions</td><td>{{ 'Yes' if cin_config.sam_fetch_desc else 'No' }}</td><td>CIN_LITE_SAM_FETCH_DESCRIPTION</td></tr>
+            <tr><td>SAM Limit</td><td>{{ cin_config.sam_limit }}</td><td>DISPATCH_SAM_LIMIT</td></tr>
+            <tr><td>NAICS Filter</td><td>{{ cin_config.sam_naics or 'None (all)' }}</td><td>DISPATCH_SAM_NAICS</td></tr>
+            <tr><td>Procurement Type</td><td>{{ cin_config.sam_ptype or 'None (all)' }}</td><td>DISPATCH_SAM_PTYPE</td></tr>
+            <tr><td>Fetch Descriptions</td><td>{{ 'Yes' if cin_config.sam_fetch_desc else 'No' }}</td><td>DISPATCH_SAM_FETCH_DESCRIPTION</td></tr>
         </tbody>
     </table>
 </section>
@@ -51,11 +51,11 @@
     <table class="data-table">
         <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
         <tbody>
-            <tr><td>From Address</td><td>{{ cin_config.email_from }}</td><td>CIN_LITE_EMAIL_FROM</td></tr>
-            <tr><td>Reviewer Address</td><td>{{ cin_config.email_reviewer }}</td><td>CIN_LITE_EMAIL_REVIEWER</td></tr>
-            <tr><td>Domain</td><td>{{ cin_config.email_domain }}</td><td>CIN_LITE_EMAIL_DOMAIN</td></tr>
-            <tr><td>HMAC Secret</td><td>{{ 'Configured' if cin_config.email_secret_set else 'Using default (not production-safe)' }}</td><td>CIN_LITE_EMAIL_SECRET</td></tr>
-            <tr><td>Portal URL</td><td>{{ cin_config.portal_url }}</td><td>CIN_LITE_PORTAL_URL</td></tr>
+            <tr><td>From Address</td><td>{{ cin_config.email_from }}</td><td>DISPATCH_EMAIL_FROM</td></tr>
+            <tr><td>Reviewer Address</td><td>{{ cin_config.email_reviewer }}</td><td>DISPATCH_EMAIL_REVIEWER</td></tr>
+            <tr><td>Domain</td><td>{{ cin_config.email_domain }}</td><td>DISPATCH_EMAIL_DOMAIN</td></tr>
+            <tr><td>HMAC Secret</td><td>{{ 'Configured' if cin_config.email_secret_set else 'Using default (not production-safe)' }}</td><td>DISPATCH_EMAIL_SECRET</td></tr>
+            <tr><td>Portal URL</td><td>{{ cin_config.portal_url }}</td><td>DISPATCH_PORTAL_URL</td></tr>
         </tbody>
     </table>
 </section>
