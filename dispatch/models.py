@@ -225,6 +225,14 @@ class MilestoneEvent:
         return asdict(self)
 
 
+ALLOWED_EXTENSIONS = {
+    "pdf", "png", "jpg", "jpeg", "gif", "tif", "tiff",
+    "doc", "docx", "xls", "xlsx", "csv", "txt", "rtf",
+    "zip", "bmp", "webp",
+}
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
+
+
 @dataclass
 class EvidenceItem:
     evidence_id: str = ""
@@ -232,6 +240,9 @@ class EvidenceItem:
     related_milestone_id: str | None = None
     evidence_type: str = "document"
     file_path: str | None = None
+    original_filename: str = ""
+    file_size: int = 0
+    mime_type: str = ""
     capture_time: str = ""
     description: str = ""
     uploaded_by: str = ""

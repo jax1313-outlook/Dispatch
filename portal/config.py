@@ -12,6 +12,11 @@ _DEFAULT_SECRET = "dev-portal-key-change-in-production"
 class Config:
     SECRET_KEY = os.environ.get("PORTAL_SECRET_KEY", _DEFAULT_SECRET)
     DATA_DIR = os.environ.get("PORTAL_DATA_DIR", str(_PORTAL_DIR / "data"))
+    UPLOAD_FOLDER = os.environ.get(
+        "PORTAL_UPLOAD_DIR",
+        str(Path(os.environ.get("PORTAL_DATA_DIR", str(_PORTAL_DIR / "data"))) / "uploads"),
+    )
+    MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25 MB
     INQUIRY_THRESHOLD = int(os.environ.get("PORTAL_INQUIRY_THRESHOLD", "90"))
     INQUIRY_MODE = os.environ.get("PORTAL_INQUIRY_MODE", "HUMAN_REVIEW")
     HOST = os.environ.get("PORTAL_HOST", "127.0.0.1")

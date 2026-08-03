@@ -9,10 +9,11 @@ from __future__ import annotations
 import csv
 import io
 
-from flask import Blueprint, Response, jsonify, render_template, request
+from flask import Blueprint, Response, jsonify, render_template, request, send_file
 
 from dispatch import notifications, services
 from dispatch.models import (
+    ALLOWED_EXTENSIONS,
     BROKER_STATUSES,
     DETENTION_LOCATIONS,
     DETENTION_STATUSES,
@@ -24,6 +25,7 @@ from dispatch.models import (
     EXCEPTION_TYPES,
     IFTA_JURISDICTIONS,
     LOAD_SOURCES,
+    MAX_FILE_SIZE,
     SEVERITY_LEVELS,
     ACTIVITY_TYPES,
     EXPENSE_CATEGORIES,
@@ -295,6 +297,32 @@ def list_evidence(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/evidence", methods=["POST"])
 def attach_evidence(load_id):
+    uploaded_file = request.files.get("file")
+    if uploaded_file and uploaded_file.filename:
+        ev_type = request.form.get("evidence_type", "document")
+        if ev_type not in EVIDENCE_TYPES:
+            return jsonify({"error": f"Invalid evidence_type: {ev_type}"}), 400
+        filename = uploaded_file.filename
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ALLOWED_EXTENSIONS:
+            return jsonify({"error": f"File type not allowed: .{ext}"}), 400
+        file_data = uploaded_file.read()
+        if len(file_data) > MAX_FILE_SIZE:
+            return jsonify({"error": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"}), 400
+        try:
+            ev = services.attach_evidence(
+                load_id=load_id,
+                evidence_type=ev_type,
+                description=request.form.get("description", ""),
+                related_milestone_id=request.form.get("related_milestone_id") or None,
+                uploaded_by=request.form.get("uploaded_by", ""),
+                file_data=file_data,
+                original_filename=filename,
+            )
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
+        return jsonify({"status": "ok", "evidence": ev}), 201
+
     data = request.get_json(silent=True) or {}
     ev_type = data.get("evidence_type", "document")
     if ev_type not in EVIDENCE_TYPES:
@@ -311,6 +339,15 @@ def attach_evidence(load_id):
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
     return jsonify({"status": "ok", "evidence": ev}), 201
+
+
+@dispatch_bp.route("/evidence/<evidence_id>/download", methods=["GET"])
+def download_evidence(evidence_id):
+    result = services.get_evidence_file(evidence_id)
+    if not result:
+        return jsonify({"error": "File not found"}), 404
+    file_path, download_name = result
+    return send_file(file_path, download_name=download_name, as_attachment=True)
 
 
 @dispatch_bp.route("/evidence/<evidence_id>", methods=["PATCH"])

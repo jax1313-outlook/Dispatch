@@ -301,7 +301,7 @@
     </div>
 
     <div id="evidence-form" style="display:none;margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px;">
-        <form onsubmit="attachEvidence(event, '{{ load.load_id }}')">
+        <form id="evidence-upload-form" enctype="multipart/form-data" onsubmit="attachEvidence(event, '{{ load.load_id }}')">
             <div class="brief-fields" style="margin-bottom:8px;">
                 <div><label><strong>Type</strong><br>
                     <select name="evidence_type" style="width:100%;padding:4px;">
@@ -309,8 +309,9 @@
                     </select></label></div>
                 <div><label><strong>Description</strong><br>
                     <input type="text" name="description" style="width:100%;padding:4px 8px;"></label></div>
-                <div class="full-width"><label><strong>File Path</strong><br>
-                    <input type="text" name="file_path" placeholder="Optional file reference" style="width:100%;padding:4px 8px;"></label></div>
+                <div class="full-width"><label><strong>File</strong><br>
+                    <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.tif,.tiff,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.zip,.bmp,.webp" style="width:100%;padding:4px 0;">
+                    <span style="font-size:0.8em;color:#999;">Max 25 MB. PDF, images, Office docs, CSV, TXT, ZIP.</span></label></div>
             </div>
             <button type="submit" class="btn btn-sm btn-success">Attach</button>
             <button type="button" class="btn btn-sm" onclick="toggleEl('evidence-form')">Cancel</button>
@@ -319,16 +320,18 @@
 
     {% if evidence %}
     <table class="event-table">
-        <thead><tr><th>ID</th><th>Type</th><th>Description</th><th>Captured</th><th>Uploaded By</th><th>Actions</th></tr></thead>
+        <thead><tr><th>ID</th><th>Type</th><th>File</th><th>Description</th><th>Captured</th><th>Uploaded By</th><th>Actions</th></tr></thead>
         <tbody>
         {% for ev in evidence %}
         <tr>
             <td style="font-size:11px;">{{ ev.evidence_id[:12] }}...</td>
             <td><span class="status-tag">{{ ev.evidence_type }}</span></td>
+            <td>{% if ev.original_filename %}<a href="{{ url_for('dispatch_api.download_evidence', evidence_id=ev.evidence_id) }}" title="Download {{ ev.original_filename }}">{{ ev.original_filename }}</a> <span style="font-size:0.8em;color:#999;">{% if ev.file_size %}({{ "%.1f"|format(ev.file_size / 1024) }} KB){% endif %}</span>{% else %}—{% endif %}</td>
             <td>{{ ev.description or '—' }}</td>
             <td>{{ ev.capture_time[:16] if ev.capture_time else '—' }}</td>
             <td>{{ ev.uploaded_by or '—' }}</td>
             <td>
+                {% if ev.original_filename %}<a href="{{ url_for('dispatch_api.download_evidence', evidence_id=ev.evidence_id) }}" class="btn btn-xs">Download</a>{% endif %}
                 <button class="btn btn-xs" onclick="editEvidence('{{ ev.evidence_id }}', '{{ ev.description|e }}')">Edit</button>
                 <button class="btn btn-xs btn-danger" onclick="removeEvidence('{{ ev.evidence_id }}')">Remove</button>
             </td>
@@ -832,12 +835,25 @@ function saveVisibilityNotes(loadId) {
 
 function attachEvidence(e, loadId) {
     e.preventDefault();
-    var data = {};
-    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
-    apiPost('/api/dispatch/loads/' + loadId + '/evidence', data).then(function(r) {
-        if (r.error) { alert(r.error); return; }
-        location.reload();
-    });
+    var form = e.target;
+    var fileInput = form.querySelector('input[type="file"]');
+    if (fileInput && fileInput.files.length > 0) {
+        var fd = new FormData(form);
+        fetch('/api/dispatch/loads/' + loadId + '/evidence', {
+            method: 'POST',
+            body: fd
+        }).then(function(r) { return r.json(); }).then(function(r) {
+            if (r.error) { alert(r.error); return; }
+            location.reload();
+        });
+    } else {
+        var data = {};
+        new FormData(form).forEach(function(v, k) { if (v && k !== 'file') data[k] = v; });
+        apiPost('/api/dispatch/loads/' + loadId + '/evidence', data).then(function(r) {
+            if (r.error) { alert(r.error); return; }
+            location.reload();
+        });
+    }
 }
 
 function openException(e, loadId) {

@@ -300,10 +300,12 @@ def create_evidence(ev: EvidenceItem) -> dict:
         conn.execute(
             """INSERT INTO evidence
                (evidence_id, load_id, related_milestone_id, evidence_type,
-                file_path, capture_time, description, uploaded_by, checksum)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+                file_path, original_filename, file_size, mime_type,
+                capture_time, description, uploaded_by, checksum)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (ev.evidence_id, ev.load_id, ev.related_milestone_id,
-             ev.evidence_type, ev.file_path, ev.capture_time,
+             ev.evidence_type, ev.file_path, ev.original_filename,
+             ev.file_size, ev.mime_type, ev.capture_time,
              ev.description, ev.uploaded_by, ev.checksum),
         )
     return ev.to_dict()
@@ -330,7 +332,10 @@ def update_evidence(evidence_id: str, **fields) -> dict | None:
     existing = get_evidence(evidence_id)
     if not existing:
         return None
-    allowed = {"evidence_type", "description", "uploaded_by"}
+    allowed = {
+        "evidence_type", "description", "uploaded_by",
+        "file_path", "original_filename", "file_size", "mime_type", "checksum",
+    }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return existing

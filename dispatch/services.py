@@ -6,6 +6,8 @@ Business logic for the full load lifecycle: create -> dispatch -> pickup
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from dispatch.models import (
     BROKER_STATUSES,
     EXCEPTION_STATUSES,
@@ -359,6 +361,33 @@ def update_visibility_notes(
     return store.update_visibility_notes(load_id, **fields)
 
 
+def _get_upload_dir() -> Path:
+    import os
+    portal_data = os.environ.get("PORTAL_DATA_DIR")
+    upload_dir = os.environ.get("PORTAL_UPLOAD_DIR")
+    if upload_dir:
+        p = Path(upload_dir)
+    elif portal_data:
+        p = Path(portal_data) / "uploads"
+    else:
+        p = Path(__file__).resolve().parent.parent / "portal" / "data" / "uploads"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _save_upload(evidence_id: str, filename: str, data: bytes) -> Path:
+    from dispatch.models import ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+    if len(data) > MAX_FILE_SIZE:
+        raise ValueError(f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit")
+    ext = Path(filename).suffix.lstrip(".").lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"File type not allowed: .{ext}")
+    safe_name = f"{evidence_id}.{ext}"
+    dest = _get_upload_dir() / safe_name
+    dest.write_bytes(data)
+    return dest
+
+
 def attach_evidence(
     load_id: str,
     evidence_type: str = "document",
@@ -367,6 +396,7 @@ def attach_evidence(
     related_milestone_id: str | None = None,
     uploaded_by: str = "",
     file_data: bytes | None = None,
+    original_filename: str = "",
 ) -> dict:
     load = store.get_load(load_id)
     if not load:
@@ -379,10 +409,26 @@ def attach_evidence(
         file_path=file_path,
         related_milestone_id=related_milestone_id,
         uploaded_by=uploaded_by,
+        original_filename=original_filename,
     )
     if file_data:
         ev.compute_checksum(file_data)
+        ev.file_size = len(file_data)
+        import mimetypes
+        ev.mime_type = mimetypes.guess_type(original_filename or "file.pdf")[0] or "application/octet-stream"
+        saved = _save_upload(ev.evidence_id, original_filename or "file.pdf", file_data)
+        ev.file_path = str(saved)
     return store.create_evidence(ev)
+
+
+def get_evidence_file(evidence_id: str) -> tuple[Path, str] | None:
+    ev = store.get_evidence(evidence_id)
+    if not ev or not ev.get("file_path"):
+        return None
+    p = Path(ev["file_path"])
+    if not p.is_file():
+        return None
+    return p, ev.get("original_filename") or p.name
 
 
 def list_evidence(load_id: str) -> list[dict]:
@@ -394,6 +440,11 @@ def update_evidence(evidence_id: str, **fields) -> dict | None:
 
 
 def delete_evidence(evidence_id: str) -> bool:
+    ev = store.get_evidence(evidence_id)
+    if ev and ev.get("file_path"):
+        p = Path(ev["file_path"])
+        if p.is_file():
+            p.unlink()
     return store.delete_evidence(evidence_id)
 
 
