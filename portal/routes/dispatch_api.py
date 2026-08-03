@@ -1560,9 +1560,6 @@ def load_profitability():
     return jsonify(result)
 
 
-# ── Email Template Preview ───────────────────────────────────────────
-
-
 # ── Driver Pay ───────────────────────────────────────────────────────
 
 
@@ -1667,6 +1664,110 @@ def mark_driver_pay_paid():
         pay_ids, paid_date=data.get("paid_date", "")
     )
     return jsonify({"paid": count})
+
+
+# ── Maintenance Schedules ────────────────────────────────────────────
+
+
+@dispatch_bp.route("/maintenance", methods=["GET"])
+def list_maintenance():
+    from dispatch import services as svc
+    entries = svc.list_maintenance_schedules(
+        equipment_id=request.args.get("equipment_id") or None,
+        status=request.args.get("status") or None,
+    )
+    return jsonify(entries)
+
+
+@dispatch_bp.route("/maintenance", methods=["POST"])
+def create_maintenance():
+    from dispatch import services as svc
+    data = request.get_json(force=True)
+    equipment_id = data.get("equipment_id", "")
+    if not equipment_id:
+        return jsonify({"error": "equipment_id is required"}), 400
+    try:
+        result = svc.add_maintenance_schedule(
+            equipment_id=equipment_id,
+            service_type=data.get("service_type", "other"),
+            description=data.get("description", ""),
+            interval_miles=float(data.get("interval_miles", 0)),
+            interval_days=int(data.get("interval_days", 0)),
+            next_due_date=data.get("next_due_date", ""),
+            next_due_miles=float(data.get("next_due_miles", 0)),
+            cost_estimate=float(data.get("cost_estimate", 0)),
+            vendor=data.get("vendor", ""),
+            notes=data.get("notes", ""),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result), 201
+
+
+@dispatch_bp.route("/maintenance/<schedule_id>", methods=["GET"])
+def get_maintenance(schedule_id):
+    from dispatch import services as svc
+    entry = svc.get_maintenance_schedule(schedule_id)
+    if not entry:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(entry)
+
+
+@dispatch_bp.route("/maintenance/<schedule_id>", methods=["PATCH"])
+def update_maintenance(schedule_id):
+    from dispatch import services as svc
+    data = request.get_json(force=True)
+    try:
+        result = svc.update_maintenance_schedule(schedule_id, **data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not result:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(result)
+
+
+@dispatch_bp.route("/maintenance/<schedule_id>", methods=["DELETE"])
+def delete_maintenance(schedule_id):
+    from dispatch import services as svc
+    if svc.delete_maintenance_schedule(schedule_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found"}), 404
+
+
+@dispatch_bp.route("/maintenance/<schedule_id>/complete", methods=["POST"])
+def complete_maintenance(schedule_id):
+    from dispatch import services as svc
+    data = request.get_json(force=True) if request.is_json else {}
+    result = svc.complete_maintenance(
+        schedule_id,
+        service_date=data.get("service_date", ""),
+        service_miles=float(data.get("service_miles", 0)),
+    )
+    if not result:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(result)
+
+
+@dispatch_bp.route("/maintenance/upcoming", methods=["GET"])
+def upcoming_maintenance():
+    from dispatch import services as svc
+    days = int(request.args.get("days", 7))
+    entries = svc.get_upcoming_maintenance(days_ahead=days)
+    return jsonify(entries)
+
+
+@dispatch_bp.route("/maintenance/overdue", methods=["GET"])
+def overdue_maintenance():
+    from dispatch import services as svc
+    entries = svc.get_overdue_maintenance()
+    return jsonify(entries)
+
+
+@dispatch_bp.route("/maintenance/check-alerts", methods=["POST"])
+def check_maintenance_alerts():
+    from dispatch import services as svc
+    result = svc.check_maintenance_alerts()
+    return jsonify(result)
 
 
 # ── Email Template Preview ───────────────────────────────────────────

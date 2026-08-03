@@ -1687,3 +1687,121 @@ def get_driver_pay_summary(
     d["paid_amount"] = round(d["paid_amount"], 2)
     d["pending_amount"] = round(d["pending_amount"], 2)
     return d
+
+
+# ── Maintenance Schedules ───────────────────────────────────────────
+
+
+def create_maintenance_schedule(sched) -> dict:
+    d = sched.to_dict()
+    cols = [
+        "schedule_id", "equipment_id", "service_type", "description",
+        "interval_miles", "interval_days", "last_service_date",
+        "last_service_miles", "next_due_date", "next_due_miles",
+        "status", "cost_estimate", "vendor", "notes",
+        "created_at", "updated_at",
+    ]
+    placeholders = ", ".join("?" for _ in cols)
+    col_str = ", ".join(cols)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO maintenance_schedules ({col_str}) VALUES ({placeholders})",
+            [d[c] for c in cols],
+        )
+    return d
+
+
+def get_maintenance_schedule(schedule_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM maintenance_schedules WHERE schedule_id = ?",
+            (schedule_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_maintenance_schedules(
+    equipment_id: str | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    sql = "SELECT * FROM maintenance_schedules WHERE 1=1"
+    params: list = []
+    if equipment_id:
+        sql += " AND equipment_id = ?"
+        params.append(equipment_id)
+    if status:
+        sql += " AND status = ?"
+        params.append(status)
+    sql += " ORDER BY next_due_date ASC, created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_maintenance_schedule(schedule_id: str, **fields) -> dict | None:
+    existing = get_maintenance_schedule(schedule_id)
+    if not existing:
+        return None
+    allowed = {
+        "service_type", "description", "interval_miles", "interval_days",
+        "last_service_date", "last_service_miles", "next_due_date",
+        "next_due_miles", "status", "cost_estimate", "vendor", "notes",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    from dispatch.models import _utc_now
+    updates["updated_at"] = _utc_now()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [schedule_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE maintenance_schedules SET {set_clause} WHERE schedule_id = ?",
+            vals,
+        )
+    return get_maintenance_schedule(schedule_id)
+
+
+def delete_maintenance_schedule(schedule_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM maintenance_schedules WHERE schedule_id = ?",
+            (schedule_id,),
+        )
+    return cur.rowcount > 0
+
+
+def get_upcoming_maintenance(days_ahead: int = 7) -> list[dict]:
+    from dispatch.models import _utc_now
+    today = _utc_now()[:10]
+    from datetime import datetime, timedelta
+    cutoff = (datetime.fromisoformat(today) + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+    sql = """\
+    SELECT ms.*, e.unit_number, e.equipment_type, e.make, e.model
+    FROM maintenance_schedules ms
+    JOIN equipment e ON e.equipment_id = ms.equipment_id
+    WHERE ms.status IN ('scheduled', 'due', 'overdue')
+      AND ms.next_due_date != ''
+      AND ms.next_due_date <= ?
+    ORDER BY ms.next_due_date ASC
+    """
+    with get_connection() as conn:
+        rows = conn.execute(sql, (cutoff,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_overdue_maintenance() -> list[dict]:
+    from dispatch.models import _utc_now
+    today = _utc_now()[:10]
+    sql = """\
+    SELECT ms.*, e.unit_number, e.equipment_type, e.make, e.model
+    FROM maintenance_schedules ms
+    JOIN equipment e ON e.equipment_id = ms.equipment_id
+    WHERE ms.status IN ('scheduled', 'due')
+      AND ms.next_due_date != ''
+      AND ms.next_due_date < ?
+    ORDER BY ms.next_due_date ASC
+    """
+    with get_connection() as conn:
+        rows = conn.execute(sql, (today,)).fetchall()
+    return [dict(r) for r in rows]
