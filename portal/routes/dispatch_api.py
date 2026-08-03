@@ -1547,6 +1547,59 @@ def ifta_quarterly_report():
     return jsonify(report)
 
 
+@dispatch_bp.route("/ifta/monthly-report", methods=["GET"])
+def ifta_monthly_report():
+    try:
+        year = int(request.args.get("year", 0))
+        month = int(request.args.get("month", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "year and month must be integers"}), 400
+    if not year or not month:
+        return jsonify({"error": "year and month are required"}), 400
+    vehicle_id = request.args.get("vehicle_id", "")
+    try:
+        report = services.get_ifta_monthly_report(year, month, vehicle_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(report)
+
+
+@dispatch_bp.route("/ifta/export-csv", methods=["GET"])
+def ifta_export_csv():
+    from flask import Response
+
+    try:
+        year = int(request.args.get("year", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "year must be an integer"}), 400
+
+    vehicle_id = request.args.get("vehicle_id", "")
+    period_type = request.args.get("type", "quarter")
+
+    try:
+        if period_type == "month":
+            month = int(request.args.get("month", 0))
+            if not year or not month:
+                return jsonify({"error": "year and month are required"}), 400
+            report = services.get_ifta_monthly_report(year, month, vehicle_id)
+            filename = f"ifta_{year}_{month:02d}.csv"
+        else:
+            quarter = int(request.args.get("quarter", 0))
+            if not year or not quarter:
+                return jsonify({"error": "year and quarter are required"}), 400
+            report = services.get_ifta_quarterly_report(year, quarter, vehicle_id)
+            filename = f"ifta_{year}_Q{quarter}.csv"
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    csv_data = services.export_ifta_csv(report)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 # ── Broker Contact Directory ─────────────────────────────────────────
 
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}IFTA — L2-COS Portal{% endblock %}
-{% block page_title %}IFTA Mileage & Fuel Report — {{ report.quarter_label }}{% endblock %}
+{% block page_title %}IFTA Mileage & Fuel Report — {{ report.quarter_label or report.month_label }}{% endblock %}
 {% block page_actions %}
 <button class="btn btn-sm btn-success" onclick="toggleForm('add-trip-form')">+ Trip Leg</button>
 <button class="btn btn-sm btn-success" onclick="toggleForm('add-fuel-form')">+ Fuel Purchase</button>
@@ -12,9 +12,9 @@
 .ifta-filters label { font-size:12px; font-weight:600; color:#555; display:block; margin-bottom:2px; }
 .ifta-filters select, .ifta-filters input { padding:4px 8px; border:1px solid #ccc; border-radius:3px; font-size:13px; }
 .ifta-summary { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
-.ifta-summary .summary-card { flex:1; min-width:140px; }
+.ifta-summary .summary-card { flex:1; min-width:120px; }
 .ifta-report-table { width:100%; border-collapse:collapse; font-size:13px; }
-.ifta-report-table th { background:#34495e; color:#fff; padding:8px 10px; text-align:left; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; }
+.ifta-report-table th { background:#34495e; color:#fff; padding:8px 10px; text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
 .ifta-report-table td { padding:6px 10px; border-bottom:1px solid #eee; }
 .ifta-report-table tr:hover { background:#f5f8ff; }
 .ifta-report-table .num { text-align:right; font-variant-numeric:tabular-nums; }
@@ -36,19 +36,43 @@
 .form-row input, .form-row select { width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:3px; font-size:13px; box-sizing:border-box; }
 .print-section { margin-top:24px; padding:16px; background:#fff; border:1px solid #ddd; border-radius:4px; }
 .print-section h3 { margin-bottom:12px; }
+.view-toggle { display:flex; gap:0; margin-bottom:4px; }
+.view-toggle button { padding:4px 14px; font-size:12px; font-weight:600; border:1px solid #ccc; background:#f5f5f5; cursor:pointer; }
+.view-toggle button:first-child { border-radius:3px 0 0 3px; }
+.view-toggle button:last-child { border-radius:0 3px 3px 0; border-left:none; }
+.view-toggle button.active { background:#2c3e50; color:#fff; border-color:#2c3e50; }
+.tax-totals { margin-top:12px; padding:10px 14px; background:#fef9e7; border:1px solid #f0e0a0; border-radius:4px; display:flex; gap:24px; flex-wrap:wrap; font-size:14px; }
+.tax-totals strong { color:#2c3e50; }
 @media print {
   .no-print { display:none !important; }
-  .ifta-report-table { font-size:11px; }
+  .ifta-report-table { font-size:10px; }
   .ifta-report-table th { background:#333 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 }
 </style>
 
-{# ── Quarter/Vehicle Filter ──────────────────────────────────────── #}
+{# ── Period Filter ─────────────────────────────────────────────────── #}
 <form class="ifta-filters no-print" method="get">
+  <div>
+    <label>View</label>
+    <div class="view-toggle">
+      <button type="submit" name="view" value="quarter" class="{% if view_mode != 'month' %}active{% endif %}">Quarterly</button>
+      <button type="submit" name="view" value="month" class="{% if view_mode == 'month' %}active{% endif %}">Monthly</button>
+    </div>
+  </div>
   <div>
     <label>Year</label>
     <input type="number" name="year" value="{{ sel_year }}" min="2020" max="2099" style="width:80px;">
   </div>
+  {% if view_mode == 'month' %}
+  <div>
+    <label>Month</label>
+    <select name="month">
+      {% for m in range(1, 13) %}
+      <option value="{{ m }}" {% if sel_month == m %}selected{% endif %}>{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1] }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% else %}
   <div>
     <label>Quarter</label>
     <select name="quarter">
@@ -57,6 +81,7 @@
       {% endfor %}
     </select>
   </div>
+  {% endif %}
   <div>
     <label>Vehicle</label>
     <select name="vehicle_id">
@@ -66,7 +91,7 @@
       {% endfor %}
     </select>
   </div>
-  <button type="submit" class="btn btn-sm btn-primary">View Report</button>
+  <button type="submit" class="btn btn-sm btn-primary" name="view" value="{{ view_mode }}">View Report</button>
 </form>
 
 {# ── Summary Cards ───────────────────────────────────────────────── #}
@@ -87,13 +112,13 @@
     <span class="summary-number">{{ report.jurisdictions|length }}</span>
     <span class="summary-label">Jurisdictions</span>
   </div>
+  <div class="summary-card" style="border-left:4px solid #e67e22;">
+    <span class="summary-number">${{ "%.2f"|format(report.total_due) }}</span>
+    <span class="summary-label">Total Due</span>
+  </div>
   <div class="summary-card">
     <span class="summary-number">{{ report.trip_leg_count }}</span>
     <span class="summary-label">Trip Legs</span>
-  </div>
-  <div class="summary-card">
-    <span class="summary-number">{{ report.fuel_purchase_count }}</span>
-    <span class="summary-label">Fuel Purchases</span>
   </div>
 </div>
 
@@ -191,12 +216,12 @@
   <button class="btn btn-sm" onclick="toggleForm('add-fuel-form')">Cancel</button>
 </div>
 
-{# ── Quarterly Report Table (Publisher-ready) ────────────────────── #}
+{# ── Report Table ──────────────────────────────────────────────── #}
 <div class="print-section">
-  <h3>IFTA Quarterly Report — {{ report.quarter_label }}
+  <h3>IFTA {{ 'Monthly' if view_mode == 'month' else 'Quarterly' }} Report — {{ report.month_label or report.quarter_label }}
     {% if report.vehicle_id %} ({{ report.vehicle_id }}){% endif %}
     <button class="btn btn-sm no-print" onclick="window.print()" style="margin-left:12px;">Print / PDF</button>
-    <button class="btn btn-sm no-print" onclick="exportCSV()" style="margin-left:4px;">Export CSV</button>
+    <a class="btn btn-sm no-print" href="{{ url_for('dispatch_api.ifta_export_csv', year=sel_year, type=view_mode, quarter=sel_quarter if view_mode != 'month' else '', month=sel_month if view_mode == 'month' else '', vehicle_id=sel_vehicle) }}" style="margin-left:4px;">Export CSV</a>
   </h3>
   <p style="font-size:12px;color:#777;margin-bottom:12px;">
     Period: {{ report.date_from }} to {{ report.date_to }} &nbsp;|&nbsp;
@@ -210,10 +235,14 @@
       <tr>
         <th>Jurisdiction</th>
         <th class="num">Miles</th>
-        <th class="num">Taxable Gallons</th>
-        <th class="num">Fuel Purchased (gal)</th>
+        <th class="num">Taxable Gal</th>
+        <th class="num">Fuel Purch (gal)</th>
         <th class="num">Fuel Cost ($)</th>
-        <th class="num">Net Taxable Gallons</th>
+        <th class="num">Net Taxable Gal</th>
+        <th class="num">Tax Rate</th>
+        <th class="num">Tax Owed</th>
+        <th class="num">Surcharge</th>
+        <th class="num">Total Due</th>
       </tr>
     </thead>
     <tbody>
@@ -227,6 +256,10 @@
         <td class="num {% if j.net_taxable_gallons > 0 %}ifta-net-negative{% elif j.net_taxable_gallons < 0 %}ifta-net-positive{% endif %}">
           {{ "%.4f"|format(j.net_taxable_gallons) }}
         </td>
+        <td class="num">${{ "%.3f"|format(j.tax_rate) }}</td>
+        <td class="num {% if j.tax_owed > 0 %}ifta-net-negative{% elif j.tax_owed < 0 %}ifta-net-positive{% endif %}">${{ "%.2f"|format(j.tax_owed) }}</td>
+        <td class="num">${{ "%.2f"|format(j.surcharge) }}</td>
+        <td class="num {% if j.total_due > 0 %}ifta-net-negative{% elif j.total_due < 0 %}ifta-net-positive{% endif %}"><strong>${{ "%.2f"|format(j.total_due) }}</strong></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -234,35 +267,45 @@
       <tr>
         <td>TOTAL</td>
         <td class="num">{{ "%.2f"|format(report.total_miles) }}</td>
-        <td class="num">{{ "%.4f"|format(report.total_gallons) }}</td>
+        <td class="num">&mdash;</td>
         <td class="num">{{ "%.4f"|format(report.total_gallons) }}</td>
         <td class="num">&mdash;</td>
         <td class="num">&mdash;</td>
+        <td class="num">&mdash;</td>
+        <td class="num">${{ "%.2f"|format(report.total_tax_owed) }}</td>
+        <td class="num">${{ "%.2f"|format(report.total_surcharge) }}</td>
+        <td class="num"><strong>${{ "%.2f"|format(report.total_due) }}</strong></td>
       </tr>
     </tfoot>
   </table>
   </div>
+
+  <div class="tax-totals">
+    <div><strong>Tax Owed:</strong> ${{ "%.2f"|format(report.total_tax_owed) }}</div>
+    <div><strong>Surcharges:</strong> ${{ "%.2f"|format(report.total_surcharge) }}</div>
+    <div><strong>Total Due:</strong> ${{ "%.2f"|format(report.total_due) }}</div>
+  </div>
   {% else %}
-  <p style="color:#999;font-style:italic;">No trip legs or fuel purchases recorded for this quarter. Add data using the buttons above.</p>
+  <p style="color:#999;font-style:italic;">No trip legs or fuel purchases recorded for this period. Add data using the buttons above.</p>
   {% endif %}
 </div>
 
 {# ── Recent Trip Legs ────────────────────────────────────────────── #}
 <div class="ifta-entries no-print" id="trip-legs-section">
-  <h3>Trip Legs ({{ report.quarter_label }})</h3>
+  <h3>Trip Legs ({{ report.month_label or report.quarter_label }})</h3>
   <div id="trip-legs-list">Loading...</div>
 </div>
 
 {# ── Recent Fuel Purchases ──────────────────────────────────────── #}
 <div class="ifta-entries no-print" id="fuel-purchases-section">
-  <h3>Fuel Purchases ({{ report.quarter_label }})</h3>
+  <h3>Fuel Purchases ({{ report.month_label or report.quarter_label }})</h3>
   <div id="fuel-purchases-list">Loading...</div>
 </div>
 
 <script>
 const API = '/api/dispatch/ifta';
-const QTR_FROM = '{{ report.date_from }}';
-const QTR_TO = '{{ report.date_to }}';
+const PERIOD_FROM = '{{ report.date_from }}';
+const PERIOD_TO = '{{ report.date_to }}';
 
 function toggleForm(id) {
   document.getElementById(id).classList.toggle('visible');
@@ -316,11 +359,11 @@ function deleteFuelPurchase(id) {
 }
 
 function loadTripLegs() {
-  fetch(API + '/trip-legs?date_from=' + QTR_FROM + '&date_to=' + QTR_TO)
+  fetch(API + '/trip-legs?date_from=' + PERIOD_FROM + '&date_to=' + PERIOD_TO)
     .then(r => r.json())
     .then(legs => {
       const el = document.getElementById('trip-legs-list');
-      if (!legs.length) { el.innerHTML = '<p style="color:#999;font-style:italic;">No trip legs this quarter.</p>'; return; }
+      if (!legs.length) { el.innerHTML = '<p style="color:#999;font-style:italic;">No trip legs this period.</p>'; return; }
       el.innerHTML = legs.map(l => `
         <div class="ifta-entry-card">
           <div class="ifta-entry-info">
@@ -339,11 +382,11 @@ function loadTripLegs() {
 }
 
 function loadFuelPurchases() {
-  fetch(API + '/fuel-purchases?date_from=' + QTR_FROM + '&date_to=' + QTR_TO)
+  fetch(API + '/fuel-purchases?date_from=' + PERIOD_FROM + '&date_to=' + PERIOD_TO)
     .then(r => r.json())
     .then(purchases => {
       const el = document.getElementById('fuel-purchases-list');
-      if (!purchases.length) { el.innerHTML = '<p style="color:#999;font-style:italic;">No fuel purchases this quarter.</p>'; return; }
+      if (!purchases.length) { el.innerHTML = '<p style="color:#999;font-style:italic;">No fuel purchases this period.</p>'; return; }
       el.innerHTML = purchases.map(p => `
         <div class="ifta-entry-card">
           <div class="ifta-entry-info">
@@ -359,24 +402,6 @@ function loadFuelPurchases() {
           </div>
         </div>`).join('');
     });
-}
-
-function exportCSV() {
-  const table = document.getElementById('ifta-table');
-  if (!table) { alert('No data to export'); return; }
-  let csv = [];
-  for (const row of table.rows) {
-    const cols = [];
-    for (const cell of row.cells) {
-      cols.push('"' + cell.textContent.trim().replace(/"/g, '""') + '"');
-    }
-    csv.push(cols.join(','));
-  }
-  const blob = new Blob([csv.join('\n')], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'IFTA_{{ report.quarter_label|replace(" ","_") }}.csv';
-  a.click();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
