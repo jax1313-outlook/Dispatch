@@ -47,8 +47,9 @@ Set at minimum:
 PORTAL_SECRET_KEY=<random-64-char-string>
 DISPATCH_EMAIL_SECRET=<random-64-char-string>
 PORTAL_HOST=0.0.0.0
-PORTAL_DATA_DIR=/opt/dispatch/data
-DISPATCH_ARCHIVE_PATH=/opt/dispatch/archive
+DISPATCH_OPERATIONS_ROOT=/opt/dispatch/operations
+DISPATCH_ARCHIVE_ROOT=/opt/dispatch/archive
+DISPATCH_MEMORY_ROOT=/opt/dispatch/memory
 DISPATCH_COMPANY_NAME=<your company>
 DISPATCH_MC_NUMBER=<your MC number>
 DISPATCH_DOT_NUMBER=<your DOT number>
@@ -62,8 +63,10 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 ## Step 4: Create Data Directories
 
+Directories are auto-created on startup when the root env vars are set. Or create manually:
+
 ```bash
-mkdir -p /opt/dispatch/data /opt/dispatch/archive
+mkdir -p /opt/dispatch/operations /opt/dispatch/archive /opt/dispatch/memory
 ```
 
 ## Step 5: Gunicorn Service
@@ -94,7 +97,7 @@ WantedBy=multi-user.target
 
 ```bash
 sudo useradd -r -s /bin/false dispatch
-sudo chown -R dispatch:dispatch /opt/dispatch/data /opt/dispatch/archive
+sudo chown -R dispatch:dispatch /opt/dispatch/operations /opt/dispatch/archive /opt/dispatch/memory
 sudo systemctl daemon-reload
 sudo systemctl enable --now dispatch
 sudo systemctl status dispatch
@@ -138,26 +141,43 @@ sudo certbot --nginx -d your-domain.com
 
 ```
 /opt/dispatch/
-├── data/                  # PORTAL_DATA_DIR
-│   ├── dispatch.db        # SQLite database
-│   ├── sandbox.json       # SAM opportunities
-│   ├── publisher_queue.json
+├── operations/                      # DISPATCH_OPERATIONS_ROOT
+│   ├── Code/
+│   ├── Config/
+│   ├── Logs/
+│   ├── Temp/
+│   └── Current Workspace/
+│       └── PortalData/
+│           ├── dispatch.db          # SQLite database
+│           ├── sandbox.json
+│           ├── publisher_queue.json
+│           └── conflicts.json
+├── archive/                         # DISPATCH_ARCHIVE_ROOT
+│   ├── CIN/
+│   │   ├── Raw/
+│   │   ├── Processed/
+│   │   ├── Intelligence/
+│   │   ├── Summaries/
+│   │   ├── Routing/
+│   │   ├── Pending/
+│   │   ├── Outbox/
+│   │   └── Proposals/
+│   ├── Loads/
+│   ├── POD/
+│   ├── Retention/
+│   ├── Reports/
+│   └── Historical Records/
+├── memory/                          # DISPATCH_MEMORY_ROOT
 │   ├── library.json
-│   ├── archive.json       # Portal archive records
 │   ├── intelligence.json
-│   ├── conflicts.json
-│   └── uploads/           # Evidence file uploads
-├── archive/               # DISPATCH_ARCHIVE_PATH
-│   ├── Raw/
-│   ├── Processed/
-│   ├── Intelligence/
-│   ├── Summaries/
-│   ├── Routing/
-│   ├── Pending/
-│   ├── Outbox/
-│   └── Proposals/
-├── .env                   # Environment config (not in git)
-└── ...                    # Application code
+│   ├── archive.json
+│   ├── Evidence/                    # Evidence uploads
+│   ├── Company Library/
+│   ├── Broker Library/
+│   ├── Compliance/
+│   └── ...
+├── .env                             # Environment config (not in git)
+└── ...                              # Application code
 ```
 
 ## Operations
@@ -179,9 +199,10 @@ sudo systemctl restart dispatch
 ### Database backup
 
 ```bash
-sqlite3 /opt/dispatch/data/dispatch.db ".backup /tmp/dispatch-backup.db"
-cp -r /opt/dispatch/data /backups/data-$(date +%Y%m%d)
+sqlite3 /opt/dispatch/operations/Current\ Workspace/PortalData/dispatch.db ".backup /tmp/dispatch-backup.db"
+cp -r /opt/dispatch/operations /backups/operations-$(date +%Y%m%d)
 cp -r /opt/dispatch/archive /backups/archive-$(date +%Y%m%d)
+cp -r /opt/dispatch/memory /backups/memory-$(date +%Y%m%d)
 ```
 
 ### Run the CIN-Lite pipeline

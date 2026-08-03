@@ -350,7 +350,11 @@ def _default_db_path() -> Path:
     if portal_data:
         base = Path(portal_data)
     else:
-        base = Path(__file__).resolve().parent.parent / "portal" / "data"
+        ops_root = os.environ.get("DISPATCH_OPERATIONS_ROOT")
+        if ops_root:
+            base = Path(ops_root) / "Current Workspace" / "PortalData"
+        else:
+            base = Path(__file__).resolve().parent.parent / "portal" / "data"
     base.mkdir(parents=True, exist_ok=True)
     return base / "dispatch.db"
 

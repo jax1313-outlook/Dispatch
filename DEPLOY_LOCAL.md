@@ -19,29 +19,44 @@ Open http://127.0.0.1:8080 in your browser.
 
 ## Storage Layout
 
-The system writes to three locations — all auto-created on first run:
+### D:\ Ownership Structure (Production)
 
-| Data              | Default Path         | Env Var                  | What's Stored                                  |
-|-------------------|----------------------|--------------------------|-------------------------------------------------|
-| Portal data       | `portal/data/`       | `PORTAL_DATA_DIR`        | 6 JSON files + SQLite DB + uploads              |
-| CIN-Lite archive  | `cin_lite/Archive/`  | `DISPATCH_ARCHIVE_PATH`  | Raw, Processed, Intelligence, Summaries, Routing, Pending, Outbox, Proposals |
-| Evidence uploads  | `portal/data/uploads/`| `PORTAL_UPLOAD_DIR`     | BOL photos, receipts, inspection docs           |
-
-### Using an External Drive
-
-To store all data on an external drive (e.g. `D:\`):
-
-1. Create the root folder on the drive (e.g. `D:\Archive`).
-2. Set the environment variables before starting:
+Set three root variables and the system auto-creates the full folder tree on startup:
 
 ```bat
-set DISPATCH_ARCHIVE_PATH=D:\Archive
-set PORTAL_DATA_DIR=D:\Archive\PortalData
+set DISPATCH_OPERATIONS_ROOT=D:\Dispatch Operations
+set DISPATCH_ARCHIVE_ROOT=D:\Archive
+set DISPATCH_MEMORY_ROOT=D:\Memory
 python portal/app.py
 ```
 
-This moves the CIN-Lite file archive, all portal JSON data, the SQLite
-database, and evidence uploads to the external drive.
+| Root | Env Var | Contains |
+|------|---------|----------|
+| `D:\Dispatch Operations` | `DISPATCH_OPERATIONS_ROOT` | Code, Config, Logs, Temp, Current Workspace (SQLite DB, operational JSON) |
+| `D:\Archive` | `DISPATCH_ARCHIVE_ROOT` | CIN archive (Raw/Processed/Intelligence), Loads, POD, Retention, Reports |
+| `D:\Memory` | `DISPATCH_MEMORY_ROOT` | Library, Intelligence, Evidence uploads, Forms, Templates, Compliance docs |
+
+### Development Mode (No D:\ Vars Set)
+
+When the root env vars are unset, all data stays under the project tree:
+
+| Data              | Default Path         | What's Stored                                  |
+|-------------------|----------------------|-------------------------------------------------|
+| Portal data       | `portal/data/`       | Sandbox, conflicts, publisher queue (JSON) + SQLite DB |
+| CIN-Lite archive  | `cin_lite/Archive/`  | Raw, Processed, Intelligence, Summaries, Routing, Pending, Outbox, Proposals |
+| Evidence uploads  | `portal/data/uploads/`| BOL photos, receipts, inspection docs           |
+| Library/Intel     | `portal/data/`       | Library and intelligence records (JSON)          |
+| Archive records   | `portal/data/`       | Completed archive history (JSON)                 |
+
+### Legacy Env Vars (Still Supported)
+
+These still work and take precedence when set:
+
+| Variable | Overrides | Maps To |
+|----------|-----------|---------|
+| `DISPATCH_ARCHIVE_PATH` | CIN archive path | `D:\Archive\CIN` |
+| `PORTAL_DATA_DIR` | Portal operational data | `D:\Dispatch Operations\Current Workspace\PortalData` |
+| `PORTAL_UPLOAD_DIR` | Evidence uploads | `D:\Memory\Evidence` |
 
 ## Environment Variables
 
@@ -109,13 +124,11 @@ production operations you should set:
 
 ## Data Backup
 
-Back up these paths to protect your data:
+**With D:\ structure set:** Back up the three root directories:
+- `D:\Dispatch Operations` — operational database and workspace
+- `D:\Archive` — all completed history and contract intelligence
+- `D:\Memory` — all business knowledge, evidence, and compliance docs
 
-- The `PORTAL_DATA_DIR` directory (default `portal/data/`) — contains the
-  SQLite database and all JSON operational data
-- The `DISPATCH_ARCHIVE_PATH` directory (default `cin_lite/Archive/`) — contains
-  all contract intelligence artifacts
-- The `PORTAL_UPLOAD_DIR` directory (default `portal/data/uploads/`) — contains
-  evidence file uploads
-
-If using an external drive, back up the entire drive root.
+**Without D:\ structure:** Back up:
+- `portal/data/` — SQLite DB, JSON operational data, uploads
+- `cin_lite/Archive/` — contract intelligence artifacts

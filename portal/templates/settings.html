@@ -4,14 +4,29 @@
 
 {% block body %}
 <section class="card-section">
-    <h2>Storage Locations</h2>
+    <h2>Storage Roots</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:8px;">D:\ ownership structure. Set all three for production; unset = development mode.</p>
+    <table class="data-table">
+        <thead><tr><th>Root</th><th>Value</th><th>Env Var</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Operations</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.ops_root or '(not set — using defaults)' }}</td><td>DISPATCH_OPERATIONS_ROOT</td></tr>
+            <tr><td><strong>Archive</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.archive_root or '(not set — using defaults)' }}</td><td>DISPATCH_ARCHIVE_ROOT</td></tr>
+            <tr><td><strong>Memory</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.memory_root or '(not set — using defaults)' }}</td><td>DISPATCH_MEMORY_ROOT</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
+    <h2>Resolved Storage Paths</h2>
     <p style="font-size:13px;color:#666;margin-bottom:8px;">Every persistent file on this machine. This is the complete map.</p>
     <table class="data-table">
         <thead><tr><th>What</th><th>Path on Disk</th><th>Contains</th></tr></thead>
         <tbody>
             <tr><td><strong>Database</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.database }}</td><td>All loads, drivers, equipment, settlements, IFTA, compliance (SQLite)</td></tr>
-            <tr><td><strong>Portal Data</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.portal_data }}</td><td>Sandbox, publisher queue, library, archive, intelligence, conflicts (JSON)</td></tr>
+            <tr><td><strong>Portal Data</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.portal_data }}</td><td>Sandbox, publisher queue, conflicts (JSON)</td></tr>
             <tr><td><strong>Evidence Uploads</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.uploads }}</td><td>BOL photos, receipts, inspection docs, signatures</td></tr>
+            <tr><td><strong>Library / Intel</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.library_intel }}</td><td>Library, intelligence records (JSON)</td></tr>
+            <tr><td><strong>Archive Records</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.archive_records }}</td><td>Completed archive history (JSON)</td></tr>
             <tr><td><strong>Contract Archive</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.archive }}</td><td>Raw, Processed, Intelligence, Summaries, Routing, Proposals</td></tr>
             <tr><td><strong>Email Outbox</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.outbox }}</td><td>Unsent .eml files (when SMTP not configured)</td></tr>
         </tbody>
