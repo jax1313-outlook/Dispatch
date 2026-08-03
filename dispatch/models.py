@@ -532,6 +532,86 @@ class MaintenanceSchedule:
         return d
 
 
+COMPLIANCE_DOC_TYPES = [
+    "insurance_liability",
+    "insurance_cargo",
+    "insurance_physical",
+    "ifta_license",
+    "irp_registration",
+    "usdot_biennial",
+    "ucr_registration",
+    "medical_card",
+    "cdl",
+    "drug_test",
+    "mvr",
+    "hazmat_endorsement",
+    "twic_card",
+    "bod_filing",
+    "operating_authority",
+    "other",
+]
+COMPLIANCE_DOC_STATUSES = ["active", "expiring_soon", "expired", "renewed"]
+COMPLIANCE_ENTITY_TYPES = ["company", "driver", "equipment"]
+
+
+@dataclass
+class ComplianceDocument:
+    doc_id: str = ""
+    entity_type: str = "company"
+    entity_id: str = ""
+    doc_type: str = "other"
+    title: str = ""
+    issuing_authority: str = ""
+    doc_number: str = ""
+    issue_date: str = ""
+    expiry_date: str = ""
+    alert_days: int = 30
+    status: str = "active"
+    notes: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.doc_id:
+            self.doc_id = _gen_id("COMP")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.updated_at:
+            self.updated_at = self.created_at
+        _validate_choice(self.doc_type, COMPLIANCE_DOC_TYPES, "doc_type")
+        _validate_choice(self.status, COMPLIANCE_DOC_STATUSES, "status")
+        _validate_choice(self.entity_type, COMPLIANCE_ENTITY_TYPES, "entity_type")
+
+    @property
+    def is_expired(self) -> bool:
+        if not self.expiry_date:
+            return False
+        return self.expiry_date < _utc_now()[:10]
+
+    @property
+    def days_until_expiry(self) -> int | None:
+        if not self.expiry_date:
+            return None
+        from datetime import datetime
+        today = datetime.fromisoformat(_utc_now()[:10])
+        expiry = datetime.fromisoformat(self.expiry_date)
+        return (expiry - today).days
+
+    @property
+    def needs_alert(self) -> bool:
+        d = self.days_until_expiry
+        if d is None:
+            return False
+        return d <= self.alert_days
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["is_expired"] = self.is_expired
+        d["days_until_expiry"] = self.days_until_expiry
+        d["needs_alert"] = self.needs_alert
+        return d
+
+
 @dataclass
 class LoadActivity:
     activity_id: str = ""

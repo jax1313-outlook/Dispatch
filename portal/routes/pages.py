@@ -349,6 +349,43 @@ def ifta():
     )
 
 
+@pages_bp.route("/compliance")
+def compliance():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import COMPLIANCE_DOC_TYPES, COMPLIANCE_DOC_STATUSES, COMPLIANCE_ENTITY_TYPES
+
+    entity_type = request.args.get("entity_type", "")
+    doc_type = request.args.get("doc_type", "")
+    status = request.args.get("status", "")
+
+    filters = {}
+    if entity_type:
+        filters["entity_type"] = entity_type
+    if doc_type:
+        filters["doc_type"] = doc_type
+    if status:
+        filters["status"] = status
+
+    docs = dispatch_svc.list_compliance_documents(**filters)
+    expiring = dispatch_svc.get_expiring_compliance_documents(days_ahead=30)
+    drivers = dispatch_svc.list_drivers()
+    equipment = dispatch_svc.list_equipment()
+
+    return render_template(
+        "compliance.html",
+        docs=docs,
+        expiring=expiring,
+        drivers=drivers,
+        equipment=equipment,
+        doc_types=COMPLIANCE_DOC_TYPES,
+        doc_statuses=COMPLIANCE_DOC_STATUSES,
+        entity_types=COMPLIANCE_ENTITY_TYPES,
+        sel_entity_type=entity_type,
+        sel_doc_type=doc_type,
+        sel_status=status,
+    )
+
+
 @pages_bp.route("/fuel-estimator")
 def fuel_estimator():
     from dispatch import services as dispatch_svc

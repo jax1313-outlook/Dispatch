@@ -2183,3 +2183,93 @@ def check_maintenance_alerts() -> dict:
         "due_soon": len([u for u in upcoming if u["schedule_id"] not in
                          {o["schedule_id"] for o in overdue}]),
     }
+
+
+# ── Compliance Document Tracker ─────────────────────────────────────
+
+
+def add_compliance_document(
+    doc_type: str,
+    title: str,
+    entity_type: str = "company",
+    entity_id: str = "",
+    issuing_authority: str = "",
+    doc_number: str = "",
+    issue_date: str = "",
+    expiry_date: str = "",
+    alert_days: int = 30,
+    notes: str = "",
+) -> dict:
+    from dispatch.models import ComplianceDocument
+
+    if not title.strip():
+        raise ValueError("Title is required")
+    if alert_days < 0:
+        raise ValueError("Alert days must be non-negative")
+    doc = ComplianceDocument(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        doc_type=doc_type,
+        title=title,
+        issuing_authority=issuing_authority,
+        doc_number=doc_number,
+        issue_date=issue_date,
+        expiry_date=expiry_date,
+        alert_days=alert_days,
+        notes=notes,
+    )
+    return store.create_compliance_document(doc)
+
+
+def update_compliance_document(doc_id: str, **fields) -> dict:
+    from dispatch.models import COMPLIANCE_DOC_TYPES, COMPLIANCE_DOC_STATUSES, COMPLIANCE_ENTITY_TYPES
+    if "doc_type" in fields:
+        from dispatch.models import _validate_choice
+        _validate_choice(fields["doc_type"], COMPLIANCE_DOC_TYPES, "doc_type")
+    if "status" in fields:
+        from dispatch.models import _validate_choice
+        _validate_choice(fields["status"], COMPLIANCE_DOC_STATUSES, "status")
+    if "entity_type" in fields:
+        from dispatch.models import _validate_choice
+        _validate_choice(fields["entity_type"], COMPLIANCE_ENTITY_TYPES, "entity_type")
+    if "alert_days" in fields and fields["alert_days"] < 0:
+        raise ValueError("Alert days must be non-negative")
+    result = store.update_compliance_document(doc_id, **fields)
+    if not result:
+        raise ValueError(f"Compliance document {doc_id} not found")
+    return result
+
+
+def delete_compliance_document(doc_id: str) -> bool:
+    return store.delete_compliance_document(doc_id)
+
+
+def get_compliance_document(doc_id: str) -> dict | None:
+    return store.get_compliance_document(doc_id)
+
+
+def list_compliance_documents(**filters) -> list[dict]:
+    return store.list_compliance_documents(**filters)
+
+
+def get_expiring_compliance_documents(days_ahead: int = 30) -> list[dict]:
+    return store.get_expiring_compliance_documents(days_ahead=days_ahead)
+
+
+def check_compliance_alerts() -> dict:
+    from dispatch.models import _utc_now
+    today = _utc_now()[:10]
+    all_docs = store.list_compliance_documents(status="active")
+    expired_count = 0
+    expiring_count = 0
+    for doc in all_docs:
+        if doc.get("is_expired"):
+            store.update_compliance_document(doc["doc_id"], status="expired")
+            expired_count += 1
+        elif doc.get("needs_alert"):
+            store.update_compliance_document(doc["doc_id"], status="expiring_soon")
+            expiring_count += 1
+    return {
+        "expired": expired_count,
+        "expiring_soon": expiring_count,
+    }
