@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Driver Pay — L2-COS Portal{% endblock %}
+{% block page_title %}Driver Pay{% endblock %}
+{% block page_actions %}
+<button onclick="document.getElementById('add-pay-form').style.display = document.getElementById('add-pay-form').style.display === 'none' ? 'block' : 'none'" class="btn">+ Add Pay Entry</button>
+{% endblock %}
+
+{% block body %}
+
+{% if summary %}
+<div class="summary-cards" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; margin-bottom:1.5rem;">
+    <div class="card-section" style="padding:1rem; text-align:center;">
+        <div style="font-size:0.8em; color:#7f8c8d; text-transform:uppercase;">Gross Pay</div>
+        <div style="font-size:1.6em; font-weight:700; color:#27ae60;">${{ "%.2f"|format(summary.gross_pay) }}</div>
+    </div>
+    <div class="card-section" style="padding:1rem; text-align:center;">
+        <div style="font-size:0.8em; color:#7f8c8d; text-transform:uppercase;">Deductions</div>
+        <div style="font-size:1.6em; font-weight:700; color:#e74c3c;">${{ "%.2f"|format(summary.deductions) }}</div>
+    </div>
+    <div class="card-section" style="padding:1rem; text-align:center;">
+        <div style="font-size:0.8em; color:#7f8c8d; text-transform:uppercase;">Net Pay</div>
+        <div style="font-size:1.6em; font-weight:700; color:#2c3e50;">${{ "%.2f"|format(summary.net_pay) }}</div>
+    </div>
+    <div class="card-section" style="padding:1rem; text-align:center;">
+        <div style="font-size:0.8em; color:#7f8c8d; text-transform:uppercase;">Pending</div>
+        <div style="font-size:1.6em; font-weight:700; color:#f39c12;">${{ "%.2f"|format(summary.pending_amount) }}</div>
+    </div>
+    <div class="card-section" style="padding:1rem; text-align:center;">
+        <div style="font-size:0.8em; color:#7f8c8d; text-transform:uppercase;">Paid</div>
+        <div style="font-size:1.6em; font-weight:700; color:#27ae60;">${{ "%.2f"|format(summary.paid_amount) }}</div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card-section" style="padding:1rem; margin-bottom:1.5rem;">
+    <form method="get" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:end;">
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Driver</label><br>
+            <select name="driver_id" style="padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+                <option value="">All Drivers</option>
+                {% for d in drivers %}
+                <option value="{{ d.driver_id }}" {% if d.driver_id == driver_id %}selected{% endif %}>{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Pay Period</label><br>
+            <input type="text" name="pay_period" value="{{ pay_period }}" placeholder="e.g. 2026-W31" style="padding:6px 10px; border:1px solid #dee2e6; border-radius:4px; width:120px;">
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Status</label><br>
+            <select name="status" style="padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+                <option value="">All</option>
+                {% for s in pay_statuses %}
+                <option value="{{ s }}" {% if s == status_filter %}selected{% endif %}>{{ s|title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn" style="padding:6px 14px;">Filter</button>
+    </form>
+</div>
+
+<div id="add-pay-form" class="card-section" style="display:none; padding:1rem; margin-bottom:1.5rem;">
+    <h3 style="margin-top:0;">Add Pay Entry</h3>
+    <form onsubmit="addPayEntry(event)" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem;">
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Driver *</label><br>
+            <select id="pay-driver" required style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+                <option value="">Select Driver</option>
+                {% for d in drivers %}
+                <option value="{{ d.driver_id }}">{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Pay Type *</label><br>
+            <select id="pay-type" required style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+                {% for t in pay_types %}
+                <option value="{{ t }}">{{ t|replace('_',' ')|title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Amount ($)</label><br>
+            <input type="number" id="pay-amount" step="0.01" value="0" style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Rate</label><br>
+            <input type="number" id="pay-rate" step="0.01" value="0" style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Miles</label><br>
+            <input type="number" id="pay-miles" step="0.1" value="0" style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Load ID</label><br>
+            <input type="text" id="pay-load" placeholder="Optional" style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Pay Period</label><br>
+            <input type="text" id="pay-period" placeholder="e.g. 2026-W31" style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Description</label><br>
+            <input type="text" id="pay-desc" style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+        </div>
+        <div>
+            <label style="font-size:0.8em; color:#7f8c8d;">Notes</label><br>
+            <input type="text" id="pay-notes" style="width:100%; padding:6px 10px; border:1px solid #dee2e6; border-radius:4px;">
+        </div>
+        <div style="display:flex; align-items:end;">
+            <button type="submit" class="btn" style="padding:8px 20px;">Add</button>
+        </div>
+    </form>
+</div>
+
+<div class="card-section" style="padding:0;">
+    <div style="overflow-x:auto;">
+    <table class="data-table" style="width:100%;">
+        <thead>
+            <tr>
+                <th><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
+                <th>Driver</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Load</th>
+                <th>Amount</th>
+                <th>Rate</th>
+                <th>Period</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entries %}
+            <tr>
+                <td><input type="checkbox" class="pay-check" value="{{ e.pay_id }}"></td>
+                <td>{{ e.driver_id[:12] }}</td>
+                <td>{{ e.pay_type|replace('_',' ')|title }}</td>
+                <td>{{ e.description }}</td>
+                <td>{% if e.load_id %}<a href="{{ url_for('pages.dispatch_detail', load_id=e.load_id) }}">{{ e.load_id[:16] }}</a>{% endif %}</td>
+                <td style="font-weight:600; {% if e.pay_type == 'deduction' %}color:#e74c3c{% else %}color:#27ae60{% endif %}">
+                    {% if e.pay_type == 'deduction' %}-{% endif %}${{ "%.2f"|format(e.amount) }}
+                </td>
+                <td>{% if e.rate %}${{ "%.2f"|format(e.rate) }}{% if e.pay_type == 'per_mile' %}/mi{% elif e.pay_type == 'hourly' %}/hr{% endif %}{% endif %}</td>
+                <td>{{ e.pay_period }}</td>
+                <td>
+                    <span style="padding:2px 8px; border-radius:10px; font-size:0.8em; font-weight:600;
+                        {% if e.status == 'paid' %}background:#d5f5e3; color:#27ae60;
+                        {% elif e.status == 'approved' %}background:#d6eaf8; color:#2980b9;
+                        {% else %}background:#fef9e7; color:#f39c12;{% endif %}">
+                        {{ e.status|title }}
+                    </span>
+                </td>
+                <td style="font-size:0.85em; color:#7f8c8d;">{{ e.created_at[:10] }}</td>
+                <td>
+                    <button onclick="deletePayEntry('{{ e.pay_id }}')" style="border:none; background:none; color:#e74c3c; cursor:pointer; font-size:0.85em;">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not entries %}
+            <tr><td colspan="11" style="text-align:center; padding:2rem; color:#7f8c8d;">No pay entries found.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% if entries %}
+<div style="margin-top:1rem; display:flex; gap:0.5rem;">
+    <button onclick="bulkAction('approve')" class="btn" style="padding:6px 14px;">Approve Selected</button>
+    <button onclick="bulkAction('mark-paid')" class="btn" style="padding:6px 14px;">Mark Paid</button>
+</div>
+{% endif %}
+
+<script>
+function toggleSelectAll(el) {
+    document.querySelectorAll('.pay-check').forEach(cb => cb.checked = el.checked);
+}
+
+function getSelected() {
+    return Array.from(document.querySelectorAll('.pay-check:checked')).map(cb => cb.value);
+}
+
+function addPayEntry(e) {
+    e.preventDefault();
+    apiPost('/api/dispatch/driver-pay', {
+        driver_id: document.getElementById('pay-driver').value,
+        pay_type: document.getElementById('pay-type').value,
+        amount: parseFloat(document.getElementById('pay-amount').value) || 0,
+        rate: parseFloat(document.getElementById('pay-rate').value) || 0,
+        miles: parseFloat(document.getElementById('pay-miles').value) || 0,
+        load_id: document.getElementById('pay-load').value,
+        pay_period: document.getElementById('pay-period').value,
+        description: document.getElementById('pay-desc').value,
+        notes: document.getElementById('pay-notes').value,
+    }).then(data => {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function deletePayEntry(payId) {
+    if (!confirm('Delete this pay entry?')) return;
+    fetch('/api/dispatch/driver-pay/' + payId, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function bulkAction(action) {
+    var ids = getSelected();
+    if (!ids.length) { alert('Select at least one entry.'); return; }
+    apiPost('/api/dispatch/driver-pay/' + action, {pay_ids: ids})
+    .then(data => {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+</script>
+
+{% endblock %}

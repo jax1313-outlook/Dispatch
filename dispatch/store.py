@@ -1579,3 +1579,111 @@ def get_load_profitability_data(
         d["total_expenses"] = round(expenses, 2)
         results.append(d)
     return results
+
+
+# ── Driver Pay ──────────────────────────────────────────────────────
+
+
+def create_driver_pay(pay) -> dict:
+    d = pay.to_dict()
+    cols = [
+        "pay_id", "driver_id", "load_id", "pay_type", "description",
+        "amount", "rate", "miles", "hours", "percentage",
+        "pay_period", "status", "paid_date", "notes", "created_at",
+    ]
+    placeholders = ", ".join("?" for _ in cols)
+    col_str = ", ".join(cols)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO driver_pay ({col_str}) VALUES ({placeholders})",
+            [d[c] for c in cols],
+        )
+    return d
+
+
+def get_driver_pay(pay_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM driver_pay WHERE pay_id = ?", (pay_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_driver_pay(
+    driver_id: str | None = None,
+    load_id: str | None = None,
+    status: str | None = None,
+    pay_period: str | None = None,
+) -> list[dict]:
+    sql = "SELECT * FROM driver_pay WHERE 1=1"
+    params: list = []
+    if driver_id:
+        sql += " AND driver_id = ?"
+        params.append(driver_id)
+    if load_id:
+        sql += " AND load_id = ?"
+        params.append(load_id)
+    if status:
+        sql += " AND status = ?"
+        params.append(status)
+    if pay_period:
+        sql += " AND pay_period = ?"
+        params.append(pay_period)
+    sql += " ORDER BY created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_driver_pay(pay_id: str, **fields) -> dict | None:
+    existing = get_driver_pay(pay_id)
+    if not existing:
+        return None
+    allowed = {
+        "pay_type", "description", "amount", "rate", "miles", "hours",
+        "percentage", "pay_period", "status", "paid_date", "notes",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [pay_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE driver_pay SET {set_clause} WHERE pay_id = ?", vals
+        )
+    return get_driver_pay(pay_id)
+
+
+def delete_driver_pay(pay_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute("DELETE FROM driver_pay WHERE pay_id = ?", (pay_id,))
+    return cur.rowcount > 0
+
+
+def get_driver_pay_summary(
+    driver_id: str,
+    pay_period: str | None = None,
+) -> dict:
+    sql = """\
+    SELECT
+        COUNT(*) AS entry_count,
+        COALESCE(SUM(CASE WHEN pay_type != 'deduction' THEN amount ELSE 0 END), 0) AS gross_pay,
+        COALESCE(SUM(CASE WHEN pay_type = 'deduction' THEN amount ELSE 0 END), 0) AS deductions,
+        COALESCE(SUM(CASE WHEN status = 'paid' AND pay_type != 'deduction' THEN amount ELSE 0 END), 0) AS paid_amount,
+        COALESCE(SUM(CASE WHEN status = 'pending' AND pay_type != 'deduction' THEN amount ELSE 0 END), 0) AS pending_amount
+    FROM driver_pay WHERE driver_id = ?
+    """
+    params: list = [driver_id]
+    if pay_period:
+        sql += " AND pay_period = ?"
+        params.append(pay_period)
+    with get_connection() as conn:
+        row = conn.execute(sql, params).fetchone()
+    d = dict(row)
+    d["net_pay"] = round(d["gross_pay"] - d["deductions"], 2)
+    d["gross_pay"] = round(d["gross_pay"], 2)
+    d["deductions"] = round(d["deductions"], 2)
+    d["paid_amount"] = round(d["paid_amount"], 2)
+    d["pending_amount"] = round(d["pending_amount"], 2)
+    return d

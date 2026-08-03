@@ -1759,3 +1759,117 @@ def get_load_profitability(
             "unprofitable_count": sum(1 for r in rows if r["profit"] < 0),
         },
     }
+
+
+# ── Driver Pay ──────────────────────────────────────────────────────
+
+
+def add_driver_pay(
+    driver_id: str,
+    pay_type: str,
+    amount: float = 0.0,
+    *,
+    load_id: str = "",
+    description: str = "",
+    rate: float = 0.0,
+    miles: float = 0.0,
+    hours: float = 0.0,
+    percentage: float = 0.0,
+    pay_period: str = "",
+    notes: str = "",
+) -> dict:
+    from dispatch.models import PAY_TYPES, DriverPay
+
+    driver = get_driver(driver_id)
+    if not driver:
+        raise ValueError("Driver not found")
+    if pay_type not in PAY_TYPES:
+        raise ValueError(f"Invalid pay type: {pay_type}")
+    if load_id:
+        load = get_load(load_id)
+        if not load:
+            raise ValueError("Load not found")
+        if pay_type == "percentage" and percentage > 0:
+            rc = store.get_rate_confirmation(load_id)
+            if rc:
+                rev = rc["rate_amount"]
+                if rc["rate_type"] == "per_mile":
+                    rev = rc["rate_amount"] * rc["distance_miles"]
+                amount = round(rev * percentage / 100, 2)
+    pay = DriverPay(
+        driver_id=driver_id,
+        load_id=load_id,
+        pay_type=pay_type,
+        description=description,
+        amount=amount,
+        rate=rate,
+        miles=miles,
+        hours=hours,
+        percentage=percentage,
+        pay_period=pay_period,
+        notes=notes,
+    )
+    return store.create_driver_pay(pay)
+
+
+def get_driver_pay_entry(pay_id: str) -> dict | None:
+    return store.get_driver_pay(pay_id)
+
+
+def list_driver_pay(
+    driver_id: str | None = None,
+    load_id: str | None = None,
+    status: str | None = None,
+    pay_period: str | None = None,
+) -> list[dict]:
+    return store.list_driver_pay(
+        driver_id=driver_id,
+        load_id=load_id,
+        status=status,
+        pay_period=pay_period,
+    )
+
+
+def update_driver_pay(pay_id: str, **fields) -> dict | None:
+    from dispatch.models import PAY_STATUSES, PAY_TYPES
+
+    if "pay_type" in fields and fields["pay_type"] not in PAY_TYPES:
+        raise ValueError(f"Invalid pay type: {fields['pay_type']}")
+    if "status" in fields and fields["status"] not in PAY_STATUSES:
+        raise ValueError(f"Invalid status: {fields['status']}")
+    return store.update_driver_pay(pay_id, **fields)
+
+
+def delete_driver_pay(pay_id: str) -> bool:
+    return store.delete_driver_pay(pay_id)
+
+
+def get_driver_pay_summary(
+    driver_id: str,
+    pay_period: str | None = None,
+) -> dict:
+    return store.get_driver_pay_summary(driver_id, pay_period=pay_period)
+
+
+def approve_driver_pay(pay_ids: list[str]) -> int:
+    count = 0
+    for pay_id in pay_ids:
+        result = store.update_driver_pay(pay_id, status="approved")
+        if result:
+            count += 1
+    return count
+
+
+def mark_driver_pay_paid(pay_ids: list[str], paid_date: str = "") -> int:
+    from dispatch.models import _utc_now
+
+    if not paid_date:
+        paid_date = _utc_now()[:10]
+    count = 0
+    for pay_id in pay_ids:
+        result = store.update_driver_pay(
+            pay_id, status="paid", paid_date=paid_date
+        )
+        if result:
+            count += 1
+    return count

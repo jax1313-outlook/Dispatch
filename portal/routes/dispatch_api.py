@@ -1563,6 +1563,115 @@ def load_profitability():
 # ── Email Template Preview ───────────────────────────────────────────
 
 
+# ── Driver Pay ───────────────────────────────────────────────────────
+
+
+@dispatch_bp.route("/driver-pay", methods=["GET"])
+def list_driver_pay():
+    from dispatch import services as svc
+    entries = svc.list_driver_pay(
+        driver_id=request.args.get("driver_id") or None,
+        load_id=request.args.get("load_id") or None,
+        status=request.args.get("status") or None,
+        pay_period=request.args.get("pay_period") or None,
+    )
+    return jsonify(entries)
+
+
+@dispatch_bp.route("/driver-pay", methods=["POST"])
+def create_driver_pay():
+    from dispatch import services as svc
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id", "")
+    pay_type = data.get("pay_type", "per_mile")
+    if not driver_id:
+        return jsonify({"error": "driver_id is required"}), 400
+    try:
+        result = svc.add_driver_pay(
+            driver_id=driver_id,
+            pay_type=pay_type,
+            amount=float(data.get("amount", 0)),
+            load_id=data.get("load_id", ""),
+            description=data.get("description", ""),
+            rate=float(data.get("rate", 0)),
+            miles=float(data.get("miles", 0)),
+            hours=float(data.get("hours", 0)),
+            percentage=float(data.get("percentage", 0)),
+            pay_period=data.get("pay_period", ""),
+            notes=data.get("notes", ""),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result), 201
+
+
+@dispatch_bp.route("/driver-pay/<pay_id>", methods=["GET"])
+def get_driver_pay(pay_id):
+    from dispatch import services as svc
+    entry = svc.get_driver_pay_entry(pay_id)
+    if not entry:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(entry)
+
+
+@dispatch_bp.route("/driver-pay/<pay_id>", methods=["PATCH"])
+def update_driver_pay(pay_id):
+    from dispatch import services as svc
+    data = request.get_json(force=True)
+    try:
+        result = svc.update_driver_pay(pay_id, **data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not result:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(result)
+
+
+@dispatch_bp.route("/driver-pay/<pay_id>", methods=["DELETE"])
+def delete_driver_pay(pay_id):
+    from dispatch import services as svc
+    if svc.delete_driver_pay(pay_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found"}), 404
+
+
+@dispatch_bp.route("/driver-pay/summary/<driver_id>", methods=["GET"])
+def driver_pay_summary(driver_id):
+    from dispatch import services as svc
+    summary = svc.get_driver_pay_summary(
+        driver_id,
+        pay_period=request.args.get("pay_period") or None,
+    )
+    return jsonify(summary)
+
+
+@dispatch_bp.route("/driver-pay/approve", methods=["POST"])
+def approve_driver_pay():
+    from dispatch import services as svc
+    data = request.get_json(force=True)
+    pay_ids = data.get("pay_ids", [])
+    if not pay_ids:
+        return jsonify({"error": "pay_ids required"}), 400
+    count = svc.approve_driver_pay(pay_ids)
+    return jsonify({"approved": count})
+
+
+@dispatch_bp.route("/driver-pay/mark-paid", methods=["POST"])
+def mark_driver_pay_paid():
+    from dispatch import services as svc
+    data = request.get_json(force=True)
+    pay_ids = data.get("pay_ids", [])
+    if not pay_ids:
+        return jsonify({"error": "pay_ids required"}), 400
+    count = svc.mark_driver_pay_paid(
+        pay_ids, paid_date=data.get("paid_date", "")
+    )
+    return jsonify({"paid": count})
+
+
+# ── Email Template Preview ───────────────────────────────────────────
+
+
 @dispatch_bp.route("/email-preview", methods=["GET"])
 def email_preview_list():
     from dispatch.notifications import EMAIL_TEMPLATES

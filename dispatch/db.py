@@ -275,6 +275,28 @@ CREATE TABLE IF NOT EXISTS broker_contacts (
 CREATE INDEX IF NOT EXISTS idx_broker_contacts_company ON broker_contacts(company_name);
 CREATE INDEX IF NOT EXISTS idx_broker_contacts_mc ON broker_contacts(mc_number);
 CREATE INDEX IF NOT EXISTS idx_broker_contacts_status ON broker_contacts(status);
+
+CREATE TABLE IF NOT EXISTS driver_pay (
+    pay_id      TEXT PRIMARY KEY,
+    driver_id   TEXT NOT NULL,
+    load_id     TEXT NOT NULL DEFAULT '',
+    pay_type    TEXT NOT NULL DEFAULT 'per_mile',
+    description TEXT NOT NULL DEFAULT '',
+    amount      REAL NOT NULL DEFAULT 0,
+    rate        REAL NOT NULL DEFAULT 0,
+    miles       REAL NOT NULL DEFAULT 0,
+    hours       REAL NOT NULL DEFAULT 0,
+    percentage  REAL NOT NULL DEFAULT 0,
+    pay_period  TEXT NOT NULL DEFAULT '',
+    status      TEXT NOT NULL DEFAULT 'pending',
+    paid_date   TEXT NOT NULL DEFAULT '',
+    notes       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_driver_pay_driver ON driver_pay(driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_pay_load ON driver_pay(load_id);
+CREATE INDEX IF NOT EXISTS idx_driver_pay_status ON driver_pay(status);
+CREATE INDEX IF NOT EXISTS idx_driver_pay_period ON driver_pay(pay_period);
 """
 
 

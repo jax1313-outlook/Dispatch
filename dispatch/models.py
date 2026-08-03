@@ -643,6 +643,47 @@ class LaneTemplate:
         return asdict(self)
 
 
+PAY_TYPES = ["per_mile", "per_load", "percentage", "hourly", "bonus", "deduction", "reimbursement"]
+PAY_STATUSES = ["pending", "approved", "paid"]
+
+
+@dataclass
+class DriverPay:
+    pay_id: str = ""
+    driver_id: str = ""
+    load_id: str = ""
+    pay_type: str = "per_mile"
+    description: str = ""
+    amount: float = 0.0
+    rate: float = 0.0
+    miles: float = 0.0
+    hours: float = 0.0
+    percentage: float = 0.0
+    pay_period: str = ""
+    status: str = "pending"
+    paid_date: str = ""
+    notes: str = ""
+    created_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.pay_id:
+            self.pay_id = _gen_id("PAY")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.driver_id:
+            raise ValueError("Driver ID is required")
+        _validate_choice(self.pay_type, PAY_TYPES, "pay_type")
+        _validate_choice(self.status, PAY_STATUSES, "status")
+        if not self.amount and self.rate:
+            if self.pay_type == "per_mile" and self.miles:
+                self.amount = round(self.rate * self.miles, 2)
+            elif self.pay_type == "hourly" and self.hours:
+                self.amount = round(self.rate * self.hours, 2)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
 BROKER_STATUSES = ["active", "inactive", "blacklisted"]
 
 
