@@ -297,6 +297,28 @@ CREATE INDEX IF NOT EXISTS idx_driver_pay_driver ON driver_pay(driver_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_load ON driver_pay(load_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_status ON driver_pay(status);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_period ON driver_pay(pay_period);
+
+CREATE TABLE IF NOT EXISTS maintenance_schedules (
+    schedule_id       TEXT PRIMARY KEY,
+    equipment_id      TEXT NOT NULL,
+    service_type      TEXT NOT NULL DEFAULT 'other',
+    description       TEXT NOT NULL DEFAULT '',
+    interval_miles    REAL NOT NULL DEFAULT 0,
+    interval_days     INTEGER NOT NULL DEFAULT 0,
+    last_service_date TEXT NOT NULL DEFAULT '',
+    last_service_miles REAL NOT NULL DEFAULT 0,
+    next_due_date     TEXT NOT NULL DEFAULT '',
+    next_due_miles    REAL NOT NULL DEFAULT 0,
+    status            TEXT NOT NULL DEFAULT 'scheduled',
+    cost_estimate     REAL NOT NULL DEFAULT 0,
+    vendor            TEXT NOT NULL DEFAULT '',
+    notes             TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_maint_equipment ON maintenance_schedules(equipment_id);
+CREATE INDEX IF NOT EXISTS idx_maint_status ON maintenance_schedules(status);
+CREATE INDEX IF NOT EXISTS idx_maint_due_date ON maintenance_schedules(next_due_date);
 """
 
 

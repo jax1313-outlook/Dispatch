@@ -1873,3 +1873,124 @@ def mark_driver_pay_paid(pay_ids: list[str], paid_date: str = "") -> int:
         if result:
             count += 1
     return count
+
+
+# ── Maintenance Schedules ───────────────────────────────────────────
+
+
+def add_maintenance_schedule(
+    equipment_id: str,
+    service_type: str,
+    *,
+    description: str = "",
+    interval_miles: float = 0.0,
+    interval_days: int = 0,
+    next_due_date: str = "",
+    next_due_miles: float = 0.0,
+    cost_estimate: float = 0.0,
+    vendor: str = "",
+    notes: str = "",
+) -> dict:
+    from dispatch.models import SERVICE_TYPES, MaintenanceSchedule
+
+    equip = get_equipment(equipment_id)
+    if not equip:
+        raise ValueError("Equipment not found")
+    if service_type not in SERVICE_TYPES:
+        raise ValueError(f"Invalid service type: {service_type}")
+    sched = MaintenanceSchedule(
+        equipment_id=equipment_id,
+        service_type=service_type,
+        description=description,
+        interval_miles=interval_miles,
+        interval_days=interval_days,
+        next_due_date=next_due_date,
+        next_due_miles=next_due_miles,
+        cost_estimate=cost_estimate,
+        vendor=vendor,
+        notes=notes,
+    )
+    return store.create_maintenance_schedule(sched)
+
+
+def get_maintenance_schedule(schedule_id: str) -> dict | None:
+    return store.get_maintenance_schedule(schedule_id)
+
+
+def list_maintenance_schedules(
+    equipment_id: str | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    return store.list_maintenance_schedules(
+        equipment_id=equipment_id, status=status,
+    )
+
+
+def update_maintenance_schedule(schedule_id: str, **fields) -> dict | None:
+    from dispatch.models import MAINTENANCE_STATUSES, SERVICE_TYPES
+
+    if "service_type" in fields and fields["service_type"] not in SERVICE_TYPES:
+        raise ValueError(f"Invalid service type: {fields['service_type']}")
+    if "status" in fields and fields["status"] not in MAINTENANCE_STATUSES:
+        raise ValueError(f"Invalid status: {fields['status']}")
+    return store.update_maintenance_schedule(schedule_id, **fields)
+
+
+def delete_maintenance_schedule(schedule_id: str) -> bool:
+    return store.delete_maintenance_schedule(schedule_id)
+
+
+def complete_maintenance(
+    schedule_id: str,
+    service_date: str = "",
+    service_miles: float = 0.0,
+) -> dict | None:
+    from datetime import datetime, timedelta
+    from dispatch.models import _utc_now
+
+    sched = store.get_maintenance_schedule(schedule_id)
+    if not sched:
+        return None
+    if not service_date:
+        service_date = _utc_now()[:10]
+    updates: dict = {
+        "status": "completed",
+        "last_service_date": service_date,
+    }
+    if service_miles:
+        updates["last_service_miles"] = service_miles
+    if sched["interval_days"] > 0:
+        next_date = (
+            datetime.fromisoformat(service_date)
+            + timedelta(days=sched["interval_days"])
+        ).strftime("%Y-%m-%d")
+        updates["next_due_date"] = next_date
+        updates["status"] = "scheduled"
+    if sched["interval_miles"] > 0 and service_miles:
+        updates["next_due_miles"] = service_miles + sched["interval_miles"]
+        updates["status"] = "scheduled"
+    return store.update_maintenance_schedule(schedule_id, **updates)
+
+
+def get_upcoming_maintenance(days_ahead: int = 7) -> list[dict]:
+    return store.get_upcoming_maintenance(days_ahead=days_ahead)
+
+
+def get_overdue_maintenance() -> list[dict]:
+    return store.get_overdue_maintenance()
+
+
+def check_maintenance_alerts() -> dict:
+    overdue = store.get_overdue_maintenance()
+    for item in overdue:
+        if item["status"] != "overdue":
+            store.update_maintenance_schedule(item["schedule_id"], status="overdue")
+    upcoming = store.get_upcoming_maintenance(days_ahead=7)
+    for item in upcoming:
+        if item["status"] == "scheduled":
+            store.update_maintenance_schedule(item["schedule_id"], status="due")
+    return {
+        "overdue": len(overdue),
+        "due_soon": len([u for u in upcoming if u["schedule_id"] not in
+                         {o["schedule_id"] for o in overdue}]),
+    }

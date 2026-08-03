@@ -469,6 +469,58 @@ class Equipment:
         return asdict(self)
 
 
+SERVICE_TYPES = [
+    "oil_change", "tire_rotation", "tire_replacement", "brake_inspection",
+    "brake_replacement", "engine_service", "transmission_service",
+    "dot_inspection", "general_inspection", "hvac_service", "electrical",
+    "suspension", "alignment", "other",
+]
+MAINTENANCE_STATUSES = ["scheduled", "due", "overdue", "completed", "skipped"]
+
+
+@dataclass
+class MaintenanceSchedule:
+    schedule_id: str = ""
+    equipment_id: str = ""
+    service_type: str = "other"
+    description: str = ""
+    interval_miles: float = 0.0
+    interval_days: int = 0
+    last_service_date: str = ""
+    last_service_miles: float = 0.0
+    next_due_date: str = ""
+    next_due_miles: float = 0.0
+    status: str = "scheduled"
+    cost_estimate: float = 0.0
+    vendor: str = ""
+    notes: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.schedule_id:
+            self.schedule_id = _gen_id("MNT")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.updated_at:
+            self.updated_at = self.created_at
+        if not self.equipment_id:
+            raise ValueError("Equipment ID is required")
+        _validate_choice(self.service_type, SERVICE_TYPES, "service_type")
+        _validate_choice(self.status, MAINTENANCE_STATUSES, "status")
+
+    @property
+    def is_overdue(self) -> bool:
+        if not self.next_due_date:
+            return False
+        return self.next_due_date < _utc_now()[:10]
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["is_overdue"] = self.is_overdue
+        return d
+
+
 @dataclass
 class LoadActivity:
     activity_id: str = ""

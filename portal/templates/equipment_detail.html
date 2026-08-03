@@ -126,6 +126,105 @@
     {% endif %}
 </div>
 
+{# ── Maintenance Schedule ────────────────────────────────────────── #}
+<div class="card-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h2 style="margin:0;">Maintenance Schedule ({{ maint_schedules|length }})</h2>
+        <button class="btn btn-sm" onclick="document.getElementById('add-maint-form').style.display = document.getElementById('add-maint-form').style.display === 'none' ? 'block' : 'none'">+ Add Service</button>
+    </div>
+
+    <div id="add-maint-form" style="display:none; margin-bottom:1rem; padding:1rem; background:#f8f9fa; border-radius:6px;">
+        <form onsubmit="addMaintenance(event)" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:0.75rem;">
+            <div>
+                <label style="font-size:0.8em; color:#7f8c8d;">Service Type</label><br>
+                <select id="maint-type" style="width:100%; padding:4px 8px;">
+                    {% for t in service_types %}
+                    <option value="{{ t }}">{{ t|replace('_',' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="font-size:0.8em; color:#7f8c8d;">Next Due Date</label><br>
+                <input type="date" id="maint-due" style="width:100%; padding:4px 8px;">
+            </div>
+            <div>
+                <label style="font-size:0.8em; color:#7f8c8d;">Interval (days)</label><br>
+                <input type="number" id="maint-interval-days" value="0" style="width:100%; padding:4px 8px;">
+            </div>
+            <div>
+                <label style="font-size:0.8em; color:#7f8c8d;">Interval (miles)</label><br>
+                <input type="number" id="maint-interval-miles" value="0" style="width:100%; padding:4px 8px;">
+            </div>
+            <div>
+                <label style="font-size:0.8em; color:#7f8c8d;">Cost Estimate</label><br>
+                <input type="number" id="maint-cost" step="0.01" value="0" style="width:100%; padding:4px 8px;">
+            </div>
+            <div>
+                <label style="font-size:0.8em; color:#7f8c8d;">Vendor</label><br>
+                <input type="text" id="maint-vendor" style="width:100%; padding:4px 8px;">
+            </div>
+            <div>
+                <label style="font-size:0.8em; color:#7f8c8d;">Description</label><br>
+                <input type="text" id="maint-desc" style="width:100%; padding:4px 8px;">
+            </div>
+            <div style="display:flex; align-items:end;">
+                <button type="submit" class="btn btn-sm btn-success">Add</button>
+            </div>
+        </form>
+    </div>
+
+    {% if maint_schedules %}
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Service</th>
+                <th>Description</th>
+                <th>Next Due</th>
+                <th>Interval</th>
+                <th>Last Service</th>
+                <th>Cost Est.</th>
+                <th>Vendor</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for m in maint_schedules %}
+            <tr>
+                <td>{{ m.service_type|replace('_',' ')|title }}</td>
+                <td>{{ m.description or '—' }}</td>
+                <td style="{% if m.is_overdue %}color:#e74c3c; font-weight:600;{% endif %}">{{ m.next_due_date or '—' }}</td>
+                <td>{% if m.interval_days %}{{ m.interval_days }}d{% endif %}{% if m.interval_days and m.interval_miles %} / {% endif %}{% if m.interval_miles %}{{ "%.0f"|format(m.interval_miles) }}mi{% endif %}{% if not m.interval_days and not m.interval_miles %}—{% endif %}</td>
+                <td>{{ m.last_service_date or '—' }}</td>
+                <td>{% if m.cost_estimate %}${{ "%.2f"|format(m.cost_estimate) }}{% else %}—{% endif %}</td>
+                <td>{{ m.vendor or '—' }}</td>
+                <td>
+                    <span style="padding:2px 8px; border-radius:10px; font-size:0.8em; font-weight:600;
+                        {% if m.status == 'overdue' %}background:#fadbd8; color:#e74c3c;
+                        {% elif m.status == 'due' %}background:#fef9e7; color:#f39c12;
+                        {% elif m.status == 'completed' %}background:#d5f5e3; color:#27ae60;
+                        {% elif m.status == 'skipped' %}background:#eaecee; color:#7f8c8d;
+                        {% else %}background:#d6eaf8; color:#2980b9;{% endif %}">{{ m.status|title }}</span>
+                </td>
+                <td style="white-space:nowrap;">
+                    {% if m.status != 'completed' %}
+                    <button onclick="completeMaintenance('{{ m.schedule_id }}')" style="border:none; background:none; color:#27ae60; cursor:pointer; font-size:0.85em;">Complete</button>
+                    {% endif %}
+                    <button onclick="deleteMaintenance('{{ m.schedule_id }}')" style="border:none; background:none; color:#e74c3c; cursor:pointer; font-size:0.85em;">Delete</button>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No maintenance schedules for this unit.</p>
+    </div>
+    {% endif %}
+</div>
+
 </div>
 
 <script>
@@ -150,6 +249,42 @@ function saveEquipment(e, equipId) {
     new FormData(e.target).forEach(function(v, k) { data[k] = v; });
     apiPatch('/api/dispatch/equipment/' + equipId, data).then(function(r) {
         if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function addMaintenance(e) {
+    e.preventDefault();
+    apiPost('/api/dispatch/maintenance', {
+        equipment_id: '{{ equip.equipment_id }}',
+        service_type: document.getElementById('maint-type').value,
+        next_due_date: document.getElementById('maint-due').value,
+        interval_days: parseInt(document.getElementById('maint-interval-days').value) || 0,
+        interval_miles: parseFloat(document.getElementById('maint-interval-miles').value) || 0,
+        cost_estimate: parseFloat(document.getElementById('maint-cost').value) || 0,
+        vendor: document.getElementById('maint-vendor').value,
+        description: document.getElementById('maint-desc').value,
+    }).then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function completeMaintenance(scheduleId) {
+    if (!confirm('Mark this service as completed?')) return;
+    apiPost('/api/dispatch/maintenance/' + scheduleId + '/complete', {})
+    .then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        location.reload();
+    });
+}
+
+function deleteMaintenance(scheduleId) {
+    if (!confirm('Delete this maintenance schedule?')) return;
+    fetch('/api/dispatch/maintenance/' + scheduleId, {method: 'DELETE'})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { alert(data.error); return; }
         location.reload();
     });
 }
