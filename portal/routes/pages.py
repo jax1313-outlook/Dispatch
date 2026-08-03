@@ -194,6 +194,39 @@ def dispatch_detail(load_id):
     )
 
 
+@pages_bp.route("/dispatch/<load_id>/rate-confirmation/print")
+def rate_confirmation_print(load_id):
+    import os
+    from dispatch import services as dispatch_svc
+
+    bundle = dispatch_svc.get_load_bundle(load_id)
+    if not bundle:
+        return redirect(url_for("pages.dispatch"))
+
+    financials = bundle["financials"]
+    if not financials or not financials.get("rate_confirmation"):
+        return redirect(url_for("pages.dispatch_detail", load_id=load_id))
+
+    company = {
+        "name": os.environ.get("DISPATCH_COMPANY_NAME", ""),
+        "address": os.environ.get("DISPATCH_COMPANY_ADDRESS", ""),
+        "phone": os.environ.get("DISPATCH_COMPANY_PHONE", ""),
+        "email": os.environ.get("DISPATCH_COMPANY_EMAIL", ""),
+        "mc_number": os.environ.get("DISPATCH_MC_NUMBER", ""),
+        "dot_number": os.environ.get("DISPATCH_DOT_NUMBER", ""),
+    }
+
+    return render_template(
+        "rate_confirmation_print.html",
+        load=bundle["load"],
+        rate=financials["rate_confirmation"],
+        financials=financials,
+        company=company,
+        assigned_driver=bundle.get("assigned_driver"),
+        assigned_equipment=bundle.get("assigned_equipment"),
+    )
+
+
 @pages_bp.route("/brokers")
 def brokers():
     from dispatch import services as dispatch_svc

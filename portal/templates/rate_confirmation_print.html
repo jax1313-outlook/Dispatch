@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rate Confirmation — {{ load.load_id[:12] }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #222; padding: 24px; max-width: 800px; margin: 0 auto; }
+
+        .print-controls { display: flex; gap: 8px; margin-bottom: 16px; }
+        .print-controls button { padding: 6px 16px; font-size: 13px; cursor: pointer; border: 1px solid #ccc; border-radius: 3px; background: #f5f5f5; }
+        .print-controls button.primary { background: #2c3e50; color: #fff; border-color: #2c3e50; }
+
+        .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid #2c3e50; }
+        .doc-header h1 { font-size: 20px; color: #2c3e50; margin-bottom: 4px; }
+        .doc-header .doc-id { font-size: 13px; color: #666; }
+        .company-info { text-align: right; font-size: 12px; line-height: 1.5; }
+        .company-name { font-weight: 700; font-size: 14px; color: #2c3e50; }
+
+        .section { margin-bottom: 16px; }
+        .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #2c3e50; padding: 4px 8px; background: #ecf0f1; margin-bottom: 8px; }
+
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; padding: 0 8px; }
+        .info-grid .full { grid-column: 1 / -1; }
+        .info-item { display: flex; gap: 4px; padding: 3px 0; border-bottom: 1px dotted #ddd; }
+        .info-label { font-weight: 600; white-space: nowrap; min-width: 120px; color: #444; }
+        .info-value { flex: 1; }
+
+        .rate-box { border: 2px solid #2c3e50; padding: 12px 16px; margin: 0 8px; }
+        .rate-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+        .rate-row.total { border-top: 2px solid #2c3e50; margin-top: 8px; padding-top: 8px; font-size: 16px; font-weight: 700; }
+        .rate-label { color: #444; }
+        .rate-value { font-weight: 600; }
+        .rate-value.big { font-size: 18px; color: #2c3e50; }
+
+        .sig-section { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding: 0 8px; }
+        .sig-block { padding-top: 8px; }
+        .sig-line { border-top: 1px solid #222; margin-top: 40px; padding-top: 4px; font-size: 12px; color: #666; }
+
+        .terms { font-size: 11px; color: #666; line-height: 1.5; padding: 8px; margin-top: 16px; border-top: 1px solid #ddd; }
+
+        .footer-line { text-align: center; font-size: 11px; color: #999; margin-top: 16px; padding-top: 8px; border-top: 1px solid #eee; }
+
+        @media print {
+            body { padding: 0; }
+            .print-controls { display: none; }
+            .doc-header { border-bottom-color: #000; }
+            .section-title { background: #eee; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .rate-box { border-color: #000; }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-controls">
+        <button class="primary" onclick="window.print()">Print</button>
+        <button onclick="window.history.back()">Back</button>
+    </div>
+
+    <div class="doc-header">
+        <div>
+            <h1>Rate Confirmation</h1>
+            <div class="doc-id">Load # {{ load.load_id }}</div>
+            <div class="doc-id">Date: {{ rate.confirmed_at[:10] if rate.confirmed_at else '' }}</div>
+        </div>
+        <div class="company-info">
+            {% if company.name %}<div class="company-name">{{ company.name }}</div>{% endif %}
+            {% if company.address %}<div>{{ company.address }}</div>{% endif %}
+            {% if company.phone %}<div>{{ company.phone }}</div>{% endif %}
+            {% if company.email %}<div>{{ company.email }}</div>{% endif %}
+            {% if company.mc_number %}<div>MC# {{ company.mc_number }}</div>{% endif %}
+            {% if company.dot_number %}<div>DOT# {{ company.dot_number }}</div>{% endif %}
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Load Details</div>
+        <div class="info-grid">
+            <div class="info-item"><span class="info-label">Customer</span><span class="info-value">{{ load.customer }}</span></div>
+            <div class="info-item"><span class="info-label">Broker / Shipper</span><span class="info-value">{{ load.broker_shipper or '—' }}</span></div>
+            <div class="info-item"><span class="info-label">Pickup Location</span><span class="info-value">{{ load.pickup_location or '—' }}</span></div>
+            <div class="info-item"><span class="info-label">Delivery Location</span><span class="info-value">{{ load.delivery_location or '—' }}</span></div>
+            <div class="info-item"><span class="info-label">Pickup Date/Time</span><span class="info-value">{{ load.pickup_datetime or '—' }}</span></div>
+            <div class="info-item"><span class="info-label">Delivery Date/Time</span><span class="info-value">{{ load.delivery_datetime or '—' }}</span></div>
+            <div class="info-item"><span class="info-label">Equipment Type</span><span class="info-value">{{ load.equipment or '—' }}</span></div>
+            {% if assigned_driver %}
+            <div class="info-item"><span class="info-label">Driver</span><span class="info-value">{{ assigned_driver.name }}</span></div>
+            {% endif %}
+            {% if assigned_equipment %}
+            <div class="info-item"><span class="info-label">Unit #</span><span class="info-value">{{ assigned_equipment.unit_number }}</span></div>
+            {% endif %}
+            {% if load.notes %}
+            <div class="info-item full"><span class="info-label">Notes</span><span class="info-value">{{ load.notes }}</span></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Rate Information</div>
+        <div class="rate-box">
+            <div class="rate-row">
+                <span class="rate-label">Rate Type</span>
+                <span class="rate-value">{{ rate.rate_type|replace('_', ' ')|title }}</span>
+            </div>
+            <div class="rate-row">
+                <span class="rate-label">Rate Amount</span>
+                <span class="rate-value">${{ "%.2f"|format(rate.rate_amount) }}{% if rate.rate_type == 'per_mile' %}/mile{% endif %}</span>
+            </div>
+            {% if rate.distance_miles %}
+            <div class="rate-row">
+                <span class="rate-label">Distance</span>
+                <span class="rate-value">{{ rate.distance_miles }} miles</span>
+            </div>
+            {% endif %}
+            <div class="rate-row total">
+                <span class="rate-label">Total Revenue</span>
+                <span class="rate-value big">${{ "%.2f"|format(financials.summary.revenue) }}</span>
+            </div>
+        </div>
+        {% if rate.confirmed_by %}
+        <div style="padding:4px 8px;font-size:12px;color:#666;margin-top:4px;">Confirmed by: {{ rate.confirmed_by }}</div>
+        {% endif %}
+        {% if rate.notes %}
+        <div style="padding:4px 8px;font-size:12px;color:#666;">Notes: {{ rate.notes }}</div>
+        {% endif %}
+    </div>
+
+    <div class="sig-section">
+        <div class="sig-block">
+            <div class="sig-line">Carrier Signature / Date</div>
+        </div>
+        <div class="sig-block">
+            <div class="sig-line">Shipper/Broker Signature / Date</div>
+        </div>
+    </div>
+
+    <div class="terms">
+        This rate confirmation serves as an agreement between the carrier and shipper/broker for the transportation of freight as described above.
+        Payment terms are net 30 days from receipt of signed proof of delivery unless otherwise agreed in writing.
+        Carrier agrees to maintain proper insurance coverage for the duration of the shipment.
+    </div>
+
+    <div class="footer-line">
+        Generated {{ rate.confirmed_at[:10] if rate.confirmed_at else '' }} &mdash; Load {{ load.load_id }}
+    </div>
+</body>
+</html>

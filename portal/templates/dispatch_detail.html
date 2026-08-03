@@ -668,6 +668,7 @@
         {% if financials.rate_confirmation.confirmed_by %} | <strong>By:</strong> {{ financials.rate_confirmation.confirmed_by }}{% endif %}
         {% if financials.rate_confirmation.notes %} | {{ financials.rate_confirmation.notes }}{% endif %}
         <button class="btn btn-sm" style="margin-left:8px;" onclick="toggleEl('rate-form')">Edit Rate</button>
+        <a href="{{ url_for('pages.rate_confirmation_print', load_id=load.load_id) }}" target="_blank" class="btn btn-sm" style="margin-left:4px;">Print Rate Confirmation</a>
     </div>
     {% else %}
     <p class="empty-state-sm">No rate confirmed yet.</p>
