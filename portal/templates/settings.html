@@ -4,13 +4,27 @@
 
 {% block body %}
 <section class="card-section">
+    <h2>Storage Locations</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:8px;">Every persistent file on this machine. This is the complete map.</p>
+    <table class="data-table">
+        <thead><tr><th>What</th><th>Path on Disk</th><th>Contains</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Database</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.database }}</td><td>All loads, drivers, equipment, settlements, IFTA, compliance (SQLite)</td></tr>
+            <tr><td><strong>Portal Data</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.portal_data }}</td><td>Sandbox, publisher queue, library, archive, intelligence, conflicts (JSON)</td></tr>
+            <tr><td><strong>Evidence Uploads</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.uploads }}</td><td>BOL photos, receipts, inspection docs, signatures</td></tr>
+            <tr><td><strong>Contract Archive</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.archive }}</td><td>Raw, Processed, Intelligence, Summaries, Routing, Proposals</td></tr>
+            <tr><td><strong>Email Outbox</strong></td><td style="font-family:monospace;font-size:12px;">{{ storage_paths.outbox }}</td><td>Unsent .eml files (when SMTP not configured)</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="card-section">
     <h2>Portal Configuration</h2>
     <table class="data-table">
         <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
         <tbody>
             <tr><td>Host</td><td>{{ config.HOST }}</td><td>PORTAL_HOST</td></tr>
             <tr><td>Port</td><td>{{ config.PORT }}</td><td>PORTAL_PORT</td></tr>
-            <tr><td>Data Directory</td><td>{{ config.DATA_DIR }}</td><td>PORTAL_DATA_DIR</td></tr>
             <tr><td>Inquiry Threshold</td><td>{{ config.INQUIRY_THRESHOLD }}</td><td>PORTAL_INQUIRY_THRESHOLD</td></tr>
             <tr><td>Inquiry Mode</td><td>{{ config.INQUIRY_MODE }}</td><td>PORTAL_INQUIRY_MODE</td></tr>
             <tr><td>Secret Key</td><td>{{ 'Configured' if cin_config.portal_secret_set else 'Using default (not production-safe)' }}</td><td>PORTAL_SECRET_KEY</td></tr>

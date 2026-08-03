@@ -57,10 +57,25 @@ def create_app(config: dict | None = None) -> Flask:
     return app
 
 
+def _print_storage_map() -> None:
+    from cin_lite import archive as cin_archive
+    from dispatch.db import get_db_path
+    from dispatch.services import _get_upload_dir
+
+    print("  Storage:")
+    print(f"    Database         {get_db_path().resolve()}")
+    print(f"    Portal data      {Path(Config.DATA_DIR).resolve()}")
+    print(f"    Evidence uploads {_get_upload_dir().resolve()}")
+    print(f"    Contract archive {cin_archive.ARCHIVE_ROOT.resolve()}")
+    print(f"    Email outbox     {(cin_archive.ARCHIVE_ROOT / 'Outbox').resolve()}")
+    print()
+
+
 if __name__ == "__main__":
     app = create_app()
     host = Config.HOST
     port = Config.PORT
     print(f"\n  L2-COS Operations Portal v1")
     print(f"  http://{host}:{port}\n")
+    _print_storage_map()
     app.run(host=host, port=port, debug=True)
