@@ -486,3 +486,183 @@ def notify_stalled(load: dict) -> str:
     subject = f"[DISPATCH] STALLED — {load.get('customer', load['load_id'])} ({hours:.0f}h in {status})"
     msg = _build([reviewer_address()], subject, text, html=html)
     return _send_or_write(f"dispatch-stalled-{load['load_id']}", msg)
+
+
+# ── Email Template Preview ───────────────────────────────────────────
+
+_SAMPLE_LOAD: dict = {
+    "load_id": "LOAD-20260801-SAMPLE",
+    "customer": "Acme Logistics",
+    "broker_shipper": "National Freight Co",
+    "status": "in_transit",
+    "pickup_location": "Dallas, TX",
+    "delivery_location": "Atlanta, GA",
+    "driver": "John Smith",
+    "equipment": "TRK-001 (Dry Van)",
+    "pickup_datetime": "2026-08-01T08:00:00Z",
+    "delivery_datetime": "2026-08-02T14:00:00Z",
+}
+
+EMAIL_TEMPLATES: dict[str, str] = {
+    "dispatched": "Load Dispatched",
+    "exception": "Exception Alert",
+    "delivered": "Load Delivered",
+    "pod_generated": "POD Package Generated",
+    "archived": "Load Archived",
+    "invoice_created": "Invoice Created",
+    "payment_received": "Payment Received",
+    "payment_overdue": "Payment Overdue",
+    "stalled": "Load Stalled",
+}
+
+
+def preview_notification(template_key: str) -> dict | None:
+    esc = _html.escape
+    load = dict(_SAMPLE_LOAD)
+
+    if template_key == "dispatched":
+        detail = f"""\
+<div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;margin-bottom:16px;">
+    <strong>Load Dispatched</strong><br>
+    Driver: {esc(load['driver'])}<br>
+    Equipment: {esc(load['equipment'])}
+</div>
+<p style="color:#666;font-size:13px;">
+    The load has been dispatched and is ready for pickup.
+</p>"""
+        text, html = _render_notification(load, "dispatched", "Load Dispatched", detail, "acknowledge")
+        subject = f"[DISPATCH] Dispatched — {load['customer']}"
+
+    elif template_key == "exception":
+        detail = """\
+<div style="background:#ffebee;border-left:4px solid #c62828;padding:12px 16px;margin-bottom:16px;">
+    <strong style="color:#c62828;">Exception — Delay at Pickup</strong><br>
+    Severity: <strong>high</strong><br>
+    Driver reports mechanical issue at pickup facility.<br>
+    <span style="font-size:12px;color:#888;">EXC-20260801-SAMPLE</span>
+</div>
+<p style="color:#666;font-size:13px;">
+    An exception requires immediate attention.
+</p>"""
+        text, html = _render_notification(load, "exception", "Exception — Delay at Pickup", detail, "flag_review")
+        subject = f"[DISPATCH] EXCEPTION — {load['customer']}"
+
+    elif template_key == "delivered":
+        detail = """\
+<div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;margin-bottom:16px;">
+    <strong>Delivery Confirmed</strong><br>
+    Delivered at: 2026-08-02 14:30 UTC<br>
+    Source: driver
+</div>
+<p style="color:#666;font-size:13px;">
+    Load has been delivered. Generate POD and proceed to invoicing.
+</p>"""
+        load["status"] = "delivered"
+        text, html = _render_notification(load, "delivered", "Load Delivered", detail, "acknowledge")
+        subject = f"[DISPATCH] Delivered — {load['customer']}"
+
+    elif template_key == "pod_generated":
+        detail = """\
+<div style="background:#e3f2fd;border-left:4px solid #1565c0;padding:12px 16px;margin-bottom:16px;">
+    <strong>POD Package Generated</strong><br>
+    Package ID: <code>POD-20260802-SAMPLE</code><br>
+    BOL Included: Yes<br>
+    Delivery Receipt: Yes<br>
+    Photos: 2 attached
+</div>
+<p style="color:#666;font-size:13px;">
+    Proof of delivery is ready for invoicing.
+</p>"""
+        load["status"] = "delivered"
+        text, html = _render_notification(load, "pod_generated", "POD Package Ready", detail, "acknowledge")
+        subject = f"[DISPATCH] POD Ready — {load['customer']}"
+
+    elif template_key == "archived":
+        detail = """\
+<div style="background:#f3e5f5;border-left:4px solid #6a1b9a;padding:12px 16px;margin-bottom:16px;">
+    <strong>Load Archived</strong><br>
+    Archive ID: <code>RET-20260802-SAMPLE</code><br>
+    Retention Period: 3 years<br>
+    Archive Date: 2026-08-02
+</div>
+<p style="color:#666;font-size:13px;">
+    Load has been archived per retention policy.
+</p>"""
+        load["status"] = "archived"
+        text, html = _render_notification(load, "archived", "Load Archived", detail, "acknowledge")
+        subject = f"[DISPATCH] Archived — {load['customer']}"
+
+    elif template_key == "invoice_created":
+        detail = """\
+<div style="background:#e8f5e9;border-left:4px solid #1b5e20;padding:12px 16px;margin-bottom:16px;">
+    <strong>Invoice Created</strong><br>
+    Invoice: <code>INV-20260802-SAMPLE</code><br>
+    Amount: <strong>$2,450.00</strong><br>
+    Due Date: 2026-09-01<br>
+    Payment Terms: Net 30
+</div>
+<p style="color:#666;font-size:13px;">
+    Invoice has been generated and is ready for delivery.
+</p>"""
+        text, html = _render_notification(load, "invoice_created", "Invoice Created", detail, "acknowledge")
+        subject = f"[DISPATCH] Invoice — {load['customer']}"
+
+    elif template_key == "payment_received":
+        detail = """\
+<div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;margin-bottom:16px;">
+    <strong>Payment Received</strong><br>
+    Invoice: <code>INV-20260802-SAMPLE</code><br>
+    Amount Paid: <strong>$2,450.00</strong><br>
+    Method: ACH Transfer<br>
+    Factoring Fee: $0.00<br>
+    Net Payment: <strong>$2,450.00</strong>
+</div>
+<p style="color:#666;font-size:13px;">
+    Payment has been received and recorded.
+</p>"""
+        text, html = _render_notification(load, "payment_received", "Payment Received", detail, "acknowledge")
+        subject = f"[DISPATCH] Payment — {load['customer']}"
+
+    elif template_key == "payment_overdue":
+        detail = """\
+<div style="background:#ffebee;border-left:4px solid #c62828;padding:12px 16px;margin-bottom:16px;">
+    <strong style="color:#c62828;">Payment Overdue</strong><br>
+    Invoice: <code>INV-20260802-SAMPLE</code><br>
+    Amount Due: <strong>$2,450.00</strong><br>
+    Due Date: 2026-07-01<br>
+    Days Overdue: <strong style="color:#c62828;">32</strong>
+</div>
+<p style="color:#666;font-size:13px;">
+    This invoice has exceeded its due date and requires follow-up.
+</p>"""
+        text, html = _render_notification(load, "payment_overdue", "Payment Overdue — 32 Days", detail, "flag_review")
+        subject = f"[DISPATCH] OVERDUE — {load['customer']}"
+
+    elif template_key == "stalled":
+        load["status"] = "at_pickup"
+        load["hours_in_status"] = 8.5
+        load["threshold_hours"] = 4
+        detail = f"""\
+<div style="background:#fff3e0;border-left:4px solid #e65100;padding:12px 16px;margin-bottom:16px;">
+    <strong>Load Stalled</strong><br>
+    Current Status: <strong>At Pickup</strong><br>
+    Time in Status: <strong style="color:#e65100;">8.5 hours</strong> (threshold: 4h)<br>
+    Driver: {esc(load['driver'])}<br>
+    Equipment: {esc(load['equipment'])}
+</div>
+<p style="color:#666;font-size:13px;">
+    This load has exceeded the expected time in its current status.
+</p>"""
+        text, html = _render_notification(load, "stalled", "Load Stalled — At Pickup for 8.5h", detail, "flag_review")
+        subject = f"[DISPATCH] STALLED — {load['customer']}"
+
+    else:
+        return None
+
+    return {
+        "key": template_key,
+        "name": EMAIL_TEMPLATES.get(template_key, template_key),
+        "subject": subject,
+        "html": html,
+        "text": text,
+    }

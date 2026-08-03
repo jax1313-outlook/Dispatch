@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Email Templates — L2-COS Portal{% endblock %}
+{% block page_title %}Email Template Preview{% endblock %}
+
+{% block body %}
+
+<style>
+.template-layout { display:grid; grid-template-columns:240px 1fr; gap:1.5rem; }
+.template-list { list-style:none; padding:0; margin:0; }
+.template-list li { margin-bottom:2px; }
+.template-list a {
+    display:block; padding:10px 14px; border-radius:4px;
+    text-decoration:none; color:#2c3e50; font-size:0.9em;
+    transition: background 0.15s;
+}
+.template-list a:hover { background:#ecf0f1; }
+.template-list a.active { background:#3498db; color:#fff; font-weight:600; }
+.preview-frame {
+    border:1px solid #dee2e6; border-radius:6px;
+    background:#fff; min-height:500px;
+}
+.preview-header {
+    padding:12px 16px; border-bottom:1px solid #dee2e6;
+    display:flex; justify-content:space-between; align-items:center;
+    background:#f8f9fa; border-radius:6px 6px 0 0;
+}
+.preview-subject { font-weight:600; color:#2c3e50; }
+.preview-meta { font-size:0.85em; color:#7f8c8d; }
+.preview-body { padding:20px; }
+.preview-body iframe {
+    width:100%; border:none; min-height:600px;
+}
+</style>
+
+<div class="template-layout">
+    <div class="card-section" style="padding:1rem;">
+        <h3 style="margin-top:0; font-size:0.95em; color:#7f8c8d; text-transform:uppercase; letter-spacing:0.05em;">Templates</h3>
+        <ul class="template-list">
+            {% for key, name in templates.items() %}
+            <li>
+                <a href="{{ url_for('pages.email_templates', template=key) }}"
+                   class="{% if selected == key %}active{% endif %}"
+                   onclick="loadPreview('{{ key }}'); return false;"
+                   data-key="{{ key }}">
+                    {{ name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="preview-frame">
+        <div class="preview-header">
+            <div>
+                <div class="preview-subject" id="preview-subject">Loading...</div>
+                <div class="preview-meta">
+                    To: <span id="preview-to">reviewer@dispatch.local</span>
+                </div>
+            </div>
+            <div>
+                <button onclick="toggleView()" id="view-toggle" style="padding:4px 10px; border:1px solid #dee2e6; border-radius:4px; background:#fff; cursor:pointer; font-size:0.85em;">Plain Text</button>
+            </div>
+        </div>
+        <div class="preview-body">
+            <iframe id="preview-iframe" sandbox="allow-same-origin"></iframe>
+            <pre id="preview-text" style="display:none; white-space:pre-wrap; font-size:0.9em; color:#333; padding:0; margin:0;"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentView = 'html';
+let currentData = null;
+
+function loadPreview(key) {
+    document.querySelectorAll('.template-list a').forEach(a => {
+        a.classList.toggle('active', a.dataset.key === key);
+    });
+    history.replaceState(null, '', '?template=' + key);
+
+    fetch('/api/dispatch/email-preview/' + key)
+    .then(r => r.json())
+    .then(data => {
+        currentData = data;
+        document.getElementById('preview-subject').textContent = data.subject;
+        const iframe = document.getElementById('preview-iframe');
+        iframe.srcdoc = data.html;
+        document.getElementById('preview-text').textContent = data.text;
+        showView(currentView);
+    });
+}
+
+function toggleView() {
+    currentView = currentView === 'html' ? 'text' : 'html';
+    showView(currentView);
+}
+
+function showView(view) {
+    const iframe = document.getElementById('preview-iframe');
+    const pre = document.getElementById('preview-text');
+    const btn = document.getElementById('view-toggle');
+    if (view === 'html') {
+        iframe.style.display = 'block';
+        pre.style.display = 'none';
+        btn.textContent = 'Plain Text';
+    } else {
+        iframe.style.display = 'none';
+        pre.style.display = 'block';
+        btn.textContent = 'HTML View';
+    }
+}
+
+loadPreview('{{ selected }}');
+</script>
+
+{% endblock %}
