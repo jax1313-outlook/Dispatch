@@ -360,13 +360,51 @@ def driver_detail(driver_id):
         return "Driver not found", 404
     active_load = dispatch_store.get_active_load_for_driver(driver_id)
     load_history = dispatch_store.get_loads_for_driver(driver_id)
+    from dispatch.models import PAY_TYPES, PAY_STATUSES
+    pay_entries = dispatch_svc.list_driver_pay(driver_id=driver_id)
+    pay_summary = dispatch_svc.get_driver_pay_summary(driver_id)
     return render_template(
         "driver_detail.html",
         driver=driver,
         active_load=active_load,
         load_history=load_history,
+        pay_entries=pay_entries,
+        pay_summary=pay_summary,
+        pay_types=PAY_TYPES,
+        pay_statuses=PAY_STATUSES,
         driver_statuses=DRIVER_STATUSES,
         license_classes=LICENSE_CLASSES,
+    )
+
+
+@pages_bp.route("/driver-pay")
+def driver_pay():
+    from dispatch import services as dispatch_svc
+    from dispatch.models import PAY_TYPES, PAY_STATUSES
+    drivers = dispatch_svc.list_drivers()
+    driver_id = request.args.get("driver_id", "")
+    pay_period = request.args.get("pay_period", "")
+    status_filter = request.args.get("status", "")
+    entries = dispatch_svc.list_driver_pay(
+        driver_id=driver_id or None,
+        status=status_filter or None,
+        pay_period=pay_period or None,
+    )
+    summary = None
+    if driver_id:
+        summary = dispatch_svc.get_driver_pay_summary(
+            driver_id, pay_period=pay_period or None
+        )
+    return render_template(
+        "driver_pay.html",
+        drivers=drivers,
+        entries=entries,
+        summary=summary,
+        pay_types=PAY_TYPES,
+        pay_statuses=PAY_STATUSES,
+        driver_id=driver_id,
+        pay_period=pay_period,
+        status_filter=status_filter,
     )
 
 
