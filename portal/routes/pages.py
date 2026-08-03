@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from flask import Blueprint, render_template, request, redirect, url_for
 
 from portal import helpers
@@ -809,12 +811,31 @@ def settings():
         "portal_url": os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080"),
         "portal_secret_set": Config.SECRET_KEY != _DEFAULT_SECRET,
     }
-    from dispatch.services import _STALL_THRESHOLDS_HOURS
+
+    from cin_lite import archive as cin_archive
+    from dispatch.db import get_db_path
+    from dispatch.services import _STALL_THRESHOLDS_HOURS, _get_upload_dir
+    from portal.models import get_memory_dir, get_archive_dir
+
+    storage_paths = {
+        "ops_root": os.environ.get("DISPATCH_OPERATIONS_ROOT", ""),
+        "archive_root": os.environ.get("DISPATCH_ARCHIVE_ROOT", ""),
+        "memory_root": os.environ.get("DISPATCH_MEMORY_ROOT", ""),
+        "portal_data": str(Path(Config.DATA_DIR).resolve()),
+        "database": str(get_db_path().resolve()),
+        "uploads": str(_get_upload_dir().resolve()),
+        "archive": str(cin_archive.ARCHIVE_ROOT.resolve()),
+        "outbox": str((cin_archive.ARCHIVE_ROOT / "Outbox").resolve()),
+        "library_intel": str(get_memory_dir().resolve()),
+        "archive_records": str(get_archive_dir().resolve()),
+    }
+
     return render_template(
         "settings.html",
         config=Config,
         cin_config=cin_config,
         stall_thresholds=_STALL_THRESHOLDS_HOURS,
+        storage_paths=storage_paths,
     )
 
 

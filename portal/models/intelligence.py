@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir
+from portal.models import get_memory_dir
 
 INTEL_TYPES = [
     "location",
@@ -36,7 +36,7 @@ def _utc_now() -> str:
 
 
 def _intel_path() -> Path:
-    d = get_data_dir()
+    d = get_memory_dir()
     d.mkdir(parents=True, exist_ok=True)
     return d / "intelligence.json"
 

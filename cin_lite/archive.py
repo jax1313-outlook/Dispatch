@@ -14,7 +14,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ARCHIVE_ROOT = Path(os.environ.get("DISPATCH_ARCHIVE_PATH", Path(__file__).resolve().parent / "Archive"))
+def _resolve_archive_root() -> Path:
+    explicit = os.environ.get("DISPATCH_ARCHIVE_PATH")
+    if explicit:
+        return Path(explicit)
+    archive_root = os.environ.get("DISPATCH_ARCHIVE_ROOT")
+    if archive_root:
+        return Path(archive_root) / "CIN"
+    return Path(__file__).resolve().parent / "Archive"
+
+
+ARCHIVE_ROOT = _resolve_archive_root()
 _SUBDIRS = ("Raw", "Processed", "Intelligence", "Summaries", "Routing", "Pending", "Outbox")
 
 

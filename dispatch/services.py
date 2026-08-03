@@ -363,14 +363,23 @@ def update_visibility_notes(
 
 def _get_upload_dir() -> Path:
     import os
-    portal_data = os.environ.get("PORTAL_DATA_DIR")
     upload_dir = os.environ.get("PORTAL_UPLOAD_DIR")
     if upload_dir:
         p = Path(upload_dir)
-    elif portal_data:
-        p = Path(portal_data) / "uploads"
     else:
-        p = Path(__file__).resolve().parent.parent / "portal" / "data" / "uploads"
+        memory_root = os.environ.get("DISPATCH_MEMORY_ROOT")
+        if memory_root:
+            p = Path(memory_root) / "Evidence"
+        else:
+            portal_data = os.environ.get("PORTAL_DATA_DIR")
+            if portal_data:
+                p = Path(portal_data) / "uploads"
+            else:
+                ops_root = os.environ.get("DISPATCH_OPERATIONS_ROOT")
+                if ops_root:
+                    p = Path(ops_root) / "Current Workspace" / "PortalData" / "uploads"
+                else:
+                    p = Path(__file__).resolve().parent.parent / "portal" / "data" / "uploads"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
