@@ -1686,11 +1686,9 @@ def _quarter_date_range(year: int, quarter: int) -> tuple[str, str]:
     return f"{year}-{starts[quarter]}", f"{year}-{ends[quarter]}"
 
 
-def get_ifta_quarterly_report(year: int, quarter: int, vehicle_id: str = "") -> dict:
-    if quarter not in (1, 2, 3, 4):
-        raise ValueError(f"Invalid quarter: {quarter}")
+def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
+    from dispatch.models import IFTA_TAX_RATES
 
-    date_from, date_to = _quarter_date_range(year, quarter)
     leg_kwargs: dict = {"date_from": date_from, "date_to": date_to}
     fuel_kwargs: dict = {"date_from": date_from, "date_to": date_to}
     if vehicle_id:
@@ -1719,11 +1717,20 @@ def get_ifta_quarterly_report(year: int, quarter: int, vehicle_id: str = "") -> 
 
     all_jurs = sorted(set(list(miles_by_jur.keys()) + list(fuel_by_jur.keys())))
     jurisdictions = []
+    total_tax_owed = 0.0
+    total_surcharge = 0.0
     for j in all_jurs:
         miles = round(miles_by_jur.get(j, 0), 2)
         fuel = fuel_by_jur.get(j, {"gallons": 0.0, "amount": 0.0})
         taxable_gallons = round(miles / fleet_mpg, 4) if fleet_mpg > 0 else 0.0
         net_taxable = round(taxable_gallons - fuel["gallons"], 4)
+        rates = IFTA_TAX_RATES.get(j, {"rate": 0.0, "surcharge": 0.0})
+        tax_rate = rates["rate"]
+        surcharge_rate = rates["surcharge"]
+        tax_owed = round(net_taxable * tax_rate, 2)
+        surcharge = round(net_taxable * surcharge_rate, 2) if surcharge_rate else 0.0
+        total_tax_owed += tax_owed
+        total_surcharge += surcharge
         jurisdictions.append({
             "jurisdiction": j,
             "miles": miles,
@@ -1731,12 +1738,14 @@ def get_ifta_quarterly_report(year: int, quarter: int, vehicle_id: str = "") -> 
             "fuel_amount": round(fuel["amount"], 2),
             "taxable_gallons": taxable_gallons,
             "net_taxable_gallons": net_taxable,
+            "tax_rate": tax_rate,
+            "surcharge_rate": surcharge_rate,
+            "tax_owed": tax_owed,
+            "surcharge": surcharge,
+            "total_due": round(tax_owed + surcharge, 2),
         })
 
     return {
-        "year": year,
-        "quarter": quarter,
-        "quarter_label": f"Q{quarter} {year}",
         "date_from": date_from,
         "date_to": date_to,
         "vehicle_id": vehicle_id,
@@ -1746,7 +1755,76 @@ def get_ifta_quarterly_report(year: int, quarter: int, vehicle_id: str = "") -> 
         "jurisdictions": jurisdictions,
         "trip_leg_count": len(legs),
         "fuel_purchase_count": len(purchases),
+        "total_tax_owed": round(total_tax_owed, 2),
+        "total_surcharge": round(total_surcharge, 2),
+        "total_due": round(total_tax_owed + total_surcharge, 2),
     }
+
+
+def get_ifta_quarterly_report(year: int, quarter: int, vehicle_id: str = "") -> dict:
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+
+    date_from, date_to = _quarter_date_range(year, quarter)
+    result = _ifta_aggregate(date_from, date_to, vehicle_id)
+    result["year"] = year
+    result["quarter"] = quarter
+    result["quarter_label"] = f"Q{quarter} {year}"
+    return result
+
+
+def get_ifta_monthly_report(year: int, month: int, vehicle_id: str = "") -> dict:
+    import calendar
+    if month < 1 or month > 12:
+        raise ValueError(f"Invalid month: {month}")
+
+    last_day = calendar.monthrange(year, month)[1]
+    date_from = f"{year}-{month:02d}-01"
+    date_to = f"{year}-{month:02d}-{last_day:02d}"
+    result = _ifta_aggregate(date_from, date_to, vehicle_id)
+    result["year"] = year
+    result["month"] = month
+    result["month_label"] = f"{calendar.month_name[month]} {year}"
+    return result
+
+
+def export_ifta_csv(report: dict) -> str:
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    label = report.get("quarter_label") or report.get("month_label", "IFTA Report")
+    writer.writerow(["IFTA Report", label])
+    writer.writerow(["Date Range", report["date_from"], "to", report["date_to"]])
+    if report.get("vehicle_id"):
+        writer.writerow(["Vehicle", report["vehicle_id"]])
+    writer.writerow(["Fleet MPG", report["fleet_mpg"]])
+    writer.writerow(["Total Miles", report["total_miles"]])
+    writer.writerow(["Total Gallons", report["total_gallons"]])
+    writer.writerow([])
+
+    writer.writerow([
+        "Jurisdiction", "Miles", "Taxable Gallons",
+        "Fuel Purchased (gal)", "Fuel Cost ($)",
+        "Net Taxable Gallons", "Tax Rate ($/gal)",
+        "Surcharge Rate", "Tax Owed", "Surcharge", "Total Due",
+    ])
+    for j in report["jurisdictions"]:
+        writer.writerow([
+            j["jurisdiction"], j["miles"], j["taxable_gallons"],
+            j["fuel_gallons"], j["fuel_amount"],
+            j["net_taxable_gallons"], j["tax_rate"],
+            j["surcharge_rate"], j["tax_owed"],
+            j["surcharge"], j["total_due"],
+        ])
+    writer.writerow([])
+    writer.writerow(["TOTALS", report["total_miles"], "", report["total_gallons"],
+                      "", "", "", "", report["total_tax_owed"],
+                      report["total_surcharge"], report["total_due"]])
+
+    return output.getvalue()
 
 
 # ── Broker Contact Directory ─────────────────────────────────────────
