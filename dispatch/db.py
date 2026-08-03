@@ -322,6 +322,26 @@ CREATE TABLE IF NOT EXISTS maintenance_schedules (
 CREATE INDEX IF NOT EXISTS idx_maint_equipment ON maintenance_schedules(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_maint_status ON maintenance_schedules(status);
 CREATE INDEX IF NOT EXISTS idx_maint_due_date ON maintenance_schedules(next_due_date);
+
+CREATE TABLE IF NOT EXISTS compliance_documents (
+    doc_id            TEXT PRIMARY KEY,
+    entity_type       TEXT NOT NULL DEFAULT 'company',
+    entity_id         TEXT NOT NULL DEFAULT '',
+    doc_type          TEXT NOT NULL DEFAULT 'other',
+    title             TEXT NOT NULL DEFAULT '',
+    issuing_authority TEXT NOT NULL DEFAULT '',
+    doc_number        TEXT NOT NULL DEFAULT '',
+    issue_date        TEXT NOT NULL DEFAULT '',
+    expiry_date       TEXT NOT NULL DEFAULT '',
+    alert_days        INTEGER NOT NULL DEFAULT 30,
+    status            TEXT NOT NULL DEFAULT 'active',
+    notes             TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comp_entity ON compliance_documents(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_comp_status ON compliance_documents(status);
+CREATE INDEX IF NOT EXISTS idx_comp_expiry ON compliance_documents(expiry_date);
 """
 
 

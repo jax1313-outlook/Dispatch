@@ -1894,6 +1894,88 @@ def check_maintenance_alerts():
     return jsonify(result)
 
 
+# ── Compliance Document Tracker ──────────────────────────────────────
+
+
+@dispatch_bp.route("/compliance", methods=["GET"])
+def list_compliance_documents():
+    from dispatch import services as svc
+    filters = {}
+    for key in ("entity_type", "entity_id", "doc_type", "status"):
+        val = request.args.get(key)
+        if val:
+            filters[key] = val
+    docs = svc.list_compliance_documents(**filters)
+    return jsonify(docs)
+
+
+@dispatch_bp.route("/compliance", methods=["POST"])
+def add_compliance_document():
+    from dispatch import services as svc
+    data = request.json or {}
+    try:
+        doc = svc.add_compliance_document(
+            doc_type=data.get("doc_type", "other"),
+            title=data.get("title", ""),
+            entity_type=data.get("entity_type", "company"),
+            entity_id=data.get("entity_id", ""),
+            issuing_authority=data.get("issuing_authority", ""),
+            doc_number=data.get("doc_number", ""),
+            issue_date=data.get("issue_date", ""),
+            expiry_date=data.get("expiry_date", ""),
+            alert_days=int(data.get("alert_days", 30)),
+            notes=data.get("notes", ""),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(doc), 201
+
+
+@dispatch_bp.route("/compliance/<doc_id>", methods=["GET"])
+def get_compliance_document(doc_id):
+    from dispatch import services as svc
+    doc = svc.get_compliance_document(doc_id)
+    if not doc:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(doc)
+
+
+@dispatch_bp.route("/compliance/<doc_id>", methods=["PATCH"])
+def update_compliance_document(doc_id):
+    from dispatch import services as svc
+    data = request.json or {}
+    try:
+        if "alert_days" in data:
+            data["alert_days"] = int(data["alert_days"])
+        doc = svc.update_compliance_document(doc_id, **data)
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(doc)
+
+
+@dispatch_bp.route("/compliance/<doc_id>", methods=["DELETE"])
+def delete_compliance_document(doc_id):
+    from dispatch import services as svc
+    if svc.delete_compliance_document(doc_id):
+        return jsonify({"status": "deleted"})
+    return jsonify({"error": "not found"}), 404
+
+
+@dispatch_bp.route("/compliance/expiring", methods=["GET"])
+def expiring_compliance_documents():
+    from dispatch import services as svc
+    days = int(request.args.get("days", 30))
+    docs = svc.get_expiring_compliance_documents(days_ahead=days)
+    return jsonify(docs)
+
+
+@dispatch_bp.route("/compliance/check-alerts", methods=["POST"])
+def check_compliance_alerts():
+    from dispatch import services as svc
+    result = svc.check_compliance_alerts()
+    return jsonify(result)
+
+
 # ── Email Template Preview ───────────────────────────────────────────
 
 

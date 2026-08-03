@@ -1810,3 +1810,142 @@ def get_overdue_maintenance() -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(sql, (today,)).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── Compliance Documents ──────────────────────────────────────────
+
+
+def create_compliance_document(doc) -> dict:
+    d = doc.to_dict()
+    cols = [
+        "doc_id", "entity_type", "entity_id", "doc_type", "title",
+        "issuing_authority", "doc_number", "issue_date", "expiry_date",
+        "alert_days", "status", "notes", "created_at", "updated_at",
+    ]
+    placeholders = ", ".join("?" for _ in cols)
+    col_str = ", ".join(cols)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO compliance_documents ({col_str}) VALUES ({placeholders})",
+            [d[c] for c in cols],
+        )
+    return d
+
+
+def get_compliance_document(doc_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM compliance_documents WHERE doc_id = ?",
+            (doc_id,),
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    _enrich_compliance_doc(d)
+    return d
+
+
+def list_compliance_documents(
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    doc_type: str | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    sql = "SELECT * FROM compliance_documents WHERE 1=1"
+    params: list = []
+    if entity_type:
+        sql += " AND entity_type = ?"
+        params.append(entity_type)
+    if entity_id:
+        sql += " AND entity_id = ?"
+        params.append(entity_id)
+    if doc_type:
+        sql += " AND doc_type = ?"
+        params.append(doc_type)
+    if status:
+        sql += " AND status = ?"
+        params.append(status)
+    sql += " ORDER BY expiry_date ASC, created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    results = []
+    for r in rows:
+        d = dict(r)
+        _enrich_compliance_doc(d)
+        results.append(d)
+    return results
+
+
+def update_compliance_document(doc_id: str, **fields) -> dict | None:
+    existing = get_compliance_document(doc_id)
+    if not existing:
+        return None
+    allowed = {
+        "entity_type", "entity_id", "doc_type", "title",
+        "issuing_authority", "doc_number", "issue_date", "expiry_date",
+        "alert_days", "status", "notes",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return existing
+    from dispatch.models import _utc_now
+    updates["updated_at"] = _utc_now()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [doc_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE compliance_documents SET {set_clause} WHERE doc_id = ?",
+            vals,
+        )
+    return get_compliance_document(doc_id)
+
+
+def delete_compliance_document(doc_id: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM compliance_documents WHERE doc_id = ?",
+            (doc_id,),
+        )
+    return cur.rowcount > 0
+
+
+def _enrich_compliance_doc(d: dict) -> None:
+    from dispatch.models import _utc_now
+    from datetime import datetime
+    expiry = d.get("expiry_date", "")
+    today = _utc_now()[:10]
+    if expiry:
+        d["is_expired"] = expiry < today
+        try:
+            delta = (datetime.fromisoformat(expiry) - datetime.fromisoformat(today)).days
+            d["days_until_expiry"] = delta
+            d["needs_alert"] = delta <= d.get("alert_days", 30)
+        except ValueError:
+            d["days_until_expiry"] = None
+            d["needs_alert"] = False
+    else:
+        d["is_expired"] = False
+        d["days_until_expiry"] = None
+        d["needs_alert"] = False
+
+
+def get_expiring_compliance_documents(days_ahead: int = 30) -> list[dict]:
+    from dispatch.models import _utc_now
+    from datetime import datetime, timedelta
+    today = _utc_now()[:10]
+    cutoff = (datetime.fromisoformat(today) + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+    sql = """\
+    SELECT * FROM compliance_documents
+    WHERE status IN ('active', 'expiring_soon')
+      AND expiry_date != ''
+      AND expiry_date <= ?
+    ORDER BY expiry_date ASC
+    """
+    with get_connection() as conn:
+        rows = conn.execute(sql, (cutoff,)).fetchall()
+    results = []
+    for r in rows:
+        d = dict(r)
+        _enrich_compliance_doc(d)
+        results.append(d)
+    return results

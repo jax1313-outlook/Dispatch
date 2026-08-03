@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Compliance — L2-COS Portal{% endblock %}
+{% block page_title %}Compliance Document Tracker{% endblock %}
+{% block page_actions %}
+<button class="btn btn-sm btn-success" onclick="toggleForm('add-doc-form')">+ Add Document</button>
+<button class="btn btn-sm" onclick="checkAlerts()">Check Alerts</button>
+{% endblock %}
+
+{% block body %}
+<style>
+  .comp-alert-bar { padding:10px 14px; border-radius:6px; margin-bottom:16px; display:flex; gap:20px; flex-wrap:wrap; }
+  .comp-alert-bar.has-alerts { background:#fff3cd; border:1px solid #e6c200; }
+  .comp-alert-bar.all-clear { background:#d4edda; border:1px solid #28a745; }
+  .comp-alert-item { font-size:0.95em; }
+  .comp-alert-item.expired { color:#dc3545; font-weight:600; }
+  .comp-alert-item.expiring { color:#e67e00; font-weight:600; }
+  .comp-card { background:var(--bg2, #f8f9fa); padding:12px 16px; border-radius:8px; border:1px solid var(--border, #dee2e6); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  .comp-card.expired { border-left:4px solid #dc3545; }
+  .comp-card.expiring { border-left:4px solid #e67e00; }
+  .comp-card.active { border-left:4px solid #28a745; }
+  .comp-card .doc-title { font-weight:600; font-size:1em; }
+  .comp-card .doc-meta { font-size:0.85em; color:var(--text-muted, #6c757d); }
+  .comp-card .doc-expiry { font-size:0.9em; }
+  .comp-card .doc-expiry.text-danger { color:#dc3545; }
+  .comp-card .doc-expiry.text-warning { color:#e67e00; }
+  .comp-card .doc-expiry.text-success { color:#28a745; }
+  .comp-card .doc-actions { display:flex; gap:4px; }
+  .filter-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .hidden-form { display:none; background:var(--bg2, #f8f9fa); padding:16px; border-radius:8px; margin-bottom:16px; border:1px solid var(--border, #dee2e6); }
+  .form-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+  .form-row label { display:block; font-size:0.85em; font-weight:500; margin-bottom:2px; }
+  .form-row .field { flex:1; min-width:180px; }
+  .form-row input, .form-row select, .form-row textarea { width:100%; padding:4px 8px; border:1px solid var(--border, #ccc); border-radius:4px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.8em; font-weight:500; }
+  .badge-expired { background:#f8d7da; color:#721c24; }
+  .badge-expiring { background:#fff3cd; color:#856404; }
+  .badge-active { background:#d4edda; color:#155724; }
+  .badge-renewed { background:#cce5ff; color:#004085; }
+</style>
+
+{% set expired_docs = expiring | selectattr('is_expired') | list %}
+{% set expiring_docs = expiring | rejectattr('is_expired') | list %}
+
+{% if expired_docs or expiring_docs %}
+<div class="comp-alert-bar has-alerts">
+  {% if expired_docs %}
+  <div class="comp-alert-item expired">{{ expired_docs|length }} expired document{{ 's' if expired_docs|length != 1 }}</div>
+  {% endif %}
+  {% if expiring_docs %}
+  <div class="comp-alert-item expiring">{{ expiring_docs|length }} expiring within 30 days</div>
+  {% endif %}
+</div>
+{% else %}
+<div class="comp-alert-bar all-clear">
+  <div class="comp-alert-item">All compliance documents are current</div>
+</div>
+{% endif %}
+
+<div id="add-doc-form" class="hidden-form">
+  <h3>Add Compliance Document</h3>
+  <form onsubmit="addDoc(event)">
+    <div class="form-row">
+      <div class="field">
+        <label>Title *</label>
+        <input name="title" required>
+      </div>
+      <div class="field">
+        <label>Document Type</label>
+        <select name="doc_type">
+          {% for dt in doc_types %}
+          <option value="{{ dt }}">{{ dt | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Entity Type</label>
+        <select name="entity_type" onchange="updateEntityOptions(this)">
+          {% for et in entity_types %}
+          <option value="{{ et }}">{{ et | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Entity</label>
+        <select name="entity_id" id="entity-id-select">
+          <option value="">— Company-wide —</option>
+          {% for d in drivers %}
+          <option value="{{ d.driver_id }}" class="driver-opt" style="display:none">{{ d.name }}</option>
+          {% endfor %}
+          {% for e in equipment %}
+          <option value="{{ e.equipment_id }}" class="equip-opt" style="display:none">{{ e.unit_number }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>Document Number</label>
+        <input name="doc_number">
+      </div>
+      <div class="field">
+        <label>Issuing Authority</label>
+        <input name="issuing_authority">
+      </div>
+      <div class="field">
+        <label>Issue Date</label>
+        <input type="date" name="issue_date">
+      </div>
+      <div class="field">
+        <label>Expiry Date</label>
+        <input type="date" name="expiry_date">
+      </div>
+      <div class="field">
+        <label>Alert Days Before Expiry</label>
+        <input type="number" name="alert_days" value="30" min="0">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field" style="flex:3">
+        <label>Notes</label>
+        <textarea name="notes" rows="2"></textarea>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Save Document</button>
+    <button type="button" class="btn btn-sm" onclick="toggleForm('add-doc-form')">Cancel</button>
+  </form>
+</div>
+
+<div class="filter-bar">
+  <form method="get" action="{{ url_for('pages.compliance') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <select name="entity_type">
+      <option value="">All Entities</option>
+      {% for et in entity_types %}
+      <option value="{{ et }}" {% if sel_entity_type == et %}selected{% endif %}>{{ et | title }}</option>
+      {% endfor %}
+    </select>
+    <select name="doc_type">
+      <option value="">All Types</option>
+      {% for dt in doc_types %}
+      <option value="{{ dt }}" {% if sel_doc_type == dt %}selected{% endif %}>{{ dt | replace('_', ' ') | title }}</option>
+      {% endfor %}
+    </select>
+    <select name="status">
+      <option value="">All Statuses</option>
+      {% for s in doc_statuses %}
+      <option value="{{ s }}" {% if sel_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+    {% if sel_entity_type or sel_doc_type or sel_status %}
+    <a href="{{ url_for('pages.compliance') }}" class="btn btn-sm">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<h3>Documents ({{ docs|length }})</h3>
+
+{% if docs %}
+{% for doc in docs %}
+<div class="comp-card {% if doc.is_expired %}expired{% elif doc.needs_alert %}expiring{% else %}active{% endif %}">
+  <div style="flex:1">
+    <div class="doc-title">{{ doc.title }}</div>
+    <div class="doc-meta">
+      {{ doc.doc_type | replace('_', ' ') | title }}
+      {% if doc.entity_type != 'company' %} · {{ doc.entity_type | title }}: {{ doc.entity_id }}{% endif %}
+      {% if doc.doc_number %} · #{{ doc.doc_number }}{% endif %}
+      {% if doc.issuing_authority %} · {{ doc.issuing_authority }}{% endif %}
+    </div>
+  </div>
+  <div>
+    {% if doc.is_expired %}
+    <span class="badge badge-expired">Expired</span>
+    {% elif doc.needs_alert %}
+    <span class="badge badge-expiring">Expiring Soon</span>
+    {% elif doc.status == 'renewed' %}
+    <span class="badge badge-renewed">Renewed</span>
+    {% else %}
+    <span class="badge badge-active">Active</span>
+    {% endif %}
+  </div>
+  <div class="doc-expiry {% if doc.is_expired %}text-danger{% elif doc.needs_alert %}text-warning{% else %}text-success{% endif %}">
+    {% if doc.expiry_date %}
+      Expires: {{ doc.expiry_date }}
+      {% if doc.days_until_expiry is not none %}
+        ({{ doc.days_until_expiry }} day{{ 's' if doc.days_until_expiry != 1 }})
+      {% endif %}
+    {% else %}
+      No expiry
+    {% endif %}
+  </div>
+  <div class="doc-actions">
+    <button class="btn btn-sm" onclick="renewDoc('{{ doc.doc_id }}')">Renew</button>
+    <button class="btn btn-sm" onclick="deleteDoc('{{ doc.doc_id }}')">Delete</button>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<p style="color:var(--text-muted, #6c757d);">No compliance documents found. Add one to start tracking.</p>
+{% endif %}
+
+<script>
+function toggleForm(id) {
+  var f = document.getElementById(id);
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateEntityOptions(sel) {
+  var et = sel.value;
+  var eid = document.getElementById('entity-id-select');
+  eid.querySelectorAll('.driver-opt, .equip-opt').forEach(function(o) { o.style.display = 'none'; });
+  if (et === 'driver') {
+    eid.querySelectorAll('.driver-opt').forEach(function(o) { o.style.display = ''; });
+  } else if (et === 'equipment') {
+    eid.querySelectorAll('.equip-opt').forEach(function(o) { o.style.display = ''; });
+  }
+}
+
+function addDoc(e) {
+  e.preventDefault();
+  var fd = new FormData(e.target);
+  var body = {};
+  fd.forEach(function(v, k) { body[k] = v; });
+  if (body.alert_days) body.alert_days = parseInt(body.alert_days);
+  fetch('/api/dispatch/compliance', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(r) {
+    if (r.ok) location.reload();
+    else r.json().then(function(d) { alert(d.error || 'Error'); });
+  });
+}
+
+function renewDoc(docId) {
+  var newExpiry = prompt('Enter new expiry date (YYYY-MM-DD):');
+  if (!newExpiry) return;
+  fetch('/api/dispatch/compliance/' + docId, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({expiry_date: newExpiry, status: 'renewed'})
+  }).then(function(r) {
+    if (r.ok) location.reload();
+    else r.json().then(function(d) { alert(d.error || 'Error'); });
+  });
+}
+
+function deleteDoc(docId) {
+  if (!confirm('Delete this compliance document?')) return;
+  fetch('/api/dispatch/compliance/' + docId, {
+    method: 'DELETE'
+  }).then(function(r) {
+    if (r.ok) location.reload();
+    else alert('Error deleting document');
+  });
+}
+
+function checkAlerts() {
+  fetch('/api/dispatch/compliance/check-alerts', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      alert('Expired: ' + d.expired + ', Expiring soon: ' + d.expiring_soon);
+      location.reload();
+    });
+}
+</script>
+{% endblock %}
