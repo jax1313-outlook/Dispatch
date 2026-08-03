@@ -746,6 +746,66 @@ def get_financials(load_id: str) -> dict | None:
     }
 
 
+def get_avg_fuel_price() -> float:
+    purchases = store.list_ifta_fuel_purchases()
+    if not purchases:
+        return 0.0
+    total_amount = sum(p["amount"] for p in purchases)
+    total_gallons = sum(p["gallons"] for p in purchases)
+    if total_gallons <= 0:
+        return 0.0
+    return round(total_amount / total_gallons, 4)
+
+
+def get_fleet_mpg() -> float:
+    legs = store.list_ifta_trip_legs()
+    purchases = store.list_ifta_fuel_purchases()
+    total_miles = sum(leg["miles"] for leg in legs)
+    total_gallons = sum(p["gallons"] for p in purchases)
+    if total_gallons <= 0:
+        return 0.0
+    return round(total_miles / total_gallons, 2)
+
+
+def estimate_fuel_cost(
+    distance_miles: float = 0.0,
+    mpg: float = 0.0,
+    fuel_price: float = 0.0,
+    load_id: str = "",
+) -> dict:
+    if load_id and not distance_miles:
+        rc = store.get_rate_confirmation(load_id)
+        if rc and rc.get("distance_miles"):
+            distance_miles = rc["distance_miles"]
+
+    if not mpg:
+        mpg = get_fleet_mpg()
+    if not fuel_price:
+        fuel_price = get_avg_fuel_price()
+
+    if distance_miles <= 0:
+        return {
+            "distance_miles": 0,
+            "mpg": round(mpg, 2),
+            "fuel_price_per_gallon": round(fuel_price, 4),
+            "gallons_needed": 0,
+            "estimated_cost": 0,
+            "cost_per_mile": 0,
+        }
+
+    gallons_needed = distance_miles / mpg if mpg > 0 else 0.0
+    estimated_cost = gallons_needed * fuel_price
+
+    return {
+        "distance_miles": round(distance_miles, 2),
+        "mpg": round(mpg, 2),
+        "fuel_price_per_gallon": round(fuel_price, 4),
+        "gallons_needed": round(gallons_needed, 2),
+        "estimated_cost": round(estimated_cost, 2),
+        "cost_per_mile": round(estimated_cost / distance_miles, 4) if distance_miles > 0 else 0,
+    }
+
+
 def create_settlement(
     load_id: str,
     due_date: str = "",

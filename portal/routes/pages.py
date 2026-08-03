@@ -306,6 +306,16 @@ def ifta():
     )
 
 
+@pages_bp.route("/fuel-estimator")
+def fuel_estimator():
+    from dispatch import services as dispatch_svc
+    defaults = {
+        "avg_fuel_price": dispatch_svc.get_avg_fuel_price(),
+        "fleet_mpg": dispatch_svc.get_fleet_mpg(),
+    }
+    return render_template("fuel_estimator.html", defaults=defaults)
+
+
 @pages_bp.route("/fleet")
 def fleet():
     from dispatch import services as dispatch_svc

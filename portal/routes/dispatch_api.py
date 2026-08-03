@@ -626,6 +626,40 @@ def get_financials(load_id):
     return jsonify({"status": "ok", **result})
 
 
+# ── Fuel Cost Estimator ──────────────────────────────────────────────
+
+@dispatch_bp.route("/fuel-estimate", methods=["GET", "POST"])
+def fuel_estimate():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+    else:
+        data = {}
+        for k in ("distance_miles", "mpg", "fuel_price"):
+            v = request.args.get(k)
+            if v:
+                data[k] = float(v)
+        load_id = request.args.get("load_id", "")
+        if load_id:
+            data["load_id"] = load_id
+
+    result = services.estimate_fuel_cost(
+        distance_miles=float(data.get("distance_miles", 0)),
+        mpg=float(data.get("mpg", 0)),
+        fuel_price=float(data.get("fuel_price", 0)),
+        load_id=data.get("load_id", ""),
+    )
+    return jsonify({"status": "ok", **result})
+
+
+@dispatch_bp.route("/fuel-defaults", methods=["GET"])
+def fuel_defaults():
+    return jsonify({
+        "status": "ok",
+        "avg_fuel_price": services.get_avg_fuel_price(),
+        "fleet_mpg": services.get_fleet_mpg(),
+    })
+
+
 # ── Settlements ──────────────────────────────────────────────────────
 
 @dispatch_bp.route("/loads/<load_id>/settlement", methods=["GET"])
