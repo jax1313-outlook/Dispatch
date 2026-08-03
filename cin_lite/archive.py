@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ARCHIVE_ROOT = Path(__file__).resolve().parent / "Archive"
+ARCHIVE_ROOT = Path(os.environ.get("DISPATCH_ARCHIVE_PATH", Path(__file__).resolve().parent / "Archive"))
 _SUBDIRS = ("Raw", "Processed", "Intelligence", "Summaries", "Routing", "Pending", "Outbox")
 
 
