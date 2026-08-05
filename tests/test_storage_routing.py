@@ -325,3 +325,51 @@ class TestPrecedence:
         monkeypatch.setenv("DISPATCH_ARCHIVE_ROOT", str(tmp_path / "root"))
         from cin_lite import archive
         assert archive._resolve_archive_root() == tmp_path / "explicit"
+
+
+# ── Config class resolution (PROMPT 5 gap fix) ──────────────────────
+
+
+class TestConfigResolution:
+    def test_config_data_dir_uses_ops_root(self, tmp_path, monkeypatch):
+        ops_root = tmp_path / "Dispatch Operations"
+        monkeypatch.setenv("DISPATCH_OPERATIONS_ROOT", str(ops_root))
+        monkeypatch.delenv("PORTAL_DATA_DIR", raising=False)
+        from portal.config import _resolve_data_dir
+        result = _resolve_data_dir()
+        assert result == str(ops_root / "Current Workspace" / "PortalData")
+
+    def test_config_data_dir_explicit_wins(self, tmp_path, monkeypatch):
+        explicit = tmp_path / "CustomData"
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(explicit))
+        monkeypatch.setenv("DISPATCH_OPERATIONS_ROOT", str(tmp_path / "Ops"))
+        from portal.config import _resolve_data_dir
+        assert _resolve_data_dir() == str(explicit)
+
+    def test_config_data_dir_default(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("PORTAL_DATA_DIR", raising=False)
+        monkeypatch.delenv("DISPATCH_OPERATIONS_ROOT", raising=False)
+        from portal.config import _resolve_data_dir, _PORTAL_DIR
+        assert _resolve_data_dir() == str(_PORTAL_DIR / "data")
+
+    def test_config_upload_dir_uses_memory_root(self, tmp_path, monkeypatch):
+        memory_root = tmp_path / "Memory"
+        monkeypatch.setenv("DISPATCH_MEMORY_ROOT", str(memory_root))
+        monkeypatch.delenv("PORTAL_UPLOAD_DIR", raising=False)
+        from portal.config import _resolve_upload_dir
+        assert _resolve_upload_dir() == str(memory_root / "Evidence")
+
+    def test_config_upload_dir_explicit_wins(self, tmp_path, monkeypatch):
+        explicit = tmp_path / "CustomUploads"
+        monkeypatch.setenv("PORTAL_UPLOAD_DIR", str(explicit))
+        monkeypatch.setenv("DISPATCH_MEMORY_ROOT", str(tmp_path / "Memory"))
+        from portal.config import _resolve_upload_dir
+        assert _resolve_upload_dir() == str(explicit)
+
+    def test_config_upload_dir_default(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("PORTAL_UPLOAD_DIR", raising=False)
+        monkeypatch.delenv("DISPATCH_MEMORY_ROOT", raising=False)
+        monkeypatch.delenv("PORTAL_DATA_DIR", raising=False)
+        monkeypatch.delenv("DISPATCH_OPERATIONS_ROOT", raising=False)
+        from portal.config import _resolve_upload_dir, _PORTAL_DIR
+        assert _resolve_upload_dir() == str(_PORTAL_DIR / "data" / "uploads")

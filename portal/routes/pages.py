@@ -827,13 +827,13 @@ def settings():
     from cin_lite import archive as cin_archive
     from dispatch.db import get_db_path
     from dispatch.services import _STALL_THRESHOLDS_HOURS, _get_upload_dir
-    from portal.models import get_memory_dir, get_archive_dir
+    from portal.models import get_data_dir, get_memory_dir, get_archive_dir
 
     storage_paths = {
         "ops_root": os.environ.get("DISPATCH_OPERATIONS_ROOT", ""),
         "archive_root": os.environ.get("DISPATCH_ARCHIVE_ROOT", ""),
         "memory_root": os.environ.get("DISPATCH_MEMORY_ROOT", ""),
-        "portal_data": str(Path(Config.DATA_DIR).resolve()),
+        "portal_data": str(get_data_dir().resolve()),
         "database": str(get_db_path().resolve()),
         "uploads": str(_get_upload_dir().resolve()),
         "archive": str(cin_archive.ARCHIVE_ROOT.resolve()),

@@ -107,7 +107,8 @@ def _print_storage_map() -> None:
     print()
     print("  Resolved Paths:")
     print(f"    Database         {get_db_path().resolve()}")
-    print(f"    Portal data      {Path(Config.DATA_DIR).resolve()}")
+    from portal.models import get_data_dir
+    print(f"    Portal data      {get_data_dir().resolve()}")
     print(f"    Evidence uploads {_get_upload_dir().resolve()}")
     print(f"    Contract archive {cin_archive.ARCHIVE_ROOT.resolve()}")
     print(f"    Email outbox     {(cin_archive.ARCHIVE_ROOT / 'Outbox').resolve()}")
