@@ -1701,6 +1701,15 @@ def ifta_report_approval_detail(approval_id):
     return jsonify(approval)
 
 
+@dispatch_bp.route("/ifta/report-approvals/<approval_id>/exceptions", methods=["GET"])
+def ifta_report_approval_exceptions(approval_id):
+    approval = services.get_ifta_report_approval(approval_id)
+    if approval is None:
+        return jsonify({"error": f"No such IFTA report approval: {approval_id}"}), 404
+    exceptions = services.list_ifta_exceptions(approval_id)
+    return jsonify({"status": "ok", "approval_id": approval_id, "exceptions": exceptions, "count": len(exceptions)})
+
+
 @dispatch_bp.route("/ifta/report-approvals/<approval_id>/approve", methods=["GET"])
 def ifta_report_approval_approve(approval_id):
     token = request.args.get("token", "")

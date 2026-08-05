@@ -291,6 +291,17 @@ CREATE TABLE IF NOT EXISTS ifta_report_approvals (
 
 CREATE INDEX IF NOT EXISTS idx_ifta_approvals_period ON ifta_report_approvals(year, quarter, vehicle_id);
 
+CREATE TABLE IF NOT EXISTS ifta_exceptions (
+    exception_id        TEXT PRIMARY KEY,
+    approval_id         TEXT NOT NULL REFERENCES ifta_report_approvals(approval_id),
+    exception_type      TEXT NOT NULL,
+    detail              TEXT NOT NULL DEFAULT '',
+    related_record_ids  TEXT NOT NULL DEFAULT '[]',
+    detected_at         TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_exceptions_approval ON ifta_exceptions(approval_id);
+
 CREATE TABLE IF NOT EXISTS broker_contacts (
     broker_id       TEXT PRIMARY KEY,
     company_name    TEXT NOT NULL,

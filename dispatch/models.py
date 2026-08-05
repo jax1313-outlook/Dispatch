@@ -901,6 +901,45 @@ class IFTAReportApproval:
         return asdict(self)
 
 
+IFTA_EXCEPTION_TYPES = [
+    "fuel_no_miles",
+    "miles_no_fuel_gap",
+    "fleet_mpg_out_of_band",
+    "broken_evidence_linkage",
+    "late_arrival_closed_quarter",
+    "corner_clipping",
+]
+
+
+@dataclass
+class IFTAException:
+    """One detector finding for one submitted quarter -- six of Hold's
+    ten exception types (src/dispatch/ifta/exceptions.py), the ones that
+    port to data Dispatch actually has. Advisory only: nothing in this
+    codebase reads an exception as a reason to block a submission or a
+    seal. Persisted once, at submission time, alongside the frozen
+    IFTAReportApproval snapshot it was computed from -- never updated or
+    deleted after that, matching Hold's insert-only ifta_exceptions
+    convention."""
+    exception_id: str = ""
+    approval_id: str = ""
+    exception_type: str = ""
+    detail: str = ""
+    related_record_ids: list = field(default_factory=list)
+    detected_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.exception_id:
+            self.exception_id = _gen_id("IFTAEXC")
+        if not self.detected_at:
+            self.detected_at = _utc_now()
+        if self.exception_type:
+            _validate_choice(self.exception_type, IFTA_EXCEPTION_TYPES, "exception_type")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
 @dataclass
 class LaneTemplate:
     template_id: str = ""

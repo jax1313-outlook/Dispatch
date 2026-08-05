@@ -14,6 +14,7 @@ from dispatch.models import (
     ExceptionNotice,
     Expense,
     BrokerContact,
+    IFTAException,
     IFTAFuelEvidence,
     IFTAFuelPurchase,
     IFTAReportApproval,
@@ -1563,6 +1564,29 @@ def update_ifta_report_approval(approval_id: str, updates: dict) -> dict | None:
             f"UPDATE ifta_report_approvals SET {sets} WHERE approval_id = ?", vals
         )
     return get_ifta_report_approval(approval_id)
+
+
+# ── IFTA Exceptions (Phase 6a detectors) ─────────────────────────────
+
+def create_ifta_exception(exc: IFTAException) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO ifta_exceptions
+               (exception_id, approval_id, exception_type, detail, related_record_ids, detected_at)
+               VALUES (?,?,?,?,?,?)""",
+            (exc.exception_id, exc.approval_id, exc.exception_type, exc.detail,
+             json.dumps(exc.related_record_ids), exc.detected_at),
+        )
+    return exc.to_dict()
+
+
+def list_ifta_exceptions(approval_id: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ifta_exceptions WHERE approval_id = ? ORDER BY detected_at ASC",
+            (approval_id,),
+        ).fetchall()
+    return [deserialize_json_fields(dict_from_row(r), "related_record_ids") for r in rows]
 
 
 # ── Broker Contacts ──────────────────────────────────────────────────
