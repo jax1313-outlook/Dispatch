@@ -278,23 +278,25 @@ class TestReviewDashboard:
         assert dash["total_purchase_count"] == 1
         assert "no receipt attached" in dash["readiness_status"]
 
-    def test_all_linked_and_no_warnings_is_ready_to_submit(self):
-        purchase = services.add_ifta_fuel_purchase(jurisdiction="OK", gallons=50, amount=175, date="2025-01-16")
+    def test_all_linked_and_no_exceptions_is_ready_to_submit(self):
+        purchase = services.add_ifta_fuel_purchase(jurisdiction="CA", gallons=50, amount=175, date="2025-01-16")
         services.attach_ifta_fuel_evidence(
             purchase_id=purchase["purchase_id"], file_data=b"r", original_filename="r.pdf",
         )
         services.add_ifta_trip_leg(jurisdiction="CA", miles=250, date="2025-01-15")
         dash = services.build_ifta_review_dashboard(2025, 1)
         assert dash["unlinked_purchase_count"] == 0
+        assert dash["exceptions"] == []
         assert dash["readiness_status"] == "ready to submit"
 
-    def test_implausible_mpg_produces_warning(self):
+    def test_implausible_mpg_produces_exception(self):
         # 5000 miles on 10 gallons -> 500 mpg, well outside DEFAULT_MPG_BAND
         services.add_ifta_trip_leg(jurisdiction="CA", miles=5000, date="2025-01-15")
         services.add_ifta_fuel_purchase(jurisdiction="CA", gallons=10, amount=35, date="2025-01-16")
         dash = services.build_ifta_review_dashboard(2025, 1)
-        assert dash["warnings"]
-        assert "outside plausible range" in dash["warnings"][0]
+        assert dash["exceptions"]
+        assert any(e["exception_type"] == "fleet_mpg_out_of_band" for e in dash["exceptions"])
+        assert "outside plausible range" in dash["exceptions"][0]["detail"]
 
     def test_sealed_quarter_shows_frozen_snapshot(self):
         _seed_taxable_quarter()
@@ -341,12 +343,13 @@ class TestReviewPage:
         assert resp.status_code == 200
         assert "no data recorded yet this quarter" in resp.data.decode()
 
-    def test_renders_with_plausibility_warning(self, client):
+    def test_renders_with_exception(self, client):
         services.add_ifta_trip_leg(jurisdiction="CA", miles=5000, date="2025-01-15")
         services.add_ifta_fuel_purchase(jurisdiction="CA", gallons=10, amount=35, date="2025-01-16")
         resp = client.get("/ifta/review?year=2025&quarter=1")
         assert resp.status_code == 200
         assert "outside plausible range" in resp.data.decode()
+        assert "fleet_mpg_out_of_band" in resp.data.decode()
 
     def test_renders_with_mixed_linked_and_unlinked_purchases(self, client):
         linked = services.add_ifta_fuel_purchase(jurisdiction="OK", gallons=50, amount=175, date="2025-01-16")

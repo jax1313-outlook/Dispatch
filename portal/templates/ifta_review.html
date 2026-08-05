@@ -105,17 +105,17 @@
   {% endif %}
 </div>
 
-{# ── Plausibility Warnings ───────────────────────────────────────── #}
+{# ── Exceptions ───────────────────────────────────────────────────── #}
 <div class="review-panel">
-  <h3>Plausibility Warnings</h3>
-  {% if dashboard.warnings %}
+  <h3>Exceptions{% if dashboard.exceptions %} ({{ dashboard.exceptions|length }}){% endif %}</h3>
+  {% if dashboard.exceptions %}
   <ul class="warning-list">
-    {% for w in dashboard.warnings %}
-    <li>{{ w }}</li>
+    {% for e in dashboard.exceptions %}
+    <li><strong>{{ e.exception_type }}</strong> — {{ e.detail }}</li>
     {% endfor %}
   </ul>
   {% else %}
-  <p style="color:#999;font-style:italic;">No plausibility warnings for this period.</p>
+  <p style="color:#999;font-style:italic;">No exceptions found for this period.</p>
   {% endif %}
 </div>
 
