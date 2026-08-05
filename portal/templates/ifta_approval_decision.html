@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}IFTA Approval — {{ approval_id[:16] if approval_id else approval.approval_id[:16] }}...{% endblock %}
+{% block page_title %}IFTA Quarter Approval{% endblock %}
+
+{% block body %}
+{% if success %}
+<div class="card" style="border-left:4px solid #2e7d32;padding:24px;margin-bottom:20px;">
+    <h2 style="color:#2e7d32;margin-top:0;">Quarter Sealed</h2>
+    <table style="margin-bottom:16px;">
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Period</td>
+            <td style="padding:4px 0;"><strong>Q{{ approval.quarter }} {{ approval.year }}</strong></td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Approved by</td>
+            <td style="padding:4px 0;">{{ approval.approved_by }}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Sealed at</td>
+            <td style="padding:4px 0;">{{ approval.sealed_at }}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#666;">Recommendation</td>
+            <td style="padding:4px 0;">
+                {% if approval.recommendation_json %}
+                <strong>{{ approval.recommendation_json.recommendation }}</strong>
+                — ${{ "%.2f"|format(approval.recommendation_json.amount) }}
+                {% endif %}
+            </td></tr>
+    </table>
+    <p style="color:#666;font-size:14px;">
+        <a href="{{ url_for('pages.ifta') }}">Back to IFTA</a>
+    </p>
+</div>
+{% else %}
+<div class="card" style="border-left:4px solid #c62828;padding:24px;">
+    <h2 style="color:#c62828;margin-top:0;">Approval Failed</h2>
+    <p>{{ error }}</p>
+    <p style="color:#666;font-size:14px;">Approval ID: {{ approval_id }}</p>
+</div>
+{% endif %}
+{% endblock %}

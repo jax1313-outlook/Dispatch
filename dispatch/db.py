@@ -259,6 +259,22 @@ CREATE INDEX IF NOT EXISTS idx_ifta_fuel_date ON ifta_fuel_purchases(date);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_jurisdiction ON ifta_fuel_purchases(jurisdiction);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_vehicle ON ifta_fuel_purchases(vehicle_id);
 
+CREATE TABLE IF NOT EXISTS ifta_report_approvals (
+    approval_id         TEXT PRIMARY KEY,
+    year                INTEGER NOT NULL,
+    quarter             INTEGER NOT NULL,
+    vehicle_id          TEXT NOT NULL DEFAULT '',
+    status              TEXT NOT NULL DEFAULT 'draft',
+    snapshot_json       TEXT NOT NULL,
+    recommendation_json TEXT,
+    submitted_at        TEXT NOT NULL,
+    sealed_at           TEXT,
+    approved_by         TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_approvals_period ON ifta_report_approvals(year, quarter, vehicle_id);
+
 CREATE TABLE IF NOT EXISTS broker_contacts (
     broker_id       TEXT PRIMARY KEY,
     company_name    TEXT NOT NULL,

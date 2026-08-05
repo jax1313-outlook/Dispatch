@@ -343,6 +343,11 @@ def ifta():
         error = str(exc)
 
     equipment = dispatch_svc.list_equipment(status="active")
+
+    approval = None
+    if view_mode != "month" and report is not None:
+        approval = dispatch_svc.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+
     return render_template(
         "ifta.html",
         report=report,
@@ -354,6 +359,7 @@ def ifta():
         sel_month=month,
         sel_vehicle=vehicle_id,
         view_mode=view_mode,
+        approval=approval,
     )
 
 
