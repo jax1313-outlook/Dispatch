@@ -716,7 +716,12 @@ def archive_view():
             "key": key,
             "records": all_archive.get(key, []),
         })
-    pipeline_archived = cin_archive.list_contracts()
+    pipeline_archived = []
+    pipeline_archive_error = None
+    try:
+        pipeline_archived = cin_archive.list_contracts()
+    except cin_archive.ArchiveIntegrityError as exc:
+        pipeline_archive_error = str(exc)
 
     from dispatch import services as dispatch_svc
     dispatch_archived = dispatch_svc.list_retentions()
@@ -726,6 +731,7 @@ def archive_view():
         sections=sections,
         sandbox_archived=sandbox_archived,
         pipeline_archived=pipeline_archived,
+        pipeline_archive_error=pipeline_archive_error,
         dispatch_archived=dispatch_archived,
     )
 
