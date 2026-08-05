@@ -179,6 +179,13 @@
 <div id="add-fuel-form" class="hidden-form no-print">
   <h3>Add Fuel Purchase</h3>
   <div class="form-row">
+    <div class="field" style="flex:2;">
+      <label>Scan Receipt (optional — pre-fills the fields below)</label>
+      <input type="file" id="fuel-scan-input" accept="image/*" onchange="scanReceipt(this)">
+      <div id="fuel-scan-status" style="font-size:12px;margin-top:4px;color:#777;"></div>
+    </div>
+  </div>
+  <div class="form-row">
     <div class="field">
       <label>Jurisdiction</label>
       <select id="fuel-jurisdiction">
@@ -372,6 +379,41 @@ function addTripLeg() {
     .catch(e => alert('Error: ' + e.message));
 }
 
+let scannedReceiptFile = null;
+
+function scanReceipt(inputEl) {
+  const file = inputEl.files[0];
+  const statusEl = document.getElementById('fuel-scan-status');
+  if (!file) { scannedReceiptFile = null; statusEl.textContent = ''; return; }
+  scannedReceiptFile = file;
+  statusEl.style.color = '#777';
+  statusEl.textContent = 'Scanning...';
+  const formData = new FormData();
+  formData.append('file', file);
+  fetch(API + '/fuel-purchases/extract-receipt', {method: 'POST', body: formData})
+    .then(r => r.json())
+    .then(result => {
+      if (!result.available) {
+        statusEl.style.color = '#e65100';
+        statusEl.textContent = 'Scan unavailable (' + (result.reason || 'unknown') + ') — fill in manually.';
+        return;
+      }
+      if (result.jurisdiction) document.getElementById('fuel-jurisdiction').value = result.jurisdiction;
+      if (result.gallons != null) document.getElementById('fuel-gallons').value = result.gallons;
+      if (result.amount != null) document.getElementById('fuel-amount').value = result.amount;
+      if (result.purchase_date) document.getElementById('fuel-date').value = result.purchase_date;
+      if (result.vendor_name) document.getElementById('fuel-vendor').value = result.vendor_name;
+      const conf = result.extraction_confidence;
+      const confStr = (conf != null) ? conf.toFixed(2) : '?';
+      statusEl.style.color = (conf != null && conf < 0.75) ? '#e65100' : '#2e7d32';
+      statusEl.textContent = 'Scanned (confidence ' + confStr + ') — review before saving.';
+    })
+    .catch(() => {
+      statusEl.style.color = '#e65100';
+      statusEl.textContent = 'Scan failed — fill in manually.';
+    });
+}
+
 function addFuelPurchase() {
   const payload = {
     jurisdiction: document.getElementById('fuel-jurisdiction').value,
@@ -386,6 +428,13 @@ function addFuelPurchase() {
   if (!payload.gallons) { alert('Enter gallons'); return; }
   fetch(API + '/fuel-purchases', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
     .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(purchase => {
+      if (scannedReceiptFile) {
+        const formData = new FormData();
+        formData.append('file', scannedReceiptFile);
+        return fetch(API + '/fuel-purchases/' + purchase.purchase_id + '/evidence', {method: 'POST', body: formData});
+      }
+    })
     .then(() => location.reload())
     .catch(e => alert('Error: ' + e.message));
 }
