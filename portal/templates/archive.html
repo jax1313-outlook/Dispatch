@@ -37,7 +37,14 @@
 </section>
 {% endfor %}
 
-{% if pipeline_archived %}
+{% if pipeline_archive_error %}
+<section class="card-section">
+    <h2>DISPATCH Pipeline Archive</h2>
+    <div class="ifta-error-banner" style="background:#fdecea;border:1px solid #f5c2c0;color:#b71c1c;padding:12px 16px;border-radius:4px;">
+        <strong>Unable to load this section:</strong> {{ pipeline_archive_error }}
+    </div>
+</section>
+{% elif pipeline_archived %}
 <section class="card-section">
     <h2>DISPATCH Pipeline Archive ({{ pipeline_archived|length }})</h2>
     <p class="section-desc">Contracts processed through the DISPATCH acquisition pipeline and archived after a decision.</p>
