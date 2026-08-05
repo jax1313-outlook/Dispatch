@@ -1695,6 +1695,7 @@ def add_ifta_fuel_purchase(
     vehicle_id: str = "",
     vendor: str = "",
     notes: str = "",
+    extraction_confidence: float | None = None,
 ) -> dict:
     if jurisdiction not in IFTA_JURISDICTIONS:
         raise ValueError(f"Invalid jurisdiction: {jurisdiction}")
@@ -1710,6 +1711,7 @@ def add_ifta_fuel_purchase(
         vehicle_id=vehicle_id,
         vendor=vendor,
         notes=notes,
+        extraction_confidence=extraction_confidence,
     )
     return store.create_ifta_fuel_purchase(purchase)
 
@@ -1737,6 +1739,32 @@ def delete_ifta_fuel_purchase(purchase_id: str) -> bool:
 
 def list_ifta_fuel_purchases(**kwargs) -> list[dict]:
     return store.list_ifta_fuel_purchases(**kwargs)
+
+
+DEFAULT_SUSPECT_CONFIDENCE_THRESHOLD = 0.75  # Hold's own placeholder (validators.py) -- not yet calibrated
+
+
+def list_suspect_ifta_fuel_purchases(
+    year: int, quarter: int, vehicle_id: str = "",
+    threshold: float = DEFAULT_SUSPECT_CONFIDENCE_THRESHOLD,
+) -> list[dict]:
+    """Read-only: fuel purchases in this quarter whose scan-time
+    extraction_confidence is below threshold. No recomputation -- that
+    number was already produced once, at scan time (Phase 6b), and is
+    simply read back here, direct port of Hold's own _suspect_entries()
+    contract. A manually-entered purchase (extraction_confidence is
+    None) never qualifies -- there was no OCR to be uncertain about."""
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+    date_from, date_to = _quarter_date_range(year, quarter)
+    kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if vehicle_id:
+        kwargs["vehicle_id"] = vehicle_id
+    purchases = store.list_ifta_fuel_purchases(**kwargs)
+    return [
+        p for p in purchases
+        if p.get("extraction_confidence") is not None and p["extraction_confidence"] < threshold
+    ]
 
 
 def attach_ifta_fuel_evidence(
@@ -2362,14 +2390,17 @@ def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -
     no new I/O, no writes. As of Phase 6a, the Exceptions panel is a
     formal port of six of Hold's ten detectors, replacing Phase 5's ad
     hoc "Plausibility Warnings" panel (fleet_mpg_out_of_band is now one
-    of the six, not a separate mechanism). Still no suspect-entries
-    panel: Dispatch has no OCR-confidence pipeline to honestly populate
-    it from (DISPATCH_IFTA_PHASE5_LAUNCH_PACKAGE_v2 Section 2)."""
+    of the six, not a separate mechanism). As of Phase 7, a Suspect
+    Entries panel surfaces scanned fuel purchases below the confidence
+    threshold -- always computed live from the stored field (matching
+    Hold's own choice), never persisted, never factored into
+    readiness_status: it's informational, not a governed exception."""
     if quarter not in (1, 2, 3, 4):
         raise ValueError(f"Invalid quarter: {quarter}")
 
     approval = get_latest_ifta_report_approval(year, quarter, vehicle_id)
     sealed = approval is not None and approval["status"] == "sealed"
+    suspect_entries = list_suspect_ifta_fuel_purchases(year, quarter, vehicle_id)
 
     if sealed:
         snapshot = approval["snapshot_json"]
@@ -2389,6 +2420,7 @@ def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -
                 "unlinked_purchase_count": 0,
                 "total_purchase_count": 0,
                 "exceptions": [{"exception_type": "blocked", "detail": str(exc)}],
+                "suspect_entries": suspect_entries,
                 "readiness_status": "blocked — " + str(exc),
                 "approval_status": approval["status"] if approval else None,
                 "approval": approval,
@@ -2427,6 +2459,7 @@ def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -
         "unlinked_purchase_count": unlinked_count,
         "total_purchase_count": total_purchase_count,
         "exceptions": exceptions,
+        "suspect_entries": suspect_entries,
         "readiness_status": readiness_status,
         "approval_status": approval["status"] if approval else None,
         "approval": approval,

@@ -840,6 +840,7 @@ class IFTAFuelPurchase:
     notes: str = ""
     created_at: str = ""
     evidence_id: str | None = None
+    extraction_confidence: float | None = None
 
     def __post_init__(self) -> None:
         if not self.purchase_id:
