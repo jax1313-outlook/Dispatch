@@ -605,6 +605,28 @@ class TestPageRendering:
         assert "DISPATCH Pipeline Archive" in html
         assert "Pipeline Archived" in html
 
+    def test_archive_page_renders_clean_error_on_integrity_mismatch(self, client, tmp_archive):
+        """A tampered/corrupted pipeline-archive artifact must render a
+        clean error banner on /archive, not an unhandled 500 -- the same
+        class of gap Phase 2 closed on /ifta."""
+        import json as _json
+        from cin_lite import archive
+        contract = {"title": "Pipeline Archived", "solicitation_number": "SOL-ARC2",
+                     "agency": "DOD", "estimated_value": 100000, "response_date": None}
+        intel = {"set_aside_detection": {"module": "set_aside_detection", "version": "1.0",
+                 "flags": [], "findings": {}, "summary": "None",
+                 "score": None, "deterministic": True}}
+        metadata = archive.store(contract, intel, "test summary")
+        cid = metadata["contract_id"]
+        (tmp_archive / "Processed" / f"{cid}.json").write_text(
+            _json.dumps({"tampered": True}), encoding="utf-8"
+        )
+
+        resp = client.get("/archive")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "Unable to load this section" in html
+
 
 # ---------- Sandbox model tests ----------
 class TestSandboxModel:

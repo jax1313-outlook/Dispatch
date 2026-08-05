@@ -163,7 +163,7 @@ class TestCINArchiveRouting:
         )
         raw_dir = cin_root / "Raw"
         assert raw_dir.exists()
-        assert len(list(raw_dir.iterdir())) == 1
+        assert len(list(raw_dir.glob("*.json"))) == 1
 
 
 # ── Requirement 4: Portal data writes route to Dispatch Operations ────

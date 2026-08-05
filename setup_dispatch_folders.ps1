@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Creates the locked D:\ Dispatch ownership folder structure.
 
@@ -113,7 +113,7 @@ if (-not (Test-Path "D:\")) {
 
 Write-Host ""
 if ($DryRun) {
-    Write-Host "  DRY RUN — no changes will be made" -ForegroundColor Yellow
+    Write-Host "  DRY RUN -- no changes will be made" -ForegroundColor Yellow
 } else {
     Write-Host "  DISPATCH Folder Setup" -ForegroundColor Cyan
 }
@@ -165,7 +165,7 @@ foreach ($entry in $envVars.GetEnumerator()) {
 # ── Report ────────────────────────────────────────────────────────────
 
 Write-Host ""
-Write-Host "  ── Summary ──" -ForegroundColor Cyan
+Write-Host "  -- Summary --" -ForegroundColor Cyan
 Write-Host "  Folders created:  $created"
 Write-Host "  Folders existed:  $existed"
 Write-Host "  Env vars set:     $varsSet"

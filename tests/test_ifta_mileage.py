@@ -230,6 +230,44 @@ class TestIFTATripLegService:
             services.update_ifta_trip_leg(result["leg_id"], miles=-5)
 
 
+class TestIFTATripLegPlausibilityWarning:
+    """Non-blocking mileage plausibility signal -- fires when the fleet's
+    estimated MPG for the trip leg's quarter falls outside a plausible band,
+    but never refuses or rolls back the entry either way."""
+
+    def test_fires_when_mpg_out_of_band(self):
+        services.add_ifta_fuel_purchase(jurisdiction="TX", gallons=10, amount=35, date="2025-01-10")
+        result = services.add_ifta_trip_leg(jurisdiction="TX", miles=500, date="2025-01-15")
+        assert "plausibility_warning" in result
+        assert store.get_ifta_trip_leg(result["leg_id"]) is not None
+
+    def test_silent_when_mpg_in_band(self):
+        services.add_ifta_fuel_purchase(jurisdiction="TX", gallons=100, amount=350, date="2025-01-10")
+        result = services.add_ifta_trip_leg(jurisdiction="TX", miles=700, date="2025-01-15")
+        assert "plausibility_warning" not in result
+        assert store.get_ifta_trip_leg(result["leg_id"]) is not None
+
+    def test_silent_with_insufficient_data(self):
+        result = services.add_ifta_trip_leg(jurisdiction="TX", miles=100, date="2025-01-15")
+        assert "plausibility_warning" not in result
+
+    def test_uses_generated_date_when_none_given(self):
+        """date defaults to today inside IFTATripLeg.__post_init__ -- the
+        plausibility check must key off the record's real stored date, not
+        the empty string the caller passed, or it would silently skip."""
+        from datetime import date as date_cls
+        today = date_cls.today()
+        quarter = (today.month - 1) // 3 + 1
+        year, q = today.year, quarter
+        starts = {1: "01-01", 2: "04-01", 3: "07-01", 4: "10-01"}
+        services.add_ifta_fuel_purchase(
+            jurisdiction="TX", gallons=10, amount=35, date=f"{year}-{starts[q]}"
+        )
+        result = services.add_ifta_trip_leg(jurisdiction="TX", miles=500)
+        assert result["date"] == today.isoformat()
+        assert "plausibility_warning" in result
+
+
 class TestIFTAFuelPurchaseService:
     def test_add_fuel_purchase(self):
         result = services.add_ifta_fuel_purchase(
@@ -537,3 +575,18 @@ class TestIFTATemplate:
         html = resp.data.decode()
         assert "Print" in html
         assert "Export CSV" in html
+
+    def test_ifta_page_renders_clean_error_on_missing_rate(self, client, monkeypatch):
+        """A missing rate must surface as a clean, human-readable message on
+        the /ifta page -- not an unhandled 500. This is the page a human
+        actually looks at, closing the gap the API routes already covered."""
+        from dispatch.models import IFTA_TAX_RATES
+        client.post("/api/dispatch/ifta/trip-legs", json={
+            "jurisdiction": "TX", "miles": 500, "date": "2025-01-15"
+        })
+        monkeypatch.delitem(IFTA_TAX_RATES, "TX")
+        resp = client.get("/ifta?year=2025&quarter=1")
+        assert resp.status_code == 200
+        html = resp.data.decode()
+        assert "Unable to generate this report" in html
+        assert "TX" in html

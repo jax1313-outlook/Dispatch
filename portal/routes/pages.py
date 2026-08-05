@@ -332,15 +332,21 @@ def ifta():
 
     vehicle_id = request.args.get("vehicle_id", "")
 
-    if view_mode == "month":
-        report = dispatch_svc.get_ifta_monthly_report(year, month, vehicle_id)
-    else:
-        report = dispatch_svc.get_ifta_quarterly_report(year, quarter, vehicle_id)
+    report = None
+    error = None
+    try:
+        if view_mode == "month":
+            report = dispatch_svc.get_ifta_monthly_report(year, month, vehicle_id)
+        else:
+            report = dispatch_svc.get_ifta_quarterly_report(year, quarter, vehicle_id)
+    except ValueError as exc:
+        error = str(exc)
 
     equipment = dispatch_svc.list_equipment(status="active")
     return render_template(
         "ifta.html",
         report=report,
+        error=error,
         jurisdictions=IFTA_JURISDICTIONS,
         equipment=equipment,
         sel_year=year,
@@ -710,7 +716,12 @@ def archive_view():
             "key": key,
             "records": all_archive.get(key, []),
         })
-    pipeline_archived = cin_archive.list_contracts()
+    pipeline_archived = []
+    pipeline_archive_error = None
+    try:
+        pipeline_archived = cin_archive.list_contracts()
+    except cin_archive.ArchiveIntegrityError as exc:
+        pipeline_archive_error = str(exc)
 
     from dispatch import services as dispatch_svc
     dispatch_archived = dispatch_svc.list_retentions()
@@ -720,6 +731,7 @@ def archive_view():
         sections=sections,
         sandbox_archived=sandbox_archived,
         pipeline_archived=pipeline_archived,
+        pipeline_archive_error=pipeline_archive_error,
         dispatch_archived=dispatch_archived,
     )
 

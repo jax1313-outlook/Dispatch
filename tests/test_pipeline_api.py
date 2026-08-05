@@ -310,6 +310,41 @@ class TestPipelineAPI:
         resp = client.get("/api/pipeline/archive/CIN-NOPE")
         assert resp.status_code == 404
 
+    def test_archive_detail_integrity_mismatch_returns_clean_500(self, client, tmp_archive):
+        """A tampered artifact must surface as a clean JSON 500, matching
+        the sibling /api/pipeline/archive list route -- not an unhandled
+        crash."""
+        import json as _json
+        self._seed(tmp_archive)
+        client.post("/api/pipeline/decide", json={
+            "contract_id": "CIN-API-001", "action": "approve_archive",
+        })
+        contracts = client.get("/api/pipeline/archive").get_json()["contracts"]
+        cid = contracts[0]["contract_id"]
+        (tmp_archive / "Processed" / f"{cid}.json").write_text(
+            _json.dumps({"tampered": True}), encoding="utf-8"
+        )
+
+        resp = client.get(f"/api/pipeline/archive/{cid}")
+        assert resp.status_code == 500
+        assert "error" in resp.get_json()
+
+    def test_archive_list_integrity_mismatch_returns_clean_500(self, client, tmp_archive):
+        import json as _json
+        self._seed(tmp_archive)
+        client.post("/api/pipeline/decide", json={
+            "contract_id": "CIN-API-001", "action": "approve_archive",
+        })
+        contracts = client.get("/api/pipeline/archive").get_json()["contracts"]
+        cid = contracts[0]["contract_id"]
+        (tmp_archive / "Processed" / f"{cid}.json").write_text(
+            _json.dumps({"tampered": True}), encoding="utf-8"
+        )
+
+        resp = client.get("/api/pipeline/archive")
+        assert resp.status_code == 500
+        assert "error" in resp.get_json()
+
 
 # --------------------------------------------------------------------------- pending page
 

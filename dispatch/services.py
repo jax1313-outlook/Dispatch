@@ -1587,6 +1587,40 @@ def duplicate_load(load_id: str) -> dict:
 # ── IFTA Mileage & Fuel ─────────────────────────────────────────────
 
 
+# Starting point only, copied from Hold's proven fleet_mpg_out_of_band pattern
+# (tuned against Hold's own synthetic data) -- not yet reviewed against
+# Dispatch's real equipment profile. Purely informational; never blocks an entry.
+DEFAULT_MPG_BAND = (4.0, 9.5)
+
+
+def _quarter_containing_date(date_str: str) -> tuple[int, int] | None:
+    if not date_str:
+        return None
+    try:
+        year = int(date_str[:4])
+        month = int(date_str[5:7])
+    except (ValueError, IndexError):
+        return None
+    return year, (month - 1) // 3 + 1
+
+
+def _fleet_mpg_estimate(date_from: str, date_to: str, vehicle_id: str = "") -> float | None:
+    """Independent of IFTA_TAX_RATES and of _ifta_aggregate() -- built from
+    the same list_ifta_trip_legs()/list_ifta_fuel_purchases() primitives so
+    it keeps working even when _ifta_aggregate() would refuse on a missing
+    rate. Returns None on insufficient data rather than raising or guessing."""
+    leg_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    fuel_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if vehicle_id:
+        leg_kwargs["vehicle_id"] = vehicle_id
+        fuel_kwargs["vehicle_id"] = vehicle_id
+    total_miles = sum(leg["miles"] for leg in store.list_ifta_trip_legs(**leg_kwargs))
+    total_gallons = sum(p["gallons"] for p in store.list_ifta_fuel_purchases(**fuel_kwargs))
+    if total_miles <= 0 or total_gallons <= 0:
+        return None
+    return total_miles / total_gallons
+
+
 def add_ifta_trip_leg(
     jurisdiction: str,
     miles: float,
@@ -1607,7 +1641,20 @@ def add_ifta_trip_leg(
         load_id=load_id,
         notes=notes,
     )
-    return store.create_ifta_trip_leg(leg)
+    result = store.create_ifta_trip_leg(leg)
+
+    period = _quarter_containing_date(result["date"])
+    if period:
+        date_from, date_to = _quarter_date_range(*period)
+        mpg = _fleet_mpg_estimate(date_from, date_to, vehicle_id)
+        if mpg is not None:
+            low, high = DEFAULT_MPG_BAND
+            if not (low <= mpg <= high):
+                result["plausibility_warning"] = (
+                    f"fleet_mpg {mpg:.2f} outside plausible range "
+                    f"[{low}, {high}] for this period — mileage or fuel entry may be off"
+                )
+    return result
 
 
 def update_ifta_trip_leg(leg_id: str, **kwargs) -> dict:
@@ -1725,6 +1772,15 @@ def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
     fleet_mpg = round(total_miles / total_gallons, 4) if total_gallons > 0 else 0.0
 
     all_jurs = sorted(set(list(miles_by_jur.keys()) + list(fuel_by_jur.keys())))
+
+    missing_rate_jurs = sorted(j for j in all_jurs if j not in IFTA_TAX_RATES)
+    if missing_rate_jurs:
+        raise ValueError(
+            f"No IFTA tax rate on file for jurisdiction(s) {missing_rate_jurs} "
+            f"— refusing to report a fabricated $0.00 rate. Add the missing "
+            f"rate(s) to IFTA_TAX_RATES before generating this report."
+        )
+
     jurisdictions = []
     total_tax_owed = 0.0
     total_surcharge = 0.0
@@ -1733,7 +1789,7 @@ def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
         fuel = fuel_by_jur.get(j, {"gallons": 0.0, "amount": 0.0})
         taxable_gallons = round(miles / fleet_mpg, 4) if fleet_mpg > 0 else 0.0
         net_taxable = round(taxable_gallons - fuel["gallons"], 4)
-        rates = IFTA_TAX_RATES.get(j, {"rate": 0.0, "surcharge": 0.0})
+        rates = IFTA_TAX_RATES[j]
         tax_rate = rates["rate"]
         surcharge_rate = rates["surcharge"]
         tax_owed = round(net_taxable * tax_rate, 2)
