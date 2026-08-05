@@ -1600,6 +1600,61 @@ def ifta_export_csv():
     )
 
 
+# ── IFTA Report Approvals (Phase 4 finalization gate) ────────────────
+
+
+@dispatch_bp.route("/ifta/report-approvals", methods=["GET", "POST"])
+def ifta_report_approvals():
+    if request.method == "GET":
+        return jsonify({"status": "ok", "approvals": services.list_ifta_report_approvals()})
+
+    data = request.get_json(silent=True) or {}
+    try:
+        year = int(data.get("year", 0))
+        quarter = int(data.get("quarter", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "year and quarter must be integers"}), 400
+    if not year or not quarter:
+        return jsonify({"error": "year and quarter are required"}), 400
+    vehicle_id = data.get("vehicle_id", "")
+
+    try:
+        approval = services.submit_ifta_quarter_for_approval(year, quarter, vehicle_id)
+    except services.AlreadySubmittedError as exc:
+        return jsonify({"error": str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(approval), 201
+
+
+@dispatch_bp.route("/ifta/report-approvals/<approval_id>", methods=["GET"])
+def ifta_report_approval_detail(approval_id):
+    approval = services.get_ifta_report_approval(approval_id)
+    if approval is None:
+        return jsonify({"error": f"No such IFTA report approval: {approval_id}"}), 404
+    return jsonify(approval)
+
+
+@dispatch_bp.route("/ifta/report-approvals/<approval_id>/approve", methods=["GET"])
+def ifta_report_approval_approve(approval_id):
+    token = request.args.get("token", "")
+    try:
+        approval = services.approve_ifta_quarter(approval_id, token)
+    except services.InvalidApprovalTokenError as exc:
+        return render_template(
+            "ifta_approval_decision.html", success=False, error=str(exc),
+            approval_id=approval_id,
+        ), 403
+    except ValueError as exc:
+        return render_template(
+            "ifta_approval_decision.html", success=False, error=str(exc),
+            approval_id=approval_id,
+        ), 404
+    return render_template(
+        "ifta_approval_decision.html", success=True, approval=approval,
+    )
+
+
 # ── Broker Contact Directory ─────────────────────────────────────────
 
 

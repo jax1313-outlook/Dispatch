@@ -15,6 +15,7 @@ from dispatch.models import (
     Expense,
     BrokerContact,
     IFTAFuelPurchase,
+    IFTAReportApproval,
     IFTATripLeg,
     Load,
     LoadActivity,
@@ -1433,6 +1434,99 @@ def update_ifta_fuel_purchase(purchase_id: str, updates: dict) -> dict | None:
             f"UPDATE ifta_fuel_purchases SET {sets} WHERE purchase_id = ?", vals
         )
     return get_ifta_fuel_purchase(purchase_id)
+
+
+# ── IFTA Report Approvals ────────────────────────────────────────────
+
+
+def _deserialize_approval(d: dict) -> dict:
+    return deserialize_json_fields(d, "snapshot_json", "recommendation_json")
+
+
+def create_ifta_report_approval(approval: IFTAReportApproval) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO ifta_report_approvals
+               (approval_id, year, quarter, vehicle_id, status, snapshot_json,
+                recommendation_json, submitted_at, sealed_at, approved_by, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (approval.approval_id, approval.year, approval.quarter, approval.vehicle_id,
+             approval.status, json.dumps(approval.snapshot),
+             json.dumps(approval.recommendation) if approval.recommendation else None,
+             approval.submitted_at, approval.sealed_at, approval.approved_by,
+             approval.created_at),
+        )
+    return get_ifta_report_approval(approval.approval_id)
+
+
+def get_ifta_report_approval(approval_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ifta_report_approvals WHERE approval_id = ?", (approval_id,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    d["snapshot_json"] = json.loads(d["snapshot_json"])
+    d["recommendation_json"] = (
+        json.loads(d["recommendation_json"]) if d["recommendation_json"] else None
+    )
+    return d
+
+
+def get_latest_ifta_report_approval(year: int, quarter: int, vehicle_id: str = "") -> dict | None:
+    """Most recently submitted approval for this period, or None. Used to
+    refuse a second submission while one is already outstanding, and to
+    check whether a period has already been sealed."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT * FROM ifta_report_approvals
+               WHERE year = ? AND quarter = ? AND vehicle_id = ?
+               ORDER BY submitted_at DESC LIMIT 1""",
+            (year, quarter, vehicle_id),
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    d["snapshot_json"] = json.loads(d["snapshot_json"])
+    d["recommendation_json"] = (
+        json.loads(d["recommendation_json"]) if d["recommendation_json"] else None
+    )
+    return d
+
+
+def list_ifta_report_approvals() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ifta_report_approvals ORDER BY submitted_at DESC"
+        ).fetchall()
+    results = []
+    for row in rows:
+        d = dict_from_row(row)
+        d["snapshot_json"] = json.loads(d["snapshot_json"])
+        d["recommendation_json"] = (
+            json.loads(d["recommendation_json"]) if d["recommendation_json"] else None
+        )
+        results.append(d)
+    return results
+
+
+def update_ifta_report_approval(approval_id: str, updates: dict) -> dict | None:
+    existing = get_ifta_report_approval(approval_id)
+    if not existing:
+        return None
+    serialized = dict(updates)
+    if "snapshot_json" in serialized and not isinstance(serialized["snapshot_json"], str):
+        serialized["snapshot_json"] = json.dumps(serialized["snapshot_json"])
+    if "recommendation_json" in serialized and not isinstance(serialized["recommendation_json"], str):
+        serialized["recommendation_json"] = json.dumps(serialized["recommendation_json"])
+    sets = ", ".join(f"{k} = ?" for k in serialized)
+    vals = list(serialized.values()) + [approval_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE ifta_report_approvals SET {sets} WHERE approval_id = ?", vals
+        )
+    return get_ifta_report_approval(approval_id)
 
 
 # ── Broker Contacts ──────────────────────────────────────────────────

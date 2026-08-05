@@ -825,6 +825,44 @@ class IFTAFuelPurchase:
         return d
 
 
+IFTA_REPORT_APPROVAL_STATUSES = ["draft", "sealed"]
+IFTA_PAYMENT_RECOMMENDATIONS = ["remit", "credit", "no_payment_due"]
+
+
+@dataclass
+class IFTAReportApproval:
+    """A frozen, submitted-for-approval snapshot of one quarter's IFTA
+    report. Mirrors Hold's proven ifta_worksheets draft/sealed lifecycle
+    (src/dispatch/ifta/package.py) -- 'draft' from submission until the
+    reviewer's approval link is verified, then 'sealed' once, never
+    reverted. The snapshot is frozen at submission time so later edits to
+    trip legs/fuel purchases can never silently change what's under
+    review or what gets sealed."""
+    approval_id: str = ""
+    year: int = 0
+    quarter: int = 0
+    vehicle_id: str = ""
+    status: str = "draft"
+    snapshot: dict = field(default_factory=dict)
+    recommendation: dict | None = None
+    submitted_at: str = ""
+    sealed_at: str | None = None
+    approved_by: str = ""
+    created_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.approval_id:
+            self.approval_id = _gen_id("IFTAAPR")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.submitted_at:
+            self.submitted_at = _utc_now()
+        _validate_choice(self.status, IFTA_REPORT_APPROVAL_STATUSES, "status")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
 @dataclass
 class LaneTemplate:
     template_id: str = ""

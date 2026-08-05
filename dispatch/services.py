@@ -22,6 +22,7 @@ from dispatch.models import (
     ExceptionNotice,
     Expense,
     IFTAFuelPurchase,
+    IFTAReportApproval,
     IFTATripLeg,
     Load,
     LoadVisibilityRecord,
@@ -1890,6 +1891,200 @@ def export_ifta_csv(report: dict) -> str:
                       report["total_surcharge"], report["total_due"]])
 
     return output.getvalue()
+
+
+# ── IFTA Report Approvals (Phase 4 finalization gate) ────────────────
+#
+# Direct port of Hold's proven draft/sealed pipeline
+# (src/dispatch/ifta_clerk/prepare.py, src/dispatch/ifta/package.py,
+# src/dispatch/ifta_clerk/recommend.py), adapted to Dispatch's own
+# architecture: Dispatch has no Queue, so "submitted for approval" is
+# gated by an emailed, HMAC-signed link (reusing cin_lite.email_delivery's
+# existing generic token functions) instead of a Queue item; Dispatch has
+# no persisted worksheet table, so the report snapshot is frozen into a
+# new IFTAReportApproval row at submission time instead of being read from
+# one that already existed. QuickBooks/accounting integration is
+# deliberately not implemented -- see compute_ifta_payment_recommendation()
+# below, ported verbatim in spirit from Hold's compute_payment_recommendation().
+
+
+class IFTAApprovalError(ValueError):
+    """Base class for IFTA report-approval failures."""
+
+
+class AlreadySubmittedError(IFTAApprovalError):
+    pass
+
+
+class InvalidApprovalTokenError(IFTAApprovalError):
+    pass
+
+
+def _resolve_compliance_root() -> Path:
+    """Sibling of cin_lite.archive's CIN root, not nested under it --
+    Phase 3 found cin_lite/archive.py's ARCHIVE_ROOT resolves to
+    <root>/CIN specifically (the federal-contract-intelligence domain);
+    IFTA compliance records belong in their own top-level folder under
+    the same DISPATCH_ARCHIVE_ROOT, not inside a folder named for an
+    unrelated domain."""
+    import os
+
+    archive_root = os.environ.get("DISPATCH_ARCHIVE_ROOT")
+    if archive_root:
+        root = Path(archive_root) / "Compliance"
+    else:
+        root = Path(__file__).resolve().parent.parent / "cin_lite" / "Compliance"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _write_compliance_record(record_type: str, record_id: str, payload: dict) -> Path:
+    """Writes one JSON artifact plus a SHA-256 sidecar, the same
+    write-and-hash technique Phase 3 proved in cin_lite/archive.py,
+    reimplemented locally (not cross-imported) to keep this package's
+    archival separate from cin_lite's, per Phase 3's own two-archives
+    finding."""
+    import hashlib
+    import json
+
+    subdir = _resolve_compliance_root() / record_type
+    subdir.mkdir(parents=True, exist_ok=True)
+    path = subdir / f"{record_id}.json"
+    content = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)
+    path.write_text(content, encoding="utf-8")
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    sidecar = path.with_name(path.name + ".sha256")
+    sidecar.write_text(
+        json.dumps({"sha256": digest, "written_at": _utc_now()}), encoding="utf-8"
+    )
+    return path
+
+
+def compute_ifta_payment_recommendation(snapshot: dict) -> dict:
+    """Pure -- no file I/O, no database access, no network access.
+    Direct port of Hold's compute_payment_recommendation(): wraps an
+    already-computed, already-approved total_due in a recommendation
+    label, inventing no new number. A negative total_due (a net credit)
+    is reported as a positive "credit" amount, never a negative figure."""
+    total_due = snapshot["total_due"]
+    if total_due > 0:
+        recommendation, amount = "remit", total_due
+    elif total_due < 0:
+        recommendation, amount = "credit", abs(total_due)
+    else:
+        recommendation, amount = "no_payment_due", 0.0
+    return {
+        "status": "recommendation",
+        "recommendation": recommendation,
+        "amount": amount,
+        "total_due": total_due,
+        "generated_at": _utc_now(),
+    }
+
+
+def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = "") -> dict:
+    """Freezes the current computed report for this period into a new
+    IFTAReportApproval (status='draft') and emails the reviewer an
+    approval link. Refuses if this exact period was already submitted --
+    once, ever, mirroring Hold's AlreadySubmittedError: there is no path
+    to resubmit a period, only to approve the one submission it got."""
+    import os
+
+    from cin_lite import email_delivery
+
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+
+    existing = store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    if existing is not None:
+        raise AlreadySubmittedError(
+            f"{year} Q{quarter} was already submitted for approval "
+            f"(approval {existing['approval_id']}, status {existing['status']!r})"
+        )
+
+    snapshot = get_ifta_quarterly_report(year, quarter, vehicle_id)
+
+    approval = IFTAReportApproval(
+        year=year, quarter=quarter, vehicle_id=vehicle_id,
+        status="draft", snapshot=snapshot,
+    )
+    created = store.create_ifta_report_approval(approval)
+
+    token = email_delivery.make_token(created["approval_id"], "approve")
+    base = os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080").rstrip("/")
+    approve_url = f"{base}/api/dispatch/ifta/report-approvals/{created['approval_id']}/approve?token={token}"
+    email_delivery.send(
+        subject=f"[DISPATCH] IFTA Q{quarter} {year} approval requested",
+        body=(
+            f"An IFTA quarterly report is ready for your approval.\n\n"
+            f"Period: Q{quarter} {year}\n"
+            f"Total due: ${snapshot['total_due']:.2f}\n\n"
+            f"Approve: {approve_url}\n"
+        ),
+        to=[email_delivery.reviewer_address()],
+        fallback_id=f"ifta-approval-{created['approval_id']}",
+    )
+    return created
+
+
+def approve_ifta_quarter(approval_id: str, token: str) -> dict:
+    """Verifies the emailed token, then seals: archives the frozen
+    snapshot and the computed payment recommendation, flips status to
+    'sealed'. Idempotent on an already-sealed approval (a repeat click on
+    the same email link is a no-op success, matching Hold's
+    attempt_seal()) -- the token is only re-checked when there is
+    something left to do."""
+    from cin_lite import email_delivery
+
+    approval = store.get_ifta_report_approval(approval_id)
+    if approval is None:
+        raise ValueError(f"No such IFTA report approval: {approval_id}")
+    if approval["status"] == "sealed":
+        return approval
+
+    if not email_delivery.verify_token(approval_id, "approve", token):
+        raise InvalidApprovalTokenError("Invalid or expired approval token.")
+
+    snapshot = approval["snapshot_json"]
+    recommendation = compute_ifta_payment_recommendation(snapshot)
+    approved_by = email_delivery.reviewer_address()
+    sealed_at = _utc_now()
+
+    _write_compliance_record(
+        "ifta_sealed_report", approval_id,
+        {
+            "approval_id": approval_id,
+            "year": approval["year"],
+            "quarter": approval["quarter"],
+            "vehicle_id": approval["vehicle_id"],
+            "snapshot": snapshot,
+            "approved_by": approved_by,
+            "sealed_at": sealed_at,
+        },
+    )
+    _write_compliance_record(
+        "ifta_payment_recommendation", approval_id,
+        {**recommendation, "approval_id": approval_id, "sealed_at": sealed_at},
+    )
+
+    return store.update_ifta_report_approval(approval_id, {
+        "status": "sealed",
+        "sealed_at": sealed_at,
+        "approved_by": approved_by,
+        "recommendation_json": recommendation,
+    })
+
+
+def list_ifta_report_approvals() -> list[dict]:
+    return store.list_ifta_report_approvals()
+
+
+def get_ifta_report_approval(approval_id: str) -> dict | None:
+    return store.get_ifta_report_approval(approval_id)
+
+
+def get_latest_ifta_report_approval(year: int, quarter: int, vehicle_id: str = "") -> dict | None:
+    return store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
 
 
 # ── Broker Contact Directory ─────────────────────────────────────────
