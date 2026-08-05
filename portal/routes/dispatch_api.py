@@ -1509,6 +1509,27 @@ def add_ifta_fuel_purchase():
     return jsonify(result), 201
 
 
+@dispatch_bp.route("/ifta/fuel-purchases/extract-receipt", methods=["POST"])
+def extract_ifta_fuel_receipt():
+    """Pre-fill lookup only -- creates no fuel purchase, no evidence row.
+    Always returns 200 with either extracted fields or an
+    available:false reason; the one genuine client error is no file at
+    all."""
+    from cin_lite.agents import receipt_vision
+
+    uploaded_file = request.files.get("file")
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({"error": "No file provided"}), 400
+    file_data = uploaded_file.read()
+    if len(file_data) > MAX_FILE_SIZE:
+        return jsonify({"error": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"}), 400
+
+    result = receipt_vision.extract_fuel_receipt(file_data, uploaded_file.filename)
+    if result.get("available") and result.get("vendor_address"):
+        result["jurisdiction"] = receipt_vision.derive_jurisdiction(result["vendor_address"])
+    return jsonify(result)
+
+
 @dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>", methods=["PATCH"])
 def update_ifta_fuel_purchase(purchase_id):
     data = request.get_json(force=True)
