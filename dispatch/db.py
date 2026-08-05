@@ -252,12 +252,28 @@ CREATE TABLE IF NOT EXISTS ifta_fuel_purchases (
     vehicle_id      TEXT NOT NULL DEFAULT '',
     vendor          TEXT NOT NULL DEFAULT '',
     notes           TEXT NOT NULL DEFAULT '',
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    evidence_id     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_date ON ifta_fuel_purchases(date);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_jurisdiction ON ifta_fuel_purchases(jurisdiction);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_vehicle ON ifta_fuel_purchases(vehicle_id);
+
+CREATE TABLE IF NOT EXISTS ifta_fuel_evidence (
+    evidence_id       TEXT PRIMARY KEY,
+    purchase_id       TEXT NOT NULL REFERENCES ifta_fuel_purchases(purchase_id),
+    original_filename TEXT NOT NULL DEFAULT '',
+    file_path         TEXT,
+    file_size         INTEGER NOT NULL DEFAULT 0,
+    mime_type         TEXT NOT NULL DEFAULT '',
+    checksum          TEXT,
+    description       TEXT NOT NULL DEFAULT '',
+    uploaded_by       TEXT NOT NULL DEFAULT '',
+    capture_time      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_fuel_evidence_purchase ON ifta_fuel_evidence(purchase_id);
 
 CREATE TABLE IF NOT EXISTS ifta_report_approvals (
     approval_id         TEXT PRIMARY KEY,
@@ -391,6 +407,21 @@ def get_db_path() -> Path:
 
 def _init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
+    _apply_migrations(conn)
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Idempotent ALTER TABLEs for columns added to tables that may
+    already exist from before the column was introduced. `CREATE TABLE
+    IF NOT EXISTS` in `_SCHEMA` above is a no-op against an existing
+    table, so a new column on an existing table needs its own statement
+    here -- guarded so re-running it against a database that already has
+    the column is a harmless no-op.
+    """
+    try:
+        conn.execute("ALTER TABLE ifta_fuel_purchases ADD COLUMN evidence_id TEXT")
+    except sqlite3.OperationalError:
+        pass
 
 
 @contextmanager

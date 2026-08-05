@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}IFTA Review — L2-COS Portal{% endblock %}
+{% block page_title %}IFTA Review Dashboard{% if dashboard %} — Q{{ dashboard.quarter }} {{ dashboard.year }}{% endif %}{% endblock %}
+{% block page_actions %}
+<a class="btn btn-sm" href="{{ url_for('pages.ifta', view='quarter', year=sel_year, quarter=sel_quarter, vehicle_id=sel_vehicle) }}">Back to IFTA Report</a>
+{% endblock %}
+
+{% block body %}
+<style>
+.review-filters { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px; padding:12px; background:#f8f9fa; border-radius:4px; }
+.review-filters label { font-size:12px; font-weight:600; color:#555; display:block; margin-bottom:2px; }
+.review-filters select, .review-filters input { padding:4px 8px; border:1px solid #ccc; border-radius:3px; font-size:13px; }
+.review-panel { background:#fff; border:1px solid #e0e0e0; border-radius:4px; padding:16px; margin-bottom:16px; }
+.review-panel h3 { margin:0 0 10px 0; font-size:14px; color:#2c3e50; text-transform:uppercase; letter-spacing:0.5px; }
+.readiness-banner { padding:12px 16px; border-radius:4px; margin-bottom:16px; font-size:14px; font-weight:600; }
+.readiness-ready { background:#e8f5e9; color:#2e7d32; }
+.readiness-sealed { background:#e8f4fd; color:#2166a8; }
+.readiness-warn { background:#fff3e0; color:#e65100; }
+.readiness-blocked { background:#fdecea; color:#b71c1c; }
+.warning-list { list-style:none; margin:0; padding:0; }
+.warning-list li { padding:8px 12px; background:#fff8e1; border-left:3px solid #f9a825; margin-bottom:6px; font-size:13px; }
+.evidence-jur { margin-bottom:12px; }
+.evidence-jur h4 { font-size:13px; color:#455a64; margin:0 0 6px 0; }
+.evidence-row { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-bottom:1px solid #eee; font-size:13px; }
+.evidence-row:last-child { border-bottom:none; }
+.evidence-yes { color:#2e7d32; font-weight:600; }
+.evidence-no { color:#e65100; font-weight:600; }
+.review-report-table { width:100%; border-collapse:collapse; font-size:13px; }
+.review-report-table th { background:#34495e; color:#fff; padding:8px 10px; text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; }
+.review-report-table td { padding:6px 10px; border-bottom:1px solid #eee; }
+.review-report-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+</style>
+
+<form class="review-filters no-print" method="get">
+  <div>
+    <label>Year</label>
+    <input type="number" name="year" value="{{ sel_year }}" min="2020" max="2099" style="width:80px;">
+  </div>
+  <div>
+    <label>Quarter</label>
+    <select name="quarter">
+      {% for q in [1,2,3,4] %}
+      <option value="{{ q }}" {% if sel_quarter == q %}selected{% endif %}>Q{{ q }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Vehicle</label>
+    <select name="vehicle_id">
+      <option value="">All Vehicles</option>
+      {% for eq in equipment %}
+      <option value="{{ eq.equipment_id }}" {% if sel_vehicle == eq.equipment_id %}selected{% endif %}>{{ eq.unit_number or eq.equipment_id }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-sm btn-primary">View</button>
+</form>
+
+{% if error %}
+<div class="ifta-error-banner" style="background:#fdecea;border:1px solid #f5c2c0;color:#b71c1c;padding:12px 16px;border-radius:4px;">
+  <strong>Unable to build this dashboard:</strong> {{ error }}
+</div>
+{% elif dashboard.tax_position_source == 'unavailable' %}
+<div class="readiness-banner readiness-blocked">Blocked — {{ dashboard.tax_position_error }}</div>
+{% else %}
+
+{# ── Readiness Rollup ────────────────────────────────────────────── #}
+<div class="readiness-banner {% if dashboard.readiness_status == 'sealed' %}readiness-sealed{% elif dashboard.readiness_status == 'ready to submit' %}readiness-ready{% else %}readiness-warn{% endif %}">
+  {{ dashboard.readiness_status }}
+  {% if dashboard.tax_position_source == 'sealed' %}<span style="font-weight:400;"> — showing the frozen, approved snapshot</span>
+  {% else %}<span style="font-weight:400;"> — showing a live preview, not yet submitted</span>{% endif %}
+</div>
+
+{# ── Tax Position ────────────────────────────────────────────────── #}
+<div class="review-panel">
+  <h3>Tax Position</h3>
+  {% set tp = dashboard.tax_position %}
+  <div class="ifta-summary" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+    <div class="summary-card"><span class="summary-number">{{ tp.total_miles|round(1) }}</span><span class="summary-label">Total Miles</span></div>
+    <div class="summary-card" style="border-left:4px solid #2980b9;"><span class="summary-number">{{ tp.total_gallons|round(2) }}</span><span class="summary-label">Total Gallons</span></div>
+    <div class="summary-card" style="border-left:4px solid #27ae60;"><span class="summary-number">{{ tp.fleet_mpg|round(2) }}</span><span class="summary-label">Fleet MPG</span></div>
+    <div class="summary-card" style="border-left:4px solid #e67e22;"><span class="summary-number">${{ "%.2f"|format(tp.total_due) }}</span><span class="summary-label">Total Due</span></div>
+  </div>
+
+  {% if tp.jurisdictions %}
+  <div style="overflow-x:auto;">
+  <table class="review-report-table">
+    <thead>
+      <tr><th>Jurisdiction</th><th class="num">Miles</th><th class="num">Fuel (gal)</th><th class="num">Total Due</th></tr>
+    </thead>
+    <tbody>
+      {% for j in tp.jurisdictions %}
+      <tr>
+        <td><strong>{{ j.jurisdiction }}</strong></td>
+        <td class="num">{{ "%.2f"|format(j.miles) }}</td>
+        <td class="num">{{ "%.4f"|format(j.fuel_gallons) }}</td>
+        <td class="num"><strong>${{ "%.2f"|format(j.total_due) }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p style="color:#999;font-style:italic;">No trip legs or fuel purchases recorded for this period.</p>
+  {% endif %}
+</div>
+
+{# ── Plausibility Warnings ───────────────────────────────────────── #}
+<div class="review-panel">
+  <h3>Plausibility Warnings</h3>
+  {% if dashboard.warnings %}
+  <ul class="warning-list">
+    {% for w in dashboard.warnings %}
+    <li>{{ w }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p style="color:#999;font-style:italic;">No plausibility warnings for this period.</p>
+  {% endif %}
+</div>
+
+{# ── Evidence Links ──────────────────────────────────────────────── #}
+<div class="review-panel">
+  <h3>Evidence Links ({{ dashboard.total_purchase_count - dashboard.unlinked_purchase_count }} of {{ dashboard.total_purchase_count }} fuel purchases have a receipt)</h3>
+  {% if dashboard.evidence %}
+    {% for jur in dashboard.evidence %}
+      {% if jur.purchases %}
+      <div class="evidence-jur">
+        <h4>{{ jur.jurisdiction }}</h4>
+        {% for entry in jur.purchases %}
+        <div class="evidence-row">
+          <span>{{ entry.purchase.date }} — {{ entry.purchase.gallons }} gal — ${{ "%.2f"|format(entry.purchase.amount) }}{% if entry.purchase.vendor %} — {{ entry.purchase.vendor }}{% endif %}</span>
+          {% if entry.evidence %}
+          <span class="evidence-yes">📎 {{ entry.evidence.original_filename }}</span>
+          {% else %}
+          <span class="evidence-no">no receipt attached</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+  <p style="color:#999;font-style:italic;">No fuel purchases recorded for this period.</p>
+  {% endif %}
+</div>
+
+{% endif %}
+{% endblock %}

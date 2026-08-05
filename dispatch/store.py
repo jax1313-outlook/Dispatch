@@ -14,6 +14,7 @@ from dispatch.models import (
     ExceptionNotice,
     Expense,
     BrokerContact,
+    IFTAFuelEvidence,
     IFTAFuelPurchase,
     IFTAReportApproval,
     IFTATripLeg,
@@ -1434,6 +1435,41 @@ def update_ifta_fuel_purchase(purchase_id: str, updates: dict) -> dict | None:
             f"UPDATE ifta_fuel_purchases SET {sets} WHERE purchase_id = ?", vals
         )
     return get_ifta_fuel_purchase(purchase_id)
+
+
+# ── IFTA Fuel Purchase Evidence ───────────────────────────────────────
+
+def create_ifta_fuel_evidence(ev: IFTAFuelEvidence) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO ifta_fuel_evidence
+               (evidence_id, purchase_id, original_filename, file_path,
+                file_size, mime_type, checksum, description, uploaded_by,
+                capture_time)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (ev.evidence_id, ev.purchase_id, ev.original_filename, ev.file_path,
+             ev.file_size, ev.mime_type, ev.checksum, ev.description,
+             ev.uploaded_by, ev.capture_time),
+        )
+    return ev.to_dict()
+
+
+def get_ifta_fuel_evidence(evidence_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ifta_fuel_evidence WHERE evidence_id = ?",
+            (evidence_id,),
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_ifta_fuel_evidence(purchase_id: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ifta_fuel_evidence WHERE purchase_id = ? ORDER BY capture_time ASC",
+            (purchase_id,),
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
 
 
 # ── IFTA Report Approvals ────────────────────────────────────────────
