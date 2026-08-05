@@ -21,6 +21,7 @@ from dispatch.models import (
     EvidenceItem,
     ExceptionNotice,
     Expense,
+    IFTAException,
     IFTAFuelEvidence,
     IFTAFuelPurchase,
     IFTAReportApproval,
@@ -2066,6 +2067,176 @@ def compute_ifta_payment_recommendation(snapshot: dict) -> dict:
     }
 
 
+DEFAULT_CORNER_CLIP_MILES = 5.0
+
+
+def _exc(exception_type: str, detail: str, related_record_ids: list | None = None) -> dict:
+    return {
+        "exception_type": exception_type,
+        "detail": detail,
+        "related_record_ids": related_record_ids or [],
+    }
+
+
+def _detect_fuel_no_miles(snapshot: dict) -> list[dict]:
+    return [
+        _exc(
+            "fuel_no_miles",
+            f"{j['jurisdiction']}: {j['fuel_gallons']:.2f} gallons purchased, 0 miles recorded",
+            j.get("purchase_ids", []),
+        )
+        for j in snapshot.get("jurisdictions", [])
+        if j["fuel_gallons"] > 0 and j["miles"] == 0
+    ]
+
+
+def _detect_miles_no_fuel_gap(snapshot: dict, *, miles_threshold: float = 50.0) -> list[dict]:
+    return [
+        _exc(
+            "miles_no_fuel_gap",
+            f"{j['jurisdiction']}: {j['miles']:.1f} miles recorded, 0 gallons purchased there",
+            j.get("leg_ids", []),
+        )
+        for j in snapshot.get("jurisdictions", [])
+        if j["miles"] > miles_threshold and j["fuel_gallons"] == 0
+    ]
+
+
+def _detect_fleet_mpg_out_of_band(snapshot: dict, *, band: tuple[float, float] = DEFAULT_MPG_BAND) -> list[dict]:
+    low, high = band
+    mpg = snapshot.get("fleet_mpg") or 0.0
+    if mpg and not (low <= mpg <= high):
+        return [_exc("fleet_mpg_out_of_band", f"fleet_mpg {mpg:.2f} outside plausible range [{low}, {high}]")]
+    return []
+
+
+def _detect_broken_evidence_linkage(snapshot: dict) -> list[dict]:
+    """Re-verifies each linked fuel-purchase receipt's checksum against
+    what was recorded at attach time -- same fail-closed technique Phase
+    3 proved for the archive layer, applied here to fuel-purchase
+    evidence."""
+    import hashlib
+
+    findings = []
+    for j in snapshot.get("jurisdictions", []):
+        for purchase_id in j.get("purchase_ids", []):
+            purchase = store.get_ifta_fuel_purchase(purchase_id)
+            if not purchase or not purchase.get("evidence_id"):
+                continue
+            ev = store.get_ifta_fuel_evidence(purchase["evidence_id"])
+            if not ev:
+                findings.append(_exc(
+                    "broken_evidence_linkage",
+                    f"fuel purchase {purchase_id}: linked evidence {purchase['evidence_id']} no longer exists",
+                    [purchase_id],
+                ))
+                continue
+            file_path = ev.get("file_path")
+            if not file_path or not Path(file_path).is_file():
+                findings.append(_exc(
+                    "broken_evidence_linkage",
+                    f"fuel purchase {purchase_id}: receipt file is missing on disk",
+                    [purchase_id, ev["evidence_id"]],
+                ))
+                continue
+            actual = hashlib.sha256(Path(file_path).read_bytes()).hexdigest()
+            if actual != ev.get("checksum"):
+                findings.append(_exc(
+                    "broken_evidence_linkage",
+                    f"fuel purchase {purchase_id}: receipt file content no longer matches its recorded checksum",
+                    [purchase_id, ev["evidence_id"]],
+                ))
+    return findings
+
+
+def _detect_late_arrival_closed_quarter(year: int, quarter: int, vehicle_id: str = "") -> list[dict]:
+    """A trip leg or fuel purchase dated inside this period exists but
+    isn't among the record IDs frozen into the already-sealed approval's
+    snapshot -- it arrived after the quarter closed and was never part of
+    what was reviewed and sealed. Direct port of Hold's
+    late_arrival_closed_quarter, adapted to Dispatch's provenance
+    tracking (Phase 5) instead of a fuel_type-scoped worksheet table."""
+    approval = store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    if approval is None or approval["status"] != "sealed":
+        return []
+
+    snapshot = approval["snapshot_json"]
+    sealed_leg_ids: set = set()
+    sealed_purchase_ids: set = set()
+    for j in snapshot.get("jurisdictions", []):
+        sealed_leg_ids.update(j.get("leg_ids", []))
+        sealed_purchase_ids.update(j.get("purchase_ids", []))
+
+    date_from, date_to = _quarter_date_range(year, quarter)
+    leg_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    fuel_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if vehicle_id:
+        leg_kwargs["vehicle_id"] = vehicle_id
+        fuel_kwargs["vehicle_id"] = vehicle_id
+
+    label = snapshot.get("quarter_label") or f"Q{quarter} {year}"
+    findings = []
+    for leg in store.list_ifta_trip_legs(**leg_kwargs):
+        if leg["leg_id"] not in sealed_leg_ids:
+            findings.append(_exc(
+                "late_arrival_closed_quarter",
+                f"trip leg {leg['leg_id']} ({leg['jurisdiction']}, {leg['date']}) falls in "
+                f"already-sealed {label} — never silently absorbed",
+                [leg["leg_id"]],
+            ))
+    for p in store.list_ifta_fuel_purchases(**fuel_kwargs):
+        if p["purchase_id"] not in sealed_purchase_ids:
+            findings.append(_exc(
+                "late_arrival_closed_quarter",
+                f"fuel purchase {p['purchase_id']} ({p['jurisdiction']}, {p['date']}) falls in "
+                f"already-sealed {label} — never silently absorbed",
+                [p["purchase_id"]],
+            ))
+    return findings
+
+
+def _detect_corner_clipping(snapshot: dict, *, threshold: float = DEFAULT_CORNER_CLIP_MILES) -> list[dict]:
+    return [
+        _exc(
+            "corner_clipping",
+            f"{j['jurisdiction']}: only {j['miles']:.2f} miles — annotated, not suppressed",
+            j.get("leg_ids", []),
+        )
+        for j in snapshot.get("jurisdictions", [])
+        if 0 < j["miles"] < threshold
+    ]
+
+
+def _run_ifta_exception_detectors_on_snapshot(
+    snapshot: dict, year: int, quarter: int, vehicle_id: str = ""
+) -> list[dict]:
+    findings: list[dict] = []
+    findings += _detect_fuel_no_miles(snapshot)
+    findings += _detect_miles_no_fuel_gap(snapshot)
+    findings += _detect_fleet_mpg_out_of_band(snapshot)
+    findings += _detect_broken_evidence_linkage(snapshot)
+    findings += _detect_late_arrival_closed_quarter(year, quarter, vehicle_id)
+    findings += _detect_corner_clipping(snapshot)
+    return findings
+
+
+def run_ifta_exception_detectors(year: int, quarter: int, vehicle_id: str = "") -> list[dict]:
+    """Public, read-only entrypoint: resolves the live-or-sealed snapshot
+    for this quarter, then runs the six ported detectors against it (of
+    Hold's ten -- the other four need infrastructure Dispatch doesn't
+    have; see DISPATCH_IFTA_PHASE6A_EXCEPTION_DETECTORS_LAUNCH_PACKAGE_v1
+    Section 2). Advisory only -- nothing here blocks submission or
+    sealing, matching Hold's own 'never auto-resolves' principle."""
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+    approval = get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    if approval is not None and approval["status"] == "sealed":
+        snapshot = approval["snapshot_json"]
+    else:
+        snapshot = get_ifta_quarterly_report(year, quarter, vehicle_id)
+    return _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
+
+
 def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = "") -> dict:
     """Freezes the current computed report for this period into a new
     IFTAReportApproval (status='draft') and emails the reviewer an
@@ -2093,6 +2264,15 @@ def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = 
         status="draft", snapshot=snapshot,
     )
     created = store.create_ifta_report_approval(approval)
+
+    findings = _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
+    for finding in findings:
+        store.create_ifta_exception(IFTAException(
+            approval_id=created["approval_id"],
+            exception_type=finding["exception_type"],
+            detail=finding["detail"],
+            related_record_ids=finding["related_record_ids"],
+        ))
 
     token = email_delivery.make_token(created["approval_id"], "approve")
     base = os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080").rstrip("/")
@@ -2172,14 +2352,19 @@ def get_latest_ifta_report_approval(year: int, quarter: int, vehicle_id: str = "
     return store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
 
 
+def list_ifta_exceptions(approval_id: str) -> list[dict]:
+    return store.list_ifta_exceptions(approval_id)
+
+
 def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -> dict:
     """Read-only, Dispatch-native review screen for one IFTA quarter,
     assembled entirely from data Dispatch already computes elsewhere --
-    no new I/O, no writes. Deliberately does not include Hold's
-    confirmed-exceptions or suspect-entries panels: Dispatch has no
-    exception-detector framework and no OCR-confidence pipeline to
-    honestly populate them from (DISPATCH_IFTA_PHASE5_LAUNCH_PACKAGE_v2
-    Section 2)."""
+    no new I/O, no writes. As of Phase 6a, the Exceptions panel is a
+    formal port of six of Hold's ten detectors, replacing Phase 5's ad
+    hoc "Plausibility Warnings" panel (fleet_mpg_out_of_band is now one
+    of the six, not a separate mechanism). Still no suspect-entries
+    panel: Dispatch has no OCR-confidence pipeline to honestly populate
+    it from (DISPATCH_IFTA_PHASE5_LAUNCH_PACKAGE_v2 Section 2)."""
     if quarter not in (1, 2, 3, 4):
         raise ValueError(f"Invalid quarter: {quarter}")
 
@@ -2203,7 +2388,7 @@ def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -
                 "evidence": [],
                 "unlinked_purchase_count": 0,
                 "total_purchase_count": 0,
-                "warnings": [str(exc)],
+                "exceptions": [{"exception_type": "blocked", "detail": str(exc)}],
                 "readiness_status": "blocked — " + str(exc),
                 "approval_status": approval["status"] if approval else None,
                 "approval": approval,
@@ -2216,23 +2401,17 @@ def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -
         1 for jur in evidence for entry in jur["purchases"] if entry["evidence"] is None
     )
 
-    warnings = []
-    date_from, date_to = _quarter_date_range(year, quarter)
-    mpg = _fleet_mpg_estimate(date_from, date_to, vehicle_id)
-    if mpg is not None:
-        low, high = DEFAULT_MPG_BAND
-        if not (low <= mpg <= high):
-            warnings.append(
-                f"fleet_mpg {mpg:.2f} outside plausible range [{low}, {high}] "
-                f"for this quarter — mileage or fuel entry may be off"
-            )
+    if sealed:
+        exceptions = store.list_ifta_exceptions(approval["approval_id"])
+    else:
+        exceptions = _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
 
     if sealed:
         readiness_status = "sealed"
     elif unlinked_count > 0:
         readiness_status = f"{unlinked_count} of {total_purchase_count} fuel purchase(s) have no receipt attached"
-    elif warnings:
-        readiness_status = f"{len(warnings)} plausibility warning(s) noted"
+    elif exceptions:
+        readiness_status = f"{len(exceptions)} exception(s) noted"
     elif snapshot.get("trip_leg_count", 0) == 0 and snapshot.get("fuel_purchase_count", 0) == 0:
         readiness_status = "no data recorded yet this quarter"
     else:
@@ -2247,7 +2426,7 @@ def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -
         "evidence": evidence,
         "unlinked_purchase_count": unlinked_count,
         "total_purchase_count": total_purchase_count,
-        "warnings": warnings,
+        "exceptions": exceptions,
         "readiness_status": readiness_status,
         "approval_status": approval["status"] if approval else None,
         "approval": approval,
