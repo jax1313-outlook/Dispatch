@@ -21,6 +21,7 @@ from dispatch.models import (
     EvidenceItem,
     ExceptionNotice,
     Expense,
+    IFTAFuelEvidence,
     IFTAFuelPurchase,
     IFTAReportApproval,
     IFTATripLeg,
@@ -1737,6 +1738,83 @@ def list_ifta_fuel_purchases(**kwargs) -> list[dict]:
     return store.list_ifta_fuel_purchases(**kwargs)
 
 
+def attach_ifta_fuel_evidence(
+    purchase_id: str,
+    file_data: bytes,
+    original_filename: str,
+    description: str = "",
+    uploaded_by: str = "",
+) -> dict:
+    """Attaches a checksummed receipt upload to an existing fuel purchase.
+
+    Mirrors attach_evidence()'s upload handling (checksum, mime-type
+    guess, _save_upload()) but writes to ifta_fuel_evidence / IFTAFuelEvidence
+    instead of the load-scoped evidence table -- see IFTAFuelEvidence's
+    docstring for why those can't be shared. A purchase must already
+    exist (two-step flow: create the purchase, then attach its receipt --
+    matching the existing load-evidence UI's own create-then-attach
+    pattern rather than a combined form)."""
+    purchase = store.get_ifta_fuel_purchase(purchase_id)
+    if not purchase:
+        raise ValueError(f"Fuel purchase not found: {purchase_id}")
+
+    ev = IFTAFuelEvidence(
+        purchase_id=purchase_id,
+        description=description,
+        uploaded_by=uploaded_by,
+        original_filename=original_filename,
+    )
+    ev.compute_checksum(file_data)
+    ev.file_size = len(file_data)
+    import mimetypes
+    ev.mime_type = mimetypes.guess_type(original_filename or "file.pdf")[0] or "application/octet-stream"
+    saved = _save_upload(ev.evidence_id, original_filename or "file.pdf", file_data)
+    ev.file_path = str(saved)
+
+    created = store.create_ifta_fuel_evidence(ev)
+    store.update_ifta_fuel_purchase(purchase_id, {"evidence_id": ev.evidence_id})
+    return created
+
+
+def get_ifta_fuel_evidence_file(evidence_id: str) -> tuple[Path, str] | None:
+    ev = store.get_ifta_fuel_evidence(evidence_id)
+    if not ev or not ev.get("file_path"):
+        return None
+    p = Path(ev["file_path"])
+    if not p.is_file():
+        return None
+    return p, ev.get("original_filename") or p.name
+
+
+def list_ifta_fuel_evidence(purchase_id: str) -> list[dict]:
+    return store.list_ifta_fuel_evidence(purchase_id)
+
+
+def resolve_ifta_evidence_for_snapshot(snapshot: dict) -> list[dict]:
+    """Resolves each jurisdiction line's contributing fuel purchases to
+    their linked receipt, if any. Direct port of Hold's
+    _resolve_line_evidence() spirit: a purchase with no evidence link is
+    included with evidence=None rather than raising -- evidence bundling
+    must never block a report that was already computed or already
+    approved."""
+    resolved = []
+    for jur_line in snapshot.get("jurisdictions", []):
+        purchases_resolved = []
+        for purchase_id in jur_line.get("purchase_ids", []):
+            purchase = store.get_ifta_fuel_purchase(purchase_id)
+            if not purchase:
+                continue
+            evidence = None
+            if purchase.get("evidence_id"):
+                evidence = store.get_ifta_fuel_evidence(purchase["evidence_id"])
+            purchases_resolved.append({"purchase": purchase, "evidence": evidence})
+        resolved.append({
+            "jurisdiction": jur_line["jurisdiction"],
+            "purchases": purchases_resolved,
+        })
+    return resolved
+
+
 def _quarter_date_range(year: int, quarter: int) -> tuple[str, str]:
     starts = {1: "01-01", 2: "04-01", 3: "07-01", 4: "10-01"}
     ends = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
@@ -1756,17 +1834,21 @@ def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
     purchases = store.list_ifta_fuel_purchases(**fuel_kwargs)
 
     miles_by_jur: dict[str, float] = {}
+    legs_by_jur: dict[str, list[str]] = {}
     for leg in legs:
         j = leg["jurisdiction"]
         miles_by_jur[j] = miles_by_jur.get(j, 0) + leg["miles"]
+        legs_by_jur.setdefault(j, []).append(leg["leg_id"])
 
     fuel_by_jur: dict[str, dict] = {}
+    purchases_by_jur: dict[str, list[str]] = {}
     for p in purchases:
         j = p["jurisdiction"]
         if j not in fuel_by_jur:
             fuel_by_jur[j] = {"gallons": 0.0, "amount": 0.0}
         fuel_by_jur[j]["gallons"] += p["gallons"]
         fuel_by_jur[j]["amount"] += p["amount"]
+        purchases_by_jur.setdefault(j, []).append(p["purchase_id"])
 
     total_miles = sum(miles_by_jur.values())
     total_gallons = sum(f["gallons"] for f in fuel_by_jur.values())
@@ -1809,6 +1891,8 @@ def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
             "tax_owed": tax_owed,
             "surcharge": surcharge,
             "total_due": round(tax_owed + surcharge, 2),
+            "leg_ids": legs_by_jur.get(j, []),
+            "purchase_ids": purchases_by_jur.get(j, []),
         })
 
     return {
@@ -2058,6 +2142,7 @@ def approve_ifta_quarter(approval_id: str, token: str) -> dict:
             "quarter": approval["quarter"],
             "vehicle_id": approval["vehicle_id"],
             "snapshot": snapshot,
+            "resolved_evidence": resolve_ifta_evidence_for_snapshot(snapshot),
             "approved_by": approved_by,
             "sealed_at": sealed_at,
         },
@@ -2085,6 +2170,88 @@ def get_ifta_report_approval(approval_id: str) -> dict | None:
 
 def get_latest_ifta_report_approval(year: int, quarter: int, vehicle_id: str = "") -> dict | None:
     return store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+
+
+def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -> dict:
+    """Read-only, Dispatch-native review screen for one IFTA quarter,
+    assembled entirely from data Dispatch already computes elsewhere --
+    no new I/O, no writes. Deliberately does not include Hold's
+    confirmed-exceptions or suspect-entries panels: Dispatch has no
+    exception-detector framework and no OCR-confidence pipeline to
+    honestly populate them from (DISPATCH_IFTA_PHASE5_LAUNCH_PACKAGE_v2
+    Section 2)."""
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+
+    approval = get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    sealed = approval is not None and approval["status"] == "sealed"
+
+    if sealed:
+        snapshot = approval["snapshot_json"]
+        tax_position_source = "sealed"
+    else:
+        try:
+            snapshot = get_ifta_quarterly_report(year, quarter, vehicle_id)
+        except ValueError as exc:
+            return {
+                "year": year,
+                "quarter": quarter,
+                "vehicle_id": vehicle_id,
+                "tax_position": None,
+                "tax_position_source": "unavailable",
+                "tax_position_error": str(exc),
+                "evidence": [],
+                "unlinked_purchase_count": 0,
+                "total_purchase_count": 0,
+                "warnings": [str(exc)],
+                "readiness_status": "blocked — " + str(exc),
+                "approval_status": approval["status"] if approval else None,
+                "approval": approval,
+            }
+        tax_position_source = "live_preview"
+
+    evidence = resolve_ifta_evidence_for_snapshot(snapshot)
+    total_purchase_count = sum(len(jur["purchases"]) for jur in evidence)
+    unlinked_count = sum(
+        1 for jur in evidence for entry in jur["purchases"] if entry["evidence"] is None
+    )
+
+    warnings = []
+    date_from, date_to = _quarter_date_range(year, quarter)
+    mpg = _fleet_mpg_estimate(date_from, date_to, vehicle_id)
+    if mpg is not None:
+        low, high = DEFAULT_MPG_BAND
+        if not (low <= mpg <= high):
+            warnings.append(
+                f"fleet_mpg {mpg:.2f} outside plausible range [{low}, {high}] "
+                f"for this quarter — mileage or fuel entry may be off"
+            )
+
+    if sealed:
+        readiness_status = "sealed"
+    elif unlinked_count > 0:
+        readiness_status = f"{unlinked_count} of {total_purchase_count} fuel purchase(s) have no receipt attached"
+    elif warnings:
+        readiness_status = f"{len(warnings)} plausibility warning(s) noted"
+    elif snapshot.get("trip_leg_count", 0) == 0 and snapshot.get("fuel_purchase_count", 0) == 0:
+        readiness_status = "no data recorded yet this quarter"
+    else:
+        readiness_status = "ready to submit"
+
+    return {
+        "year": year,
+        "quarter": quarter,
+        "vehicle_id": vehicle_id,
+        "tax_position": snapshot,
+        "tax_position_source": tax_position_source,
+        "evidence": evidence,
+        "unlinked_purchase_count": unlinked_count,
+        "total_purchase_count": total_purchase_count,
+        "warnings": warnings,
+        "readiness_status": readiness_status,
+        "approval_status": approval["status"] if approval else None,
+        "approval": approval,
+    }
 
 
 # ── Broker Contact Directory ─────────────────────────────────────────

@@ -363,6 +363,40 @@ def ifta():
     )
 
 
+@pages_bp.route("/ifta/review")
+def ifta_review():
+    from dispatch import services as dispatch_svc
+    from datetime import date
+
+    today = date.today()
+    try:
+        year = int(request.args.get("year", today.year))
+        quarter = int(request.args.get("quarter", (today.month - 1) // 3 + 1))
+    except (ValueError, TypeError):
+        year = today.year
+        quarter = (today.month - 1) // 3 + 1
+
+    vehicle_id = request.args.get("vehicle_id", "")
+    equipment = dispatch_svc.list_equipment(status="active")
+
+    error = None
+    try:
+        dashboard = dispatch_svc.build_ifta_review_dashboard(year, quarter, vehicle_id)
+    except ValueError as exc:
+        dashboard = None
+        error = str(exc)
+
+    return render_template(
+        "ifta_review.html",
+        dashboard=dashboard,
+        error=error,
+        equipment=equipment,
+        sel_year=year,
+        sel_quarter=quarter,
+        sel_vehicle=vehicle_id,
+    )
+
+
 @pages_bp.route("/compliance")
 def compliance():
     from dispatch import services as dispatch_svc

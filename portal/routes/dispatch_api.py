@@ -1527,6 +1527,51 @@ def delete_ifta_fuel_purchase(purchase_id):
     return jsonify({"status": "ok"})
 
 
+# ── IFTA Fuel Purchase Evidence (Phase 5) ──────────────────────────
+# Two-step, mirroring /loads/<load_id>/evidence: the purchase must
+# already exist before a receipt can be attached to it.
+
+
+@dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>/evidence", methods=["GET"])
+def list_ifta_fuel_evidence(purchase_id):
+    items = services.list_ifta_fuel_evidence(purchase_id)
+    return jsonify({"status": "ok", "purchase_id": purchase_id, "evidence": items, "count": len(items)})
+
+
+@dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>/evidence", methods=["POST"])
+def attach_ifta_fuel_evidence(purchase_id):
+    uploaded_file = request.files.get("file")
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({"error": "No file provided"}), 400
+    filename = uploaded_file.filename
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({"error": f"File type not allowed: .{ext}"}), 400
+    file_data = uploaded_file.read()
+    if len(file_data) > MAX_FILE_SIZE:
+        return jsonify({"error": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"}), 400
+    try:
+        ev = services.attach_ifta_fuel_evidence(
+            purchase_id=purchase_id,
+            file_data=file_data,
+            original_filename=filename,
+            description=request.form.get("description", ""),
+            uploaded_by=request.form.get("uploaded_by", ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "evidence": ev}), 201
+
+
+@dispatch_bp.route("/ifta/fuel-evidence/<evidence_id>/download", methods=["GET"])
+def download_ifta_fuel_evidence(evidence_id):
+    result = services.get_ifta_fuel_evidence_file(evidence_id)
+    if not result:
+        return jsonify({"error": "File not found"}), 404
+    file_path, download_name = result
+    return send_file(file_path, download_name=download_name, as_attachment=True)
+
+
 # ── IFTA Quarterly Report ─────────────────────────────────────────
 
 

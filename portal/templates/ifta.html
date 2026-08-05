@@ -2,6 +2,7 @@
 {% block title %}IFTA — L2-COS Portal{% endblock %}
 {% block page_title %}IFTA Mileage & Fuel Report{% if report %} — {{ report.quarter_label or report.month_label }}{% endif %}{% endblock %}
 {% block page_actions %}
+<a class="btn btn-sm" href="{{ url_for('pages.ifta_review', year=sel_year, quarter=sel_quarter, vehicle_id=sel_vehicle) }}">Review Dashboard</a>
 <button class="btn btn-sm btn-success" onclick="toggleForm('add-trip-form')">+ Trip Leg</button>
 <button class="btn btn-sm btn-success" onclick="toggleForm('add-fuel-form')">+ Fuel Purchase</button>
 {% endblock %}
@@ -439,12 +440,28 @@ function loadFuelPurchases() {
             <span style="color:#888">${p.date}</span>
             ${p.vehicle_id ? '<span style="color:#888">'+p.vehicle_id+'</span>' : ''}
             ${p.vendor ? '<span style="color:#aaa">'+p.vendor+'</span>' : ''}
+            ${p.evidence_id ? '<span style="color:#2e7d32;font-size:12px;">📎 receipt attached</span>' : '<span style="color:#e65100;font-size:12px;">no receipt</span>'}
           </div>
           <div class="ifta-entry-actions">
+            <label class="btn btn-sm" style="cursor:pointer;margin:0;">
+              Attach Receipt
+              <input type="file" style="display:none" onchange="attachFuelEvidence('${p.purchase_id}', this)">
+            </label>
             <button class="btn btn-sm btn-danger" onclick="deleteFuelPurchase('${p.purchase_id}')">Delete</button>
           </div>
         </div>`).join('');
     });
+}
+
+function attachFuelEvidence(purchaseId, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  fetch(API + '/fuel-purchases/' + purchaseId + '/evidence', {method: 'POST', body: formData})
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => location.reload())
+    .catch(e => alert('Error: ' + e.message));
 }
 
 document.addEventListener('DOMContentLoaded', () => {

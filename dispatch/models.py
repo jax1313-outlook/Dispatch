@@ -264,6 +264,43 @@ class EvidenceItem:
 
 
 @dataclass
+class IFTAFuelEvidence:
+    """A checksummed receipt upload linked to one IFTA fuel purchase.
+
+    Deliberately not `EvidenceItem` reused with an empty `load_id`: the
+    `evidence` table's `load_id` column is a NOT NULL foreign key into
+    `loads` (enforced -- `PRAGMA foreign_keys=ON`), so an evidence row with
+    no real load can't be inserted there. Fuel purchases aren't scoped to
+    a load, so this is a small, separately-scoped mirror of the same
+    checksummed-upload shape instead.
+    """
+
+    evidence_id: str = ""
+    purchase_id: str = ""
+    original_filename: str = ""
+    file_path: str | None = None
+    file_size: int = 0
+    mime_type: str = ""
+    checksum: str | None = None
+    description: str = ""
+    uploaded_by: str = ""
+    capture_time: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.evidence_id:
+            self.evidence_id = _gen_id("FUELEV")
+        if not self.capture_time:
+            self.capture_time = _utc_now()
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def compute_checksum(self, data: bytes) -> str:
+        self.checksum = hashlib.sha256(data).hexdigest()
+        return self.checksum
+
+
+@dataclass
 class ExceptionNotice:
     exception_id: str = ""
     load_id: str = ""
@@ -802,6 +839,7 @@ class IFTAFuelPurchase:
     vendor: str = ""
     notes: str = ""
     created_at: str = ""
+    evidence_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.purchase_id:
