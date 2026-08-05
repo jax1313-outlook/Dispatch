@@ -1494,6 +1494,7 @@ def list_ifta_fuel_purchases():
 @dispatch_bp.route("/ifta/fuel-purchases", methods=["POST"])
 def add_ifta_fuel_purchase():
     data = request.get_json(force=True)
+    raw_confidence = data.get("extraction_confidence")
     try:
         result = services.add_ifta_fuel_purchase(
             jurisdiction=data.get("jurisdiction", ""),
@@ -1503,6 +1504,7 @@ def add_ifta_fuel_purchase():
             vehicle_id=data.get("vehicle_id", ""),
             vendor=data.get("vendor", ""),
             notes=data.get("notes", ""),
+            extraction_confidence=float(raw_confidence) if raw_confidence is not None else None,
         )
     except (ValueError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 400

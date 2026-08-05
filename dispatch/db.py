@@ -433,6 +433,10 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE ifta_fuel_purchases ADD COLUMN evidence_id TEXT")
     except sqlite3.OperationalError:
         pass
+    try:
+        conn.execute("ALTER TABLE ifta_fuel_purchases ADD COLUMN extraction_confidence REAL")
+    except sqlite3.OperationalError:
+        pass
 
 
 @contextmanager

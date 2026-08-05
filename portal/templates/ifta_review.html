@@ -145,5 +145,20 @@
   {% endif %}
 </div>
 
+{# ── Suspect Entries ─────────────────────────────────────────────── #}
+<div class="review-panel">
+  <h3>Suspect Entries{% if dashboard.suspect_entries %} ({{ dashboard.suspect_entries|length }}){% endif %}</h3>
+  {% if dashboard.suspect_entries %}
+  <p style="font-size:12px;color:#777;margin:0 0 8px 0;">Scanned fuel purchases with a low extraction confidence — worth a second look, not necessarily wrong.</p>
+  <ul class="warning-list">
+    {% for p in dashboard.suspect_entries %}
+    <li>{{ p.date }} — {{ p.vendor or "(no vendor)" }} — {{ p.jurisdiction }} — confidence {{ "%.2f"|format(p.extraction_confidence) }}{% if p.evidence_id %} — receipt attached{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p style="color:#999;font-style:italic;">No suspect entries for this period.</p>
+  {% endif %}
+</div>
+
 {% endif %}
 {% endblock %}

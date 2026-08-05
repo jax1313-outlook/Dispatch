@@ -380,12 +380,14 @@ function addTripLeg() {
 }
 
 let scannedReceiptFile = null;
+let scannedConfidence = null;
 
 function scanReceipt(inputEl) {
   const file = inputEl.files[0];
   const statusEl = document.getElementById('fuel-scan-status');
-  if (!file) { scannedReceiptFile = null; statusEl.textContent = ''; return; }
+  if (!file) { scannedReceiptFile = null; scannedConfidence = null; statusEl.textContent = ''; return; }
   scannedReceiptFile = file;
+  scannedConfidence = null;
   statusEl.style.color = '#777';
   statusEl.textContent = 'Scanning...';
   const formData = new FormData();
@@ -403,9 +405,9 @@ function scanReceipt(inputEl) {
       if (result.amount != null) document.getElementById('fuel-amount').value = result.amount;
       if (result.purchase_date) document.getElementById('fuel-date').value = result.purchase_date;
       if (result.vendor_name) document.getElementById('fuel-vendor').value = result.vendor_name;
-      const conf = result.extraction_confidence;
-      const confStr = (conf != null) ? conf.toFixed(2) : '?';
-      statusEl.style.color = (conf != null && conf < 0.75) ? '#e65100' : '#2e7d32';
+      scannedConfidence = result.extraction_confidence != null ? result.extraction_confidence : null;
+      const confStr = (scannedConfidence != null) ? scannedConfidence.toFixed(2) : '?';
+      statusEl.style.color = (scannedConfidence != null && scannedConfidence < 0.75) ? '#e65100' : '#2e7d32';
       statusEl.textContent = 'Scanned (confidence ' + confStr + ') — review before saving.';
     })
     .catch(() => {
@@ -423,6 +425,7 @@ function addFuelPurchase() {
     vehicle_id: document.getElementById('fuel-vehicle').value,
     vendor: document.getElementById('fuel-vendor').value,
     notes: document.getElementById('fuel-notes').value,
+    extraction_confidence: scannedConfidence,
   };
   if (!payload.jurisdiction) { alert('Select a jurisdiction'); return; }
   if (!payload.gallons) { alert('Enter gallons'); return; }
