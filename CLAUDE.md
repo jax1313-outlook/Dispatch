@@ -8,6 +8,26 @@ Phase 1 is **implemented**. The authoritative specification is
 `Final_Architecture_for_Hybrid_CIN-Lite_System (1).docx` — read it before generating code.
 The sections below describe the architecture all code must follow.
 
+`docs/` also now mirrors the platform governance package from `jax1313-outlook/Claude-3` — see the next section before generating code that touches approval, security, Library, or Archive behavior.
+
+## Platform Governance (Claude-3)
+
+This repository's application code operates under the governance package mirrored at `docs/` (refreshed from `jax1313-outlook/Claude-3` — see `docs/README.md`, do not edit those files here). `docs/DISPATCH_CONSTITUTION_v3.md` is the controlling governance law for all Dispatch development work in this repository; if anything below conflicts with it, the Constitution controls until Mike approves a replacement.
+
+**Two different "five layers" — not a conflict, different scope.** The five layers in the Architecture section below (Acquisition / Processing / Control / Archive / Automation) describe *this repository's CIN-Lite contract pipeline* specifically. `docs/DISPATCH_FINAL_BLUEPRINT_v1.md` defines a separate, platform-wide five-layer model (Authority / Presentation / Organizational / Deterministic / Cognitive) that CIN-Lite operates inside, not against. Reconciliation:
+
+| CIN-Lite Layer (this file) | Platform Function (`docs/DISPATCH_FINAL_BLUEPRINT_v1.md`) |
+|---|---|
+| Acquisition Layer | Intelligence Analyst's Sweepers/Acquisition sub-layer (§7.1) |
+| Processing Layer (rule modules) | Intelligence Analyst's Parsing/Scoring sub-layers (§7.1) — deterministic, matches doctrine exactly |
+| Control Layer (email decision gate) | Portal-mediated Approval Event (§3, §14) — today authenticates link possession via HMAC token, not an authenticated identity; closing this gap is Stage 7 (Security Foundation) of the Migration Plan |
+| Archive Layer | Archive Blueprint (§9) — this layer's SHA-256 fail-closed hash verification already satisfies platform doctrine |
+| Automation Layer | Dispatch Spine automation hooks (§10) |
+
+Core platform rules that apply to every layer below, without exception: Mike Zachary is final authority; AI decides nothing (assists, drafts, recommends — never approves, submits, books, or invents facts); Unknown means Unknown (no fabrication). See `docs/DISPATCH_CONSTITUTION_v3.md` §3–4, §10 for the full text.
+
+Full governance detail, including the staged Migration Plan reconciling this codebase against platform doctrine, lives in Claude-3 (`DISPATCH_INTEGRATED_BLUEPRINT_v1.md`, `DISPATCH_REPO_RECONCILIATION_MATRIX_v1.md`, `DISPATCH_STAGE_LAUNCH_PACKAGES_v1.md`) and is not duplicated here.
+
 ## What this is
 
 **DISPATCH** is a contract-locating, intelligence-processing, and
