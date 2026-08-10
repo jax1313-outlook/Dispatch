@@ -257,6 +257,31 @@ body {
 .status-closed { background: #eee; color: #888; }
 .status-placeholder { background: #fff3cd; color: #856404; }
 
+/* ---------- Card Level / Version Doctrine ---------- */
+/* 0 Silent Log, 1 Status, 2 Review, 3 Decision, 4 Conflict, 5 Authority
+   -- docs/DISPATCH_CONSTITUTION_v3.md Section 17 */
+.card-level {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #eee;
+    color: #555;
+}
+.card-level-0 { background: #f5f5f5; color: #aaa; }
+.card-level-1 { background: #eaf2f8; color: #2874a6; }
+.card-level-2 { background: #eafaf1; color: #229954; }
+.card-level-3 { background: #fef5e7; color: #b9770e; }
+.card-level-4 { background: #fdedec; color: #c0392b; }
+.card-level-5 { background: #f4ecf7; color: #7d3c98; }
+
+.card-version, .card-last-change {
+    font-size: 11px;
+    color: #888;
+}
+.card-last-change { font-style: italic; }
+
 /* ---------- Dispatch Engine Statuses ---------- */
 .dispatch-created { background: #e8f4fd; color: #2471a3; }
 .dispatch-dispatched { background: #d1f2eb; color: #148f77; }

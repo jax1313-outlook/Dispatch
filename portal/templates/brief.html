@@ -18,6 +18,9 @@
         <span class="card-score">Priority: {{ entry.decision.priority }}</span>
         {% endif %}
         <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+        <span class="card-level card-level-{{ entry.card_level }}" title="Consequence level {{ entry.card_level }}">Level {{ entry.card_level }}</span>
+        <span class="card-version">Ver: {{ entry.version }}</span>
+        {% if entry.last_change %}<span class="card-last-change">Last Change: {{ entry.last_change }}</span>{% endif %}
     </div>
 
     <section class="brief-section">

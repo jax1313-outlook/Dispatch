@@ -21,6 +21,9 @@
         <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
         <div class="card-meta">
             <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+            <span class="card-level card-level-{{ entry.card_level }}" title="Consequence level {{ entry.card_level }}">L{{ entry.card_level }}</span>
+            <span class="card-version">Ver: {{ entry.version }}</span>
+            {% if entry.last_change %}<span class="card-last-change">Last Change: {{ entry.last_change }}</span>{% endif %}
             {% if entry.flags %}
             <span class="flag-count">{{ entry.flags|length }} flag(s)</span>
             {% endif %}

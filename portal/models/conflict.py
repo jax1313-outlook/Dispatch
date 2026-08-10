@@ -29,6 +29,20 @@ CONFLICT_TYPES = [
 
 SEVERITIES = ["info", "warning", "critical"]
 
+# Card consequence level, per docs/DISPATCH_CONSTITUTION_v3.md Section 17:
+# 0 Silent Log, 1 Status, 2 Review, 3 Decision, 4 Conflict, 5 Authority.
+# Conflict Notices map to Level 4 (the doctrine's own "Conflict" level)
+# only at critical severity; lower severities land at Review/Status/Silent
+# depending on whether a human decision is actually required.
+def _derive_card_level(severity: str, human_decision_required: bool) -> int:
+    if severity == "critical":
+        return 4
+    if severity == "warning":
+        return 3 if human_decision_required else 2
+    if severity == "info":
+        return 1 if human_decision_required else 0
+    return 2
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -52,12 +66,22 @@ def _save(data: list[dict]) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _with_card_level_default(notice: dict) -> dict:
+    """Backfills card_level at read time for notices written before
+    Stage 5 -- same tolerate-legacy-records pattern as sandbox.py."""
+    if "card_level" not in notice:
+        notice["card_level"] = _derive_card_level(
+            notice.get("severity", "info"), notice.get("human_decision_required", True)
+        )
+    return notice
+
+
 def get_all() -> list[dict]:
-    return _load()
+    return [_with_card_level_default(n) for n in _load()]
 
 
 def get_unresolved() -> list[dict]:
-    return [n for n in _load() if not n.get("resolved")]
+    return [_with_card_level_default(n) for n in _load() if not n.get("resolved")]
 
 
 def create_notice(
@@ -78,6 +102,7 @@ def create_notice(
         "explanation": explanation,
         "recommended_action": recommended_action,
         "human_decision_required": human_decision_required,
+        "card_level": _derive_card_level(severity, human_decision_required),
         "resolved": False,
         "created_at": now,
     }

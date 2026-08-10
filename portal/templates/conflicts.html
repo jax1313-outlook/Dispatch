@@ -13,6 +13,7 @@
         <div class="conflict-header">
             <strong>{{ cn.conflict_type|replace('_', ' ')|title }}</strong>
             <span class="severity-tag severity-{{ cn.severity }}">{{ cn.severity }}</span>
+            <span class="card-level card-level-{{ cn.card_level }}" title="Consequence level {{ cn.card_level }}">L{{ cn.card_level }}</span>
             {% if cn.human_decision_required %}
             <span class="decision-required">Human Decision Required</span>
             {% endif %}
