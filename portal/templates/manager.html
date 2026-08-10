@@ -43,4 +43,27 @@
     <p>Nothing needs your attention right now.</p>
 </div>
 {% endif %}
+
+{% if stage_gate %}
+<section class="card-section">
+    <h2>Stage Gate Status <span class="card-level card-level-{{ stage_gate.card_level }}" title="Consequence level {{ stage_gate.card_level }}">L{{ stage_gate.card_level }}</span></h2>
+    <p class="section-note">Mirrored from Claude-3's Migration Plan tracking documents, refreshed manually — not a live integration.</p>
+    <div class="conflict-fields">
+        <div><strong>Stages tracked:</strong> {{ stage_gate.stage_count }}</div>
+        <div><strong>Last synced:</strong> {{ stage_gate.last_synced }}{% if stage_gate.stale %} (stale — over 14 days old){% endif %}</div>
+        {% if stage_gate.next_recommended_stage %}
+        <div><strong>Recommended next stage:</strong> {{ stage_gate.next_recommended_stage }} — {{ stage_gate.next_recommended_reason }}</div>
+        {% endif %}
+    </div>
+    {% if stage_gate.blocked_stages %}
+    <div class="conflict-fields" style="margin-top:8px;">
+        <strong>Blocked stages:</strong>
+        {% for s in stage_gate.blocked_stages %}
+        <div>Stage {{ s.number }} ({{ s.name }}): {{ s.blocked_reason }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <p style="margin-top:8px;font-style:italic;color:#666;">This is a recommendation only. No action is authorized. Mike decides.</p>
+</section>
+{% endif %}
 {% endblock %}

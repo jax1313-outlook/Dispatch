@@ -496,3 +496,111 @@ def test_level_one_signal_never_appears_as_individual_card(client):
     resp = client.get("/manager")
     html = resp.data.decode()
     assert "Cards Needing Attention" not in html
+
+
+# ── Phase M4: Stage Gate (docs/STAGE_STATUS.json mirror) ──────────────────
+
+@pytest.fixture
+def isolated_status_file(tmp_path, monkeypatch):
+    """Redirects stage_gate's mirror-file path to an isolated tmp file
+    so tests never read or depend on the real docs/STAGE_STATUS.json."""
+    from dispatch.manager import stage_gate
+
+    path = tmp_path / "STAGE_STATUS.json"
+    monkeypatch.setattr(stage_gate, "_STATUS_FILE", path)
+    return path
+
+
+def _write_status(path, **overrides):
+    import json as json_mod
+
+    payload = {
+        "schema_version": 1,
+        "last_synced": "2026-08-10T00:00:00Z",
+        "synced_from": "test",
+        "stages": [
+            {"number": 1, "name": "Test Stage", "status": "approved", "depends_on": [],
+             "blocked": False, "blocked_reason": None, "open_questions": [],
+             "test_status": None, "walkthrough_reports": []},
+        ],
+        "next_recommended_stage": 1,
+        "next_recommended_reason": "test",
+    }
+    payload.update(overrides)
+    path.write_text(json_mod.dumps(payload))
+
+
+def test_stage_gate_missing_file_returns_none(isolated_status_file):
+    from dispatch.manager import stage_gate
+
+    assert stage_gate.build_summary() is None
+
+
+def test_stage_gate_malformed_json_returns_none(isolated_status_file):
+    from dispatch.manager import stage_gate
+
+    isolated_status_file.write_text("{not valid json")
+    assert stage_gate.build_summary() is None
+
+
+def test_stage_gate_wrong_schema_version_returns_none(isolated_status_file):
+    from dispatch.manager import stage_gate
+
+    _write_status(isolated_status_file, schema_version=2)
+    assert stage_gate.build_summary() is None
+
+
+def test_stage_gate_well_formed_no_blocked_stages(isolated_status_file):
+    from dispatch.manager import stage_gate
+
+    _write_status(isolated_status_file)
+    summary = stage_gate.build_summary()
+    assert summary is not None
+    assert summary["card_level"] == 1
+    assert summary["blocked_stages"] == []
+    assert summary["next_recommended_stage"] == 1
+
+
+def test_stage_gate_blocked_stage_bumps_card_level(isolated_status_file):
+    from dispatch.manager import stage_gate
+
+    _write_status(isolated_status_file, stages=[
+        {"number": 6, "name": "Archive/IFTA", "status": "redefined_analysis_only_delivered",
+         "depends_on": [4], "blocked": True, "blocked_reason": "Needs Mike authorization",
+         "open_questions": [], "test_status": None, "walkthrough_reports": []},
+    ])
+    summary = stage_gate.build_summary()
+    assert summary["card_level"] == 2
+    assert len(summary["blocked_stages"]) == 1
+    assert summary["blocked_stages"][0]["blocked_reason"] == "Needs Mike authorization"
+
+
+def test_stage_gate_never_writes_to_docs():
+    """Structural guard: stage_gate.py must never write to docs/ or
+    anywhere else -- read-only against one local file."""
+    from dispatch.manager import stage_gate
+
+    source = inspect.getsource(stage_gate)
+    assert 'open(' not in source  # uses Path.read_text(), no raw open() at all
+    assert '"w"' not in source
+    assert "'w'" not in source
+
+
+def test_manager_page_renders_without_stage_gate_panel_when_file_missing(client, isolated_status_file):
+    """The core, already-shipped signal pipeline must be provably
+    unaffected by a missing mirror file -- this is the whole point of
+    failing soft."""
+    resp = client.get("/manager")
+    assert resp.status_code == 200
+    assert b"Stage Gate Status" not in resp.data
+    assert b"Nothing needs your attention" in resp.data
+
+
+def test_manager_page_renders_stage_gate_panel_when_file_present(client, isolated_status_file):
+    _write_status(isolated_status_file)
+    resp = client.get("/manager")
+    html = resp.data.decode()
+    assert resp.status_code == 200
+    assert "Stage Gate Status" in html
+    assert "Recommended next stage" in html
+    assert "Cards Needing Attention" not in html

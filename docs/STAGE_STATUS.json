@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "last_synced": "2026-08-10T23:59:00Z",
+  "synced_from": "jax1313-outlook/Claude-3: DISPATCH_STAGE_LAUNCH_PACKAGES_v1.md, DISPATCH_BLUEPRINT_DECISION_LOG.md",
+  "stages": [
+    {
+      "number": 1,
+      "name": "Inventory Freeze",
+      "status": "approved",
+      "depends_on": [],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 2,
+      "name": "Documentation Import",
+      "status": "approved_executed",
+      "depends_on": [1],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 3,
+      "name": "Blueprint Alignment",
+      "status": "approved_executed",
+      "depends_on": [2],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 4,
+      "name": "Data Engine / Spine Reconciliation",
+      "status": "approved_executed",
+      "depends_on": [3],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [],
+      "test_status": "23 new tests; full suite 2,352 tests, 0 failures",
+      "walkthrough_reports": ["STAGE4_SPINE_SCHEMA_WALKTHROUGH_REPORT_v1.md"]
+    },
+    {
+      "number": 5,
+      "name": "Portal Reconciliation",
+      "status": "approved_executed",
+      "depends_on": [4],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [],
+      "test_status": "21 new tests; full suite 2,373 tests, 0 failures",
+      "walkthrough_reports": ["STAGE5_PORTAL_RECONCILIATION_WALKTHROUGH_REPORT_v1.md"]
+    },
+    {
+      "number": 6,
+      "name": "Archive / IFTA Reconciliation",
+      "status": "redefined_analysis_only_delivered",
+      "depends_on": [4],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "A future Stage 6 build launch package (IFTA-to-Approval-Event migration; Archive Review Queue) remains available whenever Mike authorizes it."
+      ],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 7,
+      "name": "Security Foundation",
+      "status": "approved_executed_narrowed",
+      "depends_on": [4],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "Portal-Wide Enforcement (retrofitting the three HMAC gates, broader page protection) remains a separate, unapproved future stage."
+      ],
+      "test_status": "29 new tests; full suite 2,402 tests, 0 failures",
+      "walkthrough_reports": ["STAGE7_SECURITY_FOUNDATION_WALKTHROUGH_REPORT_v1.md"]
+    },
+    {
+      "number": 8,
+      "name": "Version Doctrine Retrofit",
+      "status": "redefined_analysis_only_delivered",
+      "depends_on": [5],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "A future Stage 8 build launch package remains available whenever Mike authorizes it, possibly merged with a future Stage 6 build."
+      ],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 9,
+      "name": "Verification Workflow Retrofit",
+      "status": "redefined_analysis_only_delivered",
+      "depends_on": [7, 8],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "A future Stage 9 build launch package remains available whenever Mike authorizes it."
+      ],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 10,
+      "name": "Alert Governance Retrofit",
+      "status": "redefined_analysis_only_delivered",
+      "depends_on": [5],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "A future Stage 10 build launch package remains available whenever Mike authorizes it."
+      ],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 11,
+      "name": "MVP Integration",
+      "status": "redefined_analysis_only_delivered",
+      "depends_on": [4, 5, 6, 7, 8, 9, 10],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 12,
+      "name": "Manager Reconciliation and Build",
+      "status": "approved_executed_narrowed",
+      "depends_on": [11],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "M4 (Stage Gate Monitor): resolved by this same design/build -- no longer open once this file and dispatch/manager/stage_gate.py ship.",
+        "M5 Archive half: still blocked on the Stage 6 Archive Review Queue build, not yet authorized.",
+        "M7 (policy routing hook): deferred pending a separate Mike decision on whether a policy engine is wanted at all."
+      ],
+      "test_status": "42 new tests across two build passes; full suite 2,444 tests, 0 failures",
+      "walkthrough_reports": [
+        "STAGE12_MANAGER_FOUNDATION_WALKTHROUGH_REPORT_v1.md",
+        "STAGE12_MANAGER_M4_M6_WALKTHROUGH_REPORT_v1.md"
+      ]
+    },
+    {
+      "number": 13,
+      "name": "Testing and Hold Review",
+      "status": "pending",
+      "depends_on": [12],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "Should the 90% coverage threshold apply immediately to dispatch/security/ and dispatch/spine/ (and now dispatch/manager/), or is a lower initial bar acceptable for the first Hold Review pass?"
+      ],
+      "test_status": null,
+      "walkthrough_reports": []
+    },
+    {
+      "number": 14,
+      "name": "Production-Intent Promotion Decision",
+      "status": "pending",
+      "depends_on": [13],
+      "blocked": false,
+      "blocked_reason": null,
+      "open_questions": [
+        "Does Mike want a formal re-walk of DEPLOY_VPS.md's Blockers to Resolve checklist as an explicit part of this stage?"
+      ],
+      "test_status": null,
+      "walkthrough_reports": []
+    }
+  ],
+  "next_recommended_stage": 6,
+  "next_recommended_reason": "The Archive Review Queue (Stage 6's original build scope) is the single concrete prerequisite unlocking two separate things at once: Stage 6's own build, and Manager's M5 Archive half, which has been blocked on this exact gap since it was first found in Stage 12 Phase M2+M3's design."
+}
