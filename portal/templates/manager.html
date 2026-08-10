@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Manager — L2-COS Portal{% endblock %}
+{% block page_title %}Manager — Staff Report{% endblock %}
+
+{% block body %}
+<p class="section-note">Manager is the Run Office function. It reads existing signals, classifies and ranks them, and prepares cards for anything worth your attention — it never approves, books, or submits anything. View-only.</p>
+
+<section class="card-section">
+    <h2>Summary</h2>
+    <div class="conflict-fields">
+        {% for classification, count in counts.items() %}
+        <div><strong>{{ classification }}:</strong> {{ count }}</div>
+        {% endfor %}
+        {% if not counts %}
+        <div>No signals to report.</div>
+        {% endif %}
+    </div>
+</section>
+
+{% if cards %}
+<section class="card-section">
+    <h2>Cards Needing Attention ({{ cards|length }})</h2>
+    {% for card in cards %}
+    <div class="conflict-card">
+        <div class="conflict-header">
+            <strong>{{ card.title }}</strong>
+            <span class="card-level card-level-{{ card.card_level }}" title="Consequence level {{ card.card_level }}">L{{ card.card_level }}</span>
+            <span style="color:#888;font-size:0.85em;margin-left:8px;">Priority Tier {{ card.priority_tier }}</span>
+        </div>
+        <div class="conflict-fields">
+            <div><strong>Summary:</strong> {{ card.summary }}</div>
+            <div><strong>Recommendation:</strong> {{ card.recommendation }}</div>
+            {% if card.decision_needed %}
+            <div><strong>Decision Needed:</strong> {{ card.decision_needed }}</div>
+            {% endif %}
+        </div>
+        <p style="margin-top:8px;font-style:italic;color:#666;">{{ card.required_closing }}</p>
+    </div>
+    {% endfor %}
+</section>
+{% else %}
+<div class="empty-state">
+    <p>Nothing needs your attention right now.</p>
+</div>
+{% endif %}
+{% endblock %}

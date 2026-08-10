@@ -42,6 +42,7 @@
             <li><a href="{{ url_for('pages.intelligence_view') }}" class="{% if request.endpoint == 'pages.intelligence_view' %}active{% endif %}">Intelligence</a></li>
             <li><a href="{{ url_for('pages.pending_decisions') }}" class="{% if request.endpoint == 'pages.pending_decisions' %}active{% endif %}">Pipeline</a></li>
             <li><a href="{{ url_for('pages.queues') }}" class="{% if request.endpoint == 'pages.queues' %}active{% endif %}">Queues</a></li>
+            <li><a href="{{ url_for('manager.staff_report') }}" class="{% if request.endpoint == 'manager.staff_report' %}active{% endif %}">Manager</a></li>
             <li><a href="{{ url_for('pages.conflicts') }}" class="{% if request.endpoint == 'pages.conflicts' %}active{% endif %}">Conflict Notices</a></li>
             <li><a href="{{ url_for('pages.driver_pay') }}" class="{% if request.endpoint == 'pages.driver_pay' %}active{% endif %}">Driver Pay</a></li>
             <li><a href="{{ url_for('pages.email_templates') }}" class="{% if request.endpoint == 'pages.email_templates' %}active{% endif %}">Email Templates</a></li>

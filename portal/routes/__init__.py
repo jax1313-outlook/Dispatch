@@ -8,6 +8,7 @@ from portal.routes.decisions import decisions_bp
 from portal.routes.pipeline import pipeline_bp
 from portal.routes.dispatch_api import dispatch_bp
 from portal.routes.security import security_bp
+from portal.routes.manager import manager_bp
 
 
 def register_routes(app: Flask) -> None:
@@ -17,3 +18,4 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(pipeline_bp, url_prefix="/api/pipeline")
     app.register_blueprint(dispatch_bp, url_prefix="/api/dispatch")
     app.register_blueprint(security_bp)
+    app.register_blueprint(manager_bp)
