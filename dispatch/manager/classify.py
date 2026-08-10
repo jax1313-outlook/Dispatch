@@ -21,7 +21,7 @@ Flagged here rather than silently assumed permanent.
 
 from __future__ import annotations
 
-from dispatch.manager import signals
+from dispatch.manager import security_monitor, signals
 
 ROUTINE = "Routine"
 STATUS = "Status"
@@ -109,12 +109,27 @@ def _classify_ifta_suspect_entry(_raw: dict) -> str:
     return REVIEW_NEEDED
 
 
+def _classify_ifta_exception(_raw: dict) -> str:
+    # Advisory only per IFTAException's own doctrine ("nothing in this
+    # codebase reads an exception as a reason to block a submission or
+    # a seal") -- worth a look before sealing, never a hard stop.
+    return REVIEW_NEEDED
+
+
+def _classify_security_pattern(_raw: dict) -> str:
+    # Stage 12 Phase M6: a repeated security pattern is always Conflict
+    # -- no graduated severity, regardless of which pattern fired.
+    return CONFLICT
+
+
 _CLASSIFIERS = {
     signals.STALLED_LOAD: _classify_stalled_load,
     signals.OVERDUE_SETTLEMENT: _classify_overdue_settlement,
     signals.OPEN_EXCEPTION: _classify_open_exception,
     signals.UNRESOLVED_CONFLICT: _classify_unresolved_conflict,
     signals.IFTA_SUSPECT_ENTRY: _classify_ifta_suspect_entry,
+    signals.IFTA_EXCEPTION: _classify_ifta_exception,
+    security_monitor.SECURITY_PATTERN: _classify_security_pattern,
 }
 
 
@@ -147,6 +162,16 @@ def _title_and_summary(raw: dict, classification: str) -> tuple[str, str]:
             f"Suspect IFTA fuel purchase {data['purchase_id']}",
             f"Extraction confidence {data.get('extraction_confidence')} "
             f"below review threshold.",
+        )
+    if source_type == signals.IFTA_EXCEPTION:
+        return (
+            f"IFTA exception: {data.get('exception_type', 'unknown')}",
+            data.get("detail", ""),
+        )
+    if source_type == security_monitor.SECURITY_PATTERN:
+        return (
+            f"Repeated {data['event_type']} ({data['count']}x in {data['window_hours']}h)",
+            f"Security event pattern for {data['key']} -- {data['count']} occurrences.",
         )
     return (f"{source_type} signal", "")
 

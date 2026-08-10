@@ -9,7 +9,7 @@ import inspect
 import pytest
 
 from dispatch import db, services
-from dispatch.manager import classify, priority, signals, staff_report
+from dispatch.manager import classify, priority, security_monitor, signals, staff_report
 from dispatch.spine.store import get_work_item, list_portal_cards
 from portal.models import conflict as conflict_model
 
@@ -84,6 +84,39 @@ def _make_suspect_ifta_entry() -> dict:
     return purchase
 
 
+def _make_draft_ifta_approval_with_exception(status: str = "draft") -> tuple[dict, dict]:
+    from dispatch import store
+    from dispatch.models import IFTAException, IFTAReportApproval
+
+    approval = store.create_ifta_report_approval(
+        IFTAReportApproval(year=2026, quarter=1, status=status)
+    )
+    exc = store.create_ifta_exception(
+        IFTAException(
+            approval_id=approval["approval_id"],
+            exception_type="fuel_no_miles",
+            detail="Test IFTA exception",
+        )
+    )
+    return approval, exc
+
+
+def _make_security_events(event_type: str, count: int, *, user_id: str | None = None,
+                           display_name: str | None = None, path: str | None = None) -> None:
+    from dispatch.security.models import SecurityEvent
+    from dispatch.security.store import create_security_event
+
+    details = {}
+    if display_name:
+        details["display_name"] = display_name
+    if path:
+        details["path"] = path
+    for _ in range(count):
+        create_security_event(
+            SecurityEvent(event_type=event_type, user_id=user_id, details=details)
+        )
+
+
 # ── Signal aggregation ───────────────────────────────────────────────────
 
 def test_empty_state_produces_no_signals():
@@ -144,6 +177,71 @@ def test_ifta_suspect_entry_detected():
     assert matches[0]["source_id"] == purchase["purchase_id"]
 
 
+# ── Phase M5: IFTA exceptions (draft approvals only) ──────────────────────
+
+def test_ifta_exception_on_draft_approval_detected():
+    _approval, exc = _make_draft_ifta_approval_with_exception(status="draft")
+    raw = signals.collect_signals()
+    matches = [s for s in raw if s["source_type"] == signals.IFTA_EXCEPTION]
+    assert len(matches) == 1
+    assert matches[0]["source_id"] == exc["exception_id"]
+
+
+def test_ifta_exception_on_sealed_approval_not_detected():
+    _make_draft_ifta_approval_with_exception(status="sealed")
+    raw = signals.collect_signals()
+    assert not [s for s in raw if s["source_type"] == signals.IFTA_EXCEPTION]
+
+
+# ── Phase M6: security event patterns ──────────────────────────────────────
+
+def test_login_failure_below_threshold_produces_no_pattern():
+    _make_security_events("LOGIN_FAILURE", 2, user_id="USER-X")
+    raw = signals.collect_signals()
+    assert not [s for s in raw if s["source_type"] == security_monitor.SECURITY_PATTERN]
+
+
+def test_login_failure_at_threshold_produces_one_pattern():
+    _make_security_events("LOGIN_FAILURE", 3, user_id="USER-X")
+    raw = signals.collect_signals()
+    matches = [s for s in raw if s["source_type"] == security_monitor.SECURITY_PATTERN]
+    assert len(matches) == 1
+    assert matches[0]["data"]["event_type"] == "LOGIN_FAILURE"
+    assert matches[0]["data"]["count"] == 3
+
+
+def test_unknown_identity_and_known_identity_failures_not_conflated():
+    """A wrong-PIN attempt (user_id set) and an unknown-identity
+    attempt (user_id None, keyed by display_name) must never merge
+    into the same pattern, even if a human later realizes they're the
+    same person -- different risk shapes, different keys."""
+    _make_security_events("LOGIN_FAILURE", 2, user_id="USER-X")
+    _make_security_events("LOGIN_FAILURE", 2, display_name="Mike")
+    raw = signals.collect_signals()
+    matches = [s for s in raw if s["source_type"] == security_monitor.SECURITY_PATTERN]
+    assert matches == []  # 2 + 2, neither group alone reaches the threshold of 3
+
+
+def test_permission_denied_pattern_grouped_by_user_and_path():
+    _make_security_events("PERMISSION_DENIED", 3, user_id="USER-Y", path="/settings")
+    raw = signals.collect_signals()
+    matches = [s for s in raw if s["source_type"] == security_monitor.SECURITY_PATTERN]
+    assert len(matches) == 1
+    assert matches[0]["data"]["event_type"] == "PERMISSION_DENIED"
+
+
+def test_security_monitor_never_calls_security_write_functions():
+    """Structural guard: security_monitor.py must call exactly
+    list_security_events() and nothing else in dispatch.security."""
+    source = inspect.getsource(security_monitor)
+    forbidden = (
+        "create_user_with_pin", "change_pin", "reset_pin", "revoke_pin",
+        "create_session", "revoke_session", "auth.login(",
+    )
+    for name in forbidden:
+        assert name not in source
+
+
 def test_check_overdue_settlements_never_called_directly():
     """Structural guard: signals.py must read already-overdue
     settlements, never call the mutating check_overdue_settlements()
@@ -200,6 +298,18 @@ def test_ifta_suspect_entry_classifies_review_needed():
     assert classify.classify_signal(raw)["classification"] == classify.REVIEW_NEEDED
 
 
+def test_ifta_exception_classifies_review_needed():
+    _make_draft_ifta_approval_with_exception()
+    raw = [s for s in signals.collect_signals() if s["source_type"] == signals.IFTA_EXCEPTION][0]
+    assert classify.classify_signal(raw)["classification"] == classify.REVIEW_NEEDED
+
+
+def test_security_pattern_always_classifies_conflict():
+    _make_security_events("LOGIN_FAILURE", 3, user_id="USER-X")
+    raw = [s for s in signals.collect_signals() if s["source_type"] == security_monitor.SECURITY_PATTERN][0]
+    assert classify.classify_signal(raw)["classification"] == classify.CONFLICT
+
+
 def test_clears_review_bar_threshold():
     assert classify.clears_review_bar({"card_level": 2}) is True
     assert classify.clears_review_bar({"card_level": 1}) is False
@@ -207,6 +317,13 @@ def test_clears_review_bar_threshold():
 
 
 # ── Priority ranking ──────────────────────────────────────────────────────
+
+def test_ifta_exception_and_security_pattern_are_tier_one():
+    ifta_signal = {"source_type": signals.IFTA_EXCEPTION, "classification": classify.REVIEW_NEEDED, "card_level": 2}
+    security_signal = {"source_type": security_monitor.SECURITY_PATTERN, "classification": classify.CONFLICT, "card_level": 4}
+    for signal in (ifta_signal, security_signal):
+        assert priority.assign_priority(signal)["priority_tier"] == priority.TIER_SAFETY_SECURITY_LEGAL_COMPLIANCE_AUTHORITY
+
 
 def test_tier_one_always_ranks_above_lower_tiers_regardless_of_card_level():
     tier1_low_level = {
@@ -289,6 +406,26 @@ def test_two_distinct_signals_each_materialize_once():
     assert len(report["cards"]) == 2
 
 
+def test_ifta_exception_second_run_does_not_duplicate():
+    from dispatch.spine.store import list_work_items
+
+    _make_draft_ifta_approval_with_exception()
+    staff_report.generate_staff_report()
+    staff_report.generate_staff_report()
+    assert len(list_work_items()) == 1
+
+
+def test_security_pattern_second_run_same_day_does_not_duplicate():
+    from dispatch.spine.store import list_work_items
+
+    _make_security_events("LOGIN_FAILURE", 3, user_id="USER-X")
+    first = staff_report.generate_staff_report()
+    second = staff_report.generate_staff_report()
+    assert len(first["cards"]) == 1
+    assert len(second["cards"]) == 1
+    assert len(list_work_items()) == 1
+
+
 # ── Structural guards ─────────────────────────────────────────────────────
 
 def test_manager_never_writes_current_state_directly():
@@ -296,7 +433,7 @@ def test_manager_never_writes_current_state_directly():
     (e.g. dispatch/security/'s no-plaintext-PIN guard): Manager code
     must never contain a raw work_items UPDATE -- apply_transition()
     is the only allowed path."""
-    for module in (signals, classify, priority, staff_report):
+    for module in (signals, classify, priority, staff_report, security_monitor):
         source = inspect.getsource(module)
         assert "UPDATE work_items" not in source
         assert "current_state=" not in source
@@ -304,13 +441,14 @@ def test_manager_never_writes_current_state_directly():
 
 
 def test_manager_never_calls_security_write_functions():
-    source = inspect.getsource(staff_report)
     forbidden = (
         "create_user_with_pin", "change_pin", "reset_pin", "revoke_pin",
-        "create_session", "revoke_session", "login(",
+        "create_session", "revoke_session", "auth.login(",
     )
-    for name in forbidden:
-        assert name not in source
+    for module in (staff_report, signals, security_monitor):
+        source = inspect.getsource(module)
+        for name in forbidden:
+            assert name not in source
 
 
 def test_manager_never_calls_approval_or_booking_functions():

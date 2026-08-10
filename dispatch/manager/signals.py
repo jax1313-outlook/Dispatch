@@ -15,6 +15,13 @@ effect (that scan already runs elsewhere, e.g. the Portal's existing
 "Run Aging Check" button). Manager instead reads the *result* of that
 scan via dispatch.services.list_settlements(payment_status="overdue"),
 a genuine read with no side effects.
+
+IFTA_EXCEPTION and the security_monitor pattern signals were added in
+Stage 12 Phases M5 (IFTA half only -- the Archive half is blocked on
+the not-yet-built Archive Review Queue) and M6, per
+DISPATCH_STAGE12_MANAGER_M4_M6_BUILD_DESIGN_v1.md. IFTA_EXCEPTION only
+scans 'draft' (unsealed) report approvals -- a sealed quarter's
+exceptions are historical record, not open work.
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from dispatch import services
+from dispatch.manager.security_monitor import detect_patterns
 from portal.models import conflict as conflict_model
 
 # Signal source_type identifiers -- used for classification, priority
@@ -31,6 +39,7 @@ OVERDUE_SETTLEMENT = "overdue_settlement"
 OPEN_EXCEPTION = "open_exception"
 UNRESOLVED_CONFLICT = "unresolved_conflict"
 IFTA_SUSPECT_ENTRY = "ifta_suspect_entry"
+IFTA_EXCEPTION = "ifta_exception"
 
 
 def _current_year_quarter() -> tuple[int, int]:
@@ -79,5 +88,17 @@ def collect_signals() -> list[dict]:
             "source_id": purchase["purchase_id"],
             "data": purchase,
         })
+
+    for approval in services.list_ifta_report_approvals():
+        if approval["status"] != "draft":
+            continue
+        for exc in services.list_ifta_exceptions(approval["approval_id"]):
+            raw.append({
+                "source_type": IFTA_EXCEPTION,
+                "source_id": exc["exception_id"],
+                "data": exc,
+            })
+
+    raw.extend(detect_patterns())
 
     return raw

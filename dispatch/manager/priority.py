@@ -11,7 +11,7 @@ implementation choice, same status as classify.py's thresholds.
 
 from __future__ import annotations
 
-from dispatch.manager import signals
+from dispatch.manager import security_monitor, signals
 from dispatch.manager.classify import CONFLICT, DECISION_NEEDED
 
 TIER_SAFETY_SECURITY_LEGAL_COMPLIANCE_AUTHORITY = 1
@@ -62,12 +62,24 @@ def _tier_for_ifta_suspect_entry(_classified: dict) -> int:
     return _IFTA_TIER
 
 
+def _tier_for_ifta_exception(_classified: dict) -> int:
+    # Same reasoning as suspect entries: a finding against a
+    # not-yet-sealed government filing is a compliance matter.
+    return _IFTA_TIER
+
+
+def _tier_for_security_pattern(_classified: dict) -> int:
+    return TIER_SAFETY_SECURITY_LEGAL_COMPLIANCE_AUTHORITY
+
+
 _TIER_FUNCTIONS = {
     signals.STALLED_LOAD: _tier_for_stalled_load,
     signals.OVERDUE_SETTLEMENT: _tier_for_overdue_settlement,
     signals.OPEN_EXCEPTION: _tier_for_open_exception,
     signals.UNRESOLVED_CONFLICT: _tier_for_unresolved_conflict,
     signals.IFTA_SUSPECT_ENTRY: _tier_for_ifta_suspect_entry,
+    signals.IFTA_EXCEPTION: _tier_for_ifta_exception,
+    security_monitor.SECURITY_PATTERN: _tier_for_security_pattern,
 }
 
 
