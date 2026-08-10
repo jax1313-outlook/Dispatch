@@ -39,6 +39,12 @@ body {
     text-transform: uppercase;
     letter-spacing: 1px;
 }
+.sidebar-auth {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #95a5a6;
+}
+.sidebar-auth a { color: #85c1e9; }
 .nav-links {
     list-style: none;
     padding: 8px 0;

@@ -11,6 +11,16 @@
         <div class="sidebar-header">
             <h2>L2-COS Portal</h2>
             <span class="sidebar-subtitle">Operations Cockpit</span>
+            {% if current_dispatch_user %}
+            <div class="sidebar-auth">
+                Logged in as {{ current_dispatch_user.display_name }}
+                (<a href="{{ url_for('security.logout') }}">Logout</a>)
+            </div>
+            {% else %}
+            <div class="sidebar-auth">
+                <a href="{{ url_for('security.login') }}">Login</a>
+            </div>
+            {% endif %}
         </div>
         <ul class="nav-links">
             <li><a href="{{ url_for('pages.home') }}" class="{% if request.endpoint == 'pages.home' %}active{% endif %}">Home</a></li>

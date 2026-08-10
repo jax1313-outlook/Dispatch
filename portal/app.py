@@ -36,6 +36,16 @@ def create_app(config: dict | None = None) -> Flask:
         check_secret_key()
     register_routes(app)
 
+    @app.context_processor
+    def _inject_current_dispatch_user():
+        # Purely informational for the nav (Section 3 of
+        # DISPATCH_STAGE7_SECURITY_FOUNDATION_DESIGN_v1.md) -- never
+        # blocks page rendering, never redirects. Only /settings and
+        # /login,/logout actually require a session in this build.
+        from portal.auth_helpers import get_current_user
+
+        return {"current_dispatch_user": get_current_user()}
+
     @app.template_filter("time_ago")
     def _time_ago(iso_str: str) -> str:
         if not iso_str:

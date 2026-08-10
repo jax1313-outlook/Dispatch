@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Login — L2-COS Portal{% endblock %}
+{% block page_title %}Login{% endblock %}
+
+{% block body %}
+<div class="brief-container" style="max-width: 380px;">
+    {% if error %}
+    <div class="conflict-card severity-critical">
+        <p>{{ error }}</p>
+    </div>
+    {% endif %}
+    <section class="brief-section">
+        <form method="post">
+            <div class="card-fields" style="display:flex;flex-direction:column;gap:10px;">
+                <label>
+                    <div><strong>Identity</strong></div>
+                    <input type="text" name="display_name" autocomplete="username" required
+                           style="width:100%;padding:6px;">
+                </label>
+                <label>
+                    <div><strong>PIN</strong></div>
+                    <input type="password" name="pin" inputmode="numeric" autocomplete="current-password" required
+                           style="width:100%;padding:6px;">
+                </label>
+            </div>
+            <div class="card-actions">
+                <button type="submit" class="btn btn-primary">Log In</button>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}

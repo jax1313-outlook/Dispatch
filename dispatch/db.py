@@ -420,8 +420,10 @@ def _init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
     _apply_migrations(conn)
     from dispatch.spine.db import init_spine_schema
+    from dispatch.security.db import init_security_schema
 
     init_spine_schema(conn)
+    init_security_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:

@@ -132,6 +132,27 @@ def flags(intelligence) -> list[str]:
 
 
 @pytest.fixture
+def login_as_authority():
+    """Returns a callable that logs a Flask test client in as a fresh
+    Authority user via the real /login route (Stage 7 Security
+    Foundation). Needed by any test exercising /settings, which
+    @authority_required gates -- every other Portal page is unaffected
+    by Stage 7 and needs no login."""
+
+    def _login(client, display_name="Test Authority", pin="1234"):
+        from dispatch.security import auth
+
+        auth.create_user_with_pin(display_name, "Authority", pin)
+        resp = client.post(
+            "/login", data={"display_name": display_name, "pin": pin}
+        )
+        assert resp.status_code == 302
+        return resp
+
+    return _login
+
+
+@pytest.fixture
 def install_anthropic(monkeypatch):
     """Factory: install a fake `anthropic` module + API key.
 

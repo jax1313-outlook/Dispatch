@@ -141,7 +141,8 @@ class TestNotifyStalledAPI:
 
 
 class TestSettingsStallThresholds:
-    def test_thresholds_displayed(self, client):
+    def test_thresholds_displayed(self, client, login_as_authority):
+        login_as_authority(client)
         resp = client.get("/settings")
         html = resp.data.decode()
         assert "Stall Detection Thresholds" in html
@@ -149,7 +150,8 @@ class TestSettingsStallThresholds:
         assert "Dispatched" in html
         assert "In Transit" in html
 
-    def test_quickbooks_section(self, client):
+    def test_quickbooks_section(self, client, login_as_authority):
+        login_as_authority(client)
         resp = client.get("/settings")
         html = resp.data.decode()
         assert "QuickBooks Online" in html

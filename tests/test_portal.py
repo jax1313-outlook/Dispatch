@@ -546,15 +546,22 @@ class TestPageRendering:
         assert "Company Library" in html
         assert "Location Intelligence" in html
 
-    def test_settings_renders(self, client):
-        resp = client.get("/settings")
-        assert resp.status_code == 200
-        html = resp.data.decode("utf-8")
-        assert "SAM.gov API" in html
-        assert "SMTP Email" in html
-        assert "Claude API" in html
-        assert "DISPATCH Acquisition" in html
-        assert "Email Delivery" in html
+    def test_settings_renders(self, client, login_as_authority, tmp_path):
+        from dispatch import db
+
+        db.set_db_path(tmp_path / "settings_render.db")
+        try:
+            login_as_authority(client)
+            resp = client.get("/settings")
+            assert resp.status_code == 200
+            html = resp.data.decode("utf-8")
+            assert "SAM.gov API" in html
+            assert "SMTP Email" in html
+            assert "Claude API" in html
+            assert "DISPATCH Acquisition" in html
+            assert "Email Delivery" in html
+        finally:
+            db.set_db_path(None)
 
     def test_brief_shows_intelligence_modules(self, client):
         from portal.models import sandbox

@@ -7,6 +7,7 @@ from pathlib import Path
 from flask import Blueprint, render_template, request, redirect, url_for
 
 from portal import helpers
+from portal.auth_helpers import authority_required
 from portal.models import sandbox, publisher, conflict
 from portal.models import library as lib_model
 from portal.models import archive as arc_model
@@ -843,6 +844,7 @@ def queues():
 
 
 @pages_bp.route("/settings")
+@authority_required
 def settings():
     import os
     from portal.config import Config, _DEFAULT_SECRET
