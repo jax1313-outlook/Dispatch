@@ -17,11 +17,18 @@ scan via dispatch.services.list_settlements(payment_status="overdue"),
 a genuine read with no side effects.
 
 IFTA_EXCEPTION and the security_monitor pattern signals were added in
-Stage 12 Phases M5 (IFTA half only -- the Archive half is blocked on
+Stage 12 Phases M5 (IFTA half only -- the Archive half was blocked on
 the not-yet-built Archive Review Queue) and M6, per
 DISPATCH_STAGE12_MANAGER_M4_M6_BUILD_DESIGN_v1.md. IFTA_EXCEPTION only
 scans 'draft' (unsealed) report approvals -- a sealed quarter's
 exceptions are historical record, not open work.
+
+ARCHIVE_REVIEW_ITEM completes M5's Archive half, per
+DISPATCH_STAGE12_MANAGER_ARCHIVE_WIRING_DESIGN_v1.md, once Stage 6
+shipped portal.models.archive.list_review_queue(). Manager only ever
+reads that queue -- it never calls mark_reviewed() or otherwise
+records a Keep/Delete decision; that stays on the Authority-gated
+/archive page.
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ from datetime import datetime, timezone
 
 from dispatch import services
 from dispatch.manager.security_monitor import detect_patterns
+from portal.models import archive as archive_model
 from portal.models import conflict as conflict_model
 
 # Signal source_type identifiers -- used for classification, priority
@@ -40,6 +48,7 @@ OPEN_EXCEPTION = "open_exception"
 UNRESOLVED_CONFLICT = "unresolved_conflict"
 IFTA_SUSPECT_ENTRY = "ifta_suspect_entry"
 IFTA_EXCEPTION = "ifta_exception"
+ARCHIVE_REVIEW_ITEM = "archive_review_item"
 
 
 def _current_year_quarter() -> tuple[int, int]:
@@ -98,6 +107,13 @@ def collect_signals() -> list[dict]:
                 "source_id": exc["exception_id"],
                 "data": exc,
             })
+
+    for item in archive_model.list_review_queue():
+        raw.append({
+            "source_type": ARCHIVE_REVIEW_ITEM,
+            "source_id": item["id"],
+            "data": item,
+        })
 
     raw.extend(detect_patterns())
 

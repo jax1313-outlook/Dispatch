@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_synced": "2026-08-10T23:59:00Z",
+  "last_synced": "2026-08-11T00:30:00Z",
   "synced_from": "jax1313-outlook/Claude-3: DISPATCH_STAGE_LAUNCH_PACKAGES_v1.md, DISPATCH_BLUEPRINT_DECISION_LOG.md",
   "stages": [
     {
@@ -61,15 +61,16 @@
     {
       "number": 6,
       "name": "Archive / IFTA Reconciliation",
-      "status": "redefined_analysis_only_delivered",
+      "status": "approved_executed_narrowed",
       "depends_on": [4],
       "blocked": false,
       "blocked_reason": null,
       "open_questions": [
-        "A future Stage 6 build launch package (IFTA-to-Approval-Event migration; Archive Review Queue) remains available whenever Mike authorizes it."
+        "The IFTA-to-Approval-Event-schema migration remains entirely deferred to its own future build pass, its own design, its own resolution of the still-open historical-rows question.",
+        "A physical purge mechanism (vs. recording a Delete decision) was deliberately not built -- would need its own explicit design and sign-off given its irreversibility."
       ],
-      "test_status": null,
-      "walkthrough_reports": []
+      "test_status": "21 new tests; full suite 2,473 tests, 0 failures",
+      "walkthrough_reports": ["STAGE6_ARCHIVE_REVIEW_QUEUE_WALKTHROUGH_REPORT_v1.md"]
     },
     {
       "number": 7,
@@ -142,14 +143,14 @@
       "blocked": false,
       "blocked_reason": null,
       "open_questions": [
-        "M4 (Stage Gate Monitor): resolved by this same design/build -- no longer open once this file and dispatch/manager/stage_gate.py ship.",
-        "M5 Archive half: still blocked on the Stage 6 Archive Review Queue build, not yet authorized.",
-        "M7 (policy routing hook): deferred pending a separate Mike decision on whether a policy engine is wanted at all."
+        "M7 (policy routing hook): deferred pending a separate Mike decision on whether a policy engine is wanted at all. This is the only phase of Manager's original M1-M7 scope still open."
       ],
-      "test_status": "42 new tests across two build passes; full suite 2,444 tests, 0 failures",
+      "test_status": "58 new tests across four build passes; full suite 2,481 tests, 0 failures",
       "walkthrough_reports": [
         "STAGE12_MANAGER_FOUNDATION_WALKTHROUGH_REPORT_v1.md",
-        "STAGE12_MANAGER_M4_M6_WALKTHROUGH_REPORT_v1.md"
+        "STAGE12_MANAGER_M4_M6_WALKTHROUGH_REPORT_v1.md",
+        "STAGE12_MANAGER_M4_WALKTHROUGH_REPORT_v1.md",
+        "STAGE12_MANAGER_ARCHIVE_WIRING_WALKTHROUGH_REPORT_v1.md"
       ]
     },
     {
@@ -179,6 +180,6 @@
       "walkthrough_reports": []
     }
   ],
-  "next_recommended_stage": 6,
-  "next_recommended_reason": "The Archive Review Queue (Stage 6's original build scope) is the single concrete prerequisite unlocking two separate things at once: Stage 6's own build, and Manager's M5 Archive half, which has been blocked on this exact gap since it was first found in Stage 12 Phase M2+M3's design."
+  "next_recommended_stage": 13,
+  "next_recommended_reason": "Stage 6 (Archive Review Queue) and Stage 12 (Manager -- M2, M3, M4, M5, M6 all delivered) are both complete. Stage 13 (Testing and Hold Review) is next in sequence and aggregates everything built across every stage into one combined Hold Review pass, per the plan's own design. M7 (policy routing) remains a separate, still-undecided item that doesn't block Stage 13."
 }

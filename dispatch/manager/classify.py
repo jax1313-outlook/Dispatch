@@ -1,16 +1,25 @@
 """Classification per MANAGER.md Section 7's nine-class taxonomy.
 
-Only five of the nine classes are reachable from this build's signal
-sources (Status, Review Needed, Decision Needed, Conflict, plus the
+Six of the nine classes are reachable from this build's signal sources
+(Status, Review Needed, Decision Needed, Conflict, Archive, plus the
 Routine/Noise floor for anything below the Review Needed bar) -- no
-Archive, Library Candidate, or Authority signal source is wired in
-this build. The full taxonomy is still named explicitly rather than
-narrowed, so a future signal source can be classified without
-inventing a new taxonomy.
+Library Candidate or Authority signal source is wired in this build.
+The full taxonomy is still named explicitly rather than narrowed, so
+a future signal source can be classified without inventing a new
+taxonomy.
 
 Card levels follow MANAGER.md Section 9 / DISPATCH_CONSTITUTION_v3.md
 Section 17: 0 Silent Log, 1 Status, 2 Review, 3 Decision, 4 Conflict,
 5 Authority.
+
+ARCHIVE's card level was corrected from 1 to 2 when the Archive Review
+Queue wiring (DISPATCH_STAGE12_MANAGER_ARCHIVE_WIRING_DESIGN_v1.md)
+made this class reachable for the first time -- it had been defined
+since the M2+M3 build but was dead code until now, and the original
+value of 1 sat below REVIEW_BAR_CARD_LEVEL, which would have silently
+made every Archive Review card unreachable. 2 matches
+DISPATCH_MANAGER_BUILDOUT_DESIGN_v1.md Section 7's own Portal Card
+Model table (Archive Review Card = Level 2) exactly.
 
 The specific thresholds below (e.g. "2x the stall threshold is Decision
 Needed, not just Status") are this build's own tunable defaults, not
@@ -40,7 +49,7 @@ _CARD_LEVEL_BY_CLASS = {
     DECISION_NEEDED: 3,
     CONFLICT: 4,
     AUTHORITY: 5,
-    ARCHIVE: 1,
+    ARCHIVE: 2,
     LIBRARY_CANDIDATE: 2,
     NOISE: 0,
 }
@@ -122,6 +131,13 @@ def _classify_security_pattern(_raw: dict) -> str:
     return CONFLICT
 
 
+def _classify_archive_review_item(_raw: dict) -> str:
+    # DISPATCH_MANAGER_BUILDOUT_DESIGN_v1.md's Portal Card Model gives
+    # Archive Review Card one fixed level -- no age-based sub-tiering,
+    # unlike stalled loads or overdue settlements.
+    return ARCHIVE
+
+
 _CLASSIFIERS = {
     signals.STALLED_LOAD: _classify_stalled_load,
     signals.OVERDUE_SETTLEMENT: _classify_overdue_settlement,
@@ -130,6 +146,7 @@ _CLASSIFIERS = {
     signals.IFTA_SUSPECT_ENTRY: _classify_ifta_suspect_entry,
     signals.IFTA_EXCEPTION: _classify_ifta_exception,
     security_monitor.SECURITY_PATTERN: _classify_security_pattern,
+    signals.ARCHIVE_REVIEW_ITEM: _classify_archive_review_item,
 }
 
 
@@ -172,6 +189,13 @@ def _title_and_summary(raw: dict, classification: str) -> tuple[str, str]:
         return (
             f"Repeated {data['event_type']} ({data['count']}x in {data['window_hours']}h)",
             f"Security event pattern for {data['key']} -- {data['count']} occurrences.",
+        )
+    if source_type == signals.ARCHIVE_REVIEW_ITEM:
+        return (
+            f"Archive Review: {data.get('title', data.get('id', 'unknown'))}",
+            f"In the Archive Review Queue, {data.get('age_days', '?')} days old. "
+            f"Review and record a Keep/Delete decision at /archive -- "
+            f"Manager does not action this itself.",
         )
     return (f"{source_type} signal", "")
 

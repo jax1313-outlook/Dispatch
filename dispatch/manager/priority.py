@@ -72,6 +72,14 @@ def _tier_for_security_pattern(_classified: dict) -> int:
     return TIER_SAFETY_SECURITY_LEGAL_COMPLIANCE_AUTHORITY
 
 
+def _tier_for_archive_review_item(_classified: dict) -> int:
+    # DISPATCH_MANAGER_BUILDOUT_DESIGN_v1.md Section 8 names this tier
+    # explicitly for "Library, Archive, or cleanup work" -- not a
+    # judgment call the way some other tier assignments in this build
+    # have been.
+    return TIER_LIBRARY_ARCHIVE_CLEANUP
+
+
 _TIER_FUNCTIONS = {
     signals.STALLED_LOAD: _tier_for_stalled_load,
     signals.OVERDUE_SETTLEMENT: _tier_for_overdue_settlement,
@@ -80,6 +88,7 @@ _TIER_FUNCTIONS = {
     signals.IFTA_SUSPECT_ENTRY: _tier_for_ifta_suspect_entry,
     signals.IFTA_EXCEPTION: _tier_for_ifta_exception,
     security_monitor.SECURITY_PATTERN: _tier_for_security_pattern,
+    signals.ARCHIVE_REVIEW_ITEM: _tier_for_archive_review_item,
 }
 
 

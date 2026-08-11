@@ -117,6 +117,26 @@ def _make_security_events(event_type: str, count: int, *, user_id: str | None = 
         )
 
 
+def _make_archive_review_item(days_old: int = 200, section: str = "load") -> dict:
+    from datetime import datetime, timedelta, timezone
+
+    from portal.models import archive as archive_model
+
+    record = archive_model.create_record(
+        section=section, source_id=f"MGR-ARCH-{days_old}", title="Manager Archive Test Record",
+        record_data={"status": "closed"},
+    )
+    backdated = (datetime.now(timezone.utc) - timedelta(days=days_old)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    data = archive_model._load()
+    for r in data[section]:
+        if r["id"] == record["id"]:
+            r["archived_at"] = backdated
+    archive_model._save(data)
+    return record
+
+
 # ── Signal aggregation ───────────────────────────────────────────────────
 
 def test_empty_state_produces_no_signals():
@@ -240,6 +260,73 @@ def test_security_monitor_never_calls_security_write_functions():
     )
     for name in forbidden:
         assert name not in source
+
+
+# ── Manager <-> Archive Review Queue wiring ────────────────────────────────
+
+def test_archive_review_item_detected():
+    record = _make_archive_review_item(days_old=200)
+    raw = signals.collect_signals()
+    matches = [s for s in raw if s["source_type"] == signals.ARCHIVE_REVIEW_ITEM]
+    assert len(matches) == 1
+    assert matches[0]["source_id"] == record["id"]
+
+
+def test_archive_review_item_below_age_threshold_not_detected():
+    _make_archive_review_item(days_old=30)
+    raw = signals.collect_signals()
+    assert not [s for s in raw if s["source_type"] == signals.ARCHIVE_REVIEW_ITEM]
+
+
+def test_already_reviewed_archive_item_not_detected():
+    from portal.models import archive as archive_model
+
+    record = _make_archive_review_item(days_old=200)
+    archive_model.mark_reviewed(record["id"], "load", "kept")
+    raw = signals.collect_signals()
+    assert not [s for s in raw if s["source_type"] == signals.ARCHIVE_REVIEW_ITEM]
+
+
+def test_archive_review_item_classifies_archive_and_clears_review_bar():
+    """Direct regression test for the ARCHIVE card-level fix (1 -> 2):
+    an Archive-classified signal must clear REVIEW_BAR_CARD_LEVEL."""
+    _make_archive_review_item(days_old=200)
+    raw = [s for s in signals.collect_signals() if s["source_type"] == signals.ARCHIVE_REVIEW_ITEM][0]
+    classified = classify.classify_signal(raw)
+    assert classified["classification"] == classify.ARCHIVE
+    assert classified["card_level"] == 2
+    assert classify.clears_review_bar(classified) is True
+
+
+def test_archive_review_item_is_tier_seven():
+    _make_archive_review_item(days_old=200)
+    raw = [s for s in signals.collect_signals() if s["source_type"] == signals.ARCHIVE_REVIEW_ITEM][0]
+    classified = classify.classify_signal(raw)
+    assert priority.assign_priority(classified)["priority_tier"] == priority.TIER_LIBRARY_ARCHIVE_CLEANUP
+
+
+def test_archive_review_item_materializes_and_second_pass_does_not_duplicate():
+    from dispatch.spine.store import list_work_items
+
+    _make_archive_review_item(days_old=200)
+    first = staff_report.generate_staff_report()
+    second = staff_report.generate_staff_report()
+    matches_first = [c for c in first["cards"] if "Archive Review" in c["title"]]
+    matches_second = [c for c in second["cards"] if "Archive Review" in c["title"]]
+    assert len(matches_first) == 1
+    assert len(matches_second) == 1
+    assert matches_first[0]["card_id"] == matches_second[0]["card_id"]
+    assert len([wi for wi in list_work_items() if wi["source_type"] == signals.ARCHIVE_REVIEW_ITEM]) == 1
+
+
+def test_manager_never_calls_archive_mark_reviewed():
+    """Structural guard: dispatch/manager/ must never call
+    mark_reviewed() -- Manager reads the Archive Review Queue, it
+    never records a Keep/Delete decision itself."""
+    for module in (signals, classify, priority, staff_report, security_monitor):
+        source = inspect.getsource(module)
+        assert "archive_model.mark_reviewed(" not in source
+        assert "arc_model.mark_reviewed(" not in source
 
 
 def test_check_overdue_settlements_never_called_directly():
@@ -496,6 +583,16 @@ def test_level_one_signal_never_appears_as_individual_card(client):
     resp = client.get("/manager")
     html = resp.data.decode()
     assert "Cards Needing Attention" not in html
+
+
+def test_manager_page_renders_archive_review_card(client):
+    _make_archive_review_item(days_old=200)
+    resp = client.get("/manager")
+    html = resp.data.decode()
+    assert resp.status_code == 200
+    assert "Archive Review" in html
+    assert "/archive" in html
+    assert "This is a recommendation only. No action is authorized. Mike decides." in html
 
 
 # ── Phase M4: Stage Gate (docs/STAGE_STATUS.json mirror) ──────────────────
