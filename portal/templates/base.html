@@ -167,6 +167,18 @@
             });
     }
 
+    function archiveReviewDecision(recordId, section, disposition) {
+        if (disposition === 'deleted' && !confirm('Record this Archive item as Deleted? This records the decision only -- it does not remove the underlying record.')) return;
+        var reason = prompt('Reason (optional):');
+        if (reason === null) return;
+        apiPost('/api/archive/review-decision', {record_id: recordId, section: section, disposition: disposition, reason: reason})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            })
+            .catch(() => { alert('Request failed -- Authority login required.'); });
+    }
+
     function intelAdd(intelType) {
         var subject = prompt('Subject:');
         if (!subject) return;

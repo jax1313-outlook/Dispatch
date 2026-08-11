@@ -8,10 +8,13 @@ from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
 from portal import helpers
+from portal.auth_helpers import authority_required, get_current_session, get_current_user
 from portal.models import sandbox, publisher, conflict
 from portal.models import library as lib_model
 from portal.models import archive as arc_model
 from portal.models import intelligence as intel_model
+from dispatch.spine.models import ApprovalEvent, AuditEvent, WorkItem
+from dispatch.spine.store import create_approval_event, create_work_item
 
 api_bp = Blueprint("api", __name__)
 
@@ -292,6 +295,82 @@ def archive_create():
         return jsonify({"error": "Sandbox entry not found"}), 404
     record = arc_model.archive_from_sandbox(entry)
     return jsonify({"status": "ok", "record": record})
+
+
+@api_bp.route("/archive/review-decision", methods=["POST"])
+@authority_required
+def archive_review_decision():
+    """Keep/Delete on an Archive Review Queue item -- Stage 6,
+    DISPATCH_STAGE6_ARCHIVE_BUILD_DESIGN_v1.md. Authority-gated, same
+    decorator /settings uses. Records a real ApprovalEvent with the
+    acting Authority's actual session/user/role identity -- the first
+    Portal action route in this codebase to populate those fields with
+    a live identity rather than leaving them nullable. 'deleted' means
+    the disposition is recorded, never a physical removal."""
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    section = data.get("section")
+    disposition = data.get("disposition")
+    reason = data.get("reason", "")
+
+    if not record_id or not section or disposition not in ("kept", "deleted"):
+        return jsonify({"error": "record_id, section, and disposition ('kept' or 'deleted') required"}), 400
+
+    session = get_current_session()
+    user = get_current_user()
+
+    try:
+        record = arc_model.mark_reviewed(
+            record_id, section, disposition, reason=reason,
+            reviewed_by=user["user_id"] if user else None,
+        )
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
+
+    action = "APPROVE_ARCHIVE_KEEP" if disposition == "kept" else "APPROVE_ARCHIVE_DELETE"
+
+    # approval_events.work_item_id is NOT NULL with an enforced foreign
+    # key to work_items -- every ApprovalEvent needs a real Work Item to
+    # reference. The build design assumed a work-item-less approval was
+    # possible; the Stage 4 schema doesn't allow it. A minimal Work Item
+    # is created here, matching the pattern dispatch/manager/staff_report.py
+    # already uses (create a Work Item, then record the Spine action
+    # against it) -- not a new pattern, reused.
+    work_item = create_work_item(
+        WorkItem(
+            source_type="archive_review", source_id=record_id,
+            assigned_function="Archive", required_action=f"Review decision: {disposition}",
+        )
+    )
+
+    audit = AuditEvent(
+        work_item_id=work_item["work_item_id"],
+        actor_type="portal_authority_action",
+        actor_id=user["user_id"] if user else "unknown",
+        action=action,
+        notes=f"Archive record {record_id} ({section}): {reason or 'no reason given'}",
+    )
+    approval = create_approval_event(
+        ApprovalEvent(
+            session_id=session["session_id"] if session else None,
+            user_id=user["user_id"] if user else None,
+            role=session["role"] if session else None,
+            work_item_id=work_item["work_item_id"],
+            object_type="archive_record",
+            object_id=record_id,
+            action=action,
+            new_state=disposition,
+            comments=reason,
+        ),
+        audit=audit,
+    )
+    return jsonify({
+        "status": "ok", "record": record,
+        "approval_event_id": approval["approval_event_id"],
+        "work_item_id": work_item["work_item_id"],
+    })
 
 
 # ---- Intelligence API ----

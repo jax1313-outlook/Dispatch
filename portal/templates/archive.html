@@ -5,6 +5,40 @@
 {% block body %}
 <p class="section-note">Archive stores completed records, decisions, evidence, and audit bundles. Archive is the system of record for completed history.</p>
 
+{% if review_queue %}
+<section class="card-section">
+    <h2>Archive Review Queue ({{ review_queue|length }})</h2>
+    <p class="section-desc">Records older than {{ review_age_days }} days awaiting a Keep/Delete decision. "Delete" records the decision only — it does not remove the underlying record. Requires an Authority-role session.</p>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Section</th>
+                <th>Title</th>
+                <th>Archived</th>
+                <th>Age (days)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for record in review_queue %}
+            <tr>
+                <td>{{ record.id }}</td>
+                <td>{{ record.section }}</td>
+                <td>{{ record.title }}</td>
+                <td>{{ record.archived_at }}</td>
+                <td>{{ record.age_days }}</td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick="archiveReviewDecision('{{ record.id }}', '{{ record.section }}', 'kept')">Keep</button>
+                    <button class="btn btn-sm btn-danger" onclick="archiveReviewDecision('{{ record.id }}', '{{ record.section }}', 'deleted')">Delete</button>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
 {% for section in sections %}
 <section class="card-section">
     <h2>{{ section.name }} ({{ section.records|length }})</h2>

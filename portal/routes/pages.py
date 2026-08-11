@@ -767,10 +767,14 @@ def archive_view():
     from dispatch import services as dispatch_svc
     dispatch_archived = dispatch_svc.list_retentions()
 
+    review_queue = arc_model.list_review_queue()
+
     return render_template(
         "archive.html",
         sections=sections,
         sandbox_archived=sandbox_archived,
+        review_queue=review_queue,
+        review_age_days=arc_model.REVIEW_AGE_DAYS,
         pipeline_archived=pipeline_archived,
         pipeline_archive_error=pipeline_archive_error,
         dispatch_archived=dispatch_archived,

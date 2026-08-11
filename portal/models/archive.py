@@ -3,6 +3,16 @@
 Archive stores completed records, decisions, evidence, cards, briefs,
 source records, documents, POD/BOL records, detention evidence, and
 audit bundles. Archive is the system of record for completed history.
+
+Archive Review Queue (Stage 6, DISPATCH_STAGE6_ARCHIVE_BUILD_DESIGN_v1.md):
+age-based, not version-based -- create_record() below has always
+silently no-op'd on a repeat source_id (confirmed before this design:
+there is no multi-version history for Archive records at all), so the
+literal "Current + 3 Previous" trigger ARCHIVE_REVIEW_POLICY.md
+specifies cannot exist until Stage 8 (Version Doctrine on Archive)
+gives these records real version history. REVIEW_AGE_DAYS is a
+documented, tunable default standing in for that until then, not
+doctrine.
 """
 
 from __future__ import annotations
@@ -28,6 +38,9 @@ SECTION_LABELS = {
     "location_history": "Location History Archive",
     "broker_history": "Broker History Archive",
 }
+
+REVIEW_STATUSES = ["pending", "kept", "deleted"]
+REVIEW_AGE_DAYS = 180
 
 
 def _utc_now() -> str:
@@ -83,6 +96,10 @@ def create_record(section: str, source_id: str, title: str,
         "decision_summary": decision_summary,
         "evidence": evidence or {},
         "archived_at": now,
+        "review_status": "pending",
+        "reviewed_at": None,
+        "reviewed_by": None,
+        "disposition_reason": None,
     }
     data[section].append(record)
     _save(data)
@@ -137,3 +154,61 @@ def archive_publisher_action(action: dict) -> dict:
 def total_count() -> int:
     data = _load()
     return sum(len(records) for records in data.values())
+
+
+def _age_days(archived_at: str) -> float | None:
+    try:
+        ts = datetime.strptime(archived_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+    return (datetime.now(timezone.utc) - ts).total_seconds() / 86400
+
+
+def list_review_queue(age_days: int = REVIEW_AGE_DAYS) -> list[dict]:
+    """Records still pending review whose age exceeds the threshold --
+    the Archive Review Queue. Records written before this field existed
+    default to 'pending' via .get(), so nothing predating this build is
+    silently excluded."""
+    data = _load()
+    queue: list[dict] = []
+    for section, records in data.items():
+        for record in records:
+            if record.get("review_status", "pending") != "pending":
+                continue
+            age = _age_days(record.get("archived_at", ""))
+            if age is None or age < age_days:
+                continue
+            queue.append({**record, "age_days": round(age, 1)})
+    queue.sort(key=lambda r: r["age_days"], reverse=True)
+    return queue
+
+
+def mark_reviewed(record_id: str, section: str, disposition: str,
+                   reason: str = "", reviewed_by: str | None = None) -> dict:
+    """Records a Keep/Delete decision. 'deleted' means the disposition
+    is recorded, never that the record or its evidence is physically
+    removed -- per ARCHIVE_REVIEW_POLICY.md Section 6, a delete is an
+    approved decision with a full audit trail, not a file-system purge.
+    Refuses a record already reviewed, once, ever -- matching this
+    codebase's existing refuse-resubmission convention
+    (IFTAReportApproval's AlreadySubmittedError) rather than silently
+    allowing a second decision to overwrite the first.
+    """
+    if disposition not in ("kept", "deleted"):
+        raise ValueError(f"Invalid disposition: {disposition!r}")
+    data = _load()
+    records = data.get(section, [])
+    for record in records:
+        if record["id"] == record_id:
+            if record.get("review_status", "pending") != "pending":
+                raise ValueError(
+                    f"Archive record {record_id} already reviewed "
+                    f"(status={record['review_status']!r})"
+                )
+            record["review_status"] = disposition
+            record["reviewed_at"] = _utc_now()
+            record["reviewed_by"] = reviewed_by
+            record["disposition_reason"] = reason
+            _save(data)
+            return record
+    raise KeyError(f"Archive record not found: {record_id} in section {section!r}")
