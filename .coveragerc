@@ -2,6 +2,7 @@
 source =
     cin_lite
     dispatch
+    portal
 branch = False
 
 [report]

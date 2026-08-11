@@ -42,6 +42,8 @@ jobs:
         run: |
           python -m pytest \
             --cov=cin_lite \
+            --cov=dispatch \
+            --cov=portal \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml \
