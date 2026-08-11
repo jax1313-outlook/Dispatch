@@ -157,8 +157,37 @@ def review_candidate(record_id: str, approve: bool, reviewed_by: str) -> dict:
                 rec["reviewed_at"] = _utc_now()
                 rec["updated_at"] = _utc_now()
                 _save(data)
+                if approve:
+                    _trigger_publisher_on_approval(rec)
                 return rec
     raise KeyError(f"Library record not found: {record_id}")
+
+
+def _trigger_publisher_on_approval(rec: dict) -> None:
+    """Stage 1 of DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md (Claude-3 repo): approving a Library
+    candidate that originated from an Intelligence finding creates a Publisher action.
+
+    Scoped narrowly -- fires only for candidates carrying Intelligence provenance metadata (set
+    by intelligence.promote_to_candidate(), currently the only submitted_by="machine" caller in
+    the codebase, so in practice this is the only kind of pending_review record that exists
+    today). A future submitted_by="machine" caller without this metadata is a no-op here, not an
+    error -- this stage does not claim to handle every possible machine-submitted candidate.
+    """
+    if rec.get("metadata", {}).get("source_type") != "INTELLIGENCE":
+        return
+
+    from portal.models import publisher as pub_model
+
+    pub_model.create_action(
+        action_type="Broker Packet Required",
+        sandbox_id=f"LIBRARY-{rec['id']}",
+        trigger_reason=(
+            f"Library candidate {rec['id']} approved (source: Intelligence finding "
+            f"{rec['metadata'].get('source_finding_id', 'UNKNOWN')})"
+        ),
+        available_data=get_available_company_assets(),
+        missing_data=get_missing_company_assets(),
+    )
 
 
 def update_record(record_id: str, name: str | None = None,

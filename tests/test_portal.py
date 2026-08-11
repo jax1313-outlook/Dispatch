@@ -1719,3 +1719,72 @@ class TestDispatchEngineUI:
         html = resp.data.decode("utf-8")
         assert "new-load-form" in html
         assert "Create New Load" in html
+
+
+# ---------- Stage 1: Intelligence -> Library -> Publisher link ----------
+# DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md / STAGE_1_INTELLIGENCE_LIBRARY_PUBLISHER_LINK_SCOPE_v1.md
+class TestStage1IntelligenceLibraryPublisherLink:
+    def test_full_chain_broker_finding_to_publisher_action(self):
+        from portal.models import intelligence as intel_model, library as lib_model, publisher as pub_model
+
+        finding = intel_model.create_record(
+            intel_type="broker", subject="Acme Brokerage",
+            content="Reliable partner, net-30 terms", source="manual",
+        )
+
+        candidate = intel_model.promote_to_candidate(finding["id"])
+        assert candidate["section"] == "broker"
+        assert candidate["name"] == "Acme Brokerage"
+        assert candidate["content"] == "Reliable partner, net-30 terms"
+        assert candidate["status"] == "pending_review"
+        assert candidate["submitted_by"] == "machine"
+        assert candidate["metadata"]["source_finding_id"] == finding["id"]
+        assert candidate["metadata"]["source_type"] == "INTELLIGENCE"
+
+        approved = lib_model.review_candidate(candidate["id"], approve=True, reviewed_by="Mike Zachary")
+        assert approved["status"] == "approved"
+
+        queue = pub_model.get_queue()
+        matches = [a for a in queue if a["sandbox_id"] == f"LIBRARY-{candidate['id']}"]
+        assert len(matches) == 1
+        action = matches[0]
+        assert action["action_type"] == "Broker Packet Required"
+        assert action["status"] == "PENDING"
+        assert finding["id"] in action["trigger_reason"]
+        assert candidate["id"] in action["trigger_reason"]
+
+    def test_promote_to_candidate_rejects_non_broker_type(self):
+        from portal.models import intelligence as intel_model
+
+        finding = intel_model.create_record(
+            intel_type="location", subject="Port of Savannah", content="Busy area",
+        )
+        with pytest.raises(ValueError):
+            intel_model.promote_to_candidate(finding["id"])
+
+    def test_promote_to_candidate_nonexistent_record_raises(self):
+        from portal.models import intelligence as intel_model
+
+        with pytest.raises(KeyError):
+            intel_model.promote_to_candidate("INT-NONEXISTENT")
+
+    def test_rejected_candidate_does_not_trigger_publisher(self):
+        from portal.models import intelligence as intel_model, library as lib_model, publisher as pub_model
+
+        finding = intel_model.create_record(
+            intel_type="broker", subject="Bad Broker", content="Avoid",
+        )
+        candidate = intel_model.promote_to_candidate(finding["id"])
+        lib_model.review_candidate(candidate["id"], approve=False, reviewed_by="Mike Zachary")
+
+        matches = [a for a in pub_model.get_queue() if a["sandbox_id"] == f"LIBRARY-{candidate['id']}"]
+        assert matches == []
+
+    def test_human_placed_candidate_does_not_trigger_publisher(self):
+        # A human-placed record is auto-approved and never carries the INTELLIGENCE provenance
+        # metadata this trigger keys on -- confirms the hook only fires for the Stage 1 path,
+        # not for every Library record that happens to reach "approved".
+        from portal.models import library as lib_model, publisher as pub_model
+
+        lib_model.add_record(section="broker", name="Manually Added Broker", content="n/a")
+        assert pub_model.get_queue() == []
