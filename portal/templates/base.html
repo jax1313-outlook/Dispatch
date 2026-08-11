@@ -103,7 +103,13 @@
     }
 
     function updatePublisherStatus(actionId, status) {
-        apiPost('/api/publisher/update', {action_id: actionId, status: status})
+        var payload = {action_id: actionId, status: status};
+        if (status === 'APPROVED') {
+            var approvedBy = prompt('Approving identity (your name):');
+            if (!approvedBy) return;
+            payload.approved_by = approvedBy;
+        }
+        apiPost('/api/publisher/update', payload)
             .then(data => {
                 if (data.error) { alert(data.error); return; }
                 location.reload();

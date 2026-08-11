@@ -432,6 +432,16 @@ class TestPublisher:
         resp = client.get("/publisher")
         assert resp.status_code == 200
 
+    def test_mark_approved_button_sends_approved_by(self, client):
+        # Regression test: updatePublisherStatus() previously posted only
+        # {action_id, status}, so a real "Mark Approved" click always hit
+        # the approved_by gate and silently failed. Pin that the shipped JS
+        # now collects and forwards approved_by for the APPROVED transition.
+        resp = client.get("/publisher")
+        html = resp.get_data(as_text=True)
+        assert "payload.approved_by" in html
+        assert "status === 'APPROVED'" in html
+
 
 # ---------- 11. Conflict notice generates for missing email ----------
 class TestConflictNotice:
