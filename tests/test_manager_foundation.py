@@ -595,6 +595,93 @@ def test_manager_page_renders_archive_review_card(client):
     assert "This is a recommendation only. No action is authorized. Mike decides." in html
 
 
+# ── Phase M7: policy routing hook candidate (read-only, no GX) ────────────
+
+def test_auto_log_summary_empty_state():
+    from dispatch.manager import policy_candidates
+
+    summary = policy_candidates.auto_log_summary()
+    assert summary["auto_log_counts"] == {}
+    assert "not a working policy engine" in summary["note"]
+
+
+def test_auto_log_summary_includes_noise_excludes_review_needed_and_above():
+    from dispatch.manager import policy_candidates
+
+    # Noise: info severity, no human decision required -> card_level 0.
+    _make_conflict_notice(severity="info", human_decision_required=False)
+    # Conflict: critical severity -> card_level 4, well above Auto-log.
+    _make_conflict_notice(severity="critical", human_decision_required=True)
+
+    summary = policy_candidates.auto_log_summary()
+    assert summary["auto_log_counts"].get(classify.NOISE) == 1
+    assert classify.CONFLICT not in summary["auto_log_counts"]
+    assert classify.REVIEW_NEEDED not in summary["auto_log_counts"]
+    assert classify.DECISION_NEEDED not in summary["auto_log_counts"]
+
+
+def test_auto_log_summary_excludes_status_tier():
+    """Status (card_level 1) is still a human-facing 'awareness only'
+    tier per MANAGER.md Section 9 -- it must never appear in the
+    Auto-log-only interface, even though it also produces no card."""
+    _make_stalled_load(hours_past_threshold_multiple=1.1)  # Status, card_level 1
+    from dispatch.manager import policy_candidates
+
+    summary = policy_candidates.auto_log_summary()
+    assert classify.STATUS not in summary["auto_log_counts"]
+
+
+def test_auto_log_summary_never_exposes_individual_record_data():
+    """Structural guard: the response shape is counts-only -- no load_id,
+    exception_id, or any other individual record field anywhere."""
+    from dispatch.manager import policy_candidates
+
+    _make_conflict_notice(severity="info", human_decision_required=False)
+    summary = policy_candidates.auto_log_summary()
+    serialized = str(summary)
+    assert "SBX-TEST-001" not in serialized  # the conflict notice's sandbox_id
+    assert all(isinstance(v, int) for v in summary["auto_log_counts"].values())
+
+
+def test_policy_candidates_module_never_calls_write_or_action_functions():
+    """Structural guard, the most important one in this build: zero
+    write, approval, booking, or submission capability anywhere."""
+    import dispatch.manager.policy_candidates as policy_module
+
+    source = inspect.getsource(policy_module)
+    forbidden = (
+        "create_approval_event", "apply_transition", "mark_reviewed(",
+        "create_user_with_pin", "book", "approve_ifta_quarter", "deliver_decision",
+    )
+    for name in forbidden:
+        assert name not in source
+
+
+def test_policy_candidates_route_is_get_only(client):
+    import portal.routes.manager as manager_route_module
+
+    source = inspect.getsource(manager_route_module)
+    assert "methods=" not in source
+
+
+def test_policy_candidates_endpoint_returns_expected_shape(client):
+    resp = client.get("/api/manager/policy-candidates")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "auto_log_counts" in data
+    assert "note" in data
+
+
+def test_manager_page_unaffected_by_policy_candidates_addition(client):
+    """Confirms the new endpoint is purely additive -- /manager's own
+    behavior is unchanged."""
+    _make_conflict_notice(severity="critical")
+    resp = client.get("/manager")
+    html = resp.data.decode()
+    assert resp.status_code == 200
+    assert "Test conflict" in html
+
+
 # ── Phase M4: Stage Gate (docs/STAGE_STATUS.json mirror) ──────────────────
 
 @pytest.fixture
