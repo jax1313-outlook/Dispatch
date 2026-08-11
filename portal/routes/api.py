@@ -126,12 +126,13 @@ def update_publisher_action():
     data = request.get_json(force=True)
     action_id = data.get("action_id")
     new_status = data.get("status")
+    approved_by = data.get("approved_by")
 
     if not action_id or not new_status:
         return jsonify({"error": "action_id and status required"}), 400
 
     try:
-        action = publisher.update_action_status(action_id, new_status)
+        action = publisher.update_action_status(action_id, new_status, approved_by=approved_by)
         if new_status == "ARCHIVED":
             arc_model.archive_publisher_action(action)
         return jsonify({"status": "ok", "action": action})
@@ -242,9 +243,31 @@ def library_add():
             name=name,
             content=data.get("content", ""),
             metadata=data.get("metadata"),
+            submitted_by=data.get("submitted_by", "human"),
         )
         return jsonify({"status": "ok", "record": record})
     except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/library/review", methods=["POST"])
+def library_review():
+    """Promote or reject a machine-submitted (pending_review) Library candidate.
+
+    No caller in Dispatch submits a machine candidate yet (see library.py module docstring),
+    so this route has no live traffic today -- it exists so review_candidate() is reachable
+    once a future automated nomination path (e.g. a Publisher content worker) is wired up.
+    """
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    approve = data.get("approve")
+    reviewed_by = data.get("reviewed_by")
+    if not record_id or approve is None:
+        return jsonify({"error": "record_id and approve required"}), 400
+    try:
+        record = lib_model.review_candidate(record_id, approve=bool(approve), reviewed_by=reviewed_by)
+        return jsonify({"status": "ok", "record": record})
+    except (KeyError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
 
 

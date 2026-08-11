@@ -3,6 +3,12 @@
 Archive stores completed records, decisions, evidence, cards, briefs,
 source records, documents, POD/BOL records, detention evidence, and
 audit bundles. Archive is the system of record for completed history.
+
+Governance gate (Stage 5 of DISPATCH_CANONICAL_ARCHITECTURE_RECONCILIATION_MATRIX_v1.md,
+Claude-3 repo, Hard Conflict List item 3): `archive_publisher_action()` previously archived
+whatever it was given with no precondition. It now refuses to archive a Publisher action that
+was never approved, mirroring tri-department Publisher's `create_archive_handoff()`, which
+blocks unless the referenced review is APPROVED_BY_MIKE.
 """
 
 from __future__ import annotations
@@ -12,6 +18,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from portal.models import get_archive_dir
+
+# Same reserved-identity set as portal.models.publisher.RESERVED_SYSTEM_IDENTITIES. Duplicated
+# rather than imported to keep this module's only real dependency (portal.models) unchanged --
+# archive.py and publisher.py are siblings, and importing one model module from another for a
+# single constant is not worth the coupling.
+RESERVED_SYSTEM_IDENTITIES = {"PUBLISHER", "SYSTEM", "AUTOMATION", "INTELLIGENCE", "LIBRARY"}
+
+
+class ArchiveApprovalError(ValueError):
+    """Raised when attempting to archive a Publisher action that was never approved by a real,
+    external, non-system identity."""
 
 ARCHIVE_SECTIONS = [
     "load",
@@ -124,13 +141,31 @@ def archive_from_sandbox(entry: dict) -> dict:
 
 
 def archive_publisher_action(action: dict) -> dict:
-    """Archive a completed publisher action."""
+    """Archive a completed publisher action.
+
+    Checks `action["approved_by"]`, not `action["status"]`: by the time the real caller
+    (`portal/routes/api.py::update_publisher_action()`) reaches this function, it has already
+    called `publisher.update_action_status(action_id, "ARCHIVED", ...)`, so `status` is already
+    "ARCHIVED" here, never "APPROVED" -- `approved_by` is what `update_action_status()` stamps
+    once, during the APPROVED transition, and it persists forward through to ARCHIVED, so it's
+    the only reliable signal of whether this action was ever actually approved.
+    """
+    approved_by = action.get("approved_by")
+    if not approved_by or approved_by.strip().upper() in RESERVED_SYSTEM_IDENTITIES:
+        raise ArchiveApprovalError(
+            f"Publisher action {action.get('id')!r} cannot be archived: no valid approved_by "
+            f"identity recorded. Publisher outputs must be approved by a real, external, "
+            f"non-system identity before archival."
+        )
+
     return create_record(
         section="publisher",
         source_id=action["id"],
         title=f"{action['action_type']} — {action.get('sandbox_id', '')}",
         record_data=action,
-        decision_summary=f"Publisher action completed: {action['status']}",
+        decision_summary=(
+            f"Publisher action approved by {approved_by} and archived: {action['status']}"
+        ),
     )
 
 

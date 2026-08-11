@@ -2,6 +2,12 @@
 
 Publisher produces documents from approved inputs only.
 Publisher must not invent facts.
+
+Governance gate (Stage 5 of DISPATCH_CANONICAL_ARCHITECTURE_RECONCILIATION_MATRIX_v1.md,
+Claude-3 repo, Hard Conflict List item 2): `human_approval_required` was previously a static
+flag nothing checked. `update_action_status()` now enforces it in code for the `APPROVED`
+transition specifically, mirroring tri-department Publisher's `approve_review_package()` --
+Publisher (or any other system identity) may not approve its own action.
 """
 
 from __future__ import annotations
@@ -11,6 +17,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from portal.models import get_data_dir
+
+# Identities that may never be used as an approver -- Publisher may not approve itself. Matches
+# dispatch_publisher.models.RESERVED_SYSTEM_IDENTITIES from the tri-department build.
+RESERVED_SYSTEM_IDENTITIES = {"PUBLISHER", "SYSTEM", "AUTOMATION", "INTELLIGENCE", "LIBRARY"}
+
+
+class PublisherApprovalError(ValueError):
+    """Raised when an action is moved to APPROVED without a valid external approver identity."""
+
 
 ACTION_TYPES = [
     "Broker Packet Required",
@@ -102,12 +117,30 @@ def create_action(
     return action
 
 
-def update_action_status(action_id: str, new_status: str) -> dict:
+def update_action_status(action_id: str, new_status: str, approved_by: str | None = None) -> dict:
+    """Update a Publisher action's status.
+
+    `approved_by` is required and validated only for the `APPROVED` transition: it must be a
+    real, external, non-system identity (Publisher may not approve itself). All other
+    transitions (PENDING/DRAFT/READY/ARCHIVED) are unaffected -- this is additive, not a
+    behavior change for any transition except the one that was previously ungated.
+    """
     if new_status not in PUBLISHER_STATUSES:
         raise ValueError(f"Invalid publisher status: {new_status}")
+
+    if new_status == "APPROVED":
+        if not approved_by or approved_by.strip().upper() in RESERVED_SYSTEM_IDENTITIES:
+            raise PublisherApprovalError(
+                "Publisher action cannot be marked APPROVED without a real, external, "
+                "non-system approved_by identity (Publisher may not approve itself)."
+            )
+
     queue = _load()
     for action in queue:
         if action["id"] == action_id:
+            if new_status == "APPROVED":
+                action["approved_by"] = approved_by
+                action["approved_at"] = _utc_now()
             action["status"] = new_status
             action["updated_at"] = _utc_now()
             _save(queue)

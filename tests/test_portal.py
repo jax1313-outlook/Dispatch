@@ -387,14 +387,46 @@ class TestPublisher:
         queue = publisher.get_queue()
         action_id = queue[0]["id"]
 
-        for new_status in ["DRAFT", "READY", "APPROVED"]:
+        for new_status in ["DRAFT", "READY"]:
             resp = client.post("/api/publisher/update", json={
                 "action_id": action_id,
                 "status": new_status,
             })
             data = resp.get_json()
             assert data["status"] == "ok"
-            assert data["action"]["status"] == new_status
+
+        # APPROVED requires an external, non-system approved_by identity (Stage 5 gate) --
+        # unlike DRAFT/READY, which are unaffected by the gate.
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+            "approved_by": "Mike Zachary",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["action"]["approved_by"] == "Mike Zachary"
+
+    def test_publisher_approval_requires_external_identity(self, client, sample_load_good):
+        from portal.models import publisher
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
+        queue = publisher.get_queue()
+        action_id = queue[0]["id"]
+
+        # No approved_by at all.
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+        })
+        assert resp.status_code == 400
+
+        # A system identity may not approve its own output.
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+            "approved_by": "PUBLISHER",
+        })
+        assert resp.status_code == 400
 
     def test_publisher_page_renders(self, client):
         resp = client.get("/publisher")
@@ -1126,6 +1158,64 @@ class TestLibraryModel:
         assert "Insurance" not in missing
         assert "Authority" in missing
 
+    def test_human_placed_record_is_still_immediately_approved(self):
+        # Stage 5 governance gate must not change the default (human) path at all.
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "W-9")
+        assert record["status"] == "approved"
+        assert record["submitted_by"] == "human"
+
+    def test_machine_submitted_record_starts_pending_review(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+        assert record["status"] == "pending_review"
+        assert record["submitted_by"] == "machine"
+
+    def test_pending_review_record_not_counted_as_available_asset(self):
+        # This is the regression test for Hard Conflict List item 1: an unreviewed
+        # machine-submitted candidate must not silently satisfy a missing-asset check.
+        # Uses "Terms", a real COMPANY_ASSETS entry, so it's actually eligible to appear in
+        # get_missing_company_assets() -- an arbitrary name never would be, regardless of status.
+        from portal.models import library as lib_model
+        lib_model.add_record("company", "Terms", submitted_by="machine")
+        available = lib_model.get_available_company_assets()
+        missing = lib_model.get_missing_company_assets()
+        assert "Terms" not in available
+        assert "Terms" in missing
+
+    def test_review_candidate_requires_external_non_system_identity(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+
+        with pytest.raises(lib_model.LibraryApprovalError):
+            lib_model.review_candidate(record["id"], approve=True, reviewed_by="")
+        with pytest.raises(lib_model.LibraryApprovalError):
+            lib_model.review_candidate(record["id"], approve=True, reviewed_by="LIBRARY")
+
+    def test_review_candidate_approve_promotes_to_approved(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+
+        reviewed = lib_model.review_candidate(record["id"], approve=True, reviewed_by="Mike Zachary")
+        assert reviewed["status"] == "approved"
+        assert reviewed["reviewed_by"] == "Mike Zachary"
+        assert "Bonding Certificate" in lib_model.get_available_company_assets()
+
+    def test_review_candidate_reject_does_not_promote(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+
+        reviewed = lib_model.review_candidate(record["id"], approve=False, reviewed_by="Mike Zachary")
+        assert reviewed["status"] == "rejected"
+        assert "Bonding Certificate" not in lib_model.get_available_company_assets()
+
+    def test_review_candidate_cannot_target_human_placed_record(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "W-9")  # human-placed, already approved
+
+        with pytest.raises(lib_model.LibraryApprovalError):
+            lib_model.review_candidate(record["id"], approve=True, reviewed_by="Mike Zachary")
+
     def test_six_sections_defined(self):
         from portal.models.library import SECTIONS
         assert len(SECTIONS) == 6
@@ -1211,10 +1301,33 @@ class TestArchiveModel:
             "action_type": "Broker Packet Required",
             "sandbox_id": "SBX-TEST",
             "status": "ARCHIVED",
+            "approved_by": "Mike Zachary",
         }
         record = arc_model.archive_publisher_action(action)
         assert record["section"] == "publisher"
         assert record["source_id"] == "PUB-001"
+
+    def test_archive_publisher_action_requires_approval(self):
+        # This is the regression test for Hard Conflict List item 3: archiving an action with
+        # no recorded approval must be rejected, not silently accepted.
+        from portal.models import archive as arc_model
+
+        with pytest.raises(arc_model.ArchiveApprovalError):
+            arc_model.archive_publisher_action({
+                "id": "PUB-002",
+                "action_type": "Broker Packet Required",
+                "sandbox_id": "SBX-TEST",
+                "status": "ARCHIVED",
+            })
+
+        with pytest.raises(arc_model.ArchiveApprovalError):
+            arc_model.archive_publisher_action({
+                "id": "PUB-003",
+                "action_type": "Broker Packet Required",
+                "sandbox_id": "SBX-TEST",
+                "status": "ARCHIVED",
+                "approved_by": "PUBLISHER",  # a system identity may not approve its own output
+            })
 
     def test_total_count(self):
         from portal.models import archive as arc_model
@@ -1371,12 +1484,38 @@ class TestArchiveAPI:
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
         queue = publisher.get_queue()
         action_id = queue[0]["id"]
+
+        # Legitimate path: approve first (with a real, external identity), then archive.
+        client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+            "approved_by": "Mike Zachary",
+        })
         client.post("/api/publisher/update", json={
             "action_id": action_id,
             "status": "ARCHIVED",
         })
         pub_archive = arc_model.get_section("publisher")
         assert len(pub_archive) >= 1
+        assert pub_archive[-1]["record_data"]["approved_by"] == "Mike Zachary"
+
+    def test_publisher_cannot_archive_without_approval(self, client, sample_load_good):
+        # Regression test for Hard Conflict List item 3: skipping straight to ARCHIVED with no
+        # approval ever recorded must be rejected, not silently accepted -- this was the exact
+        # path DISPATCH_DEPARTMENT_RECONCILIATION_v1.md (Claude-3 repo) flagged as a live gap.
+        from portal.models import publisher, archive as arc_model
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
+        queue = publisher.get_queue()
+        action_id = queue[0]["id"]
+
+        before = len(arc_model.get_section("publisher"))
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "ARCHIVED",
+        })
+        assert resp.status_code == 400
+        assert len(arc_model.get_section("publisher")) == before
 
 
 # ---------- Intelligence API ----------
