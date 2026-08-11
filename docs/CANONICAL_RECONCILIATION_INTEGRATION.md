@@ -1,7 +1,7 @@
 # Canonical Reconciliation Integration Branch
 
-Status: Stage 3 of DISPATCH_CANONICAL_ARCHITECTURE_RECONCILIATION_MATRIX_v1 (Claude-3 repo).
-No adapters, no governance-gap fixes, and no object-flow wiring exist on this branch yet.
+Status: Stage 4 complete (adapters) per DISPATCH_CANONICAL_ARCHITECTURE_RECONCILIATION_MATRIX_v1
+(Claude-3 repo). No governance-gap fixes and no object-flow wiring exist on this branch yet.
 
 ## What this branch is for
 
@@ -18,12 +18,22 @@ canonical winners declared in that document's Section 3:
 - Archive: Dispatch's `cin_lite/archive.py` wins as the canonical, hash-verified archive engine
 - Portal: Dispatch Portal remains the canonical presentation layer
 
+## What HAS happened on this branch (Stage 4)
+
+`reconciliation/` — pure, read-only adapter functions translating Dispatch's existing
+`portal/models/{library,intelligence,publisher,archive}.py` records into the canonical
+shared-object shapes from `DISPATCH_SHARED_OBJECT_CONTRACTS_v1.md`. No file I/O, no writes back
+to any Dispatch store, no wiring into any route. See `reconciliation/README.md` for the full
+breakdown and `tests/test_reconciliation_*.py` (29 tests) for coverage. Notably, the Publisher
+and Archive adapters make the exact gaps in Hard Conflict List items 2 and 3 inspectable and
+countable (`publisher_adapter.would_pass_tri_department_gate()`,
+`archive_adapter.unverified_publisher_archive_count()`) without changing any of that behavior.
+
 ## What has NOT happened on this branch
 
 Per the canonical matrix's own Stage sequencing (Section 6) and "Do Not Touch Yet" list
 (Section 7):
 
-- No adapters have been built (Stage 4).
 - No governance gaps have been fixed — Library's auto-approve behavior, Publisher's unenforced
   `human_approval_required` flag, and Archive's missing approval-status precondition on
   `archive_publisher_action()` all still behave exactly as documented in
