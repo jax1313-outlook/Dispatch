@@ -368,10 +368,13 @@ def intelligence_update():
             record_id=record_id,
             content=data.get("content"),
             metadata=data.get("metadata"),
+            verification_status=data.get("verification_status"),
         )
         return jsonify({"status": "ok", "record": record})
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 # ---- Engine Sync API ----

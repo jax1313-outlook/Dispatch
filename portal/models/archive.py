@@ -36,6 +36,7 @@ ARCHIVE_SECTIONS = [
     "publisher",
     "location_history",
     "broker_history",
+    "intelligence",
 ]
 
 SECTION_LABELS = {
@@ -44,6 +45,7 @@ SECTION_LABELS = {
     "publisher": "Publisher Archive",
     "location_history": "Location History Archive",
     "broker_history": "Broker History Archive",
+    "intelligence": "Intelligence Archive",
 }
 
 
@@ -166,6 +168,26 @@ def archive_publisher_action(action: dict) -> dict:
         decision_summary=(
             f"Publisher action approved by {approved_by} and archived: {action['status']}"
         ),
+    )
+
+
+def archive_from_intelligence(record: dict) -> dict:
+    """Create an archive record from an Intelligence record.
+
+    Part B of OPERATIONAL_INTELLIGENCE_VERIFICATION_LABELING_SCOPE_v1.md (Claude-3 repo) --
+    closes INTELLIGENCE_COMPLETENESS_REVIEW_v1.md's "must always archive" finding. No approval
+    precondition, unlike archive_publisher_action() -- Intelligence's contract requires archiving
+    unconditionally, on creation, not gated on any review state (the review/verification concern
+    is Part A's separate verification_status field, not an archival gate). create_record()'s
+    existing source_id de-duplication makes this safe to call every time a record is created,
+    including once this function's own caller is invoked more than once for the same record.
+    """
+    return create_record(
+        section="intelligence",
+        source_id=record["id"],
+        title=record.get("subject", "Unknown"),
+        record_data=record,
+        decision_summary=f"Intelligence record captured: {record.get('intel_type', 'unknown')}",
     )
 
 

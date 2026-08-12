@@ -920,12 +920,14 @@ class TestLibraryAllSections:
 
 # ---------- P2-3. Archive Placeholder: all sections ----------
 class TestArchiveAllSections:
-    def test_archive_five_sections(self, client):
+    def test_archive_six_sections(self, client):
+        # Sixth section (Intelligence Archive) added by
+        # OPERATIONAL_INTELLIGENCE_VERIFICATION_LABELING_SCOPE_v1.md Part B (Claude-3 repo).
         resp = client.get("/archive")
         html = resp.data.decode("utf-8")
         for section in [
             "Load Archive", "Decision Archive", "Publisher Archive",
-            "Location History Archive", "Broker History Archive",
+            "Location History Archive", "Broker History Archive", "Intelligence Archive",
         ]:
             assert section in html, f"Missing archive section: {section}"
 
@@ -1357,10 +1359,12 @@ class TestArchiveModel:
         with pytest.raises(ValueError):
             arc_model.create_record("invalid", "X", "X", {})
 
-    def test_five_sections_defined(self):
+    def test_six_sections_defined(self):
+        # Sixth section (intelligence) added by
+        # OPERATIONAL_INTELLIGENCE_VERIFICATION_LABELING_SCOPE_v1.md Part B (Claude-3 repo).
         from portal.models.archive import ARCHIVE_SECTIONS, SECTION_LABELS
-        assert len(ARCHIVE_SECTIONS) == 5
-        assert len(SECTION_LABELS) == 5
+        assert len(ARCHIVE_SECTIONS) == 6
+        assert len(SECTION_LABELS) == 6
         for s in ARCHIVE_SECTIONS:
             assert s in SECTION_LABELS
 
@@ -1416,6 +1420,58 @@ class TestIntelligenceModel:
         assert len(INTEL_LABELS) == 6
         for t in INTEL_TYPES:
             assert t in INTEL_LABELS
+
+    def test_new_record_defaults_unverified(self):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("broker", "New Broker", "Content")
+        assert record["verification_status"] == "UNVERIFIED"
+
+    def test_legacy_record_without_field_reads_unverified(self, portal_data_dir):
+        import json
+        from portal.models import intelligence as intel_model
+        # Simulate a record written before verification_status existed -- no migration script,
+        # a read-time default only (OPERATIONAL_INTELLIGENCE_VERIFICATION_LABELING_SCOPE_v1.md
+        # Section 3). Written directly to portal_data_dir rather than via the model's private
+        # _intel_path() helper.
+        path = portal_data_dir / "intelligence.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({
+            "broker": [{
+                "id": "INT-BRO-0001", "intel_type": "broker", "subject": "Legacy",
+                "content": "x", "source": "", "metadata": {},
+                "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+            }]
+        }))
+        records = intel_model.get_by_type("broker")
+        assert records[0]["verification_status"] == "UNVERIFIED"
+        # Confirm it was NOT written back to disk -- read-time default only.
+        raw = json.loads(path.read_text())
+        assert "verification_status" not in raw["broker"][0]
+
+    def test_update_verification_status(self):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("broker", "B", "x")
+        updated = intel_model.update_record(record["id"], verification_status="VERIFIED")
+        assert updated["verification_status"] == "VERIFIED"
+
+    def test_update_invalid_verification_status_raises(self):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("broker", "B", "x")
+        with pytest.raises(ValueError):
+            intel_model.update_record(record["id"], verification_status="NOT_A_REAL_STATUS")
+
+    def test_update_without_verification_status_leaves_unchanged(self):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("broker", "B", "x")
+        updated = intel_model.update_record(record["id"], content="new content")
+        assert updated["verification_status"] == "UNVERIFIED"
+
+    def test_create_record_archives_automatically(self):
+        from portal.models import intelligence as intel_model
+        from portal.models import archive as arc_model
+        record = intel_model.create_record("market", "Fuel Trend", "Rising")
+        archived = arc_model.get_section("intelligence")
+        assert any(a["source_id"] == record["id"] for a in archived)
 
 
 # ---------- Library API ----------
@@ -1585,6 +1641,26 @@ class TestIntelligenceAPI:
         broker_names = [r["subject"] for r in broker_intel]
         assert "Southeast Freight Partners" in broker_names
 
+    def test_update_verification_status_via_api(self, client):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("broker", "B", "x")
+        resp = client.post("/api/intelligence/update", json={
+            "record_id": record["id"],
+            "verification_status": "PARTIALLY_VERIFIED",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["record"]["verification_status"] == "PARTIALLY_VERIFIED"
+
+    def test_update_invalid_verification_status_via_api(self, client):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("broker", "B", "x")
+        resp = client.post("/api/intelligence/update", json={
+            "record_id": record["id"],
+            "verification_status": "NOT_A_REAL_STATUS",
+        })
+        assert resp.status_code == 400
+
 
 # ---------- New Page Rendering ----------
 class TestNewPages:
@@ -1602,6 +1678,21 @@ class TestNewPages:
         resp = client.get("/intelligence")
         html = resp.data.decode("utf-8")
         assert "Test Broker Intel" in html
+
+    def test_intelligence_page_shows_verification_badge_for_each_status(self, client):
+        # Real rendered HTML, not a template unit test -- matches this session's Track D
+        # discipline (Claude-3 repo) of verifying actual HTTP behavior.
+        from portal.models import intelligence as intel_model
+        unverified = intel_model.create_record("broker", "Unverified Co", "x")
+        partial = intel_model.create_record("broker", "Partial Co", "x")
+        intel_model.update_record(partial["id"], verification_status="PARTIALLY_VERIFIED")
+        verified = intel_model.create_record("broker", "Verified Co", "x")
+        intel_model.update_record(verified["id"], verification_status="VERIFIED")
+
+        html = client.get("/intelligence").data.decode("utf-8")
+        assert 'status-unverified">UNVERIFIED' in html
+        assert 'status-partially_verified">PARTIALLY VERIFIED' in html
+        assert 'status-verified">VERIFIED' in html
 
     def test_home_shows_archive_count(self, client):
         resp = client.get("/home")
