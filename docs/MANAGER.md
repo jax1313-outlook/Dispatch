@@ -137,5 +137,21 @@ itself, and are the source material this document consolidates:
 | Manager Orchestration Review, Phase 1 | Confirmed zero Manager code exists anywhere in Dispatch. |
 | Manager Orchestration Review, Phase 2 | Scoped six open design questions; found Manager less blocked than assumed, but did not authorize building it. |
 | This document | **Manager Preservation Decision**: dormant, reserved, not implemented. Not built, not deleted, not refactored. Documented and made visible in Dispatch's own repository structure, separate from and in addition to the Claude-3 planning record. |
+| Reinforcement (see Section 8) | A separate repository (`jax1313-outlook/hold`) was found to contain `library_seed/Constitutions/MANAGER_CONSTITUTION_v1.md`, part of an unstarted "Dispatch Matrix Group 1" initiative. Manager Queue remains dormant regardless — that document's existence is not, by itself, grounds for reactivation. |
+
+## 8. Reinforcement: A Constitution Existing Elsewhere Does Not Reopen This Decision
+
+`jax1313-outlook/hold` is a staging/stabilization repository — candidate architecture and
+scaffolding intended for evaluation before promotion, not an automatic replacement for this
+repository. It was found to define a four-lane "Dispatch Matrix Group 1" initiative (Librarian,
+Manager, Receipt/IFTA, Reports), including its own `MANAGER_CONSTITUTION_v1.md`. Verified: zero
+application code exists anywhere in that repository — every file under its `src/`, `tests/`, and
+`tools/` directories is an empty `.gitkeep` placeholder. No lane has been built.
+
+Mike's ruling, verbatim: **Manager Queue remains dormant. Treat `Hold`'s Manager lane as
+archived planning material unless explicitly reactivated. Do not implement Manager
+functionality based solely on the existence of `MANAGER_CONSTITUTION_v1.md`.**
+
+Sections 1-7 above stand unmodified.
 
 Mike decides.
