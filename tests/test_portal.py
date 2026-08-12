@@ -788,7 +788,9 @@ class TestCardVisual:
 
 # ---------- P2-1. Publisher Queue: all 8 action types ----------
 class TestPublisherAllTypes:
-    def test_all_eight_action_types_exist(self):
+    def test_all_nine_action_types_exist(self):
+        # Ninth type (GovCon Proposal Draft Required) added by Stage 2 of
+        # DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md -- see TestStage2PublisherProposalWriterBridge.
         from portal.models.publisher import ACTION_TYPES
         expected = [
             "Broker Packet Required",
@@ -799,6 +801,7 @@ class TestPublisherAllTypes:
             "Arrival Notice Draft",
             "POD/BOL Document Package Draft",
             "Detention Evidence Draft",
+            "GovCon Proposal Draft Required",
         ]
         assert ACTION_TYPES == expected
 
@@ -1788,3 +1791,111 @@ class TestStage1IntelligenceLibraryPublisherLink:
 
         lib_model.add_record(section="broker", name="Manually Added Broker", content="n/a")
         assert pub_model.get_queue() == []
+
+
+# ---------- Stage 2: Publisher <-> proposal_writer.py Integration Bridge ----------
+# DISPATCH_INTEGRATION_BRIDGE_SCOPE_v1.md
+class TestStage2PublisherProposalWriterBridge:
+    def _stage_pending_decision(self, contract_id, mapped_contract, intelligence, flags):
+        from cin_lite import pending as cin_pending
+
+        decision = {"priority": "high", "recipient": "proposal-team", "action": "approve_proposal"}
+        cin_pending.store(contract_id, mapped_contract, intelligence, "summary", decision, flags)
+
+    def test_full_chain_govcon_action_drafts_and_approves(self, mapped_contract, intelligence, flags):
+        from portal.models import publisher as pub_model
+
+        contract_id = "CIN-TEST-STAGE2-001"
+        self._stage_pending_decision(contract_id, mapped_contract, intelligence, flags)
+
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id=f"GOVCON-{contract_id}",
+            trigger_reason=f"GovCon proposal requested for contract {contract_id}",
+            contract_id=contract_id,
+        )
+        assert action["contract_id"] == contract_id
+        assert action["status"] == "PENDING"
+        assert "proposal_reference_id" not in action
+
+        drafted = pub_model.update_action_status(action["id"], "DRAFT")
+        assert drafted["status"] == "DRAFT"
+        assert drafted["proposal_reference_id"].startswith("PROP-")
+
+        with pytest.raises(pub_model.PublisherApprovalError):
+            pub_model.update_action_status(action["id"], "APPROVED")
+
+        approved = pub_model.update_action_status(action["id"], "APPROVED", approved_by="Mike Zachary")
+        assert approved["status"] == "APPROVED"
+        assert approved["approved_by"] == "Mike Zachary"
+        # Reference persists through the approval transition unchanged.
+        assert approved["proposal_reference_id"] == drafted["proposal_reference_id"]
+
+    def test_draft_without_contract_id_raises(self):
+        from portal.models import publisher as pub_model
+
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id="GOVCON-missing",
+            trigger_reason="test",
+        )
+        with pytest.raises(ValueError):
+            pub_model.update_action_status(action["id"], "DRAFT")
+
+    def test_draft_without_pending_decision_raises(self):
+        from portal.models import publisher as pub_model
+
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id="GOVCON-CIN-NEVER-PENDING",
+            trigger_reason="test",
+            contract_id="CIN-NEVER-PENDING",
+        )
+        with pytest.raises(ValueError):
+            pub_model.update_action_status(action["id"], "DRAFT")
+
+    def test_existing_action_types_unaffected_by_draft_hook(self):
+        # DRAFT transition for any non-GOVCON_PROPOSAL action type must behave exactly as
+        # before -- no drafting side effect, no proposal_reference_id.
+        from portal.models import publisher as pub_model
+
+        action = pub_model.create_action(
+            action_type="Broker Packet Required",
+            sandbox_id="sbx-1",
+            trigger_reason="test",
+        )
+        drafted = pub_model.update_action_status(action["id"], "DRAFT")
+        assert drafted["status"] == "DRAFT"
+        assert "proposal_reference_id" not in drafted
+
+    def test_create_govcon_action_via_api_skips_sandbox_lookup(self, client):
+        resp = client.post(
+            "/api/publisher/create",
+            json={
+                "action_type": "GovCon Proposal Draft Required",
+                "contract_id": "CIN-TEST-STAGE2-API",
+            },
+        )
+        data = json.loads(resp.data)
+        assert resp.status_code == 200
+        assert data["action"]["contract_id"] == "CIN-TEST-STAGE2-API"
+        assert data["action"]["sandbox_id"] == "GOVCON-CIN-TEST-STAGE2-API"
+
+    def test_publisher_page_renders_govcon_fields(self, client, mapped_contract, intelligence, flags):
+        from portal.models import publisher as pub_model
+
+        contract_id = "CIN-TEST-STAGE2-PAGE"
+        self._stage_pending_decision(contract_id, mapped_contract, intelligence, flags)
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id=f"GOVCON-{contract_id}",
+            trigger_reason="test",
+            contract_id=contract_id,
+        )
+        pub_model.update_action_status(action["id"], "DRAFT")
+
+        resp = client.get("/publisher")
+        html = resp.data.decode("utf-8")
+        assert "Contract:" in html
+        assert contract_id in html
+        assert "Proposal:" in html

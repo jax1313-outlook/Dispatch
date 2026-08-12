@@ -27,6 +27,10 @@ class PublisherApprovalError(ValueError):
     """Raised when an action is moved to APPROVED without a valid external approver identity."""
 
 
+# Stage 2 of DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md (Claude-3 repo): the Integration Bridge
+# action type -- bridges Publisher to cin_lite's proposal_writer.py. See _trigger_govcon_draft().
+GOVCON_PROPOSAL_ACTION_TYPE = "GovCon Proposal Draft Required"
+
 ACTION_TYPES = [
     "Broker Packet Required",
     "Direct Shipper Packet Required",
@@ -36,6 +40,7 @@ ACTION_TYPES = [
     "Arrival Notice Draft",
     "POD/BOL Document Package Draft",
     "Detention Evidence Draft",
+    GOVCON_PROPOSAL_ACTION_TYPE,
 ]
 
 PUBLISHER_STATUSES = ["PENDING", "DRAFT", "READY", "APPROVED", "ARCHIVED"]
@@ -93,6 +98,7 @@ def create_action(
     trigger_reason: str,
     available_data: list[str] | None = None,
     missing_data: list[str] | None = None,
+    contract_id: str | None = None,
 ) -> dict:
     queue = _load()
     now = _utc_now()
@@ -112,6 +118,8 @@ def create_action(
         "created_at": now,
         "updated_at": now,
     }
+    if contract_id is not None:
+        action["contract_id"] = contract_id
     queue.append(action)
     _save(queue)
     return action
@@ -138,6 +146,8 @@ def update_action_status(action_id: str, new_status: str, approved_by: str | Non
     queue = _load()
     for action in queue:
         if action["id"] == action_id:
+            if new_status == "DRAFT" and action.get("action_type") == GOVCON_PROPOSAL_ACTION_TYPE:
+                action["proposal_reference_id"] = _trigger_govcon_draft(action)
             if new_status == "APPROVED":
                 action["approved_by"] = approved_by
                 action["approved_at"] = _utc_now()
@@ -146,3 +156,28 @@ def update_action_status(action_id: str, new_status: str, approved_by: str | Non
             _save(queue)
             return action
     raise KeyError(f"Publisher action not found: {action_id}")
+
+
+def _trigger_govcon_draft(action: dict) -> str:
+    """Stage 2 of DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md (Claude-3 repo): drafting a
+    GovCon Proposal Draft Required action calls cin_lite's existing proposal-trigger pipeline
+    via pipeline.resolve_decision(contract_id, "approve_proposal") -- the same function
+    cin_lite's email-decision "Approve Proposal" link calls, reused unmodified. This is a
+    second, independent path into that pipeline; cin_lite's HMAC-token email flow and
+    proposal_writer.py itself are untouched.
+
+    Requires the contract still be pending in cin_lite's own decision queue
+    (cin_lite.pending) -- raises ValueError if it is not, which the caller (the
+    /api/publisher/update route) already surfaces as a 400, matching every other
+    ValueError-raising gate in this module.
+    """
+    contract_id = action.get("contract_id")
+    if not contract_id:
+        raise ValueError(
+            "GovCon Proposal Draft Required actions must have a contract_id set at creation "
+            "time before they can be drafted."
+        )
+    from cin_lite import pipeline as cin_pipeline
+
+    result = cin_pipeline.resolve_decision(contract_id, "approve_proposal")
+    return result["proposal"]["proposal_id"]

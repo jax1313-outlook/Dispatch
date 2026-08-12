@@ -99,8 +99,26 @@ def create_publisher_action():
     data = request.get_json(force=True)
     sandbox_id = data.get("sandbox_id")
     action_type = data.get("action_type")
+    contract_id = data.get("contract_id")
 
-    if not sandbox_id or not action_type:
+    if not action_type:
+        return jsonify({"error": "action_type required"}), 400
+
+    if contract_id:
+        # Stage 2 of DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md (Claude-3 repo): GovCon Proposal
+        # Draft Required actions are cin_lite-contract-triggered, not sandbox-triggered -- there
+        # is no real sandbox entry to look up or update. Mirrors the "LIBRARY-<id>" marker
+        # convention Stage 1 established for non-sandbox-originated Publisher actions.
+        sandbox_id = sandbox_id or f"GOVCON-{contract_id}"
+        action = publisher.create_action(
+            action_type=action_type,
+            sandbox_id=sandbox_id,
+            trigger_reason=f"GovCon proposal requested for contract {contract_id}",
+            contract_id=contract_id,
+        )
+        return jsonify({"status": "ok", "action": action})
+
+    if not sandbox_id:
         return jsonify({"error": "sandbox_id and action_type required"}), 400
 
     entry = sandbox.get(sandbox_id)
