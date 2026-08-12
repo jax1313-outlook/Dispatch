@@ -39,20 +39,28 @@ def create_app(config: dict | None = None) -> Flask:
     @app.before_request
     def _require_authority_login():
         """DISPATCH_PIN login gate (PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md, Claude-3
-        repo). Fails closed: a missing/unbootstrapped identity does NOT bypass this gate -- it
-        just means /login correctly reports there's nothing to log into yet, rather than the
-        rest of Portal silently staying open.
+        repo). Fails closed in real (non-TESTING) use: a missing/unbootstrapped identity does
+        NOT bypass this gate -- it just means /login correctly reports there's nothing to log
+        into yet, rather than the rest of Portal silently staying open.
 
-        LOGIN_DISABLED (Flask-Login's own config-key convention, reused here) lets the existing
-        test suite's shared `app`/`client` fixtures opt out globally, so ~150 pre-existing tests
-        that predate this feature don't need individual changes -- the auth-specific test class
-        creates its own app without this flag to exercise the real gate.
+        LOGIN_DISABLED (Flask-Login's own config-key convention, reused here) defaults to
+        TESTING's value, checked live on every request rather than snapshotted once at
+        create_app() time -- most of the ~67 pre-existing test files in this repo call
+        create_app() with no config dict at all and set app.config["TESTING"] = True on the
+        returned app afterward, which a creation-time default would miss entirely. Checking
+        live means none of those files need individual changes. A config dict that explicitly
+        passes LOGIN_DISABLED (True or False) at creation time still wins, since that sets
+        app.config directly -- see TestDispatchPinAuthentication in tests/test_portal.py,
+        which passes False to exercise the real gate under TESTING.
 
         The `decisions` blueprint (cin_lite's HMAC-token email action links) is excluded on
         purpose: those links must work without a browser session, and already carry their own,
         separate token-based authentication -- see portal/routes/decisions.py.
         """
-        if app.config.get("LOGIN_DISABLED"):
+        login_disabled = app.config.get("LOGIN_DISABLED")
+        if login_disabled is None:
+            login_disabled = app.config.get("TESTING", False)
+        if login_disabled:
             return None
         if request.endpoint is None or request.endpoint == "static":
             return None

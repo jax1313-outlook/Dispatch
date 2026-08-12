@@ -42,11 +42,11 @@ def portal_data_dir(tmp_path, monkeypatch):
 def app():
     from portal.app import create_app
 
-    # LOGIN_DISABLED: this shared fixture predates DISPATCH_PIN authentication (see
-    # PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md, Claude-3 repo). Every test using this
-    # fixture exercises app behavior directly, not the login gate -- TestDispatchPinAuthentication
-    # below builds its own app without this flag to test the real gate.
-    app = create_app({"TESTING": True, "SECRET_KEY": "test", "LOGIN_DISABLED": True})
+    # TESTING=True defaults LOGIN_DISABLED to True (see create_app() in portal/app.py) -- this
+    # fixture, and every other test file's own app/client fixture in this repo, gets the
+    # DISPATCH_PIN login gate turned off automatically with no changes needed here.
+    # TestDispatchPinAuthentication below explicitly overrides it back on to test the real gate.
+    app = create_app({"TESTING": True, "SECRET_KEY": "test"})
     return app
 
 
@@ -1968,7 +1968,9 @@ class TestDispatchPinAuthentication:
     def auth_app(self, auth_data_dir):
         from portal.app import create_app
 
-        return create_app({"TESTING": True, "SECRET_KEY": "test"})
+        # LOGIN_DISABLED explicitly False: this class exists to test the real gate, so it must
+        # override create_app()'s TESTING-implies-LOGIN_DISABLED default (see portal/app.py).
+        return create_app({"TESTING": True, "SECRET_KEY": "test", "LOGIN_DISABLED": False})
 
     @pytest.fixture
     def auth_client(self, auth_app):
