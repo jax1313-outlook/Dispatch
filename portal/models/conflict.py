@@ -69,6 +69,15 @@ def create_notice(
     human_decision_required: bool = True,
 ) -> dict:
     notices = _load()
+    for existing in notices:
+        if (
+            not existing.get("resolved")
+            and existing["conflict_type"] == conflict_type
+            and existing["sandbox_id"] == sandbox_id
+            and existing["explanation"] == explanation
+        ):
+            return existing
+
     now = _utc_now()
     notice = {
         "id": f"CN-{len(notices) + 1:04d}",
