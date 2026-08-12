@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from flask import Flask
+from flask import Flask, redirect, request, session, url_for
 
 from portal.config import Config, check_secret_key
 from portal.routes import register_routes
@@ -35,6 +35,34 @@ def create_app(config: dict | None = None) -> Flask:
     if not app.config.get("TESTING"):
         check_secret_key()
     register_routes(app)
+
+    @app.before_request
+    def _require_authority_login():
+        """DISPATCH_PIN login gate (PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md, Claude-3
+        repo). Fails closed: a missing/unbootstrapped identity does NOT bypass this gate -- it
+        just means /login correctly reports there's nothing to log into yet, rather than the
+        rest of Portal silently staying open.
+
+        LOGIN_DISABLED (Flask-Login's own config-key convention, reused here) lets the existing
+        test suite's shared `app`/`client` fixtures opt out globally, so ~150 pre-existing tests
+        that predate this feature don't need individual changes -- the auth-specific test class
+        creates its own app without this flag to exercise the real gate.
+
+        The `decisions` blueprint (cin_lite's HMAC-token email action links) is excluded on
+        purpose: those links must work without a browser session, and already carry their own,
+        separate token-based authentication -- see portal/routes/decisions.py.
+        """
+        if app.config.get("LOGIN_DISABLED"):
+            return None
+        if request.endpoint is None or request.endpoint == "static":
+            return None
+        if request.blueprint == "decisions":
+            return None
+        if request.endpoint in ("auth.login", "auth.logout"):
+            return None
+        if not session.get("user_id"):
+            return redirect(url_for("auth.login"))
+        return None
 
     @app.template_filter("time_ago")
     def _time_ago(iso_str: str) -> str:
