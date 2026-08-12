@@ -387,18 +387,60 @@ class TestPublisher:
         queue = publisher.get_queue()
         action_id = queue[0]["id"]
 
-        for new_status in ["DRAFT", "READY", "APPROVED"]:
+        for new_status in ["DRAFT", "READY"]:
             resp = client.post("/api/publisher/update", json={
                 "action_id": action_id,
                 "status": new_status,
             })
             data = resp.get_json()
             assert data["status"] == "ok"
-            assert data["action"]["status"] == new_status
+
+        # APPROVED requires an external, non-system approved_by identity (Stage 5 gate) --
+        # unlike DRAFT/READY, which are unaffected by the gate.
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+            "approved_by": "Mike Zachary",
+        })
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["action"]["approved_by"] == "Mike Zachary"
+
+    def test_publisher_approval_requires_external_identity(self, client, sample_load_good):
+        from portal.models import publisher
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
+        queue = publisher.get_queue()
+        action_id = queue[0]["id"]
+
+        # No approved_by at all.
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+        })
+        assert resp.status_code == 400
+
+        # A system identity may not approve its own output.
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+            "approved_by": "PUBLISHER",
+        })
+        assert resp.status_code == 400
 
     def test_publisher_page_renders(self, client):
         resp = client.get("/publisher")
         assert resp.status_code == 200
+
+    def test_mark_approved_button_sends_approved_by(self, client):
+        # Regression test: updatePublisherStatus() previously posted only
+        # {action_id, status}, so a real "Mark Approved" click always hit
+        # the approved_by gate and silently failed. Pin that the shipped JS
+        # now collects and forwards approved_by for the APPROVED transition.
+        resp = client.get("/publisher")
+        html = resp.get_data(as_text=True)
+        assert "payload.approved_by" in html
+        assert "status === 'APPROVED'" in html
 
 
 # ---------- 11. Conflict notice generates for missing email ----------
@@ -746,7 +788,9 @@ class TestCardVisual:
 
 # ---------- P2-1. Publisher Queue: all 8 action types ----------
 class TestPublisherAllTypes:
-    def test_all_eight_action_types_exist(self):
+    def test_all_nine_action_types_exist(self):
+        # Ninth type (GovCon Proposal Draft Required) added by Stage 2 of
+        # DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md -- see TestStage2PublisherProposalWriterBridge.
         from portal.models.publisher import ACTION_TYPES
         expected = [
             "Broker Packet Required",
@@ -757,6 +801,7 @@ class TestPublisherAllTypes:
             "Arrival Notice Draft",
             "POD/BOL Document Package Draft",
             "Detention Evidence Draft",
+            "GovCon Proposal Draft Required",
         ]
         assert ACTION_TYPES == expected
 
@@ -1126,6 +1171,64 @@ class TestLibraryModel:
         assert "Insurance" not in missing
         assert "Authority" in missing
 
+    def test_human_placed_record_is_still_immediately_approved(self):
+        # Stage 5 governance gate must not change the default (human) path at all.
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "W-9")
+        assert record["status"] == "approved"
+        assert record["submitted_by"] == "human"
+
+    def test_machine_submitted_record_starts_pending_review(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+        assert record["status"] == "pending_review"
+        assert record["submitted_by"] == "machine"
+
+    def test_pending_review_record_not_counted_as_available_asset(self):
+        # This is the regression test for Hard Conflict List item 1: an unreviewed
+        # machine-submitted candidate must not silently satisfy a missing-asset check.
+        # Uses "Terms", a real COMPANY_ASSETS entry, so it's actually eligible to appear in
+        # get_missing_company_assets() -- an arbitrary name never would be, regardless of status.
+        from portal.models import library as lib_model
+        lib_model.add_record("company", "Terms", submitted_by="machine")
+        available = lib_model.get_available_company_assets()
+        missing = lib_model.get_missing_company_assets()
+        assert "Terms" not in available
+        assert "Terms" in missing
+
+    def test_review_candidate_requires_external_non_system_identity(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+
+        with pytest.raises(lib_model.LibraryApprovalError):
+            lib_model.review_candidate(record["id"], approve=True, reviewed_by="")
+        with pytest.raises(lib_model.LibraryApprovalError):
+            lib_model.review_candidate(record["id"], approve=True, reviewed_by="LIBRARY")
+
+    def test_review_candidate_approve_promotes_to_approved(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+
+        reviewed = lib_model.review_candidate(record["id"], approve=True, reviewed_by="Mike Zachary")
+        assert reviewed["status"] == "approved"
+        assert reviewed["reviewed_by"] == "Mike Zachary"
+        assert "Bonding Certificate" in lib_model.get_available_company_assets()
+
+    def test_review_candidate_reject_does_not_promote(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "Bonding Certificate", submitted_by="machine")
+
+        reviewed = lib_model.review_candidate(record["id"], approve=False, reviewed_by="Mike Zachary")
+        assert reviewed["status"] == "rejected"
+        assert "Bonding Certificate" not in lib_model.get_available_company_assets()
+
+    def test_review_candidate_cannot_target_human_placed_record(self):
+        from portal.models import library as lib_model
+        record = lib_model.add_record("company", "W-9")  # human-placed, already approved
+
+        with pytest.raises(lib_model.LibraryApprovalError):
+            lib_model.review_candidate(record["id"], approve=True, reviewed_by="Mike Zachary")
+
     def test_six_sections_defined(self):
         from portal.models.library import SECTIONS
         assert len(SECTIONS) == 6
@@ -1211,10 +1314,33 @@ class TestArchiveModel:
             "action_type": "Broker Packet Required",
             "sandbox_id": "SBX-TEST",
             "status": "ARCHIVED",
+            "approved_by": "Mike Zachary",
         }
         record = arc_model.archive_publisher_action(action)
         assert record["section"] == "publisher"
         assert record["source_id"] == "PUB-001"
+
+    def test_archive_publisher_action_requires_approval(self):
+        # This is the regression test for Hard Conflict List item 3: archiving an action with
+        # no recorded approval must be rejected, not silently accepted.
+        from portal.models import archive as arc_model
+
+        with pytest.raises(arc_model.ArchiveApprovalError):
+            arc_model.archive_publisher_action({
+                "id": "PUB-002",
+                "action_type": "Broker Packet Required",
+                "sandbox_id": "SBX-TEST",
+                "status": "ARCHIVED",
+            })
+
+        with pytest.raises(arc_model.ArchiveApprovalError):
+            arc_model.archive_publisher_action({
+                "id": "PUB-003",
+                "action_type": "Broker Packet Required",
+                "sandbox_id": "SBX-TEST",
+                "status": "ARCHIVED",
+                "approved_by": "PUBLISHER",  # a system identity may not approve its own output
+            })
 
     def test_total_count(self):
         from portal.models import archive as arc_model
@@ -1371,12 +1497,38 @@ class TestArchiveAPI:
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
         queue = publisher.get_queue()
         action_id = queue[0]["id"]
+
+        # Legitimate path: approve first (with a real, external identity), then archive.
+        client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "APPROVED",
+            "approved_by": "Mike Zachary",
+        })
         client.post("/api/publisher/update", json={
             "action_id": action_id,
             "status": "ARCHIVED",
         })
         pub_archive = arc_model.get_section("publisher")
         assert len(pub_archive) >= 1
+        assert pub_archive[-1]["record_data"]["approved_by"] == "Mike Zachary"
+
+    def test_publisher_cannot_archive_without_approval(self, client, sample_load_good):
+        # Regression test for Hard Conflict List item 3: skipping straight to ARCHIVED with no
+        # approval ever recorded must be rejected, not silently accepted -- this was the exact
+        # path DISPATCH_DEPARTMENT_RECONCILIATION_v1.md (Claude-3 repo) flagged as a live gap.
+        from portal.models import publisher, archive as arc_model
+        entry = _create_dispatch_entry(client, sample_load_good)
+        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pursue"})
+        queue = publisher.get_queue()
+        action_id = queue[0]["id"]
+
+        before = len(arc_model.get_section("publisher"))
+        resp = client.post("/api/publisher/update", json={
+            "action_id": action_id,
+            "status": "ARCHIVED",
+        })
+        assert resp.status_code == 400
+        assert len(arc_model.get_section("publisher")) == before
 
 
 # ---------- Intelligence API ----------
@@ -1570,3 +1722,228 @@ class TestDispatchEngineUI:
         html = resp.data.decode("utf-8")
         assert "new-load-form" in html
         assert "Create New Load" in html
+
+
+# ---------- Stage 1: Intelligence -> Library -> Publisher link ----------
+# DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md / STAGE_1_INTELLIGENCE_LIBRARY_PUBLISHER_LINK_SCOPE_v1.md
+class TestStage1IntelligenceLibraryPublisherLink:
+    def test_full_chain_broker_finding_to_publisher_action(self):
+        from portal.models import intelligence as intel_model, library as lib_model, publisher as pub_model
+
+        finding = intel_model.create_record(
+            intel_type="broker", subject="Acme Brokerage",
+            content="Reliable partner, net-30 terms", source="manual",
+        )
+
+        candidate = intel_model.promote_to_candidate(finding["id"])
+        assert candidate["section"] == "broker"
+        assert candidate["name"] == "Acme Brokerage"
+        assert candidate["content"] == "Reliable partner, net-30 terms"
+        assert candidate["status"] == "pending_review"
+        assert candidate["submitted_by"] == "machine"
+        assert candidate["metadata"]["source_finding_id"] == finding["id"]
+        assert candidate["metadata"]["source_type"] == "INTELLIGENCE"
+
+        approved = lib_model.review_candidate(candidate["id"], approve=True, reviewed_by="Mike Zachary")
+        assert approved["status"] == "approved"
+
+        queue = pub_model.get_queue()
+        matches = [a for a in queue if a["sandbox_id"] == f"LIBRARY-{candidate['id']}"]
+        assert len(matches) == 1
+        action = matches[0]
+        assert action["action_type"] == "Broker Packet Required"
+        assert action["status"] == "PENDING"
+        assert finding["id"] in action["trigger_reason"]
+        assert candidate["id"] in action["trigger_reason"]
+
+    def test_promote_to_candidate_rejects_non_broker_type(self):
+        from portal.models import intelligence as intel_model
+
+        finding = intel_model.create_record(
+            intel_type="location", subject="Port of Savannah", content="Busy area",
+        )
+        with pytest.raises(ValueError):
+            intel_model.promote_to_candidate(finding["id"])
+
+    def test_promote_to_candidate_nonexistent_record_raises(self):
+        from portal.models import intelligence as intel_model
+
+        with pytest.raises(KeyError):
+            intel_model.promote_to_candidate("INT-NONEXISTENT")
+
+    def test_rejected_candidate_does_not_trigger_publisher(self):
+        from portal.models import intelligence as intel_model, library as lib_model, publisher as pub_model
+
+        finding = intel_model.create_record(
+            intel_type="broker", subject="Bad Broker", content="Avoid",
+        )
+        candidate = intel_model.promote_to_candidate(finding["id"])
+        lib_model.review_candidate(candidate["id"], approve=False, reviewed_by="Mike Zachary")
+
+        matches = [a for a in pub_model.get_queue() if a["sandbox_id"] == f"LIBRARY-{candidate['id']}"]
+        assert matches == []
+
+    def test_human_placed_candidate_does_not_trigger_publisher(self):
+        # A human-placed record is auto-approved and never carries the INTELLIGENCE provenance
+        # metadata this trigger keys on -- confirms the hook only fires for the Stage 1 path,
+        # not for every Library record that happens to reach "approved".
+        from portal.models import library as lib_model, publisher as pub_model
+
+        lib_model.add_record(section="broker", name="Manually Added Broker", content="n/a")
+        assert pub_model.get_queue() == []
+
+
+# ---------- Stage 2: Publisher <-> proposal_writer.py Integration Bridge ----------
+# DISPATCH_INTEGRATION_BRIDGE_SCOPE_v1.md
+class TestStage2PublisherProposalWriterBridge:
+    def _stage_pending_decision(self, contract_id, mapped_contract, intelligence, flags):
+        from cin_lite import pending as cin_pending
+
+        decision = {"priority": "high", "recipient": "proposal-team", "action": "approve_proposal"}
+        cin_pending.store(contract_id, mapped_contract, intelligence, "summary", decision, flags)
+
+    def test_full_chain_govcon_action_drafts_and_approves(self, mapped_contract, intelligence, flags):
+        from portal.models import publisher as pub_model
+
+        contract_id = "CIN-TEST-STAGE2-001"
+        self._stage_pending_decision(contract_id, mapped_contract, intelligence, flags)
+
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id=f"GOVCON-{contract_id}",
+            trigger_reason=f"GovCon proposal requested for contract {contract_id}",
+            contract_id=contract_id,
+        )
+        assert action["contract_id"] == contract_id
+        assert action["status"] == "PENDING"
+        assert "proposal_reference_id" not in action
+
+        drafted = pub_model.update_action_status(action["id"], "DRAFT")
+        assert drafted["status"] == "DRAFT"
+        assert drafted["proposal_reference_id"].startswith("PROP-")
+
+        with pytest.raises(pub_model.PublisherApprovalError):
+            pub_model.update_action_status(action["id"], "APPROVED")
+
+        approved = pub_model.update_action_status(action["id"], "APPROVED", approved_by="Mike Zachary")
+        assert approved["status"] == "APPROVED"
+        assert approved["approved_by"] == "Mike Zachary"
+        # Reference persists through the approval transition unchanged.
+        assert approved["proposal_reference_id"] == drafted["proposal_reference_id"]
+
+    def test_draft_without_contract_id_raises(self):
+        from portal.models import publisher as pub_model
+
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id="GOVCON-missing",
+            trigger_reason="test",
+        )
+        with pytest.raises(ValueError):
+            pub_model.update_action_status(action["id"], "DRAFT")
+
+    def test_draft_without_pending_decision_raises(self):
+        from portal.models import publisher as pub_model
+
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id="GOVCON-CIN-NEVER-PENDING",
+            trigger_reason="test",
+            contract_id="CIN-NEVER-PENDING",
+        )
+        with pytest.raises(ValueError):
+            pub_model.update_action_status(action["id"], "DRAFT")
+
+    def test_existing_action_types_unaffected_by_draft_hook(self):
+        # DRAFT transition for any non-GOVCON_PROPOSAL action type must behave exactly as
+        # before -- no drafting side effect, no proposal_reference_id.
+        from portal.models import publisher as pub_model
+
+        action = pub_model.create_action(
+            action_type="Broker Packet Required",
+            sandbox_id="sbx-1",
+            trigger_reason="test",
+        )
+        drafted = pub_model.update_action_status(action["id"], "DRAFT")
+        assert drafted["status"] == "DRAFT"
+        assert "proposal_reference_id" not in drafted
+
+    def test_create_govcon_action_via_api_skips_sandbox_lookup(self, client):
+        resp = client.post(
+            "/api/publisher/create",
+            json={
+                "action_type": "GovCon Proposal Draft Required",
+                "contract_id": "CIN-TEST-STAGE2-API",
+            },
+        )
+        data = json.loads(resp.data)
+        assert resp.status_code == 200
+        assert data["action"]["contract_id"] == "CIN-TEST-STAGE2-API"
+        assert data["action"]["sandbox_id"] == "GOVCON-CIN-TEST-STAGE2-API"
+
+    def test_publisher_page_renders_govcon_fields(self, client, mapped_contract, intelligence, flags):
+        from portal.models import publisher as pub_model
+
+        contract_id = "CIN-TEST-STAGE2-PAGE"
+        self._stage_pending_decision(contract_id, mapped_contract, intelligence, flags)
+        action = pub_model.create_action(
+            action_type=pub_model.GOVCON_PROPOSAL_ACTION_TYPE,
+            sandbox_id=f"GOVCON-{contract_id}",
+            trigger_reason="test",
+            contract_id=contract_id,
+        )
+        pub_model.update_action_status(action["id"], "DRAFT")
+
+        resp = client.get("/publisher")
+        html = resp.data.decode("utf-8")
+        assert "Contract:" in html
+        assert contract_id in html
+        assert "Proposal:" in html
+
+
+# ---------- Presentation-Layer Consolidation: /home "Attention Needed" panel ----------
+# PRESENTATION_LAYER_CONSOLIDATION_SCOPE_v1.md
+class TestPresentationLayerConsolidation:
+    def test_attention_needed_composes_all_three_sources(self, client, mapped_contract, intelligence, flags):
+        from portal.models import publisher as pub_model
+        from cin_lite import pending as cin_pending, archive as cin_archive
+
+        pub_model.create_action(
+            action_type="Broker Packet Required",
+            sandbox_id="sbx-attn-1",
+            trigger_reason="Needs a broker packet",
+        )
+
+        pending_contract_id = "CIN-ATTN-PENDING"
+        decision = {"priority": "high", "recipient": "proposal-team", "action": "flag_review"}
+        cin_pending.store(pending_contract_id, mapped_contract, intelligence, "summary", decision, flags)
+
+        review_contract_id = "CIN-ATTN-REVIEW"
+        metadata = {"contract_id": review_contract_id, "title": "Zero Trust Cybersecurity Support"}
+        cin_archive.ensure_tree()
+        cin_archive.record_routing(
+            review_contract_id, "flag_review", "HUMAN_REVIEW", metadata,
+            action_label="Flag for Review", summary="needs review",
+        )
+
+        resp = client.get("/home")
+        html = resp.data.decode("utf-8")
+        assert "Attention Needed Across Departments" in html
+        assert "Broker Packet Required" in html
+        assert mapped_contract["title"] in html
+        assert "Zero Trust Cybersecurity Support" in html
+        assert 'href="/publisher"' in html
+        assert 'href="/pipeline"' in html
+        assert 'href="/queues"' in html
+
+    def test_attention_needed_absent_when_all_queues_empty(self, client):
+        resp = client.get("/home")
+        html = resp.data.decode("utf-8")
+        assert "Attention Needed Across Departments" not in html
+
+    def test_publisher_pipeline_queues_pages_unchanged(self, client):
+        # Explicit regression check: the three source pages stay exactly as they are --
+        # consolidation is additive on /home only, per the approved scope.
+        for path in ("/publisher", "/pipeline", "/queues"):
+            resp = client.get(path)
+            assert resp.status_code == 200

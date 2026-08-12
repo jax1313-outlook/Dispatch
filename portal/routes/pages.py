@@ -47,6 +47,7 @@ def home():
     from dispatch import store as dispatch_store
     recent_activity = dispatch_store.get_recent_activity(limit=15)
     chart_data = dispatch_svc.get_chart_data()
+    attention_needed = helpers.attention_needed()
 
     return render_template(
         "home.html",
@@ -63,6 +64,7 @@ def home():
         stalled_loads=stalled,
         recent_activity=recent_activity,
         chart_data=chart_data,
+        attention_needed=attention_needed,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )

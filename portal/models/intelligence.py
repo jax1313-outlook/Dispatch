@@ -103,3 +103,45 @@ def update_record(record_id: str, content: str | None = None,
 def total_count() -> int:
     data = _load()
     return sum(len(records) for records in data.values())
+
+
+def promote_to_candidate(record_id: str) -> dict:
+    """Promote a broker-type Intelligence record into a Library candidate.
+
+    Stage 1 of DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md (Claude-3 repo) -- the first wired
+    object-flow link between departments. Scoped narrowly to intel_type="broker" records only:
+    the only Intelligence type with a real automated producer (create_inquiry(), portal/routes/
+    api.py). Raises for any other intel_type -- the other five types are out of scope for this
+    stage, not silently supported.
+
+    Delegates to library.add_record(submitted_by="machine"), so the resulting record starts
+    pending_review and only becomes Library truth via review_candidate() -- this function grants
+    no approval itself.
+    """
+    data = _load()
+    record = None
+    for type_records in data.values():
+        for rec in type_records:
+            if rec["id"] == record_id:
+                record = rec
+                break
+        if record is not None:
+            break
+    if record is None:
+        raise KeyError(f"Intelligence record not found: {record_id}")
+    if record["intel_type"] != "broker":
+        raise ValueError(
+            f"promote_to_candidate() is scoped to intel_type='broker' records only "
+            f"(Stage 1 of DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md); got "
+            f"intel_type={record['intel_type']!r} for {record_id!r}."
+        )
+
+    from portal.models import library as lib_model
+
+    return lib_model.add_record(
+        section="broker",
+        name=record["subject"],
+        content=record["content"],
+        metadata={"source_finding_id": record["id"], "source_type": "INTELLIGENCE"},
+        submitted_by="machine",
+    )
