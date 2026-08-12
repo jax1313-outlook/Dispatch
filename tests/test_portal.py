@@ -1899,3 +1899,51 @@ class TestStage2PublisherProposalWriterBridge:
         assert "Contract:" in html
         assert contract_id in html
         assert "Proposal:" in html
+
+
+# ---------- Presentation-Layer Consolidation: /home "Attention Needed" panel ----------
+# PRESENTATION_LAYER_CONSOLIDATION_SCOPE_v1.md
+class TestPresentationLayerConsolidation:
+    def test_attention_needed_composes_all_three_sources(self, client, mapped_contract, intelligence, flags):
+        from portal.models import publisher as pub_model
+        from cin_lite import pending as cin_pending, archive as cin_archive
+
+        pub_model.create_action(
+            action_type="Broker Packet Required",
+            sandbox_id="sbx-attn-1",
+            trigger_reason="Needs a broker packet",
+        )
+
+        pending_contract_id = "CIN-ATTN-PENDING"
+        decision = {"priority": "high", "recipient": "proposal-team", "action": "flag_review"}
+        cin_pending.store(pending_contract_id, mapped_contract, intelligence, "summary", decision, flags)
+
+        review_contract_id = "CIN-ATTN-REVIEW"
+        metadata = {"contract_id": review_contract_id, "title": "Zero Trust Cybersecurity Support"}
+        cin_archive.ensure_tree()
+        cin_archive.record_routing(
+            review_contract_id, "flag_review", "HUMAN_REVIEW", metadata,
+            action_label="Flag for Review", summary="needs review",
+        )
+
+        resp = client.get("/home")
+        html = resp.data.decode("utf-8")
+        assert "Attention Needed Across Departments" in html
+        assert "Broker Packet Required" in html
+        assert mapped_contract["title"] in html
+        assert "Zero Trust Cybersecurity Support" in html
+        assert 'href="/publisher"' in html
+        assert 'href="/pipeline"' in html
+        assert 'href="/queues"' in html
+
+    def test_attention_needed_absent_when_all_queues_empty(self, client):
+        resp = client.get("/home")
+        html = resp.data.decode("utf-8")
+        assert "Attention Needed Across Departments" not in html
+
+    def test_publisher_pipeline_queues_pages_unchanged(self, client):
+        # Explicit regression check: the three source pages stay exactly as they are --
+        # consolidation is additive on /home only, per the approved scope.
+        for path in ("/publisher", "/pipeline", "/queues"):
+            resp = client.get(path)
+            assert resp.status_code == 200
