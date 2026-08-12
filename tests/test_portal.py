@@ -42,6 +42,10 @@ def portal_data_dir(tmp_path, monkeypatch):
 def app():
     from portal.app import create_app
 
+    # TESTING=True defaults LOGIN_DISABLED to True (see create_app() in portal/app.py) -- this
+    # fixture, and every other test file's own app/client fixture in this repo, gets the
+    # DISPATCH_PIN login gate turned off automatically with no changes needed here.
+    # TestDispatchPinAuthentication below explicitly overrides it back on to test the real gate.
     app = create_app({"TESTING": True, "SECRET_KEY": "test"})
     return app
 
@@ -1947,3 +1951,104 @@ class TestPresentationLayerConsolidation:
         for path in ("/publisher", "/pipeline", "/queues"):
             resp = client.get(path)
             assert resp.status_code == 200
+
+
+class TestDispatchPinAuthentication:
+    """DISPATCH_PIN authentication -- PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md (Claude-3
+    repo), Authority-role-only minimal build. Uses its own app fixture (no LOGIN_DISABLED) to
+    exercise the real login gate; every other test class in this file uses the shared `client`
+    fixture, which sets LOGIN_DISABLED so ~150 pre-existing tests need no individual changes."""
+
+    @pytest.fixture
+    def auth_data_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path / "auth_portal_data"))
+        return tmp_path / "auth_portal_data"
+
+    @pytest.fixture
+    def auth_app(self, auth_data_dir):
+        from portal.app import create_app
+
+        # LOGIN_DISABLED explicitly False: this class exists to test the real gate, so it must
+        # override create_app()'s TESTING-implies-LOGIN_DISABLED default (see portal/app.py).
+        return create_app({"TESTING": True, "SECRET_KEY": "test", "LOGIN_DISABLED": False})
+
+    @pytest.fixture
+    def auth_client(self, auth_app):
+        return auth_app.test_client()
+
+    def _bootstrap(self, auth_app, user_id="mike", pin="1234"):
+        with auth_app.app_context():
+            from portal.models import identity as identity_model
+            return identity_model.bootstrap_authority(user_id, "Mike Zachary", pin)
+
+    def test_bootstrap_creates_exactly_one_identity(self, auth_app):
+        self._bootstrap(auth_app)
+        with auth_app.app_context():
+            from portal.models import identity as identity_model
+            assert identity_model.has_any_identity()
+            with pytest.raises(identity_model.IdentityError):
+                identity_model.bootstrap_authority("someone_else", "Someone Else", "5678")
+
+    def test_unauthenticated_request_redirects_to_login(self, auth_client):
+        resp = auth_client.get("/home")
+        assert resp.status_code == 302
+        assert "/login" in resp.headers["Location"]
+
+    def test_login_page_itself_does_not_redirect(self, auth_client):
+        resp = auth_client.get("/login")
+        assert resp.status_code == 200
+
+    def test_correct_pin_grants_access(self, auth_app, auth_client):
+        self._bootstrap(auth_app)
+        login_resp = auth_client.post("/login", data={"pin": "1234"})
+        assert login_resp.status_code == 302
+        assert login_resp.headers["Location"].endswith("/home")
+
+        home_resp = auth_client.get("/home")
+        assert home_resp.status_code == 200
+
+    def test_wrong_pin_denied_and_session_not_created(self, auth_app, auth_client):
+        self._bootstrap(auth_app)
+        resp = auth_client.post("/login", data={"pin": "0000"})
+        assert resp.status_code == 401
+
+        still_gated = auth_client.get("/home")
+        assert still_gated.status_code == 302
+
+    def test_lockout_after_five_failed_attempts(self, auth_app, auth_client):
+        self._bootstrap(auth_app)
+        for _ in range(5):
+            resp = auth_client.post("/login", data={"pin": "0000"})
+            assert resp.status_code == 401
+
+        # Correct PIN, but the identity is now locked -- must still be rejected.
+        locked_resp = auth_client.post("/login", data={"pin": "1234"})
+        assert locked_resp.status_code == 401
+        assert auth_client.get("/home").status_code == 302
+
+    def test_pin_stored_as_hash_not_plaintext(self, auth_app, auth_data_dir):
+        self._bootstrap(auth_app, pin="1234")
+        raw = (auth_data_dir / "identity.json").read_text(encoding="utf-8")
+        assert "1234" not in raw
+        assert '"pin_hash"' in raw
+
+    def test_login_without_bootstrap_reports_clearly(self, auth_client):
+        resp = auth_client.post("/login", data={"pin": "1234"})
+        assert resp.status_code == 400
+
+    def test_decision_email_links_bypass_login_gate(self, auth_app, auth_client):
+        # No login performed. cin_lite's HMAC-token email decision links must remain reachable
+        # without a browser session -- they carry their own, separate token authentication
+        # (portal/routes/decisions.py), which is a different mechanism from this session gate.
+        self._bootstrap(auth_app)
+        resp = auth_client.get("/api/decision/NO-SUCH-CONTRACT/approve_proposal?token=bad")
+        assert resp.status_code == 403  # reached the real handler; rejected by its own token check
+        assert resp.status_code != 302
+
+    def test_logout_clears_session(self, auth_app, auth_client):
+        self._bootstrap(auth_app)
+        auth_client.post("/login", data={"pin": "1234"})
+        assert auth_client.get("/home").status_code == 200
+
+        auth_client.post("/logout")
+        assert auth_client.get("/home").status_code == 302
