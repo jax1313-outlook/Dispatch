@@ -16,6 +16,7 @@
             <div class="intel-header">
                 <strong>{{ record.subject }}</strong>
                 <span class="intel-id">{{ record.id }}</span>
+                <span class="status-tag status-{{ record.verification_status|lower }}">{{ record.verification_status|replace('_', ' ') }}</span>
             </div>
             {% if record.content %}
             <div class="intel-content">{{ record.content }}</div>
