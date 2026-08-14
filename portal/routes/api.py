@@ -357,6 +357,29 @@ def intelligence_add():
         return jsonify({"error": str(exc)}), 400
 
 
+@api_bp.route("/intelligence/promote", methods=["POST"])
+def intelligence_promote():
+    """Promote a broker-type Intelligence record into a Library candidate.
+
+    Wires the already-built, already-tested intel_model.promote_to_candidate() ->
+    library.add_record(submitted_by="machine") -> review_candidate() ->
+    _trigger_publisher_on_approval() chain to a real route (Intelligence Final Integration
+    Launch Package v1, Claude-3 repo). This route grants no approval itself -- the resulting
+    candidate starts pending_review, same as any other machine-submitted Library candidate.
+    """
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    if not record_id:
+        return jsonify({"error": "record_id required"}), 400
+    try:
+        candidate = intel_model.promote_to_candidate(record_id)
+        return jsonify({"status": "ok", "candidate": candidate})
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
 @api_bp.route("/intelligence/update", methods=["POST"])
 def intelligence_update():
     data = request.get_json(force=True)

@@ -25,6 +25,11 @@
                 {% if record.source %}<span>Source: {{ record.source }}</span>{% endif %}
                 <span>{{ record.updated_at }}</span>
             </div>
+            {% if section.key == 'broker' %}
+            <div class="section-actions">
+                <button class="btn btn-sm" onclick="promoteToLibrary('{{ record.id }}')">Promote to Library</button>
+            </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
