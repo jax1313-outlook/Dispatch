@@ -173,6 +173,15 @@
             });
     }
 
+    function promoteToLibrary(recordId) {
+        if (!confirm('Promote this record to a Library candidate? It will need review before becoming Library truth.')) return;
+        apiPost('/api/intelligence/promote', {record_id: recordId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
     function notifyStalled() {
         if (!confirm('Send stalled-load notifications for all stalled loads?')) return;
         apiPost('/api/dispatch/loads/stalled/notify', {})

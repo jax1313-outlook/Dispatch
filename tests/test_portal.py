@@ -1661,6 +1661,39 @@ class TestIntelligenceAPI:
         })
         assert resp.status_code == 400
 
+    def test_promote_broker_record_via_api(self, client):
+        from portal.models import intelligence as intel_model, library as lib_model
+        record = intel_model.create_record("broker", "Southeast Freight Partners", "Reliable payer.")
+        resp = client.post("/api/intelligence/promote", json={"record_id": record["id"]})
+        data = resp.get_json()
+        assert data["status"] == "ok"
+        assert data["candidate"]["status"] == "pending_review"
+        assert data["candidate"]["metadata"]["source_finding_id"] == record["id"]
+        pending = [r for r in lib_model.get_section("broker") if r["id"] == data["candidate"]["id"]]
+        assert len(pending) == 1
+
+    def test_promote_non_broker_record_via_api(self, client):
+        from portal.models import intelligence as intel_model
+        record = intel_model.create_record("route", "I-95 Corridor", "Heavy weekday traffic.")
+        resp = client.post("/api/intelligence/promote", json={"record_id": record["id"]})
+        assert resp.status_code == 400
+
+    def test_promote_nonexistent_record_via_api(self, client):
+        resp = client.post("/api/intelligence/promote", json={"record_id": "INT-NONEXISTENT"})
+        assert resp.status_code == 404
+
+    def test_promote_missing_record_id_via_api(self, client):
+        resp = client.post("/api/intelligence/promote", json={})
+        assert resp.status_code == 400
+
+    def test_intelligence_page_shows_promote_button_for_broker_only(self, client):
+        from portal.models import intelligence as intel_model
+        intel_model.create_record("broker", "Test Broker Co", "x")
+        intel_model.create_record("route", "Test Route", "x")
+        html = client.get("/intelligence").data.decode("utf-8")
+        assert "promoteToLibrary('INT-BRO-0001')" in html
+        assert "promoteToLibrary('INT-ROU-0001')" not in html
+
 
 # ---------- New Page Rendering ----------
 class TestNewPages:
