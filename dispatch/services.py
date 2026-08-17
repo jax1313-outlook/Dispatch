@@ -37,6 +37,25 @@ from dispatch.models import (
 )
 from dispatch import notifications, store
 
+import sys
+
+
+def _notify_safe(send) -> None:
+    """Run a notifications.notify_* call without letting an SMTP failure
+    turn an already-completed write into a false failure response.
+
+    Every notify_* call site here runs strictly after the DB write it's
+    reporting on has already committed. An SMTP timeout/auth failure raised
+    from smtplib (cin_lite/email_delivery.py's transport, reused by
+    dispatch/notifications.py) is not the caller's problem to see as a 500 --
+    the load *was* archived/delivered/invoiced; only the notification email
+    failed. Log and continue rather than propagate.
+    """
+    try:
+        send()
+    except Exception as exc:  # noqa: BLE001 - deliberately broad: any transport failure, not just SMTP
+        print(f"[dispatch.notifications] notify failed, continuing: {exc}", file=sys.stderr)
+
 
 _MILESTONE_TO_STATUS = {
     "dispatched": "dispatched",
@@ -279,7 +298,7 @@ def _try_auto_dispatch(load_id: str) -> None:
     store.upsert_visibility(vis)
     updated = store.get_load(load_id)
     if updated:
-        notifications.notify_dispatched(updated)
+        _notify_safe(lambda: notifications.notify_dispatched(updated))
 
 
 def get_visibility(load_id: str) -> dict | None:
@@ -327,7 +346,7 @@ def add_milestone(
 
     if event_type == "delivered":
         updated_load = store.get_load(load_id) or load
-        notifications.notify_delivered(updated_load, result)
+        _notify_safe(lambda: notifications.notify_delivered(updated_load, result))
 
     return result
 
@@ -494,7 +513,7 @@ def open_exception(
         store.upsert_visibility(updated)
 
     if severity in ("high", "critical"):
-        notifications.notify_exception(load, result)
+        _notify_safe(lambda: notifications.notify_exception(load, result))
 
     return result
 
@@ -588,7 +607,7 @@ def generate_pod(
             note=f"POD generated: {pod.pod_id}",
         )
 
-    notifications.notify_pod_generated(load, result)
+    _notify_safe(lambda: notifications.notify_pod_generated(load, result))
 
     return result
 
@@ -646,7 +665,7 @@ def archive_load(load_id: str) -> dict:
         )
         store.upsert_visibility(updated)
 
-    notifications.notify_archived(load, result)
+    _notify_safe(lambda: notifications.notify_archived(load, result))
 
     return result
 
@@ -842,7 +861,7 @@ def create_settlement(
         notes=notes,
     )
     result = store.create_settlement(stl)
-    notifications.notify_invoice_created(load, result)
+    _notify_safe(lambda: notifications.notify_invoice_created(load, result))
     return result
 
 
@@ -873,7 +892,7 @@ def record_payment(
 
     load = store.get_load(load_id)
     if load and result:
-        notifications.notify_payment_received(load, result)
+        _notify_safe(lambda: notifications.notify_payment_received(load, result))
 
     return result
 
@@ -915,11 +934,19 @@ def get_financial_dashboard() -> dict:
     for load in all_loads:
         rate = store.get_rate_confirmation(load["load_id"])
         if rate:
-            total_revenue += rate["revenue"]
+            # Round per-load before accumulating, matching
+            # store.get_load_profitability_data()'s convention -- summing raw
+            # unrounded floats here and store.get_load_profitability_data()
+            # rounding per-row before its own sum previously gave two
+            # financial reports different totals for the same underlying
+            # data (a real, demonstrable penny-level discrepancy, not
+            # hypothetical). Round-then-sum everywhere revenue/expenses are
+            # aggregated is the one convention to keep.
+            total_revenue += round(rate["revenue"], 2)
             loads_with_rate += 1
 
         expenses = store.list_expenses(load["load_id"])
-        total_expenses += sum(e["amount"] for e in expenses)
+        total_expenses += round(sum(e["amount"] for e in expenses), 2)
 
     for stl in settlements:
         if stl["payment_status"] == "paid":
@@ -1001,7 +1028,7 @@ def check_overdue_settlements() -> list[dict]:
         if updated:
             load = store.get_load(stl["load_id"])
             if load:
-                notifications.notify_payment_overdue(load, updated)
+                _notify_safe(lambda: notifications.notify_payment_overdue(load, updated))
             newly_overdue.append(updated)
 
     return newly_overdue
@@ -1026,7 +1053,7 @@ def dispute_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        notifications.notify_settlement_disputed(load, result, reason)
+        _notify_safe(lambda: notifications.notify_settlement_disputed(load, result, reason))
     return result
 
 
@@ -1049,7 +1076,7 @@ def write_off_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        notifications.notify_settlement_written_off(load, result, reason)
+        _notify_safe(lambda: notifications.notify_settlement_written_off(load, result, reason))
     return result
 
 
@@ -1105,7 +1132,7 @@ def notify_stalled_loads(thresholds: dict[str, int] | None = None) -> list[dict]
     """
     stalled = check_stalled_loads(thresholds)
     for load in stalled:
-        notifications.notify_stalled(load)
+        _notify_safe(lambda: notifications.notify_stalled(load))
     return stalled
 
 

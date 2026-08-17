@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 
@@ -56,13 +57,24 @@ def _get_source_dir() -> Path:
 
 
 def _acquire_local(source_dir: Path) -> list[dict]:
-    """Load and normalize JSON files from a directory."""
+    """Load and normalize JSON files from a directory.
+
+    One malformed or wrongly-shaped file (invalid JSON, or valid JSON whose
+    top level isn't an object) must not abort every other load in the
+    directory -- skip and log the offending file, keep going.
+    """
     loads: list[dict] = []
     if not source_dir.exists():
         return loads
     for path in sorted(source_dir.glob("*.json")):
-        with path.open(encoding="utf-8") as fh:
-            data = json.load(fh)
+        try:
+            with path.open(encoding="utf-8") as fh:
+                data = json.load(fh)
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        except (json.JSONDecodeError, ValueError, OSError) as exc:
+            print(f"[dispatch.acquisition] skipping {path.name}: {exc}", file=sys.stderr)
+            continue
         data.setdefault("_source_file", path.name)
         loads.append(_normalize(data))
     return loads
