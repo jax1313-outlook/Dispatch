@@ -678,6 +678,59 @@ def list_retentions() -> list[dict]:
     return store.list_retentions()
 
 
+_CLOSEOUT_ELIGIBLE_STATUSES = {"delivered", "completed"}
+
+
+def build_completion_packet(load_id: str) -> dict:
+    """Assemble the End Load closeout bundle from artifacts that already exist for this load.
+
+    Pulls together rate confirmation, POD, settlement/invoice, evidence, and broker contact --
+    generates nothing new. Callers use `available`/`missing` to know what's ready to route
+    toward Publisher/Email Helper and what still needs to be gathered first.
+    """
+    bundle = get_load_bundle(load_id)
+    if not bundle:
+        raise ValueError(f"Load not found: {load_id}")
+
+    load = bundle["load"]
+    if load["status"] not in _CLOSEOUT_ELIGIBLE_STATUSES:
+        raise ValueError(
+            f"Load must be delivered or completed before End Load (current: {load['status']})"
+        )
+
+    broker_contact = None
+    if load.get("broker_shipper"):
+        matches = store.list_broker_contacts(search=load["broker_shipper"])
+        broker_contact = matches[0] if matches else None
+
+    rate_confirmation = bundle["financials"]["rate_confirmation"] if bundle["financials"] else None
+    financial_summary = bundle["financials"]["summary"] if bundle["financials"] else None
+
+    available: list[str] = []
+    missing: list[str] = []
+    for label, present in (
+        ("Rate Confirmation", bool(rate_confirmation)),
+        ("POD", bool(bundle["pods"])),
+        ("Invoice / Settlement", bool(bundle["settlement"])),
+        ("Broker Contact", bool(broker_contact)),
+        ("Evidence", bool(bundle["evidence"])),
+    ):
+        (available if present else missing).append(label)
+
+    return {
+        "load_id": load_id,
+        "load": load,
+        "rate_confirmation": rate_confirmation,
+        "financial_summary": financial_summary,
+        "settlement": bundle["settlement"],
+        "pods": bundle["pods"],
+        "evidence": bundle["evidence"],
+        "broker_contact": broker_contact,
+        "available": available,
+        "missing": missing,
+    }
+
+
 def confirm_rate(
     load_id: str,
     rate_amount: float,
