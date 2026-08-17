@@ -1223,17 +1223,28 @@ def get_broker_loads(broker_shipper: str) -> list[dict]:
 # ── Global Search ────────────────────────────────────────────────────
 
 def global_search(query: str, limit: int = 50) -> dict:
+    """Load Search / Operational Retrieval (Driver-First Doctrine D6/D9).
+
+    Strictly read-only -- every branch below is a SELECT, nothing here can
+    create, modify, or delete anything. Searches the identifiers a driver
+    or dispatcher actually has on hand: load number, customer, broker,
+    pickup/delivery location, driver name, notes (free-text -- the only
+    place a BOL/PO/reference number could currently be found, since none
+    of those has a dedicated field in this schema today), plus drivers,
+    equipment, settlements/invoices, and the broker contact directory.
+    """
     q = f"%{query}%"
     results: dict[str, list[dict]] = {
-        "loads": [], "drivers": [], "equipment": [], "settlements": [],
+        "loads": [], "drivers": [], "equipment": [], "settlements": [], "brokers": [],
     }
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM loads WHERE "
             "load_id LIKE ? OR customer LIKE ? OR broker_shipper LIKE ? "
             "OR pickup_location LIKE ? OR delivery_location LIKE ? OR driver LIKE ? "
+            "OR notes LIKE ? "
             "ORDER BY updated_at DESC LIMIT ?",
-            (q, q, q, q, q, q, limit),
+            (q, q, q, q, q, q, q, limit),
         ).fetchall()
         results["loads"] = [dict_from_row(r) for r in rows]
 
@@ -1265,6 +1276,8 @@ def global_search(query: str, limit: int = 50) -> dict:
             d = dict_from_row(r)
             stl_results.append(Settlement(**d).to_dict())
         results["settlements"] = stl_results
+
+    results["brokers"] = list_broker_contacts(search=query)[:limit]
 
     return results
 
