@@ -55,7 +55,11 @@ def create_app(config: dict | None = None) -> Flask:
 
         The `decisions` blueprint (cin_lite's HMAC-token email action links) is excluded on
         purpose: those links must work without a browser session, and already carry their own,
-        separate token-based authentication -- see portal/routes/decisions.py.
+        separate token-based authentication -- see portal/routes/decisions.py. The freight
+        equivalent, dispatch_api.dispatch_decision (portal/routes/dispatch_api.py), is exempted
+        the same way and for the same reason -- it has its own notifications.verify_token() HMAC
+        check -- but only that one endpoint, not the whole dispatch_api blueprint, since every
+        other route in that blueprint should stay behind login.
         """
         login_disabled = app.config.get("LOGIN_DISABLED")
         if login_disabled is None:
@@ -65,6 +69,8 @@ def create_app(config: dict | None = None) -> Flask:
         if request.endpoint is None or request.endpoint == "static":
             return None
         if request.blueprint == "decisions":
+            return None
+        if request.endpoint == "dispatch_api.dispatch_decision":
             return None
         if request.endpoint in ("auth.login", "auth.logout"):
             return None
@@ -127,6 +133,13 @@ def _ensure_storage_dirs() -> None:
             Path(memory_root, sub).mkdir(parents=True, exist_ok=True)
 
 
+def _debug_enabled() -> bool:
+    """Werkzeug's debug mode ships an interactive in-browser Python console on any
+    unhandled 500 -- must default off and require an explicit local-dev opt-in, never
+    be unconditionally on for the only documented way to run this app."""
+    return os.environ.get("PORTAL_DEBUG", "0") == "1"
+
+
 def _print_storage_map() -> None:
     from cin_lite import archive as cin_archive
     from dispatch.db import get_db_path
@@ -161,4 +174,4 @@ if __name__ == "__main__":
     print(f"\n  L2-COS Operations Portal v1")
     print(f"  http://{host}:{port}\n")
     _print_storage_map()
-    app.run(host=host, port=port, debug=True)
+    app.run(host=host, port=port, debug=_debug_enabled())
