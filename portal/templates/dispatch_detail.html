@@ -871,6 +871,60 @@
     {% endif %}
 </div>
 
+{# ── Email Helper Review Package ─────────────────────────────────────── #}
+{% if completion_packet %}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Email Helper Review Package</h3>
+        {% if not email_package %}
+        <button class="btn btn-sm btn-primary" onclick="draftEmailPackage('{{ load.load_id }}')">Draft Review Package</button>
+        {% endif %}
+    </div>
+
+    {% if not email_package %}
+    <p class="empty-state-sm">Not drafted yet. Assembles broker and customer completion emails from the closeout packet for review before anything is sent.</p>
+    {% else %}
+    <div style="font-size:0.8em;color:#999;margin-bottom:10px;">
+        <strong>Status:</strong> {{ email_package.status }}
+        {% if email_package.status == 'SUBMITTED' %} | <strong>Reviewed by:</strong> {{ email_package.reviewed_by }} | <strong>Submitted:</strong> {{ email_package.submitted_at[:16] }}{% endif %}
+        — nothing is sent until a human clicks Submit below.
+    </div>
+
+    <form id="email-package-form" onsubmit="return false;">
+        <div class="brief-fields" style="margin-bottom:8px;">
+            <div class="full-width"><label><strong>Broker Email</strong><br>
+                <input type="text" id="eh-broker-email" value="{{ email_package.broker_email }}" placeholder="broker@example.com" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;"></label></div>
+            <div class="full-width"><label><strong>Broker Subject</strong><br>
+                <input type="text" id="eh-broker-subject" value="{{ email_package.broker_subject }}" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;"></label></div>
+            <div class="full-width"><label><strong>Broker Body</strong><br>
+                <textarea id="eh-broker-body" rows="5" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;">{{ email_package.broker_body }}</textarea></label></div>
+            <div class="full-width"><label><strong>Customer Email</strong><br>
+                <input type="text" id="eh-customer-email" value="{{ email_package.customer_email }}" placeholder="No customer email on file -- enter one to send" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;"></label></div>
+            <div class="full-width"><label><strong>Customer Subject</strong><br>
+                <input type="text" id="eh-customer-subject" value="{{ email_package.customer_subject }}" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;"></label></div>
+            <div class="full-width"><label><strong>Customer Body</strong><br>
+                <textarea id="eh-customer-body" rows="5" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;">{{ email_package.customer_body }}</textarea></label></div>
+        </div>
+        {% if email_package.status != 'SUBMITTED' %}
+        <button type="button" class="btn btn-sm" onclick="saveEmailPackage('{{ load.load_id }}')">Save Edits</button>
+        <button type="button" class="btn btn-sm btn-success" onclick="submitEmailPackage('{{ load.load_id }}')">Submit</button>
+        {% endif %}
+    </form>
+
+    {% if email_package.send_results %}
+    <div style="margin-top:10px;font-size:13px;">
+        <strong>Send Results:</strong>
+        <ul>
+        {% for r in email_package.send_results %}
+            <li>{{ r.to }}: {{ r.result }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endif %}
+
 {# ── Retention / Archive ──────────────────────────────────────────── #}
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -983,6 +1037,43 @@ function endLoad(loadId) {
     apiPost('/api/dispatch/loads/' + loadId + '/end-load', {}).then(function(r) {
         if (r.error) { alert(r.error); return; }
         location.reload();
+    });
+}
+
+function draftEmailPackage(loadId) {
+    apiPost('/api/dispatch/loads/' + loadId + '/email-package/draft', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function _emailPackageFormData() {
+    return {
+        broker_email: document.getElementById('eh-broker-email').value,
+        broker_subject: document.getElementById('eh-broker-subject').value,
+        broker_body: document.getElementById('eh-broker-body').value,
+        customer_email: document.getElementById('eh-customer-email').value,
+        customer_subject: document.getElementById('eh-customer-subject').value,
+        customer_body: document.getElementById('eh-customer-body').value
+    };
+}
+
+function saveEmailPackage(loadId) {
+    apiPatch('/api/dispatch/loads/' + loadId + '/email-package', _emailPackageFormData()).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function submitEmailPackage(loadId) {
+    var submittedBy = prompt('Reviewing identity (your name) -- confirms you reviewed this before it sends:');
+    if (!submittedBy) return;
+    apiPatch('/api/dispatch/loads/' + loadId + '/email-package', _emailPackageFormData()).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        apiPost('/api/dispatch/loads/' + loadId + '/email-package/submit', {submitted_by: submittedBy}).then(function(r2) {
+            if (r2.error) { alert(r2.error); return; }
+            location.reload();
+        });
     });
 }
 

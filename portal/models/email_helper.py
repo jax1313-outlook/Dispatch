@@ -1,0 +1,208 @@
+"""Email Helper: the review-package step between Publisher and Submit.
+
+D3's pipeline: End Load -> Publisher Request -> Library Template -> Publisher Creates
+Documents -> Email Helper Review Package -> Human Review -> Submit -> Email Cluster
+Archived -> Archive Takes Custody. This module is the "Email Helper Review Package" +
+"Submit" steps: it drafts broker/customer completion emails from data that already
+exists (never inventing facts, matching Publisher's own stated constraint), lets a human
+edit them, and only sends -- or writes a local fallback, same as every other email in this
+codebase -- once a real, non-system identity explicitly submits.
+
+Does not implement D10 (Email Cluster Archived -> Archive Takes Custody) -- rendering a sent
+email to a business document and handing custody to the Archive layer is separate, later
+scope (see DISPATCH_DEPLOYMENT_BLUEPRINT.md's recommended sequence). This module stops at a
+submitted, recorded send result.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+from portal.models import get_data_dir
+from portal.models.publisher import RESERVED_SYSTEM_IDENTITIES
+
+STATUSES = ["DRAFT", "REVIEWED", "SUBMITTED"]
+
+_SIGNATURE = "\n\nThank you,\n\nMike Zachary\nLevel 1 Transport Inc."
+
+_EDITABLE_FIELDS = {
+    "broker_email", "broker_subject", "broker_body",
+    "customer_email", "customer_subject", "customer_body",
+}
+
+
+class EmailHelperSubmitError(ValueError):
+    """Raised when a package is submitted without a valid external submitted_by identity."""
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _packages_path() -> Path:
+    d = get_data_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "email_packages.json"
+
+
+def _load() -> list[dict]:
+    path = _packages_path()
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return []
+
+
+def _save(data: list[dict]) -> None:
+    path = _packages_path()
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def get_package(load_id: str) -> dict | None:
+    for package in _load():
+        if package["load_id"] == load_id:
+            return package
+    return None
+
+
+def list_packages() -> list[dict]:
+    return _load()
+
+
+def _draft_broker_email(load: dict, broker_contact: dict | None) -> tuple[str, str, str]:
+    to = broker_contact["email"] if broker_contact and broker_contact.get("email") else ""
+    greeting_name = broker_contact.get("contact_name") if broker_contact else ""
+    greeting = f"Hello {greeting_name}," if greeting_name else "Hello,"
+    lane = f"{load.get('pickup_location') or '?'} to {load.get('delivery_location') or '?'}"
+    subject = f"Load {load['load_id'][:12]} Completed — {lane}"
+    body = (
+        f"{greeting}\n\n"
+        f"Load {load['load_id'][:12]} ({lane}) has been completed. Rate confirmation, "
+        "proof of delivery, and invoice are available and can be provided on request."
+        f"{_SIGNATURE}"
+    )
+    return to, subject, body
+
+
+def _draft_customer_email(load: dict) -> tuple[str, str, str]:
+    # No customer email field exists anywhere in this schema yet (Load has no customer
+    # contact info -- see DISPATCH_DEPLOYMENT_BLUEPRINT.md D2, not yet built). Left blank
+    # rather than guessed; a human fills it in during review.
+    to = ""
+    lane = f"{load.get('pickup_location') or '?'} to {load.get('delivery_location') or '?'}"
+    subject = f"Delivery Confirmation — {load.get('customer') or 'Your Shipment'}"
+    body = (
+        f"Hello,\n\nYour shipment ({lane}) has been delivered and completed. "
+        "A copy of the proof of delivery is available on request."
+        f"{_SIGNATURE}"
+    )
+    return to, subject, body
+
+
+def create_draft(
+    load_id: str,
+    load: dict,
+    broker_contact: dict | None = None,
+    pod_id: str | None = None,
+    invoice_number: str | None = None,
+) -> dict:
+    """Idempotent: re-drafting a load that already has a package returns it unchanged."""
+    existing = get_package(load_id)
+    if existing:
+        return existing
+
+    broker_to, broker_subject, broker_body = _draft_broker_email(load, broker_contact)
+    customer_to, customer_subject, customer_body = _draft_customer_email(load)
+
+    packages = _load()
+    now = _utc_now()
+    package = {
+        "id": f"EH-{len(packages) + 1:04d}",
+        "load_id": load_id,
+        "status": "DRAFT",
+        "broker_email": broker_to,
+        "broker_subject": broker_subject,
+        "broker_body": broker_body,
+        "customer_email": customer_to,
+        "customer_subject": customer_subject,
+        "customer_body": customer_body,
+        "pod_id": pod_id,
+        "invoice_number": invoice_number,
+        "send_results": [],
+        "reviewed_by": None,
+        "created_at": now,
+        "updated_at": now,
+        "submitted_at": None,
+    }
+    packages.append(package)
+    _save(packages)
+    return package
+
+
+def update_draft(load_id: str, **fields) -> dict:
+    packages = _load()
+    for package in packages:
+        if package["load_id"] == load_id:
+            if package["status"] == "SUBMITTED":
+                raise ValueError(f"Email package for {load_id} already submitted; cannot edit")
+            for key, value in fields.items():
+                if key in _EDITABLE_FIELDS:
+                    package[key] = value
+            package["status"] = "REVIEWED"
+            package["updated_at"] = _utc_now()
+            _save(packages)
+            return package
+    raise KeyError(f"Email package not found for load: {load_id}")
+
+
+def submit_package(load_id: str, submitted_by: str | None) -> dict:
+    """Send (or write a local fallback for) every recipient with a non-empty address.
+
+    Requires a real, external, non-system `submitted_by` identity -- mirrors
+    publisher.py's update_action_status() APPROVED gate exactly, reusing its own
+    RESERVED_SYSTEM_IDENTITIES rather than redefining the rule.
+    """
+    if not submitted_by or submitted_by.strip().upper() in RESERVED_SYSTEM_IDENTITIES:
+        raise EmailHelperSubmitError(
+            "Email package cannot be submitted without a real, external, non-system "
+            "submitted_by identity (mirrors Publisher's own approval gate)."
+        )
+
+    package = get_package(load_id)
+    if not package:
+        raise KeyError(f"Email package not found for load: {load_id}")
+    if package["status"] == "SUBMITTED":
+        return package  # idempotent -- re-submitting is a no-op, not a re-send
+
+    recipients = [
+        (package["broker_email"], package["broker_subject"], package["broker_body"]),
+        (package["customer_email"], package["customer_subject"], package["customer_body"]),
+    ]
+    if not any(to for to, _, _ in recipients):
+        raise ValueError(
+            "Email package has no recipient addresses -- fill in at least one email "
+            "before submitting"
+        )
+
+    from cin_lite import email_delivery
+
+    results = []
+    for to, subject, body in recipients:
+        if not to:
+            continue
+        outcome = email_delivery.send(subject, body, [to], f"completion-{load_id}-{to}")
+        results.append({"to": to, "result": outcome})
+
+    packages = _load()
+    for stored in packages:
+        if stored["load_id"] == load_id:
+            now = _utc_now()
+            stored["send_results"] = results
+            stored["reviewed_by"] = submitted_by
+            stored["status"] = "SUBMITTED"
+            stored["submitted_at"] = now
+            stored["updated_at"] = now
+            _save(packages)
+            return stored
+    raise KeyError(f"Email package not found for load: {load_id}")

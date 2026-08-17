@@ -179,6 +179,7 @@ def dispatch_detail(load_id):
     )
 
     from portal.models import completion_packet as cp_model
+    from portal.models import email_helper
 
     bundle = dispatch_svc.get_load_bundle(load_id)
     if not bundle:
@@ -197,6 +198,7 @@ def dispatch_detail(load_id):
         settlement_statuses=SETTLEMENT_STATUSES,
         payment_methods=PAYMENT_METHODS,
         completion_packet=cp_model.get_packet(load_id),
+        email_package=email_helper.get_package(load_id),
         **bundle,
     )
 

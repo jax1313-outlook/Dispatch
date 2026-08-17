@@ -551,6 +551,68 @@ def end_load(load_id):
     return jsonify({"status": "ok", "packet": packet, "publisher_action": action}), 201
 
 
+# ── Email Helper (review package) ──────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/email-package", methods=["GET"])
+def get_email_package(load_id):
+    from portal.models import email_helper
+    package = email_helper.get_package(load_id)
+    if not package:
+        return jsonify({"error": "No email package for this load"}), 404
+    return jsonify({"status": "ok", "package": package})
+
+
+@dispatch_bp.route("/loads/<load_id>/email-package/draft", methods=["POST"])
+def draft_email_package(load_id):
+    """Draft the broker/customer completion emails from the load's Completion Packet.
+    Requires End Load to have already run -- there's nothing to draft from otherwise.
+    """
+    from portal.models import completion_packet, email_helper
+
+    packet = completion_packet.get_packet(load_id)
+    if not packet:
+        return jsonify({"error": "Run End Load before drafting the email package"}), 409
+
+    closeout = packet["closeout_data"]
+    package = email_helper.create_draft(
+        load_id=load_id,
+        load=closeout["load"],
+        broker_contact=closeout.get("broker_contact"),
+        pod_id=(closeout["pods"][0]["pod_id"] if closeout.get("pods") else None),
+        invoice_number=(closeout["settlement"]["invoice_number"] if closeout.get("settlement") else None),
+    )
+    return jsonify({"status": "ok", "package": package}), 201
+
+
+@dispatch_bp.route("/loads/<load_id>/email-package", methods=["PATCH"])
+def update_email_package(load_id):
+    from portal.models import email_helper
+    data = request.get_json(silent=True) or {}
+    try:
+        package = email_helper.update_draft(load_id, **data)
+    except KeyError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"status": "ok", "package": package})
+
+
+@dispatch_bp.route("/loads/<load_id>/email-package/submit", methods=["POST"])
+def submit_email_package(load_id):
+    from portal.models import email_helper
+    data = request.get_json(silent=True) or {}
+    submitted_by = data.get("submitted_by")
+    try:
+        package = email_helper.submit_package(load_id, submitted_by)
+    except email_helper.EmailHelperSubmitError as e:
+        return jsonify({"error": str(e)}), 403
+    except KeyError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"status": "ok", "package": package})
+
+
 @dispatch_bp.route("/retention/<load_id>", methods=["GET"])
 def get_retention(load_id):
     ret = services.get_retention(load_id)
