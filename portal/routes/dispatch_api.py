@@ -516,6 +516,16 @@ def archive_load(load_id):
     except ValueError as e:
         status = 404 if "not found" in str(e).lower() else 409
         return jsonify({"error": str(e)}), status
+
+    # D10: "Archive Takes Custody" -- if this load has a Completion Packet with an Email
+    # Cluster already stored on it (see submit_email_package below), record that this
+    # (existing, human-triggered) archive action took custody of it. Does not change
+    # when/whether archiving happens -- purely a cross-reference on the packet.
+    from portal.models import completion_packet
+    packet = completion_packet.get_packet(load_id)
+    if packet and packet.get("status") == "CLUSTERED":
+        completion_packet.mark_archived(load_id, ret["archive_id"])
+
     return jsonify({"status": "ok", "retention": ret}), 201
 
 
@@ -620,7 +630,7 @@ def update_email_package(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/email-package/submit", methods=["POST"])
 def submit_email_package(load_id):
-    from portal.models import email_helper
+    from portal.models import completion_packet, email_helper
     data = request.get_json(silent=True) or {}
     submitted_by = data.get("submitted_by")
     try:
@@ -631,6 +641,13 @@ def submit_email_package(load_id):
         return jsonify({"error": str(e)}), 404
     except ValueError as e:
         return jsonify({"error": str(e)}), 409
+
+    # D10: "Email Sent -> Render Email to Business Document -> ... -> Store With
+    # Completion Package." Only clusters a real, already-submitted package -- never
+    # renders a package that's still in DRAFT/REVIEWED.
+    if package["status"] == "SUBMITTED" and completion_packet.get_packet(load_id):
+        completion_packet.create_email_cluster(load_id, package)
+
     return jsonify({"status": "ok", "package": package})
 
 

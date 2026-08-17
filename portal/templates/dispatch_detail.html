@@ -922,11 +922,22 @@
     </div>
     {% endif %}
     {% endif %}
+
+    {% if completion_packet.email_cluster %}
+    <div style="margin-top:10px;padding:10px;background:#f8f9fa;border-radius:4px;font-size:13px;">
+        <strong>Email Cluster</strong> — {{ completion_packet.email_cluster.documents|length }} document(s) stored with this Completion Packet.
+        {% if completion_packet.status == 'ARCHIVED' %}
+        Archive has taken custody (<a href="#retention-section">Retention Archive {{ completion_packet.retention_archive_id }}</a>).
+        {% else %}
+        Awaiting Archive Load to take custody.
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
 {# ── Retention / Archive ──────────────────────────────────────────── #}
-<div class="brief-section">
+<div class="brief-section" id="retention-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <h3 style="margin-bottom:0;border:none;">Retention Archive</h3>
         {% if not retention %}

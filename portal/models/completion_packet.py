@@ -19,7 +19,7 @@ from pathlib import Path
 
 from portal.models import get_data_dir
 
-STATUSES = ["ASSEMBLED", "ROUTED", "ARCHIVED"]
+STATUSES = ["ASSEMBLED", "ROUTED", "CLUSTERED", "ARCHIVED"]
 
 
 def _utc_now() -> str:
@@ -75,6 +75,8 @@ def create_packet(
         "available": available or [],
         "missing": missing or [],
         "publisher_action_id": None,
+        "email_cluster": None,
+        "retention_archive_id": None,
         "created_at": now,
         "updated_at": now,
     }
@@ -89,6 +91,74 @@ def mark_routed(load_id: str, publisher_action_id: str) -> dict:
         if packet["load_id"] == load_id:
             packet["status"] = "ROUTED"
             packet["publisher_action_id"] = publisher_action_id
+            packet["updated_at"] = _utc_now()
+            _save(packets)
+            return packet
+    raise KeyError(f"Completion packet not found for load: {load_id}")
+
+
+def create_email_cluster(load_id: str, email_package: dict) -> dict:
+    """D10: 'Email Sent -> Render Email to Business Document -> Attach Related Files ->
+    Create Email Cluster -> Store With Completion Package.' Renders each sent email in a
+    SUBMITTED email_helper package into a document record, attaches references to the
+    packet's own already-assembled evidence/POD/invoice, and stores the resulting cluster
+    on this load's Completion Packet. Idempotent -- an existing cluster is returned
+    unchanged rather than re-rendered.
+    """
+    packets = _load()
+    for packet in packets:
+        if packet["load_id"] != load_id:
+            continue
+        if packet.get("email_cluster"):
+            return packet
+
+        send_results = {r["to"]: r["result"] for r in email_package.get("send_results", [])}
+        documents = []
+        for prefix, doc_type in (("broker", "broker_email"), ("customer", "customer_email")):
+            to = email_package.get(f"{prefix}_email")
+            if not to:
+                continue
+            documents.append({
+                "type": doc_type,
+                "to": to,
+                "subject": email_package.get(f"{prefix}_subject"),
+                "body": email_package.get(f"{prefix}_body"),
+                "send_result": send_results.get(to),
+            })
+
+        closeout = packet.get("closeout_data") or {}
+        cluster = {
+            "email_package_id": email_package["id"],
+            "documents": documents,
+            "attached_files": {
+                "evidence_ids": [e["evidence_id"] for e in closeout.get("evidence") or []],
+                "pod_id": (closeout["pods"][0]["pod_id"] if closeout.get("pods") else None),
+                "invoice_number": (
+                    closeout["settlement"]["invoice_number"] if closeout.get("settlement") else None
+                ),
+            },
+            "created_at": _utc_now(),
+        }
+        packet["email_cluster"] = cluster
+        packet["status"] = "CLUSTERED"
+        packet["updated_at"] = _utc_now()
+        _save(packets)
+        return packet
+    raise KeyError(f"Completion packet not found for load: {load_id}")
+
+
+def mark_archived(load_id: str, retention_archive_id: str) -> dict:
+    """D10's terminal step: 'Archive Takes Custody.' Records that the (existing,
+    human-triggered) Archive Load action has taken custody of this packet's Email
+    Cluster -- does not itself trigger archiving. Idempotent.
+    """
+    packets = _load()
+    for packet in packets:
+        if packet["load_id"] == load_id:
+            if packet["status"] == "ARCHIVED":
+                return packet
+            packet["status"] = "ARCHIVED"
+            packet["retention_archive_id"] = retention_archive_id
             packet["updated_at"] = _utc_now()
             _save(packets)
             return packet
