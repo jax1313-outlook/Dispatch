@@ -90,6 +90,30 @@ class TestGlobalSearchStore:
         results = global_search("1HGCM82633A")
         assert len(results["equipment"]) == 1
 
+    def test_finds_load_by_notes(self):
+        """Driver-First Doctrine (D6): BOL/PO/reference numbers have no
+        dedicated field in this schema -- notes is the one place a driver
+        could realistically find one today. Confirms that path works."""
+        from dispatch.store import global_search
+        services.create_load(customer="Notes Co", notes="PO-88213-REF")
+        results = global_search("PO-88213-REF")
+        assert len(results["loads"]) == 1
+        assert results["loads"][0]["customer"] == "Notes Co"
+
+    def test_finds_broker_by_company_name(self):
+        from dispatch.store import global_search
+        services.add_broker_contact(company_name="Southeast Freight Partners")
+        results = global_search("Southeast Freight")
+        assert len(results["brokers"]) == 1
+        assert results["brokers"][0]["company_name"] == "Southeast Freight Partners"
+
+    def test_finds_broker_by_phone(self):
+        from dispatch.store import global_search
+        services.add_broker_contact(company_name="Phone Broker Co", phone="555-222-3333")
+        results = global_search("222-3333")
+        assert len(results["brokers"]) == 1
+
+
 
 # ── API endpoint ──────────────────────────────────────────────────────
 
@@ -160,6 +184,32 @@ class TestSearchPage:
         assert resp.status_code == 200
         assert b"SEARCH-001" in resp.data
         assert b"Equipment" in resp.data
+
+    def test_search_shows_brokers(self, client):
+        services.add_broker_contact(company_name="Page Search Brokerage")
+        resp = client.get("/search?q=Page Search Brokerage")
+        assert resp.status_code == 200
+        assert b"Page Search Brokerage" in resp.data
+        assert b"Broker Contacts" in resp.data
+
+    def test_page_title_is_driver_facing(self, client):
+        """Driver-First Doctrine (D6): plain operational language, not the
+        generic 'Search' label -- the page and nav must say Load Search."""
+        resp = client.get("/search")
+        assert b"Load Search" in resp.data
+
+    def test_search_is_read_only_no_action_buttons(self, client):
+        """Driver-First Doctrine (D6): blocked actions -- create, modify,
+        delete, archive, complete, dispatch, send must never appear as
+        controls on the search results themselves."""
+        services.create_load(customer="Readonly Check Co")
+        resp = client.get("/search?q=Readonly Check")
+        assert resp.status_code == 200
+        # Specific button-label text, not bare verbs -- base.html's shared
+        # sitewide JS legitimately mentions "delete" for unrelated pages
+        # (e.g. libraryDelete()), which isn't a control on this page.
+        for blocked in (b">Archive Load<", b">Generate POD<", b">+ New Load<"):
+            assert blocked not in resp.data
 
 
 # ── Sidebar link ─────────────────────────────────────────────────────
