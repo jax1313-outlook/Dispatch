@@ -841,6 +841,36 @@
 </div>
 {% endif %}
 
+{# ── Completion Packet / End Load ────────────────────────────────────── #}
+<div class="brief-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;border:none;">Completion Packet</h3>
+        {% if not completion_packet and load.status in ('delivered', 'completed') %}
+        <button class="btn btn-sm btn-primary" onclick="endLoad('{{ load.load_id }}')">End Load</button>
+        {% endif %}
+    </div>
+
+    {% if completion_packet %}
+    <div class="brief-fields">
+        <div><strong>Packet:</strong> {{ completion_packet.id }}</div>
+        <div><strong>Status:</strong> <span class="status-tag">{{ completion_packet.status }}</span></div>
+        <div><strong>Routed To Publisher:</strong> {{ completion_packet.publisher_action_id or '—' }}</div>
+        <div><strong>Assembled:</strong> {{ completion_packet.created_at[:16] if completion_packet.created_at else '—' }}</div>
+    </div>
+    <div style="margin-top:8px;font-size:13px;">
+        <strong>Ready:</strong> {{ completion_packet.available|join(', ') if completion_packet.available else 'None' }}<br>
+        <strong>Still Needed:</strong> {{ completion_packet.missing|join(', ') if completion_packet.missing else 'None' }}
+    </div>
+    <p style="font-size:0.8em;color:#999;margin-top:8px;">
+        Routed to the Publisher queue for human review. No broker or customer email is sent automatically.
+    </p>
+    {% elif load.status not in ('delivered', 'completed') %}
+    <p class="empty-state-sm">End Load becomes available once this load is delivered or completed.</p>
+    {% else %}
+    <p class="empty-state-sm">Not ended yet. End Load assembles the closeout packet (rate confirmation, POD, invoice, broker contact) and routes it to Publisher for review.</p>
+    {% endif %}
+</div>
+
 {# ── Retention / Archive ──────────────────────────────────────────── #}
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -944,6 +974,13 @@ function resolveException(excId) {
 function generatePod(loadId) {
     var recipient = prompt('POD recipient (optional):');
     apiPost('/api/dispatch/loads/' + loadId + '/pod', {recipient: recipient || ''}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function endLoad(loadId) {
+    apiPost('/api/dispatch/loads/' + loadId + '/end-load', {}).then(function(r) {
         if (r.error) { alert(r.error); return; }
         location.reload();
     });
