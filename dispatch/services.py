@@ -82,7 +82,7 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
     "delivered": {"completed", "archived"},
     "completed": {"archived"},
     "archived": set(),
-    "cancelled": set(),
+    "cancelled": {"archived"},
 }
 
 
@@ -628,6 +628,8 @@ def archive_load(load_id: str) -> dict:
     existing = store.get_retention_by_load(load_id)
     if existing:
         raise ValueError(f"Load {load_id} is already archived")
+
+    validate_status_transition(load["status"], "archived")
 
     all_ev = store.list_evidence(load_id)
     evidence_ids = [e["evidence_id"] for e in all_ev]
