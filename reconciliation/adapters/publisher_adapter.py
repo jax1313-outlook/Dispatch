@@ -2,8 +2,12 @@
 
 Per DISPATCH_CANONICAL_ARCHITECTURE_RECONCILIATION_MATRIX_v1.md Section 3: "Publisher: Hybrid.
 Tri-department governs. Dispatch proposal writer drafts." This module is read-only reporting for
-Stage 4 -- it does not add the enforced approval gate itself (that is Stage 5's
-`update_action_status(..., approved_by=...)` code change, not yet applied).
+Stage 4 -- it does not add the enforced approval gate itself. That gate is Stage 5's
+`update_action_status(..., approved_by=...)` code change, and it HAS since been applied (see
+`portal/models/publisher.py::update_action_status()` and `docs/CANONICAL_RECONCILIATION_INTEGRATION.md`,
+"Approval Chain Safety Gate"): the `APPROVED` transition unconditionally requires a real,
+external, non-system `approved_by` identity, or it raises `PublisherApprovalError`. This adapter
+now reports that fact instead of the pre-Stage-5 absence of it.
 
 Pure functions only: no file I/O, no writes, no calls into portal.models.publisher's _save().
 """
@@ -23,12 +27,17 @@ RESERVED_SYSTEM_IDENTITIES = {"PUBLISHER", "SYSTEM", "AUTOMATION", "INTELLIGENCE
 def dispatch_action_to_canonical_view(action: Dict[str, Any]) -> PublisherActionCanonicalView:
     """Translate one Dispatch publisher action into a canonical-shaped read-only view.
 
-    `is_approval_enforced` is always False: as of this Stage-4 adapter,
-    portal/models/publisher.py::update_action_status() has no code path that requires or
-    validates an approver identity (see DISPATCH_DEPARTMENT_RECONCILIATION_v1.md Section 3).
-    An action can carry an `approved_by` key today only if something outside the current
-    codebase set one manually -- this function reports that value if present, but does not
-    claim it was verified, because nothing verified it.
+    `is_approval_enforced` is now always True: it reports whether the real code path an action
+    passes through (`portal/models/publisher.py::update_action_status()`) enforces the approval
+    gate for the `APPROVED` transition -- and it now unconditionally does (raises
+    `PublisherApprovalError` without a real, external, non-system `approved_by`). This is a
+    code-path fact, the same for every action, not a per-record verification of the `approved_by`
+    value carried on *this* particular dict -- a view built from an arbitrary/historical dict
+    (e.g. pre-gate data, or a hand-built test fixture) can still carry a stale or reserved-identity
+    `approved_by` that would not itself pass the gate. For that per-record question -- "would this
+    specific approved_by value satisfy the gate" -- use `would_pass_tri_department_gate()` below;
+    it is deliberately kept separate from `is_approval_enforced` so the two questions ("does the
+    code enforce this" vs. "does this record's data look valid") are never conflated.
     """
     approved_by = action.get("approved_by")
     return PublisherActionCanonicalView(
@@ -36,7 +45,7 @@ def dispatch_action_to_canonical_view(action: Dict[str, Any]) -> PublisherAction
         action_type=action["action_type"],
         status=action["status"],
         approved_by=approved_by,
-        is_approval_enforced=False,
+        is_approval_enforced=True,
         missing_data=list(action.get("missing_data", [])),
         manifest=list(action.get("manifest", [])),
     )
