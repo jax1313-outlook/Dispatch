@@ -486,10 +486,13 @@ class TestServices:
         with pytest.raises(ValueError, match="Load not found"):
             services.archive_load("NONEXISTENT")
 
-    def test_archive_load_already_archived(self, sample_load):
-        services.archive_load(sample_load["load_id"])
+    def test_archive_load_already_archived(self, delivered_load):
+        # D1: archiving now validates the status transition, so this must
+        # start from a status that is actually allowed to reach "archived"
+        # (sample_load sits at "created", which is not).
+        services.archive_load(delivered_load["load_id"])
         with pytest.raises(ValueError, match="already archived"):
-            services.archive_load(sample_load["load_id"])
+            services.archive_load(delivered_load["load_id"])
 
     def test_get_load_bundle(self, sample_load):
         load_id = sample_load["load_id"]
@@ -506,16 +509,18 @@ class TestServices:
     def test_get_load_bundle_not_found(self):
         assert services.get_load_bundle("NONEXISTENT") is None
 
-    def test_retention_list(self, sample_load):
-        services.archive_load(sample_load["load_id"])
+    def test_retention_list(self, delivered_load):
+        # D1: same reason as test_archive_load_already_archived above --
+        # needs a status archive_load is actually allowed to reach "archived" from.
+        services.archive_load(delivered_load["load_id"])
         retentions = services.list_retentions()
         assert len(retentions) == 1
 
-    def test_get_retention(self, sample_load):
-        services.archive_load(sample_load["load_id"])
-        ret = services.get_retention(sample_load["load_id"])
+    def test_get_retention(self, delivered_load):
+        services.archive_load(delivered_load["load_id"])
+        ret = services.get_retention(delivered_load["load_id"])
         assert ret is not None
-        assert ret["load_id"] == sample_load["load_id"]
+        assert ret["load_id"] == delivered_load["load_id"]
 
 
 # ── Full workflow test ────────────────────────────────────────────────
@@ -844,6 +849,10 @@ class TestDispatchAPI:
 
     def test_archive_load(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        # D1: archive_load now validates the status transition, so the load
+        # must reach a status that is actually allowed to reach "archived"
+        # ("created" is not) before archiving.
+        self._deliver_load(client, load_id)
         resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
         assert resp.status_code == 201
         load = client.get(f"/api/dispatch/loads/{load_id}").get_json()["load"]
@@ -855,12 +864,14 @@ class TestDispatchAPI:
 
     def test_archive_load_already_archived(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
         assert resp.status_code == 409
 
     def test_list_retentions(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.get("/api/dispatch/retention")
         assert resp.status_code == 200
@@ -868,6 +879,7 @@ class TestDispatchAPI:
 
     def test_get_retention(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.get(f"/api/dispatch/retention/{load_id}")
         assert resp.status_code == 200
