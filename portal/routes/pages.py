@@ -180,12 +180,18 @@ def dispatch_detail(load_id):
 
     from portal.models import completion_packet as cp_model
     from portal.models import email_helper
+    from dispatch import notifications
 
     bundle = dispatch_svc.get_load_bundle(load_id)
     if not bundle:
         return redirect(url_for("pages.dispatch"))
+    stakeholder_token = notifications.make_stakeholder_token(load_id)
+    stakeholder_url = url_for(
+        "stakeholder.stakeholder_view", load_id=load_id, token=stakeholder_token, _external=True
+    )
     return render_template(
         "dispatch_detail.html",
+        stakeholder_url=stakeholder_url,
         load_statuses=LOAD_STATUSES,
         milestone_types=MILESTONE_TYPES,
         milestone_sources=MILESTONE_SOURCES,

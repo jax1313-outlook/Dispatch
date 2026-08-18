@@ -60,6 +60,13 @@ def create_app(config: dict | None = None) -> Flask:
         the same way and for the same reason -- it has its own notifications.verify_token() HMAC
         check -- but only that one endpoint, not the whole dispatch_api blueprint, since every
         other route in that blueprint should stay behind login.
+
+        The `stakeholder` blueprint (portal/routes/stakeholder.py) is exempted the same way, for
+        the same reason: it's the external broker/shipper/customer read-only portal link, must
+        work for a recipient with no Dispatch login at all, and carries its own, separate
+        notifications.verify_stakeholder_token() HMAC check. Unlike dispatch_api, every route in
+        this blueprint is meant to be reachable this way, so the whole blueprint is exempted
+        (there is currently only the one route, stakeholder.stakeholder_view).
         """
         login_disabled = app.config.get("LOGIN_DISABLED")
         if login_disabled is None:
@@ -69,6 +76,8 @@ def create_app(config: dict | None = None) -> Flask:
         if request.endpoint is None or request.endpoint == "static":
             return None
         if request.blueprint == "decisions":
+            return None
+        if request.blueprint == "stakeholder":
             return None
         if request.endpoint == "dispatch_api.dispatch_decision":
             return None

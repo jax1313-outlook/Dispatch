@@ -49,6 +49,22 @@ def verify_token(load_id: str, action: str, token: str) -> bool:
     return hmac.compare_digest(expected, token)
 
 
+def make_stakeholder_token(load_id: str) -> str:
+    """HMAC token for the external, non-PIN-gated stakeholder portal link
+    (broker/shipper/customer read-only view of a single load). Same
+    keyed-hash pattern as make_token()/verify_token() above, with its own
+    namespace prefix so a stakeholder-view token can never be replayed
+    against a decision-action endpoint (or vice versa)."""
+    return hmac.new(
+        _secret(), f"dispatch-stakeholder:{load_id}".encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def verify_stakeholder_token(load_id: str, token: str) -> bool:
+    expected = make_stakeholder_token(load_id)
+    return hmac.compare_digest(expected, token)
+
+
 def _action_url_base() -> str:
     portal = os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080").rstrip("/")
     return f"{portal}/api/dispatch/decision"
