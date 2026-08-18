@@ -1412,6 +1412,127 @@ def get_load_bundle(load_id: str) -> dict | None:
     }
 
 
+def _sanitize_retention_for_stakeholder(retention: dict | None) -> dict | None:
+    """Strip server-internal fields before a retention record reaches the
+    external stakeholder portal: `archive_location` is a filesystem path,
+    and `financial_summary` is exactly get_financials()['summary'] --
+    Level 1 Transport's own profit/margin_pct on the load, not a
+    rate/fee/cost figure covered by D11's disclosure rule."""
+    if not retention:
+        return None
+    return {
+        "final_status": retention.get("final_status", ""),
+        "retention_status": retention.get("retention_status", ""),
+        "archived_at": retention.get("archived_at", ""),
+        "evidence_count": len(retention.get("evidence_index") or []),
+    }
+
+
+def build_stakeholder_view(load_id: str) -> dict | None:
+    """Assemble the read-only payload shown to an external stakeholder
+    (broker/shipper/customer -- per D11 these are genuinely distinct
+    parties in a Manufacturer -> Shipper -> Broker -> Level 1 Transport
+    chain, not synonyms) via the HMAC-token-secured stakeholder portal.
+
+    Deliberately narrower than get_load_bundle():
+      - rate/fee/cost figures (rate confirmation, settlement/invoice) ARE
+        included -- D11 establishes an open-disclosure rule for these
+        parties, so there is no "curtain" to build here.
+      - Level 1 Transport's own internal economics (expense breakdown,
+        profit, margin_pct from get_financials()) are EXCLUDED -- D11
+        covers disclosure of rate/fee/cost to the parties in the chain,
+        not disclosure of Level 1 Transport's own P&L on the load.
+      - the internal activity/comment thread, driver personal contact
+        info (phone/email/license), and internal_note are EXCLUDED
+        regardless of D11, since none of those are rate/fee/cost figures
+        in the first place.
+      - evidence file downloads are EXCLUDED this pass (metadata only,
+        no download link) -- serving raw uploaded files through a
+        non-PIN-gated route is a separate scoping question, not decided
+        here; a token-scoped evidence download route is a fast-follow,
+        not part of this build.
+    """
+    load = store.get_load(load_id)
+    if not load:
+        return None
+
+    visibility = store.get_visibility(load_id)
+    rate = store.get_rate_confirmation(load_id)
+    settlement = store.get_settlement(load_id)
+
+    assigned_driver = None
+    if load.get("driver_id"):
+        driver = store.get_driver(load["driver_id"])
+        if driver:
+            assigned_driver = {"name": driver.get("name", "")}
+
+    assigned_equipment = None
+    if load.get("equipment_id"):
+        equipment = store.get_equipment(load["equipment_id"])
+        if equipment:
+            assigned_equipment = {
+                "unit_number": equipment.get("unit_number", ""),
+                "equipment_type": equipment.get("equipment_type", ""),
+            }
+
+    return {
+        "load": {
+            "load_id": load["load_id"],
+            "customer": load.get("customer", ""),
+            "broker_shipper": load.get("broker_shipper", ""),
+            "pickup_location": load.get("pickup_location", ""),
+            "delivery_location": load.get("delivery_location", ""),
+            "pickup_datetime": load.get("pickup_datetime", ""),
+            "delivery_datetime": load.get("delivery_datetime", ""),
+            "status": load.get("status", ""),
+        },
+        "customer_note": (visibility or {}).get("customer_note", ""),
+        "milestones": [
+            {
+                "event_type": m.get("event_type", ""),
+                "event_time": m.get("event_time", ""),
+                "location": m.get("location", ""),
+                "note": m.get("note", ""),
+            }
+            for m in store.list_milestones(load_id)
+        ],
+        "evidence": [
+            {
+                "evidence_type": e.get("evidence_type", ""),
+                "description": e.get("description", ""),
+                "capture_time": e.get("capture_time", ""),
+            }
+            for e in store.list_evidence(load_id)
+        ],
+        "exceptions": [
+            {
+                "exception_type": x.get("exception_type", ""),
+                "severity": x.get("severity", ""),
+                "description": x.get("description", ""),
+                "status": x.get("status", ""),
+                "first_reported": x.get("first_reported", ""),
+                "resolution_note": x.get("resolution_note", ""),
+                "resolved_at": x.get("resolved_at", ""),
+            }
+            for x in store.list_exceptions(load_id=load_id)
+        ],
+        "pods": [
+            {
+                "generated_at": p.get("generated_at", ""),
+                "status": p.get("status", ""),
+                "recipient": p.get("recipient", ""),
+                "evidence_count": len(p.get("evidence_ids") or []),
+            }
+            for p in store.list_pods(load_id)
+        ],
+        "retention": _sanitize_retention_for_stakeholder(store.get_retention_by_load(load_id)),
+        "rate_confirmation": rate,
+        "settlement": settlement,
+        "assigned_driver": assigned_driver,
+        "assigned_equipment": assigned_equipment,
+    }
+
+
 def get_lane_history(load_id: str) -> list[dict]:
     """Find past loads on the same origin-destination lane, with rate info."""
     load = store.get_load(load_id)

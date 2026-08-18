@@ -27,7 +27,23 @@
 <div class="brief-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <h3 style="margin-bottom:0;border:none;">Load Information</h3>
-        <button class="btn btn-sm btn-primary" id="edit-load-btn" onclick="toggleLoadEdit()">Edit</button>
+        <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm" onclick="toggleStakeholderLink()">Stakeholder Link</button>
+            <button class="btn btn-sm btn-primary" id="edit-load-btn" onclick="toggleLoadEdit()">Edit</button>
+        </div>
+    </div>
+
+    {# Stakeholder portal link -- read-only external view for the broker/shipper/customer
+       chain (D11). Token-signed, non-PIN-gated -- see portal/routes/stakeholder.py. #}
+    <div id="stakeholder-link-box" style="display:none;margin-bottom:12px;padding:10px 12px;background:#f5f5f5;border-radius:4px;">
+        <div style="font-size:12px;color:#666;margin-bottom:6px;">
+            Share this read-only link with the broker, shipper, or customer for this load. It shows shipment status,
+            tracking, and rate/billing figures already known to that party -- no login required.
+        </div>
+        <div style="display:flex;gap:8px;">
+            <input type="text" id="stakeholder-link-input" readonly value="{{ stakeholder_url }}" style="flex:1;padding:4px 8px;font-size:12px;">
+            <button type="button" class="btn btn-sm" onclick="copyStakeholderLink()">Copy</button>
+        </div>
     </div>
 
     {# Read-only view #}
@@ -1269,6 +1285,22 @@ function unassignEquipment(loadId) {
         if (r.error) { alert(r.error); return; }
         location.reload();
     });
+}
+
+function toggleStakeholderLink() {
+    var box = document.getElementById('stakeholder-link-box');
+    box.style.display = (box.style.display === 'none') ? '' : 'none';
+}
+
+function copyStakeholderLink() {
+    var input = document.getElementById('stakeholder-link-input');
+    input.select();
+    input.setSelectionRange(0, 99999);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value);
+    } else {
+        document.execCommand('copy');
+    }
 }
 
 function toggleLoadEdit() {
