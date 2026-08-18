@@ -47,7 +47,7 @@
         <tbody>
         {% for ld in results.loads %}
             <tr>
-                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}">{{ ld.load_id[:12] }}</a></td>
+                <td><a href="{{ url_for('pages.search_load_detail', load_id=ld.load_id) }}">{{ ld.load_id[:12] }}</a></td>
                 <td>{{ ld.customer }}</td>
                 <td>{{ ld.broker_shipper or '—' }}</td>
                 <td>{{ ld.pickup_location or '—' }}</td>
