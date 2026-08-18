@@ -12,6 +12,7 @@ from portal.models import sandbox, publisher, conflict
 from portal.models import library as lib_model
 from portal.models import archive as arc_model
 from portal.models import intelligence as intel_model
+from portal.models import integrations_registry as integrations_model
 
 api_bp = Blueprint("api", __name__)
 
@@ -421,6 +422,47 @@ def sync_engine_status():
             sandbox.update_engine_status(sid, load["status"])
             synced.append({"sandbox_id": sid, "engine_status": load["status"]})
     return jsonify({"status": "ok", "synced": synced, "count": len(synced)})
+
+
+# ---- System Keys / Integrations Registry API (D4) ----
+
+@api_bp.route("/integrations", methods=["GET"])
+def integrations_list():
+    return jsonify({"status": "ok", "entries": integrations_model.list_entries()})
+
+
+@api_bp.route("/integrations/<integration_type>", methods=["GET"])
+def integrations_get(integration_type):
+    try:
+        entry = integrations_model.get_entry(integration_type)
+        return jsonify({"status": "ok", "entry": entry})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/integrations/<integration_type>", methods=["POST", "PATCH"])
+def integrations_upsert(integration_type):
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        entry = integrations_model.upsert_entry(
+            integration_type,
+            api_key=data.get("api_key"),
+            credentials=data.get("credentials"),
+            token=data.get("token"),
+            configuration=data.get("configuration"),
+        )
+        return jsonify({"status": "ok", "entry": entry})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/integrations/<integration_type>/clear", methods=["POST"])
+def integrations_clear(integration_type):
+    try:
+        entry = integrations_model.clear_entry(integration_type)
+        return jsonify({"status": "ok", "entry": entry})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 # ---- Helpers ----

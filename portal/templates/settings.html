@@ -106,6 +106,41 @@
 </section>
 
 <section class="card-section">
+    <h2>System Keys</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:8px;">
+        Generic integrations registry -- Dispatch should manage integrations, not hard-code
+        vendors. Stored locally as plaintext JSON (this app's single-admin/local-only
+        deployment model); nothing here is read by a live integration yet.
+    </p>
+    <div class="library-grid">
+        {% for entry in integration_entries %}
+        <div class="library-item" style="flex-direction:column;align-items:stretch;">
+            <form onsubmit="saveIntegration(event, '{{ entry.integration_type }}')" style="width:100%;">
+                <div class="brief-fields" style="margin-bottom:8px;">
+                    <div class="full-width"><strong>{{ entry.integration_type }}</strong>
+                        <span class="library-meta">{{ 'Configured' if (entry.api_key or entry.credentials or entry.token or entry.configuration) else 'Not configured' }}
+                        {% if entry.updated_at %} — updated {{ entry.updated_at[:16] }}{% endif %}</span>
+                    </div>
+                    <div><label>API Key<br>
+                        <input type="text" name="api_key" value="{{ entry.api_key or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                    <div><label>Token<br>
+                        <input type="text" name="token" value="{{ entry.token or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                    <div><label>Credentials<br>
+                        <input type="text" name="credentials" value="{{ entry.credentials or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                    <div><label>Configuration<br>
+                        <input type="text" name="configuration" value="{{ entry.configuration or '' }}" style="width:100%;padding:4px 8px;"></label></div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button type="submit" class="btn btn-sm btn-success">Save</button>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="clearIntegration('{{ entry.integration_type }}')">Clear</button>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card-section">
     <h2>Accounting Integration</h2>
     <table class="data-table">
         <thead><tr><th>Integration</th><th>Status</th></tr></thead>
@@ -126,4 +161,24 @@
         <li><strong>Software</strong> automates administration.</li>
     </ul>
 </section>
+
+<script>
+function saveIntegration(e, integrationType) {
+    e.preventDefault();
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { data[k] = v; });
+    apiPatch('/api/integrations/' + integrationType, data).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function clearIntegration(integrationType) {
+    if (!confirm('Clear all stored keys for ' + integrationType + '?')) return;
+    apiPost('/api/integrations/' + integrationType + '/clear', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+</script>
 {% endblock %}
