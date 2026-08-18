@@ -21,6 +21,16 @@ def index():
     return redirect(url_for("pages.home"))
 
 
+@pages_bp.route("/operations")
+def operations():
+    """Consequence-sorted decision feed -- one screen for everything open
+    across Publisher/Conflicts/Pipeline/Exceptions/Settlements/Stalled
+    Loads/Queues/Library gaps. See portal/models/operations_feed.py."""
+    from portal.models import operations_feed
+    feed = operations_feed.build_feed()
+    return render_template("operations.html", **feed)
+
+
 @pages_bp.route("/home")
 def home():
     from dispatch import services as dispatch_svc
