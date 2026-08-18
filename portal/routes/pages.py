@@ -903,6 +903,7 @@ def settings():
     from dispatch.db import get_db_path
     from dispatch.services import _STALL_THRESHOLDS_HOURS, _get_upload_dir
     from portal.models import get_data_dir, get_memory_dir, get_archive_dir
+    from portal.models import integrations_registry
 
     storage_paths = {
         "ops_root": os.environ.get("DISPATCH_OPERATIONS_ROOT", ""),
@@ -923,6 +924,7 @@ def settings():
         cin_config=cin_config,
         stall_thresholds=_STALL_THRESHOLDS_HOURS,
         storage_paths=storage_paths,
+        integration_entries=integrations_registry.list_entries(),
     )
 
 
