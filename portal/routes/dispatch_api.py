@@ -611,6 +611,7 @@ def draft_email_package(load_id):
         broker_contact=closeout.get("broker_contact"),
         pod_id=(closeout["pods"][0]["pod_id"] if closeout.get("pods") else None),
         invoice_number=(closeout["settlement"]["invoice_number"] if closeout.get("settlement") else None),
+        closeout_data=closeout,
     )
     return jsonify({"status": "ok", "package": package}), 201
 
