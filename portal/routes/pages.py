@@ -693,6 +693,34 @@ def search():
     )
 
 
+@pages_bp.route("/search/loads/<load_id>")
+def search_load_detail(load_id):
+    """Read-only load lookup (Driver-First Doctrine D6/D9).
+
+    Reachable only from Load Search results. Reuses the same
+    get_load_bundle() data assembly as dispatch_detail, but renders it
+    through a template with no create/modify/delete/archive/complete/
+    dispatch/send affordances -- pure text/tables, so a driver looking
+    up a load from search can never accidentally trigger an action.
+    The full editable page (dispatch_detail) remains reachable from the
+    main Dispatch list, unchanged.
+    """
+    from dispatch import services as dispatch_svc
+
+    from portal.models import completion_packet as cp_model
+    from portal.models import email_helper
+
+    bundle = dispatch_svc.get_load_bundle(load_id)
+    if not bundle:
+        return redirect(url_for("pages.search"))
+    return render_template(
+        "load_readonly_detail.html",
+        completion_packet=cp_model.get_packet(load_id),
+        email_package=email_helper.get_package(load_id),
+        **bundle,
+    )
+
+
 @pages_bp.route("/brief/<sandbox_id>")
 def brief(sandbox_id: str):
     entry = sandbox.get(sandbox_id)
