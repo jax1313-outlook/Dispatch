@@ -79,6 +79,11 @@ class TestLoadReadonlyDetailRenders:
 
     def test_renders_retention(self, client):
         load = services.create_load(customer="RO Retention Co")
+        for status in (
+            "dispatched", "en_route_pickup", "at_pickup", "picked_up",
+            "in_transit", "at_delivery", "delivered",
+        ):
+            services.update_load(load["load_id"], status=status)
         services.archive_load(load["load_id"])
         resp = client.get(f"/search/loads/{load['load_id']}")
         html = resp.data.decode("utf-8")
