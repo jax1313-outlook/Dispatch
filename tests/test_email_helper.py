@@ -116,6 +116,143 @@ class TestEmailHelperModel:
             email_helper.update_draft(load["load_id"], broker_body="edited")
 
 
+# ── Document-generation content (Lane M4: itemized closeout summary) ───
+
+
+class TestEmailHelperClosoutContent:
+    """closeout_data enrichment: the drafted body must include the load's real
+    pickup/delivery, rate, invoice, and POD details -- not just a generic placeholder.
+    """
+
+    def _closeout_data(self, load, **overrides):
+        data = {
+            "load": load,
+            "rate_confirmation": {
+                "rate_amount": 2450.0,
+                "rate_type": "flat",
+                "distance_miles": 512.0,
+            },
+            "settlement": {
+                "invoice_number": "INV-TEST-9001",
+                "invoice_amount": 2450.0,
+                "payment_status": "invoiced",
+            },
+            "pods": [{"status": "generated", "recipient": "J. Rivera"}],
+        }
+        data.update(overrides)
+        return data
+
+    def test_broker_body_includes_generic_placeholder_without_closeout_data(self, client):
+        from portal.models import email_helper
+        load = _delivered_load_with_client(
+            client, pickup_location="Dallas, TX", delivery_location="Reno, NV",
+        )
+        package = email_helper.create_draft(load["load_id"], load, {"email": "b@test.com"})
+        assert "available and can be provided on request" in package["broker_body"]
+        assert "Rate:" not in package["broker_body"]
+
+    def test_broker_body_includes_real_rate_invoice_pod_details(self, client):
+        from portal.models import email_helper
+        load = _delivered_load_with_client(
+            client,
+            pickup_location="Dallas, TX",
+            delivery_location="Reno, NV",
+            pickup_datetime="2026-08-10T08:00:00Z",
+            delivery_datetime="2026-08-12T14:30:00Z",
+        )
+        closeout = self._closeout_data(load)
+        package = email_helper.create_draft(
+            load["load_id"], load, {"email": "b@test.com"}, closeout_data=closeout,
+        )
+        body = package["broker_body"]
+
+        assert "Pickup: Dallas, TX (2026-08-10 08:00)" in body
+        assert "Delivery: Reno, NV (2026-08-12 14:30)" in body
+        assert "Rate: $2450.00 (flat), 512.0 mi" in body
+        assert "Invoice #: INV-TEST-9001 ($2450.00, invoiced)" in body
+        assert "POD: generated (recipient: J. Rivera)" in body
+
+    def test_customer_body_includes_real_rate_invoice_pod_details(self, client):
+        from portal.models import email_helper
+        load = _delivered_load_with_client(
+            client, pickup_location="Dallas, TX", delivery_location="Reno, NV",
+        )
+        closeout = self._closeout_data(load)
+        package = email_helper.create_draft(
+            load["load_id"], load, None, closeout_data=closeout,
+        )
+        body = package["customer_body"]
+
+        assert "Pickup: Dallas, TX" in body
+        assert "Delivery: Reno, NV" in body
+        assert "Rate: $2450.00 (flat), 512.0 mi" in body
+        assert "Invoice #: INV-TEST-9001 ($2450.00, invoiced)" in body
+        assert "POD: generated (recipient: J. Rivera)" in body
+
+    def test_missing_pieces_render_honest_placeholders_not_invented_values(self, client):
+        """No rate confirmed, no settlement, no POD generated yet -- summary must say so
+        rather than inventing numbers (matches this module's own never-invent-facts rule).
+        """
+        from portal.models import email_helper
+        load = _delivered_load_with_client(
+            client, pickup_location="Dallas, TX", delivery_location="Reno, NV",
+        )
+        closeout = {
+            "load": load,
+            "rate_confirmation": None,
+            "settlement": None,
+            "pods": [],
+        }
+        package = email_helper.create_draft(
+            load["load_id"], load, {"email": "b@test.com"}, closeout_data=closeout,
+        )
+        body = package["broker_body"]
+        assert "Rate: not yet confirmed" in body
+        assert "Invoice: not yet generated" in body
+        assert "POD: not yet generated" in body
+
+    def test_full_flow_draft_from_real_load_data_via_api(self, client):
+        """End-to-end: confirm a real rate, generate a real POD, create a real
+        settlement/invoice, End Load, then draft the email package through the actual API
+        route (draft_email_package) and confirm those exact values reached the body.
+        """
+        load = _delivered_load_with_client(
+            client,
+            pickup_location="Chicago, IL",
+            delivery_location="Denver, CO",
+            pickup_datetime="2026-08-05T09:00:00Z",
+            delivery_datetime="2026-08-07T17:00:00Z",
+        )
+        load_id = load["load_id"]
+
+        rate_resp = client.post(
+            f"/api/dispatch/loads/{load_id}/rate",
+            json={"rate_amount": 3100.5, "rate_type": "flat", "distance_miles": 980},
+        )
+        assert rate_resp.status_code == 201
+
+        pod_resp = client.post(
+            f"/api/dispatch/loads/{load_id}/pod", json={"recipient": "T. Nguyen"},
+        )
+        assert pod_resp.status_code == 201
+
+        settlement_resp = client.post(f"/api/dispatch/loads/{load_id}/settlement", json={})
+        assert settlement_resp.status_code == 201
+        invoice_number = settlement_resp.get_json()["settlement"]["invoice_number"]
+
+        client.post(f"/api/dispatch/loads/{load_id}/end-load")
+        draft_resp = client.post(f"/api/dispatch/loads/{load_id}/email-package/draft")
+        assert draft_resp.status_code == 201
+        body = draft_resp.get_json()["package"]["broker_body"]
+
+        assert "Pickup: Chicago, IL (2026-08-05 09:00)" in body
+        assert "Delivery: Denver, CO (2026-08-07 17:00)" in body
+        assert "Rate: $3100.50 (flat), 980.0 mi" in body
+        assert f"Invoice #: {invoice_number}" in body
+        assert "$3100.50, invoiced" in body
+        assert "POD: complete (recipient: T. Nguyen)" in body
+
+
 # ── API routes ────────────────────────────────────────────────────────
 
 

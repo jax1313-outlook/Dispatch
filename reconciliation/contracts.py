@@ -117,9 +117,13 @@ class PublisherActionCanonicalView:
     objects that were never created, which is exactly what the No-Fabrication Rule forbids.
     Instead this view reports what IS known about a Dispatch action in canonical-adjacent terms,
     and is explicit about the one fact that matters most for Stage 5: whether an enforced
-    approval gate actually stands behind `approved_by`, which today it never does (see
-    `is_approval_enforced`, always False as of this Stage-4 adapter -- Stage 5 is what would make
-    this True by adding a real code gate to portal/models/publisher.py).
+    approval gate actually stands behind `approved_by`. Stage 5 has since added that real code
+    gate to `portal/models/publisher.py::update_action_status()` (the `APPROVED` transition now
+    unconditionally requires a real, external, non-system `approved_by` or raises
+    `PublisherApprovalError`), so `is_approval_enforced` is now always True -- see
+    `reconciliation/adapters/publisher_adapter.py::dispatch_action_to_canonical_view()` for why
+    that's a code-path fact rather than a per-record verification, and
+    `would_pass_tri_department_gate()` for the separate per-record question.
     """
 
     action_id: str
