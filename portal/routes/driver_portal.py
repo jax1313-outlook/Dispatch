@@ -120,6 +120,7 @@ def driver_home():
             "route_risk": route_risk_model.get_route_risk(load["load_id"]),
             "broker_contact": broker_contact,
             "mission_visibility": dispatch_svc.get_mission_visibility(load["load_id"]),
+            "publisher_status": dispatch_svc.get_publisher_status(load["load_id"]),
         })
 
     return render_template(

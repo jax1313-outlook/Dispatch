@@ -80,6 +80,18 @@
                         {% if lc.broker_contact.email %} &middot; {{ lc.broker_contact.email }}{% endif %}
                     </td></tr>
                 {% endif %}
+                {% if lc.publisher_status.has_packet %}
+                <tr><td class="label">Documentation Package</td>
+                    <td>
+                        {% if lc.publisher_status.status in ('PENDING', 'DRAFT') %}
+                            Your documentation package is being prepared.
+                        {% elif lc.publisher_status.status == 'READY' %}
+                            Your documentation package is ready.
+                        {% elif lc.publisher_status.status in ('APPROVED', 'ARCHIVED') %}
+                            Your documentation package has been finalized.
+                        {% endif %}
+                    </td></tr>
+                {% endif %}
             </table>
         </div>
         {% endfor %}
