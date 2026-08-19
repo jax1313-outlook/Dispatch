@@ -87,6 +87,7 @@
                 <th>Final Status</th>
                 <th>Evidence</th>
                 <th>POD</th>
+                <th>Email Cluster</th>
                 <th>Archived</th>
                 <th></th>
             </tr>
@@ -99,8 +100,12 @@
                 <td><span class="status-tag dispatch-{{ ret.final_status }}">{{ ret.final_status|replace('_', ' ') }}</span></td>
                 <td>{{ ret.evidence_index|length if ret.evidence_index else 0 }} items</td>
                 <td>{{ ret.pod_package_id[:12] ~ '...' if ret.pod_package_id else '—' }}</td>
+                <td>{% if ret.email_cluster_doc_count %}{{ ret.email_cluster_doc_count }} document{{ 's' if ret.email_cluster_doc_count != 1 else '' }}{% else %}—{% endif %}</td>
                 <td>{{ ret.archived_at[:16] if ret.archived_at else '—' }}</td>
-                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ret.load_id) }}" class="btn btn-sm">View</a></td>
+                <td>
+                    <a href="{{ url_for('pages.dispatch_detail', load_id=ret.load_id) }}" class="btn btn-sm">View</a>
+                    <button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText('{{ ret.stakeholder_url }}')" title="Copy the stakeholder portal link for this load">Copy Stakeholder Link</button>
+                </td>
             </tr>
         {% endfor %}
         </tbody>
