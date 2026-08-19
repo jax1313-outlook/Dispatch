@@ -105,8 +105,9 @@ def get_route_risk(load_id: str) -> dict:
         "risk_level": "Level 0",
         "consequence_level": 0,
         "summary": (
-            "No active Route Risk events recorded. Live weather/traffic API integrations "
-            "are not connected; any risk events are internal/manual entries."
+            "Route Risk is not yet available. No active Route Risk events recorded. "
+            "Live weather/traffic API integrations are not connected; any risk events "
+            "are internal/manual entries."
         ),
         "estimated_delay_minutes": 0,
         "delivery_commitment_status": "achievable",

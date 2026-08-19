@@ -7,6 +7,13 @@ from dispatch import services as dispatch_svc
 from dispatch import route_risk
 
 
+@pytest.fixture(autouse=True)
+def _clear_route_risk_events():
+    route_risk._ROUTE_RISK_EVENTS.clear()
+    yield
+    route_risk._ROUTE_RISK_EVENTS.clear()
+
+
 def test_get_route_risk_default_stub():
     res = route_risk.get_route_risk("LOAD-999")
     assert res["load_id"] == "LOAD-999"
@@ -17,6 +24,7 @@ def test_get_route_risk_default_stub():
 
 
 def test_record_route_risk_event_minor():
+    route_risk._ROUTE_RISK_EVENTS.clear()
     event = route_risk.record_route_risk_event(
         load_id="LOAD-201",
         condition_summary="Heavy rain near Glynn County, GA.",

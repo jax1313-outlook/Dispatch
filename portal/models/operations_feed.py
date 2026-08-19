@@ -277,7 +277,7 @@ def _route_risk_cards() -> list[dict]:
         if load.get("customer"):
             title = f"{title} — {load['customer']}"
         summary = f"{event['condition_summary']} (Est delay: {event['estimated_delay_minutes']}m)"
-        mv = dispatch_svc.get_mission_visibility(event["load_id"])
+        mv = dispatch_svc.get_mission_visibility(event["load_id"]) or {}
         if mv.get("next_expected_milestone"):
             summary += f" [Next expected: {mv['next_expected_milestone']}]"
         cards.append(_card(
