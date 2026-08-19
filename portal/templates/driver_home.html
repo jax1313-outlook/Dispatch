@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driver Portal — Level 1 Transport</title>
+<style>
+    body { font-family: Arial, Helvetica, sans-serif; background: #f4f4f4; color: #333; margin: 0; padding: 0; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 64px; }
+    .header { background: #1a237e; color: #fff; padding: 18px 22px; border-radius: 6px 6px 0 0; display: flex; align-items: center; justify-content: space-between; }
+    .header h1 { margin: 0; font-size: 18px; }
+    .header .sub { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+    .logout-btn { background: rgba(255,255,255,0.15); color: #fff; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    .card { background: #fff; border: 1px solid #ddd; border-top: none; padding: 16px 22px; margin-bottom: 14px; }
+    .card:last-of-type { border-radius: 0 0 6px 6px; }
+    .card h2 { font-size: 14px; margin: 0 0 10px; border-bottom: 2px solid #1a237e; padding-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 5px 0; vertical-align: top; font-size: 13px; }
+    td.label { color: #666; width: 140px; }
+    .status-tag { display: inline-block; background: #e8eaf6; color: #1a237e; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+    .load-block { border-left: 4px solid #1a237e; padding: 10px 14px; margin-bottom: 12px; background: #fafafa; }
+    .load-block h3 { margin: 0 0 8px; font-size: 14px; }
+    .risk-unavailable { color: #888; font-size: 12px; font-style: italic; }
+    .empty { color: #999; font-size: 13px; font-style: italic; }
+    .contact-line { font-size: 13px; margin: 2px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="header">
+    <div>
+        <h1>Driver Portal</h1>
+        <div class="sub">{{ driver.name }}</div>
+    </div>
+    <form method="POST" action="{{ url_for('driver_portal.driver_logout') }}">
+        <button type="submit" class="logout-btn">Sign Out</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Dispatch Contact</h2>
+    <p class="contact-line"><strong>Email:</strong> {{ dispatch_contact_email }}</p>
+</div>
+
+<div class="card">
+    <h2>Your Active Loads ({{ load_cards|length }})</h2>
+    {% if load_cards %}
+        {% for lc in load_cards %}
+        <div class="load-block">
+            <h3>{{ lc.load.pickup_location or '—' }} &rarr; {{ lc.load.delivery_location or '—' }}
+                <span class="status-tag">{{ lc.load.status.replace('_', ' ').title() }}</span></h3>
+            <table>
+                <tr><td class="label">Customer</td><td>{{ lc.load.customer or '—' }}</td></tr>
+                <tr><td class="label">Pickup</td><td>{{ lc.load.pickup_datetime or '—' }}</td></tr>
+                <tr><td class="label">Delivery</td><td>{{ lc.load.delivery_datetime or '—' }}</td></tr>
+                <tr><td class="label">Communications (COMI)</td><td>{{ lc.comi_status }}</td></tr>
+                <tr><td class="label">Route Risk</td>
+                    <td>
+                        {% if lc.route_risk.available %}
+                            {{ lc.route_risk.summary }}
+                        {% else %}
+                            <span class="risk-unavailable">{{ lc.route_risk.summary }}</span>
+                        {% endif %}
+                    </td></tr>
+                {% if lc.broker_contact %}
+                <tr><td class="label">Broker Contact</td>
+                    <td>{{ lc.broker_contact.contact_name or lc.broker_contact.company_name }}
+                        {% if lc.broker_contact.phone %} &middot; {{ lc.broker_contact.phone }}{% endif %}
+                        {% if lc.broker_contact.email %} &middot; {{ lc.broker_contact.email }}{% endif %}
+                    </td></tr>
+                {% endif %}
+            </table>
+        </div>
+        {% endfor %}
+    {% else %}
+    <p class="empty">No active loads assigned right now.</p>
+    {% endif %}
+</div>
+
+</div>
+</body>
+</html>

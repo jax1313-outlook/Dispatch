@@ -44,4 +44,47 @@
     </div>
 </section>
 {% endfor %}
+
+<section class="card-section">
+    <h2>Driver PIN Registry</h2>
+    <p class="section-desc">
+        Phone Number + PIN access to the Driver Portal (COMI status, Route Risk, and contact
+        lookups for a driver's own active loads). Mike-managed only -- drivers cannot self-enroll.
+    </p>
+
+    {% if driver_pin_cards %}
+    <div class="library-grid">
+        {% for card in driver_pin_cards %}
+        <div class="library-item">
+            <span class="library-icon">&#128272;</span>
+            <div class="library-details">
+                <span class="library-name">{{ card.driver_name }}</span>
+                <span class="library-meta">{{ card.driver_phone or 'no phone on file' }} &middot; last login: {{ card.last_login_at or 'never' }}</span>
+            </div>
+            <span class="status-tag {% if card.status == 'active' %}status-interested{% else %}status-placeholder{% endif %}">{{ card.status }}</span>
+            <button class="btn btn-sm" onclick="driverPinReset('{{ card.driver_id }}')">Reset PIN</button>
+            <button class="btn btn-sm" onclick="driverPinRecoveryWord('{{ card.driver_id }}')">Set Recovery Word</button>
+            {% if card.status == 'active' %}
+            <button class="btn btn-sm" onclick="driverPinSetStatus('{{ card.driver_id }}', 'inactive')">Deactivate</button>
+            {% else %}
+            <button class="btn btn-sm btn-success" onclick="driverPinSetStatus('{{ card.driver_id }}', 'active')">Activate</button>
+            {% endif %}
+            <button class="btn btn-sm btn-danger" onclick="driverPinDelete('{{ card.driver_id }}')" title="Remove">&#10005;</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No Driver PIN Cards issued yet.</p>
+    </div>
+    {% endif %}
+
+    {% if drivers_without_cards %}
+    <div class="section-actions">
+        {% for driver in drivers_without_cards %}
+        <button class="btn btn-sm btn-success" onclick="driverPinCreate('{{ driver.driver_id }}', '{{ driver.name }}')">+ Issue PIN for {{ driver.name }}</button>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
 {% endblock %}

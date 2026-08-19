@@ -97,6 +97,7 @@ def list_loads(
     customer: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    driver_id: str | None = None,
     *,
     page: int | None = None,
     per_page: int | None = None,
@@ -109,6 +110,9 @@ def list_loads(
     if customer:
         clauses.append("customer LIKE ?")
         params.append(f"%{customer}%")
+    if driver_id:
+        clauses.append("driver_id=?")
+        params.append(driver_id)
     if date_from:
         clauses.append("created_at >= ?")
         params.append(date_from)
@@ -764,6 +768,19 @@ def get_driver(driver_id: str) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM drivers WHERE driver_id=?", (driver_id,)
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def get_driver_by_phone(phone: str) -> dict | None:
+    """Exact-match lookup by phone -- Driver Portal login is Phone Number + PIN
+    (portal/models/driver_pin_registry.py). No phone normalization/E.164 parsing:
+    a small owner-operator fleet's phone numbers are entered once, by Mike, so an
+    exact string match on whatever format he used is the lightweight-appropriate
+    choice here, not a gap to fill."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM drivers WHERE phone=? AND phone != ''", (phone,)
         ).fetchone()
     return dict_from_row(row) if row else None
 

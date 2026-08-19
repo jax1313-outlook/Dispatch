@@ -155,6 +155,55 @@
             });
     }
 
+    function driverPinCreate(driverId, driverName) {
+        var pin = prompt('New PIN for ' + driverName + ' (at least 4 characters):');
+        if (!pin) return;
+        var recoveryWord = prompt('Recovery word for ' + driverName + ' (at least 3 characters -- used for self-service PIN reset):');
+        if (!recoveryWord) return;
+        apiPost('/api/driver-pin/create', {driver_id: driverId, pin: pin, recovery_word: recoveryWord})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function driverPinReset(driverId) {
+        var pin = prompt('New PIN (at least 4 characters):');
+        if (!pin) return;
+        apiPost('/api/driver-pin/reset', {driver_id: driverId, new_pin: pin})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                alert('PIN reset.');
+            });
+    }
+
+    function driverPinRecoveryWord(driverId) {
+        var word = prompt('New recovery word (at least 3 characters):');
+        if (!word) return;
+        apiPost('/api/driver-pin/recovery-word', {driver_id: driverId, recovery_word: word})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                alert('Recovery word updated.');
+            });
+    }
+
+    function driverPinSetStatus(driverId, status) {
+        apiPost('/api/driver-pin/status', {driver_id: driverId, status: status})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function driverPinDelete(driverId) {
+        if (!confirm('Remove this Driver PIN Card? The driver will no longer be able to sign in to the Driver Portal.')) return;
+        apiPost('/api/driver-pin/delete', {driver_id: driverId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
     function archiveEntry(sandboxId) {
         apiPost('/api/archive/create', {sandbox_id: sandboxId})
             .then(data => {

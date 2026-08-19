@@ -9,6 +9,7 @@ from portal.routes.decisions import decisions_bp
 from portal.routes.pipeline import pipeline_bp
 from portal.routes.dispatch_api import dispatch_bp
 from portal.routes.stakeholder import stakeholder_bp
+from portal.routes.driver_portal import driver_portal_bp
 
 
 def register_routes(app: Flask) -> None:
@@ -19,3 +20,4 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(pipeline_bp, url_prefix="/api/pipeline")
     app.register_blueprint(dispatch_bp, url_prefix="/api/dispatch")
     app.register_blueprint(stakeholder_bp, url_prefix="/portal")
+    app.register_blueprint(driver_portal_bp, url_prefix="/driver")
