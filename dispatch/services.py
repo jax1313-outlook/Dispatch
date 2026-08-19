@@ -649,6 +649,19 @@ def list_pods(load_id: str) -> list[dict]:
     return store.list_pods(load_id)
 
 
+def get_comi_status(load_id: str) -> dict:
+    """Shared COMI (Freight Closeout Communications) status lookup, so every
+    surface -- Driver Portal, Stakeholder Portal, Operations Feed, and any
+    future consumer -- reads the same DRAFT/REVIEWED/SUBMITTED signal from
+    portal.models.email_helper instead of re-deriving it independently."""
+    from portal.models import email_helper
+
+    pkg = email_helper.get_package(load_id)
+    if not pkg:
+        return {"exists": False, "status": None}
+    return {"exists": True, "status": pkg["status"]}
+
+
 def archive_load(load_id: str) -> dict:
     load = store.get_load(load_id)
     if not load:
@@ -1519,11 +1532,16 @@ def build_stakeholder_view(load_id: str) -> dict | None:
         info (phone/email/license), and internal_note are EXCLUDED
         regardless of D11, since none of those are rate/fee/cost figures
         in the first place.
-      - evidence file downloads are EXCLUDED this pass (metadata only,
-        no download link) -- serving raw uploaded files through a
-        non-PIN-gated route is a separate scoping question, not decided
-        here; a token-scoped evidence download route is a fast-follow,
-        not part of this build.
+      - this view itself still returns evidence as metadata only (type/
+        description/capture_time, no file_path, no download link) -- the
+        file itself is served separately by the token-scoped download
+        route, portal/routes/stakeholder.py::stakeholder_evidence_download
+        (GET /portal/loads/<load_id>/evidence/<evidence_id>?token=...),
+        which re-verifies the same stakeholder token and additionally
+        confirms the evidence record's own load_id matches the load_id in
+        the URL before serving anything (a stakeholder token is scoped to
+        one load; without that check a valid token for load A could be
+        used to enumerate and download evidence belonging to load B).
     """
     load = store.get_load(load_id)
     if not load:
@@ -1604,6 +1622,7 @@ def build_stakeholder_view(load_id: str) -> dict | None:
         "settlement": settlement,
         "assigned_driver": assigned_driver,
         "assigned_equipment": assigned_equipment,
+        "comi_status": get_comi_status(load_id),
         "publisher_status": get_publisher_status(load_id),
     }
 
