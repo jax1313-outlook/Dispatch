@@ -927,7 +927,7 @@ def queues():
 def settings():
     import os
     from portal.config import Config, _DEFAULT_SECRET
-    from cin_lite import email_delivery
+    from dispatch import email_delivery
 
     cin_config = {
         "sam_api_key": bool(os.environ.get("DISPATCH_SAM_API_KEY")),
