@@ -1443,6 +1443,36 @@ def _sanitize_retention_for_stakeholder(retention: dict | None) -> dict | None:
     }
 
 
+def get_publisher_status(load_id: str) -> dict:
+    """Look up Publisher packet status for a freight load.
+
+    Publisher's queue (portal/models/publisher.py::create_action()) is keyed
+    by sandbox_id, a GovCon/sandbox-oriented concept -- freight loads have no
+    sandbox_id of their own and there is no load_id field on a Publisher
+    action. This reuses the synthetic sandbox_id convention already
+    established for freight loads elsewhere in this codebase (End Load ->
+    Publisher routing, portal/routes/dispatch_api.py's end_load(), which
+    calls publisher.create_action(sandbox_id=f"LOAD-{load_id}", ...), mirroring
+    cin_lite's analogous f"GOVCON-{contract_id}" convention in
+    portal/routes/api.py) rather than inventing a new one or adding a
+    load_id field to Publisher's schema.
+    """
+    from portal.models import publisher
+
+    sandbox_id = f"LOAD-{load_id}"
+    matches = [a for a in publisher.get_queue() if a.get("sandbox_id") == sandbox_id]
+    if not matches:
+        return {"has_packet": False, "status": None, "action_type": None}
+
+    matches.sort(key=lambda a: a.get("updated_at", ""), reverse=True)
+    latest = matches[0]
+    return {
+        "has_packet": True,
+        "status": latest["status"],
+        "action_type": latest["action_type"],
+    }
+
+
 def build_stakeholder_view(load_id: str) -> dict | None:
     """Assemble the read-only payload shown to an external stakeholder
     (broker/shipper/customer -- per D11 these are genuinely distinct
@@ -1545,6 +1575,7 @@ def build_stakeholder_view(load_id: str) -> dict | None:
         "settlement": settlement,
         "assigned_driver": assigned_driver,
         "assigned_equipment": assigned_equipment,
+        "publisher_status": get_publisher_status(load_id),
     }
 
 
