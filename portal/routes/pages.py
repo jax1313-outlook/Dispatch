@@ -832,8 +832,21 @@ def archive_view():
     except cin_archive.ArchiveIntegrityError as exc:
         pipeline_archive_error = str(exc)
 
-    from dispatch import services as dispatch_svc
+    from dispatch import notifications, services as dispatch_svc
+    from portal.models import completion_packet as cp_model
+
     dispatch_archived = dispatch_svc.list_retentions()
+    for ret in dispatch_archived:
+        packet = cp_model.get_packet(ret["load_id"])
+        ret["email_cluster_doc_count"] = (
+            len(packet["email_cluster"]["documents"])
+            if packet and packet.get("email_cluster")
+            else 0
+        )
+        ret["stakeholder_url"] = url_for(
+            "stakeholder.stakeholder_view", load_id=ret["load_id"],
+            token=notifications.make_stakeholder_token(ret["load_id"]), _external=True,
+        )
 
     return render_template(
         "archive.html",
