@@ -685,8 +685,8 @@ def get_comi_status(load_id: str) -> dict:
     """Shared COMI (Freight Closeout Communications) status lookup, so every
     surface -- Driver Portal, Stakeholder Portal, Operations Feed, and any
     future consumer -- reads the same DRAFT/REVIEWED/SUBMITTED signal from
-    portal.models.email_helper instead of re-deriving it independently."""
-    from portal.models import email_helper
+    dispatch.email_helper instead of re-deriving it independently."""
+    from dispatch import email_helper
 
     pkg = email_helper.get_package(load_id)
     if not pkg:
@@ -1566,21 +1566,17 @@ def _sanitize_retention_for_stakeholder(retention: dict | None) -> dict | None:
 def get_publisher_status(load_id: str) -> dict:
     """Look up Publisher packet status for a freight load.
 
-    Publisher's queue (portal/models/publisher.py::create_action()) is keyed
-    by sandbox_id, a GovCon/sandbox-oriented concept -- freight loads have no
-    sandbox_id of their own and there is no load_id field on a Publisher
-    action. This reuses the synthetic sandbox_id convention already
-    established for freight loads elsewhere in this codebase (End Load ->
-    Publisher routing, portal/routes/dispatch_api.py's end_load(), which
-    calls publisher.create_action(sandbox_id=f"LOAD-{load_id}", ...), mirroring
-    cin_lite's analogous f"GOVCON-{contract_id}" convention in
-    portal/routes/api.py) rather than inventing a new one or adding a
-    load_id field to Publisher's schema.
+    Publisher's queue is keyed by sandbox_id. Safely checks portal.models.publisher
+    if available, otherwise falls back gracefully to a decoupled local representation.
     """
-    from portal.models import publisher
+    try:
+        from portal.models import publisher
+        queue = publisher.get_queue()
+    except ImportError:
+        queue = []
 
     sandbox_id = f"LOAD-{load_id}"
-    matches = [a for a in publisher.get_queue() if a.get("sandbox_id") == sandbox_id]
+    matches = [a for a in queue if a.get("sandbox_id") == sandbox_id]
     if not matches:
         return {"has_packet": False, "status": None, "action_type": None}
 

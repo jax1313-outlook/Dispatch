@@ -339,6 +339,26 @@ CREATE TABLE IF NOT EXISTS driver_pay (
     notes       TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS route_risk_events (
+    route_risk_event_id TEXT PRIMARY KEY,
+    load_id TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    source_label TEXT NOT NULL,
+    affected_area TEXT,
+    affected_corridor TEXT,
+    condition_summary TEXT NOT NULL,
+    estimated_delay_minutes INTEGER DEFAULT 0,
+    delivery_commitment_status TEXT DEFAULT 'achievable',
+    route_risk_level TEXT NOT NULL,
+    consequence_level INTEGER DEFAULT 1,
+    driver_notification_required INTEGER DEFAULT 0,
+    stakeholder_notification_required INTEGER DEFAULT 0,
+    mission_visibility_update_required INTEGER DEFAULT 0,
+    comi_required INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active'
+);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_driver ON driver_pay(driver_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_load ON driver_pay(load_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_status ON driver_pay(status);

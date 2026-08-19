@@ -39,8 +39,12 @@ def _export_dir() -> Path:
     explicit = os.environ.get("DISPATCH_ACCOUNTING_EXPORT_DIR")
     if explicit:
         return Path(explicit)
-    from portal.models import get_data_dir
-    return get_data_dir() / "AccountingExport"
+    env_dir = os.environ.get("DISPATCH_DATA_DIR")
+    if env_dir:
+        base = Path(env_dir)
+    else:
+        base = Path(__file__).resolve().parent.parent / "portal" / "data"
+    return base / "AccountingExport"
 
 
 def export_settlement(settlement: dict) -> dict:
