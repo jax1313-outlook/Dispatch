@@ -27,9 +27,15 @@ class EmailHelperSubmitError(ValueError):
 
 
 def _get_data_dir() -> Path:
+    explicit = os.environ.get("PORTAL_DATA_DIR")
+    if explicit:
+        return Path(explicit)
     env_dir = os.environ.get("DISPATCH_DATA_DIR")
     if env_dir:
         return Path(env_dir)
+    ops_root = os.environ.get("DISPATCH_OPERATIONS_ROOT")
+    if ops_root:
+        return Path(ops_root) / "Current Workspace" / "PortalData"
     return Path(__file__).resolve().parent.parent / "portal" / "data"
 
 
