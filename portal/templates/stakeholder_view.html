@@ -50,6 +50,7 @@
             <tr><td class="label">Delivery</td><td>{{ load.delivery_location or '—' }}{% if load.delivery_datetime %} &middot; {{ load.delivery_datetime }}{% endif %}</td></tr>
             <tr><td class="label">Equipment</td><td>{% if assigned_equipment %}{{ assigned_equipment.unit_number }} ({{ assigned_equipment.equipment_type.replace('_', ' ').title() }}){% else %}—{% endif %}</td></tr>
             <tr><td class="label">Driver</td><td>{% if assigned_driver %}{{ assigned_driver.name }}{% else %}Not yet assigned{% endif %}</td></tr>
+            <tr><td class="label">Next Expected</td><td>{{ next_expected_milestone or '—' }}</td></tr>
         </table>
         {% if customer_note %}
         <p style="margin-top:12px;padding:10px 12px;background:#f5f5f5;border-radius:4px;font-size:13px;">{{ customer_note }}</p>

@@ -55,6 +55,7 @@
                 <tr><td class="label">Pickup</td><td>{{ lc.load.pickup_datetime or '—' }}</td></tr>
                 <tr><td class="label">Delivery</td><td>{{ lc.load.delivery_datetime or '—' }}</td></tr>
                 <tr><td class="label">Communications (COMI)</td><td>{{ lc.comi_status }}</td></tr>
+                <tr><td class="label">Next Expected</td><td>{{ lc.mission_visibility.next_expected_milestone or '—' }}</td></tr>
                 <tr><td class="label">Route Risk</td>
                     <td>
                         {% if lc.route_risk.available %}
