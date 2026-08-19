@@ -118,6 +118,7 @@ def driver_home():
             "comi_status": comi["status"] if comi["exists"] else "No communications drafted yet",
             "route_risk": route_risk_model.get_route_risk(load["load_id"]),
             "broker_contact": broker_contact,
+            "mission_visibility": dispatch_svc.get_mission_visibility(load["load_id"]),
         })
 
     return render_template(

@@ -306,6 +306,34 @@ def get_visibility(load_id: str) -> dict | None:
     return store.get_visibility(load_id)
 
 
+def get_mission_visibility(load_id: str) -> dict:
+    """Unified, externally-safe visibility snapshot for a load.
+
+    Wraps store.get_visibility() and deliberately EXCLUDES internal_note
+    (internal-only content -- matches the precedent set by
+    build_stakeholder_view(), which also withholds internal_note from
+    external-facing payloads). Always returns the same dict shape, even
+    when no visibility record exists yet, so callers never need a
+    None-check before accessing fields.
+    """
+    visibility = store.get_visibility(load_id)
+    if not visibility:
+        return {
+            "current_status": None,
+            "last_milestone": None,
+            "next_expected_milestone": None,
+            "customer_note": "",
+            "updated_at": None,
+        }
+    return {
+        "current_status": visibility.get("current_status"),
+        "last_milestone": visibility.get("last_milestone"),
+        "next_expected_milestone": visibility.get("next_expected_milestone"),
+        "customer_note": visibility.get("customer_note", ""),
+        "updated_at": visibility.get("updated_at"),
+    }
+
+
 def add_milestone(
     load_id: str,
     event_type: str,
@@ -1484,7 +1512,7 @@ def build_stakeholder_view(load_id: str) -> dict | None:
     if not load:
         return None
 
-    visibility = store.get_visibility(load_id)
+    mission_visibility = get_mission_visibility(load_id)
     rate = store.get_rate_confirmation(load_id)
     settlement = store.get_settlement(load_id)
 
@@ -1514,7 +1542,8 @@ def build_stakeholder_view(load_id: str) -> dict | None:
             "delivery_datetime": load.get("delivery_datetime", ""),
             "status": load.get("status", ""),
         },
-        "customer_note": (visibility or {}).get("customer_note", ""),
+        "customer_note": mission_visibility["customer_note"],
+        "next_expected_milestone": mission_visibility["next_expected_milestone"],
         "milestones": [
             {
                 "event_type": m.get("event_type", ""),
