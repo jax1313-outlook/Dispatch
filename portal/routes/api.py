@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 
 from portal import helpers
 from portal.models import sandbox, publisher, conflict
@@ -13,6 +13,7 @@ from portal.models import library as lib_model
 from portal.models import archive as arc_model
 from portal.models import intelligence as intel_model
 from portal.models import integrations_registry as integrations_model
+from portal.models import driver_pin_registry as driver_pin_model
 
 api_bp = Blueprint("api", __name__)
 
@@ -319,6 +320,92 @@ def library_delete():
         return jsonify({"status": "ok", "record": record})
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
+
+
+# ---- Driver PIN Registry API (Library-managed; Authority-only, same as every
+#      other route in this blueprint -- see portal/models/driver_pin_registry.py) ----
+
+@api_bp.route("/driver-pin/create", methods=["POST"])
+def driver_pin_create():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    pin = data.get("pin")
+    recovery_word = data.get("recovery_word")
+    if not driver_id or not pin or not recovery_word:
+        return jsonify({"error": "driver_id, pin, and recovery_word required"}), 400
+    try:
+        record = driver_pin_model.create_pin_card(
+            driver_id, pin, recovery_word,
+            created_by=data.get("created_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/reset", methods=["POST"])
+def driver_pin_reset():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    new_pin = data.get("new_pin")
+    if not driver_id or not new_pin:
+        return jsonify({"error": "driver_id and new_pin required"}), 400
+    try:
+        record = driver_pin_model.reset_pin(
+            driver_id, new_pin,
+            reset_by=data.get("reset_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/recovery-word", methods=["POST"])
+def driver_pin_recovery_word():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    recovery_word = data.get("recovery_word")
+    if not driver_id or not recovery_word:
+        return jsonify({"error": "driver_id and recovery_word required"}), 400
+    try:
+        record = driver_pin_model.set_recovery_word(
+            driver_id, recovery_word,
+            set_by=data.get("set_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/status", methods=["POST"])
+def driver_pin_status():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    status = data.get("status")
+    if not driver_id or not status:
+        return jsonify({"error": "driver_id and status required"}), 400
+    try:
+        record = driver_pin_model.set_status(
+            driver_id, status,
+            changed_by=data.get("changed_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/delete", methods=["POST"])
+def driver_pin_delete():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    if not driver_id:
+        return jsonify({"error": "driver_id required"}), 400
+    deleted = driver_pin_model.delete_pin_card(
+        driver_id, deleted_by=data.get("deleted_by") or session.get("user_id", "authority"),
+    )
+    if not deleted:
+        return jsonify({"error": f"No PIN card for driver: {driver_id}"}), 404
+    return jsonify({"status": "ok"})
 
 
 # ---- Archive API ----

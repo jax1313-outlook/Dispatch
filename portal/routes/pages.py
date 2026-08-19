@@ -788,7 +788,25 @@ def library():
          "description": "Approved intelligence products, market data, and analytical references.",
          "records": all_records.get("intelligence", [])},
     ]
-    return render_template("library.html", sections=sections)
+
+    from dispatch import services as dispatch_svc
+    from portal.models import driver_pin_registry as driver_pin_model
+
+    all_drivers = {d["driver_id"]: d for d in dispatch_svc.list_drivers()}
+    pin_cards = driver_pin_model.list_pin_cards()
+    for card in pin_cards:
+        driver = all_drivers.get(card["driver_id"])
+        card["driver_name"] = driver.get("name", card["driver_id"]) if driver else "(deleted driver)"
+        card["driver_phone"] = driver.get("phone", "") if driver else ""
+    drivers_without_cards = [
+        d for d in all_drivers.values()
+        if d["driver_id"] not in {c["driver_id"] for c in pin_cards}
+    ]
+
+    return render_template(
+        "library.html", sections=sections,
+        driver_pin_cards=pin_cards, drivers_without_cards=drivers_without_cards,
+    )
 
 
 @pages_bp.route("/archive")

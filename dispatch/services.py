@@ -165,13 +165,14 @@ def list_loads(
     customer: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    driver_id: str | None = None,
     *,
     page: int | None = None,
     per_page: int | None = None,
 ) -> list[dict] | dict:
     return store.list_loads(
         status=status, customer=customer,
-        date_from=date_from, date_to=date_to,
+        date_from=date_from, date_to=date_to, driver_id=driver_id,
         page=page, per_page=per_page,
     )
 
@@ -1217,6 +1218,20 @@ def create_driver(
 
 def get_driver(driver_id: str) -> dict | None:
     return store.get_driver(driver_id)
+
+
+def get_driver_by_phone(phone: str) -> dict | None:
+    return store.get_driver_by_phone(phone)
+
+
+def reviewer_contact_email() -> str:
+    """Level 1 Transport's own dispatch contact address, for the Driver Portal's
+    contact-retrieval capability. Email only -- no SMS/phone channel is configured
+    anywhere in this codebase (Email API is Dispatch's only communication channel
+    per CLAUDE.md's tech stack), so surfacing a phone number here would be invented,
+    not retrieved."""
+    from cin_lite import email_delivery
+    return email_delivery.reviewer_address()
 
 
 def list_drivers(

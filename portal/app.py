@@ -67,6 +67,16 @@ def create_app(config: dict | None = None) -> Flask:
         notifications.verify_stakeholder_token() HMAC check. Unlike dispatch_api, every route in
         this blueprint is meant to be reachable this way, so the whole blueprint is exempted
         (there is currently only the one route, stakeholder.stakeholder_view).
+
+        The `driver_portal` blueprint (portal/routes/driver_portal.py) is exempted the same
+        way, for a related but distinct reason: it's a real login surface (Phone Number + PIN,
+        portal/models/driver_pin_registry.py), not a token link, so it needs its OWN gate --
+        which it has, as its own @driver_portal_bp.before_request checking session["driver_id"]
+        (a different session key than this gate's session["user_id"], so an Authority session
+        and a Driver session can never satisfy each other's gate). Without this exemption, the
+        Authority gate below would redirect every driver_portal request to /login (Authority's
+        login) before driver_portal's own before_request ever ran, since Flask calls app-level
+        before_request handlers before blueprint-level ones.
         """
         login_disabled = app.config.get("LOGIN_DISABLED")
         if login_disabled is None:
@@ -78,6 +88,8 @@ def create_app(config: dict | None = None) -> Flask:
         if request.blueprint == "decisions":
             return None
         if request.blueprint == "stakeholder":
+            return None
+        if request.blueprint == "driver_portal":
             return None
         if request.endpoint == "dispatch_api.dispatch_decision":
             return None
