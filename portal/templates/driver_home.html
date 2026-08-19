@@ -41,6 +41,15 @@
 <div class="card">
     <h2>Dispatch Contact</h2>
     <p class="contact-line"><strong>Email:</strong> {{ dispatch_contact_email }}</p>
+    {% if broker_contacts %}
+        <p class="contact-line" style="margin-top:10px;"><strong>Broker Contacts (today's loads):</strong></p>
+        {% for bc in broker_contacts %}
+        <p class="contact-line">{{ bc.contact_name or bc.company_name }}
+            {% if bc.phone %} &middot; {{ bc.phone }}{% endif %}
+            {% if bc.email %} &middot; {{ bc.email }}{% endif %}
+        </p>
+        {% endfor %}
+    {% endif %}
 </div>
 
 <div class="card">
@@ -55,6 +64,7 @@
                 <tr><td class="label">Pickup</td><td>{{ lc.load.pickup_datetime or '—' }}</td></tr>
                 <tr><td class="label">Delivery</td><td>{{ lc.load.delivery_datetime or '—' }}</td></tr>
                 <tr><td class="label">Communications (COMI)</td><td>{{ lc.comi_status }}</td></tr>
+                <tr><td class="label">Next Expected</td><td>{{ lc.mission_visibility.next_expected_milestone or '—' }}</td></tr>
                 <tr><td class="label">Route Risk</td>
                     <td>
                         {% if lc.route_risk.available %}
@@ -68,6 +78,18 @@
                     <td>{{ lc.broker_contact.contact_name or lc.broker_contact.company_name }}
                         {% if lc.broker_contact.phone %} &middot; {{ lc.broker_contact.phone }}{% endif %}
                         {% if lc.broker_contact.email %} &middot; {{ lc.broker_contact.email }}{% endif %}
+                    </td></tr>
+                {% endif %}
+                {% if lc.publisher_status.has_packet %}
+                <tr><td class="label">Documentation Package</td>
+                    <td>
+                        {% if lc.publisher_status.status in ('PENDING', 'DRAFT') %}
+                            Your documentation package is being prepared.
+                        {% elif lc.publisher_status.status == 'READY' %}
+                            Your documentation package is ready.
+                        {% elif lc.publisher_status.status in ('APPROVED', 'ARCHIVED') %}
+                            Your documentation package has been finalized.
+                        {% endif %}
                     </td></tr>
                 {% endif %}
             </table>

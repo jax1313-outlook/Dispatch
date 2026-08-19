@@ -50,6 +50,10 @@
             <tr><td class="label">Delivery</td><td>{{ load.delivery_location or '—' }}{% if load.delivery_datetime %} &middot; {{ load.delivery_datetime }}{% endif %}</td></tr>
             <tr><td class="label">Equipment</td><td>{% if assigned_equipment %}{{ assigned_equipment.unit_number }} ({{ assigned_equipment.equipment_type.replace('_', ' ').title() }}){% else %}—{% endif %}</td></tr>
             <tr><td class="label">Driver</td><td>{% if assigned_driver %}{{ assigned_driver.name }}{% else %}Not yet assigned{% endif %}</td></tr>
+            <tr><td class="label">Next Expected</td><td>{{ next_expected_milestone or '—' }}</td></tr>
+            {% if comi_status and comi_status.exists %}
+            <tr><td class="label">Communications</td><td>{% if comi_status.status == "SUBMITTED" %}Closeout communications sent{% else %}Closeout communications in progress{% endif %}</td></tr>
+            {% endif %}
         </table>
         {% if customer_note %}
         <p style="margin-top:12px;padding:10px 12px;background:#f5f5f5;border-radius:4px;font-size:13px;">{{ customer_note }}</p>
@@ -112,6 +116,21 @@
     </div>
     {% endif %}
 
+    {% if publisher_status.has_packet %}
+    <div class="card">
+        <h2>Documentation Package</h2>
+        <p>
+        {% if publisher_status.status in ('PENDING', 'DRAFT') %}
+            Your documentation package is being prepared.
+        {% elif publisher_status.status == 'READY' %}
+            Your documentation package is ready.
+        {% elif publisher_status.status in ('APPROVED', 'ARCHIVED') %}
+            Your documentation package has been finalized.
+        {% endif %}
+        </p>
+    </div>
+    {% endif %}
+
     {% if retention %}
     <div class="card">
         <h2>Archive</h2>
@@ -125,6 +144,20 @@
         </p>
     </div>
     {% endif %}
+
+    <div class="card">
+        <h2>Contact</h2>
+        <table>
+            <tr><td class="label">Level 1 Transport Dispatch</td><td>{{ contacts.dispatch_email }}</td></tr>
+            {% if contacts.broker_contact %}
+            <tr><td class="label">Broker Contact</td>
+                <td>{{ contacts.broker_contact.contact_name or contacts.broker_contact.company_name }}
+                    {% if contacts.broker_contact.phone %} &middot; {{ contacts.broker_contact.phone }}{% endif %}
+                    {% if contacts.broker_contact.email %} &middot; {{ contacts.broker_contact.email }}{% endif %}
+                </td></tr>
+            {% endif %}
+        </table>
+    </div>
 
     <p class="footer-note">This is a read-only shipment summary shared by Level 1 Transport. This link is unique to this shipment.</p>
 {% endif %}

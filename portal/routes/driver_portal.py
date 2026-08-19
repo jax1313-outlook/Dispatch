@@ -30,7 +30,6 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 from dispatch import route_risk as route_risk_model
 from dispatch import services as dispatch_svc
 from portal.models import driver_pin_registry as pin_registry
-from portal.models.email_helper import get_package as get_email_package
 
 driver_portal_bp = Blueprint("driver_portal", __name__)
 
@@ -108,17 +107,20 @@ def driver_home():
     active_loads = [l for l in all_loads if l["status"] not in _ACTIVE_LOAD_STATUSES_EXCLUDED]
 
     load_cards = []
+    broker_contacts_seen: dict[str, dict] = {}
     for load in active_loads:
-        comi_package = get_email_package(load["load_id"])
-        broker_contact = None
-        if load.get("broker_shipper"):
-            matches = dispatch_svc.list_broker_contacts(search=load["broker_shipper"])
-            broker_contact = matches[0] if matches else None
+        comi = dispatch_svc.get_comi_status(load["load_id"])
+        contacts = dispatch_svc.get_load_contacts(load["load_id"])
+        broker_contact = contacts["broker_contact"]
+        if broker_contact and broker_contact.get("broker_id") not in broker_contacts_seen:
+            broker_contacts_seen[broker_contact["broker_id"]] = broker_contact
         load_cards.append({
             "load": load,
-            "comi_status": comi_package["status"] if comi_package else "No communications drafted yet",
+            "comi_status": comi["status"] if comi["exists"] else "No communications drafted yet",
             "route_risk": route_risk_model.get_route_risk(load["load_id"]),
             "broker_contact": broker_contact,
+            "mission_visibility": dispatch_svc.get_mission_visibility(load["load_id"]),
+            "publisher_status": dispatch_svc.get_publisher_status(load["load_id"]),
         })
 
     return render_template(
@@ -126,4 +128,5 @@ def driver_home():
         driver=driver,
         load_cards=load_cards,
         dispatch_contact_email=dispatch_svc.reviewer_contact_email(),
+        broker_contacts=list(broker_contacts_seen.values()),
     )

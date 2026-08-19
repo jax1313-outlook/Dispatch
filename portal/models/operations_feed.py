@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dispatch import services as dispatch_svc
 
-from portal.models import conflict, publisher
+from portal.models import conflict, publisher, email_helper
 from portal.models import library as lib_model
 
 CARD_LEVELS: dict[int, str] = {
@@ -136,12 +136,16 @@ def _exception_cards() -> list[dict]:
         title = f"{exc.get('exception_type', '').replace('_', ' ').title()}"
         if load.get("customer"):
             title = f"{title} — {load['customer']}"
+        summary = exc.get("description", "")
+        mv = dispatch_svc.get_mission_visibility(exc["load_id"])
+        if mv["next_expected_milestone"]:
+            summary += f" (next expected: {mv['next_expected_milestone']})"
         cards.append(_card(
             card_id=f"exception-{exc.get('exception_id', '')}",
             source="exception",
             card_level=level,
             title=title,
-            summary=exc.get("description", ""),
+            summary=summary,
             url=f"/dispatch/{exc['load_id']}",
             created_at=exc.get("first_reported", ""),
         ))
@@ -182,6 +186,9 @@ def _stalled_load_cards() -> list[dict]:
             f"{load.get('status', '').replace('_', ' ')} "
             f"(threshold {load.get('threshold_hours')}h)"
         )
+        mv = dispatch_svc.get_mission_visibility(load["load_id"])
+        if mv["next_expected_milestone"]:
+            summary += f" (next expected: {mv['next_expected_milestone']})"
         cards.append(_card(
             card_id=f"stalled-{load.get('load_id', '')}",
             source="stalled_load",
@@ -221,6 +228,29 @@ def _queue_cards() -> list[dict]:
     return cards
 
 
+def _comi_cards() -> list[dict]:
+    cards = []
+    for package in email_helper.list_packages():
+        if package.get("status") == "SUBMITTED":
+            continue
+        load = dispatch_svc.get_load(package["load_id"])
+        title = (
+            f"Closeout Communications — {load['customer']}"
+            if load and load.get("customer")
+            else package["load_id"]
+        )
+        cards.append(_card(
+            card_id=f"comi-{package.get('id', '')}",
+            source="comi",
+            card_level=2,
+            title=title,
+            summary=f"Status: {package['status']}",
+            url=f"/dispatch/{package['load_id']}",
+            created_at=package.get("updated_at") or package.get("created_at") or "",
+        ))
+    return cards
+
+
 def _library_gap_cards() -> list[dict]:
     cards = []
     for asset in lib_model.get_missing_company_assets():
@@ -245,6 +275,7 @@ _SOURCE_BUILDERS = (
     _stalled_load_cards,
     _queue_cards,
     _library_gap_cards,
+    _comi_cards,
 )
 
 

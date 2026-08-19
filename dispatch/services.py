@@ -306,6 +306,34 @@ def get_visibility(load_id: str) -> dict | None:
     return store.get_visibility(load_id)
 
 
+def get_mission_visibility(load_id: str) -> dict:
+    """Unified, externally-safe visibility snapshot for a load.
+
+    Wraps store.get_visibility() and deliberately EXCLUDES internal_note
+    (internal-only content -- matches the precedent set by
+    build_stakeholder_view(), which also withholds internal_note from
+    external-facing payloads). Always returns the same dict shape, even
+    when no visibility record exists yet, so callers never need a
+    None-check before accessing fields.
+    """
+    visibility = store.get_visibility(load_id)
+    if not visibility:
+        return {
+            "current_status": None,
+            "last_milestone": None,
+            "next_expected_milestone": None,
+            "customer_note": "",
+            "updated_at": None,
+        }
+    return {
+        "current_status": visibility.get("current_status"),
+        "last_milestone": visibility.get("last_milestone"),
+        "next_expected_milestone": visibility.get("next_expected_milestone"),
+        "customer_note": visibility.get("customer_note", ""),
+        "updated_at": visibility.get("updated_at"),
+    }
+
+
 def add_milestone(
     load_id: str,
     event_type: str,
@@ -619,6 +647,19 @@ def get_pod(pod_id: str) -> dict | None:
 
 def list_pods(load_id: str) -> list[dict]:
     return store.list_pods(load_id)
+
+
+def get_comi_status(load_id: str) -> dict:
+    """Shared COMI (Freight Closeout Communications) status lookup, so every
+    surface -- Driver Portal, Stakeholder Portal, Operations Feed, and any
+    future consumer -- reads the same DRAFT/REVIEWED/SUBMITTED signal from
+    portal.models.email_helper instead of re-deriving it independently."""
+    from portal.models import email_helper
+
+    pkg = email_helper.get_package(load_id)
+    if not pkg:
+        return {"exists": False, "status": None}
+    return {"exists": True, "status": pkg["status"]}
 
 
 def archive_load(load_id: str) -> dict:
@@ -1234,6 +1275,29 @@ def reviewer_contact_email() -> str:
     return email_delivery.reviewer_address()
 
 
+def get_load_contacts(load_id: str) -> dict:
+    """Who to reach about this load: Level 1 Transport's own dispatch address,
+    plus the first broker contact on file matching the load's broker_shipper
+    (same substring lookup the Driver Portal has always used). Shared by the
+    Driver Portal and the Stakeholder Portal so both surfaces resolve "who do
+    I call" identically instead of drifting.
+
+    An unknown load_id still returns a dict with dispatch_email populated
+    (fail-open on contact info, not a crash) with broker_contact: None.
+    """
+    dispatch_email = reviewer_contact_email()
+    load = store.get_load(load_id)
+    if not load:
+        return {"dispatch_email": dispatch_email, "broker_contact": None}
+
+    broker_contact = None
+    if load.get("broker_shipper"):
+        matches = store.list_broker_contacts(search=load["broker_shipper"])
+        broker_contact = matches[0] if matches else None
+
+    return {"dispatch_email": dispatch_email, "broker_contact": broker_contact}
+
+
 def list_drivers(
     status: str | None = None,
     name: str | None = None,
@@ -1443,6 +1507,36 @@ def _sanitize_retention_for_stakeholder(retention: dict | None) -> dict | None:
     }
 
 
+def get_publisher_status(load_id: str) -> dict:
+    """Look up Publisher packet status for a freight load.
+
+    Publisher's queue (portal/models/publisher.py::create_action()) is keyed
+    by sandbox_id, a GovCon/sandbox-oriented concept -- freight loads have no
+    sandbox_id of their own and there is no load_id field on a Publisher
+    action. This reuses the synthetic sandbox_id convention already
+    established for freight loads elsewhere in this codebase (End Load ->
+    Publisher routing, portal/routes/dispatch_api.py's end_load(), which
+    calls publisher.create_action(sandbox_id=f"LOAD-{load_id}", ...), mirroring
+    cin_lite's analogous f"GOVCON-{contract_id}" convention in
+    portal/routes/api.py) rather than inventing a new one or adding a
+    load_id field to Publisher's schema.
+    """
+    from portal.models import publisher
+
+    sandbox_id = f"LOAD-{load_id}"
+    matches = [a for a in publisher.get_queue() if a.get("sandbox_id") == sandbox_id]
+    if not matches:
+        return {"has_packet": False, "status": None, "action_type": None}
+
+    matches.sort(key=lambda a: a.get("updated_at", ""), reverse=True)
+    latest = matches[0]
+    return {
+        "has_packet": True,
+        "status": latest["status"],
+        "action_type": latest["action_type"],
+    }
+
+
 def build_stakeholder_view(load_id: str) -> dict | None:
     """Assemble the read-only payload shown to an external stakeholder
     (broker/shipper/customer -- per D11 these are genuinely distinct
@@ -1461,17 +1555,22 @@ def build_stakeholder_view(load_id: str) -> dict | None:
         info (phone/email/license), and internal_note are EXCLUDED
         regardless of D11, since none of those are rate/fee/cost figures
         in the first place.
-      - evidence file downloads are EXCLUDED this pass (metadata only,
-        no download link) -- serving raw uploaded files through a
-        non-PIN-gated route is a separate scoping question, not decided
-        here; a token-scoped evidence download route is a fast-follow,
-        not part of this build.
+      - this view itself still returns evidence as metadata only (type/
+        description/capture_time, no file_path, no download link) -- the
+        file itself is served separately by the token-scoped download
+        route, portal/routes/stakeholder.py::stakeholder_evidence_download
+        (GET /portal/loads/<load_id>/evidence/<evidence_id>?token=...),
+        which re-verifies the same stakeholder token and additionally
+        confirms the evidence record's own load_id matches the load_id in
+        the URL before serving anything (a stakeholder token is scoped to
+        one load; without that check a valid token for load A could be
+        used to enumerate and download evidence belonging to load B).
     """
     load = store.get_load(load_id)
     if not load:
         return None
 
-    visibility = store.get_visibility(load_id)
+    mission_visibility = get_mission_visibility(load_id)
     rate = store.get_rate_confirmation(load_id)
     settlement = store.get_settlement(load_id)
 
@@ -1501,7 +1600,8 @@ def build_stakeholder_view(load_id: str) -> dict | None:
             "delivery_datetime": load.get("delivery_datetime", ""),
             "status": load.get("status", ""),
         },
-        "customer_note": (visibility or {}).get("customer_note", ""),
+        "customer_note": mission_visibility["customer_note"],
+        "next_expected_milestone": mission_visibility["next_expected_milestone"],
         "milestones": [
             {
                 "event_type": m.get("event_type", ""),
@@ -1545,6 +1645,9 @@ def build_stakeholder_view(load_id: str) -> dict | None:
         "settlement": settlement,
         "assigned_driver": assigned_driver,
         "assigned_equipment": assigned_equipment,
+        "comi_status": get_comi_status(load_id),
+        "contacts": get_load_contacts(load_id),
+        "publisher_status": get_publisher_status(load_id),
     }
 
 
