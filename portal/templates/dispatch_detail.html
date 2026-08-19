@@ -920,6 +920,10 @@
                 <input type="text" id="eh-customer-subject" value="{{ email_package.customer_subject }}" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;"></label></div>
             <div class="full-width"><label><strong>Customer Body</strong><br>
                 <textarea id="eh-customer-body" rows="5" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %} style="width:100%;padding:4px 8px;">{{ email_package.customer_body }}</textarea></label></div>
+            <div class="full-width"><label style="font-weight:normal;">
+                <input type="checkbox" id="eh-include-stakeholder-link" {% if email_package.status == 'SUBMITTED' %}disabled{% endif %}>
+                Include Stakeholder Portal Link
+            </label></div>
         </div>
         {% if email_package.status != 'SUBMITTED' %}
         <button type="button" class="btn btn-sm" onclick="saveEmailPackage('{{ load.load_id }}')">Save Edits</button>
@@ -1081,7 +1085,8 @@ function _emailPackageFormData() {
         broker_body: document.getElementById('eh-broker-body').value,
         customer_email: document.getElementById('eh-customer-email').value,
         customer_subject: document.getElementById('eh-customer-subject').value,
-        customer_body: document.getElementById('eh-customer-body').value
+        customer_body: document.getElementById('eh-customer-body').value,
+        include_stakeholder_link: document.getElementById('eh-include-stakeholder-link').checked
     };
 }
 

@@ -10,7 +10,7 @@ import csv
 import io
 from datetime import datetime
 
-from flask import Blueprint, Response, jsonify, render_template, request, send_file
+from flask import Blueprint, Response, jsonify, render_template, request, send_file, url_for
 
 from dispatch import notifications, services
 from dispatch.models import (
@@ -618,8 +618,32 @@ def draft_email_package(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/email-package", methods=["PATCH"])
 def update_email_package(load_id):
+    """Save edits to the drafted broker/customer bodies (still just DRAFT/REVIEWED --
+    see email_helper.update_draft(); nothing is sent from this endpoint).
+
+    Optional `include_stakeholder_link` (bool, default False): when true, appends the
+    same stakeholder portal link shown on this load's detail page (dispatch_detail.html's
+    "Stakeholder Link" control, built from notifications.make_stakeholder_token() the same
+    way pages.py::dispatch_detail() does) to whichever of broker_body/customer_body are
+    present in this request, before handing them to email_helper.update_draft(). This is
+    pre-filling text a human still reviews and explicitly submits -- same as every other
+    piece of drafted content in this module -- not a new send path. Idempotent: re-saving
+    with the flag still set does not duplicate the link if it's already present.
+    """
     from portal.models import email_helper
     data = request.get_json(silent=True) or {}
+    include_link = data.pop("include_stakeholder_link", False)
+    if include_link:
+        stakeholder_url = url_for(
+            "stakeholder.stakeholder_view",
+            load_id=load_id,
+            token=notifications.make_stakeholder_token(load_id),
+            _external=True,
+        )
+        for field in ("broker_body", "customer_body"):
+            body = data.get(field)
+            if body and stakeholder_url not in body:
+                data[field] = f"{body.rstrip()}\n\nStakeholder Portal Link: {stakeholder_url}"
     try:
         package = email_helper.update_draft(load_id, **data)
     except KeyError as e:
