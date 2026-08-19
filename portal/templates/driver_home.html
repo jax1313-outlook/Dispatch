@@ -41,6 +41,15 @@
 <div class="card">
     <h2>Dispatch Contact</h2>
     <p class="contact-line"><strong>Email:</strong> {{ dispatch_contact_email }}</p>
+    {% if broker_contacts %}
+        <p class="contact-line" style="margin-top:10px;"><strong>Broker Contacts (today's loads):</strong></p>
+        {% for bc in broker_contacts %}
+        <p class="contact-line">{{ bc.contact_name or bc.company_name }}
+            {% if bc.phone %} &middot; {{ bc.phone }}{% endif %}
+            {% if bc.email %} &middot; {{ bc.email }}{% endif %}
+        </p>
+        {% endfor %}
+    {% endif %}
 </div>
 
 <div class="card">

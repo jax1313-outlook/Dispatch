@@ -126,6 +126,20 @@
     </div>
     {% endif %}
 
+    <div class="card">
+        <h2>Contact</h2>
+        <table>
+            <tr><td class="label">Level 1 Transport Dispatch</td><td>{{ contacts.dispatch_email }}</td></tr>
+            {% if contacts.broker_contact %}
+            <tr><td class="label">Broker Contact</td>
+                <td>{{ contacts.broker_contact.contact_name or contacts.broker_contact.company_name }}
+                    {% if contacts.broker_contact.phone %} &middot; {{ contacts.broker_contact.phone }}{% endif %}
+                    {% if contacts.broker_contact.email %} &middot; {{ contacts.broker_contact.email }}{% endif %}
+                </td></tr>
+            {% endif %}
+        </table>
+    </div>
+
     <p class="footer-note">This is a read-only shipment summary shared by Level 1 Transport. This link is unique to this shipment.</p>
 {% endif %}
 

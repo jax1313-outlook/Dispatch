@@ -2151,10 +2151,25 @@ class TestDispatchPinAuthentication:
         assert auth_client.get("/home").status_code == 302
 
     def test_pin_stored_as_hash_not_plaintext(self, auth_app, auth_data_dir):
+        """A raw substring check (`"1234" not in raw`) is not a safe assertion here --
+        a real password hash is effectively random hex/base64, and a 4-character PIN
+        has a non-negligible chance of coincidentally appearing as a substring of it
+        purely by chance (this test has actually flaked exactly that way in CI: the
+        hash `...f335123489d45e7...` happened to contain "1234"). Assert the real
+        security property instead: no plaintext `"pin"` field exists (only
+        `"pin_hash"`), and the stored hash genuinely verifies the PIN via
+        check_password_hash -- proving it's a real hash of "1234", not "1234" itself
+        stored under a differently-named key."""
+        import json
+        from werkzeug.security import check_password_hash
+
         self._bootstrap(auth_app, pin="1234")
         raw = (auth_data_dir / "identity.json").read_text(encoding="utf-8")
-        assert "1234" not in raw
-        assert '"pin_hash"' in raw
+        data = json.loads(raw)
+        record = next(iter(data.values()))
+        assert "pin" not in record
+        assert "pin_hash" in record
+        assert check_password_hash(record["pin_hash"], "1234")
 
     def test_login_without_bootstrap_reports_clearly(self, auth_client):
         resp = auth_client.post("/login", data={"pin": "1234"})
