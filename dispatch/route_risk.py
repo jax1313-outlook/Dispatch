@@ -1,11 +1,10 @@
-"""Route Risk Foundation -- Operational Intelligence function for route-related condition evaluation.
+"""Dispatch Route Risk Extraction Staging Adapter.
 
-Route Risk evaluates route-related conditions, determines mission impact,
-assigns consequence levels (0-5), identifies communication requirements,
-and drives Mission Visibility updates through COMI.
+This module acts as an extraction staging adapter between Dispatch and the
+independently owned top-level `route_risk` domain package.
 
-Live external APIs (NOAA, DOT, Police, Weather, Traffic) are NOT connected in this pass.
-All data is internal, manual, stubbed, or stored locally.
+It injects Dispatch's COMI evaluator into Route Risk events recorded from
+Dispatch, while re-exporting the underlying Route Risk queries cleanly.
 """
 
 from __future__ import annotations

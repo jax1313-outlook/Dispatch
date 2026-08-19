@@ -30,7 +30,7 @@ blocks on it.
 
 from __future__ import annotations
 
-from cin_lite.email_delivery import _build, _send_or_write
+from dispatch.email_delivery import _build, _send_or_write
 
 
 def notify_customer(to_address: str, subject: str, body: str, fallback_id: str) -> str:

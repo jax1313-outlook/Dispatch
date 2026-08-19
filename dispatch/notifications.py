@@ -19,7 +19,7 @@ import html as _html
 import os
 from typing import Callable
 
-from cin_lite.email_delivery import (
+from dispatch.email_delivery import (
     _build,
     _send_or_write,
     from_address,

@@ -35,16 +35,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+def _get_data_dir() -> Path:
+    portal_dir = os.environ.get("PORTAL_DATA_DIR")
+    if portal_dir:
+        return Path(portal_dir)
+    ops_root = os.environ.get("DISPATCH_OPERATIONS_ROOT")
+    if ops_root:
+        return Path(ops_root) / "Current Workspace" / "PortalData"
+    env_dir = os.environ.get("DISPATCH_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path(__file__).resolve().parent.parent / "portal" / "data"
+
+
 def _export_dir() -> Path:
     explicit = os.environ.get("DISPATCH_ACCOUNTING_EXPORT_DIR")
     if explicit:
         return Path(explicit)
-    env_dir = os.environ.get("DISPATCH_DATA_DIR")
-    if env_dir:
-        base = Path(env_dir)
-    else:
-        base = Path(__file__).resolve().parent.parent / "portal" / "data"
-    return base / "AccountingExport"
+    return _get_data_dir() / "AccountingExport"
 
 
 def export_settlement(settlement: dict) -> dict:

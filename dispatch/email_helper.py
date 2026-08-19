@@ -27,15 +27,15 @@ class EmailHelperSubmitError(ValueError):
 
 
 def _get_data_dir() -> Path:
-    explicit = os.environ.get("PORTAL_DATA_DIR")
-    if explicit:
-        return Path(explicit)
-    env_dir = os.environ.get("DISPATCH_DATA_DIR")
-    if env_dir:
-        return Path(env_dir)
+    portal_dir = os.environ.get("PORTAL_DATA_DIR")
+    if portal_dir:
+        return Path(portal_dir)
     ops_root = os.environ.get("DISPATCH_OPERATIONS_ROOT")
     if ops_root:
         return Path(ops_root) / "Current Workspace" / "PortalData"
+    env_dir = os.environ.get("DISPATCH_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
     return Path(__file__).resolve().parent.parent / "portal" / "data"
 
 
@@ -253,7 +253,7 @@ def submit_package(load_id: str, submitted_by: str | None) -> dict:
             "before submitting"
         )
 
-    from cin_lite import email_delivery
+    from dispatch import email_delivery
 
     results = []
     for to, subject, body in recipients:

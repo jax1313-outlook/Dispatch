@@ -2060,6 +2060,83 @@ def list_compliance_documents(
     return results
 
 
+# ── Route Risk Events Store ───────────────────────────────────────────
+
+def create_route_risk_event(event: dict) -> dict:
+    from datetime import datetime, timezone
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO route_risk_events (
+                route_risk_event_id, load_id, source_type, source_label,
+                affected_area, affected_corridor, condition_summary,
+                estimated_delay_minutes, delivery_commitment_status,
+                route_risk_level, consequence_level, driver_notification_required,
+                stakeholder_notification_required, mission_visibility_update_required,
+                comi_required, created_at, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                event["route_risk_event_id"],
+                event["load_id"],
+                event.get("source_type", "manual_entry"),
+                event.get("source_label", ""),
+                event.get("affected_area", ""),
+                event.get("affected_corridor", ""),
+                event["condition_summary"],
+                event.get("estimated_delay_minutes", 0),
+                event.get("delivery_commitment_status", "achievable"),
+                event.get("route_risk_level", "Level 1"),
+                event.get("consequence_level", 1),
+                1 if event.get("driver_notification_required") else 0,
+                1 if event.get("stakeholder_notification_required") else 0,
+                1 if event.get("mission_visibility_update_required") else 0,
+                1 if event.get("comi_required") else 0,
+                event.get("created_at", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+                event.get("status", "active"),
+            ),
+        )
+    return event
+
+
+def get_route_risk_event(event_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM route_risk_events WHERE route_risk_event_id = ?",
+            (event_id,),
+        ).fetchone()
+        if not row:
+            return None
+        res = dict(row)
+        res["driver_notification_required"] = bool(res["driver_notification_required"])
+        res["stakeholder_notification_required"] = bool(res["stakeholder_notification_required"])
+        res["mission_visibility_update_required"] = bool(res["mission_visibility_update_required"])
+        res["comi_required"] = bool(res["comi_required"])
+        res["is_live_data"] = False
+        return res
+
+
+def list_route_risk_events(load_id: str | None = None) -> list[dict]:
+    with get_connection() as conn:
+        if load_id:
+            rows = conn.execute(
+                "SELECT * FROM route_risk_events WHERE load_id = ? ORDER BY created_at DESC",
+                (load_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM route_risk_events ORDER BY created_at DESC"
+            ).fetchall()
+        res = []
+        for r in rows:
+            d = dict(r)
+            d["driver_notification_required"] = bool(d["driver_notification_required"])
+            d["stakeholder_notification_required"] = bool(d["stakeholder_notification_required"])
+            d["mission_visibility_update_required"] = bool(d["mission_visibility_update_required"])
+            d["comi_required"] = bool(d["comi_required"])
+            d["is_live_data"] = False
+            res.append(d)
+        return res
+
+
 def update_compliance_document(doc_id: str, **fields) -> dict | None:
     existing = get_compliance_document(doc_id)
     if not existing:

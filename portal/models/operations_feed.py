@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from dispatch import services as dispatch_svc
 
-from portal.models import conflict, publisher, email_helper
+from dispatch import email_helper
+from portal.models import conflict, publisher
 from portal.models import library as lib_model
 
 CARD_LEVELS: dict[int, str] = {

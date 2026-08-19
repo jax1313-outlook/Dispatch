@@ -1327,7 +1327,7 @@ def reviewer_contact_email() -> str:
     anywhere in this codebase (Email API is Dispatch's only communication channel
     per CLAUDE.md's tech stack), so surfacing a phone number here would be invented,
     not retrieved."""
-    from cin_lite import email_delivery
+    from dispatch import email_delivery
     return email_delivery.reviewer_address()
 
 
@@ -2419,7 +2419,7 @@ def _resolve_compliance_root() -> Path:
     if archive_root:
         root = Path(archive_root) / "Compliance"
     else:
-        root = Path(__file__).resolve().parent.parent / "cin_lite" / "Compliance"
+        root = Path(__file__).resolve().parent / "Compliance"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -2646,7 +2646,7 @@ def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = 
     to resubmit a period, only to approve the one submission it got."""
     import os
 
-    from cin_lite import email_delivery
+    from dispatch import email_delivery
 
     if quarter not in (1, 2, 3, 4):
         raise ValueError(f"Invalid quarter: {quarter}")
@@ -2699,7 +2699,7 @@ def approve_ifta_quarter(approval_id: str, token: str) -> dict:
     the same email link is a no-op success, matching Hold's
     attempt_seal()) -- the token is only re-checked when there is
     something left to do."""
-    from cin_lite import email_delivery
+    from dispatch import email_delivery
 
     approval = store.get_ifta_report_approval(approval_id)
     if approval is None:

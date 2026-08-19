@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Callable, Any
 
-# Store for route risk events in memory
+# In-memory store for fallback/test stub only
 _ROUTE_RISK_EVENTS: dict[str, list[dict]] = {}
 
 
@@ -32,7 +32,7 @@ def record_route_risk_event(
     has_map_visual: bool = True,
     comi_eval_fn: Callable[..., dict[str, Any]] | None = None,
 ) -> dict:
-    """Records a Route Risk event independently without hard-coded imports to Dispatch."""
+    """Records a Route Risk event independently without inventing alternative COMI rules."""
     consequence_level = max(0, min(5, int(consequence_level)))
     event_id = f"rr-{uuid.uuid4().hex[:10]}"
 
@@ -44,11 +44,12 @@ def record_route_risk_event(
             source_refs={"route_risk_event_id": event_id},
         )
     else:
+        # Return neutral raw data - do not invent alternative COMI rules
         comi_eval = {
-            "driver_alert_required": consequence_level >= 2,
-            "stakeholder_update_required": consequence_level >= 3,
-            "mission_visibility_update_required": consequence_level >= 1,
-            "publisher_required": consequence_level >= 4,
+            "driver_alert_required": False,
+            "stakeholder_update_required": False,
+            "mission_visibility_update_required": False,
+            "publisher_required": False,
         }
 
     event = {
@@ -77,18 +78,36 @@ def record_route_risk_event(
         "is_live_data": False,
     }
 
-    if load_id not in _ROUTE_RISK_EVENTS:
-        _ROUTE_RISK_EVENTS[load_id] = []
-    _ROUTE_RISK_EVENTS[load_id].append(event)
+    try:
+        from dispatch import store
+        store.create_route_risk_event(event)
+    except Exception:
+        if load_id not in _ROUTE_RISK_EVENTS:
+            _ROUTE_RISK_EVENTS[load_id] = []
+        _ROUTE_RISK_EVENTS[load_id].append(event)
 
     return event
 
 
 def get_route_risk(load_id: str) -> dict:
     """Route Risk lookup for a single load."""
-    events = _ROUTE_RISK_EVENTS.get(load_id, [])
+    events = []
+    try:
+        from dispatch import store
+        events = store.list_route_risk_events(load_id)
+    except Exception:
+        events = _ROUTE_RISK_EVENTS.get(load_id, [])
+
     if events:
         latest = max(events, key=lambda x: x["created_at"])
+        map_placeholder = latest.get("map_visual_placeholder")
+        if not map_placeholder:
+            corridor = latest.get("affected_corridor") or latest.get("affected_area") or "Route Segment"
+            map_placeholder = {
+                "available": True,
+                "placeholder_type": "embedded_corridor_map_placeholder",
+                "label": f"Corridor Map Placeholder: {corridor}",
+            }
         return {
             "load_id": load_id,
             "available": True,
@@ -98,7 +117,7 @@ def get_route_risk(load_id: str) -> dict:
             "estimated_delay_minutes": latest["estimated_delay_minutes"],
             "delivery_commitment_status": latest["delivery_commitment_status"],
             "source_label": latest["source_label"],
-            "map_visual_placeholder": latest["map_visual_placeholder"],
+            "map_visual_placeholder": map_placeholder,
             "checked_at": _utc_now(),
             "is_live_data": False,
             "latest_event": latest,
@@ -125,9 +144,13 @@ def get_route_risk(load_id: str) -> dict:
 
 
 def list_route_risk_events(load_id: str | None = None) -> list[dict]:
-    if load_id:
-        return list(_ROUTE_RISK_EVENTS.get(load_id, []))
-    all_events = []
-    for events in _ROUTE_RISK_EVENTS.values():
-        all_events.extend(events)
-    return sorted(all_events, key=lambda x: x["created_at"], reverse=True)
+    try:
+        from dispatch import store
+        return store.list_route_risk_events(load_id)
+    except Exception:
+        if load_id:
+            return list(_ROUTE_RISK_EVENTS.get(load_id, []))
+        all_events = []
+        for events in _ROUTE_RISK_EVENTS.values():
+            all_events.extend(events)
+        return sorted(all_events, key=lambda x: x["created_at"], reverse=True)

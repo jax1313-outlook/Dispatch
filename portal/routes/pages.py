@@ -189,8 +189,7 @@ def dispatch_detail(load_id):
     )
 
     from portal.models import completion_packet as cp_model
-    from portal.models import email_helper
-    from dispatch import notifications
+    from dispatch import email_helper, notifications
 
     bundle = dispatch_svc.get_load_bundle(load_id)
     if not bundle:
@@ -724,7 +723,7 @@ def search_load_detail(load_id):
     from dispatch import services as dispatch_svc
 
     from portal.models import completion_packet as cp_model
-    from portal.models import email_helper
+    from dispatch import email_helper
 
     bundle = dispatch_svc.get_load_bundle(load_id)
     if not bundle:

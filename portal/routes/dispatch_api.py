@@ -586,7 +586,7 @@ def end_load(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/email-package", methods=["GET"])
 def get_email_package(load_id):
-    from portal.models import email_helper
+    from dispatch import email_helper
     package = email_helper.get_package(load_id)
     if not package:
         return jsonify({"error": "No email package for this load"}), 404
@@ -598,7 +598,8 @@ def draft_email_package(load_id):
     """Draft the broker/customer completion emails from the load's Completion Packet.
     Requires End Load to have already run -- there's nothing to draft from otherwise.
     """
-    from portal.models import completion_packet, email_helper
+    from portal.models import completion_packet
+    from dispatch import email_helper
 
     packet = completion_packet.get_packet(load_id)
     if not packet:
@@ -630,7 +631,7 @@ def update_email_package(load_id):
     piece of drafted content in this module -- not a new send path. Idempotent: re-saving
     with the flag still set does not duplicate the link if it's already present.
     """
-    from portal.models import email_helper
+    from dispatch import email_helper
     data = request.get_json(silent=True) or {}
     include_link = data.pop("include_stakeholder_link", False)
     if include_link:
@@ -655,7 +656,8 @@ def update_email_package(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/email-package/submit", methods=["POST"])
 def submit_email_package(load_id):
-    from portal.models import completion_packet, email_helper
+    from portal.models import completion_packet
+    from dispatch import email_helper
     data = request.get_json(silent=True) or {}
     submitted_by = data.get("submitted_by")
     try:
@@ -1709,7 +1711,10 @@ def extract_ifta_fuel_receipt():
     Always returns 200 with either extracted fields or an
     available:false reason; the one genuine client error is no file at
     all."""
-    from cin_lite.agents import receipt_vision
+    try:
+        from dispatch import receipt_vision
+    except ImportError:
+        from cin_lite.agents import receipt_vision
 
     uploaded_file = request.files.get("file")
     if not uploaded_file or not uploaded_file.filename:
