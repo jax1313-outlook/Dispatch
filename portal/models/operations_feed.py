@@ -136,12 +136,16 @@ def _exception_cards() -> list[dict]:
         title = f"{exc.get('exception_type', '').replace('_', ' ').title()}"
         if load.get("customer"):
             title = f"{title} — {load['customer']}"
+        summary = exc.get("description", "")
+        mv = dispatch_svc.get_mission_visibility(exc["load_id"])
+        if mv["next_expected_milestone"]:
+            summary += f" (next expected: {mv['next_expected_milestone']})"
         cards.append(_card(
             card_id=f"exception-{exc.get('exception_id', '')}",
             source="exception",
             card_level=level,
             title=title,
-            summary=exc.get("description", ""),
+            summary=summary,
             url=f"/dispatch/{exc['load_id']}",
             created_at=exc.get("first_reported", ""),
         ))
@@ -182,6 +186,9 @@ def _stalled_load_cards() -> list[dict]:
             f"{load.get('status', '').replace('_', ' ')} "
             f"(threshold {load.get('threshold_hours')}h)"
         )
+        mv = dispatch_svc.get_mission_visibility(load["load_id"])
+        if mv["next_expected_milestone"]:
+            summary += f" (next expected: {mv['next_expected_milestone']})"
         cards.append(_card(
             card_id=f"stalled-{load.get('load_id', '')}",
             source="stalled_load",
