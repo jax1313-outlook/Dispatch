@@ -1234,6 +1234,29 @@ def reviewer_contact_email() -> str:
     return email_delivery.reviewer_address()
 
 
+def get_load_contacts(load_id: str) -> dict:
+    """Who to reach about this load: Level 1 Transport's own dispatch address,
+    plus the first broker contact on file matching the load's broker_shipper
+    (same substring lookup the Driver Portal has always used). Shared by the
+    Driver Portal and the Stakeholder Portal so both surfaces resolve "who do
+    I call" identically instead of drifting.
+
+    An unknown load_id still returns a dict with dispatch_email populated
+    (fail-open on contact info, not a crash) with broker_contact: None.
+    """
+    dispatch_email = reviewer_contact_email()
+    load = store.get_load(load_id)
+    if not load:
+        return {"dispatch_email": dispatch_email, "broker_contact": None}
+
+    broker_contact = None
+    if load.get("broker_shipper"):
+        matches = store.list_broker_contacts(search=load["broker_shipper"])
+        broker_contact = matches[0] if matches else None
+
+    return {"dispatch_email": dispatch_email, "broker_contact": broker_contact}
+
+
 def list_drivers(
     status: str | None = None,
     name: str | None = None,
@@ -1545,6 +1568,7 @@ def build_stakeholder_view(load_id: str) -> dict | None:
         "settlement": settlement,
         "assigned_driver": assigned_driver,
         "assigned_equipment": assigned_equipment,
+        "contacts": get_load_contacts(load_id),
     }
 
 

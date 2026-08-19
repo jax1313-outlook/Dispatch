@@ -108,12 +108,13 @@ def driver_home():
     active_loads = [l for l in all_loads if l["status"] not in _ACTIVE_LOAD_STATUSES_EXCLUDED]
 
     load_cards = []
+    broker_contacts_seen: dict[str, dict] = {}
     for load in active_loads:
         comi_package = get_email_package(load["load_id"])
-        broker_contact = None
-        if load.get("broker_shipper"):
-            matches = dispatch_svc.list_broker_contacts(search=load["broker_shipper"])
-            broker_contact = matches[0] if matches else None
+        contacts = dispatch_svc.get_load_contacts(load["load_id"])
+        broker_contact = contacts["broker_contact"]
+        if broker_contact and broker_contact.get("broker_id") not in broker_contacts_seen:
+            broker_contacts_seen[broker_contact["broker_id"]] = broker_contact
         load_cards.append({
             "load": load,
             "comi_status": comi_package["status"] if comi_package else "No communications drafted yet",
@@ -126,4 +127,5 @@ def driver_home():
         driver=driver,
         load_cards=load_cards,
         dispatch_contact_email=dispatch_svc.reviewer_contact_email(),
+        broker_contacts=list(broker_contacts_seen.values()),
     )
