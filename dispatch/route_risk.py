@@ -28,9 +28,13 @@ def _get_rr():
         _ROUTE_RISK_EVENTS = _ROUTE_RISK_EVENTS
         @staticmethod
         def record_route_risk_event(load_id, condition_summary, consequence_level=1, **kwargs):
+            import uuid
+            from datetime import datetime, timezone
             from dispatch import store
+            event_id = f"rr-{uuid.uuid4().hex[:10]}"
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             event = {
-                "route_risk_event_id": f"rr-stub-{load_id}",
+                "route_risk_event_id": event_id,
                 "load_id": load_id,
                 "condition_summary": condition_summary,
                 "consequence_level": consequence_level,
@@ -43,7 +47,7 @@ def _get_rr():
                 "stakeholder_notification_required": False,
                 "mission_visibility_update_required": False,
                 "comi_required": False,
-                "created_at": "",
+                "created_at": now,
                 "status": "active",
                 "is_live_data": False,
             }
@@ -62,7 +66,7 @@ def _get_rr():
             except Exception:
                 pass
             if events:
-                latest = max(events, key=lambda x: x.get("created_at", ""))
+                latest = events[0]
                 return {
                     "load_id": load_id,
                     "available": True,

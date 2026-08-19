@@ -2118,12 +2118,12 @@ def list_route_risk_events(load_id: str | None = None) -> list[dict]:
     with get_connection() as conn:
         if load_id:
             rows = conn.execute(
-                "SELECT * FROM route_risk_events WHERE load_id = ? ORDER BY created_at DESC",
+                "SELECT * FROM route_risk_events WHERE load_id = ? ORDER BY created_at DESC, rowid DESC",
                 (load_id,),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM route_risk_events ORDER BY created_at DESC"
+                "SELECT * FROM route_risk_events ORDER BY created_at DESC, rowid DESC"
             ).fetchall()
         res = []
         for r in rows:

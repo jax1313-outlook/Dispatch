@@ -8,10 +8,13 @@ from dispatch import route_risk
 
 
 @pytest.fixture(autouse=True)
-def _clear_route_risk_events():
+def _clear_route_risk_events(tmp_path):
+    from dispatch.db import set_db_path
+    set_db_path(tmp_path / "test_rr.db")
     route_risk._ROUTE_RISK_EVENTS.clear()
     yield
     route_risk._ROUTE_RISK_EVENTS.clear()
+    set_db_path(None)
 
 
 def test_get_route_risk_default_stub():
@@ -61,3 +64,33 @@ def test_record_route_risk_event_significant():
     assert event["comi_required"] is True
     assert event["map_visual_placeholder"]["available"] is True
     assert event["is_live_data"] is False
+
+
+def test_fallback_stub_adapter_multiple_events(monkeypatch):
+    """Explicitly verify that when top-level route_risk is absent (rr = None),
+    the fallback adapter generates unique event IDs and persists multiple events
+    for the same load without primary key collision."""
+    monkeypatch.setattr(route_risk, "rr", None)
+
+    ev1 = route_risk.record_route_risk_event(
+        load_id="LOAD-STUB-001",
+        condition_summary="Minor delay at rest stop.",
+        consequence_level=1,
+    )
+    ev2 = route_risk.record_route_risk_event(
+        load_id="LOAD-STUB-001",
+        condition_summary="Severe accident blocking both lanes.",
+        consequence_level=4,
+    )
+
+    assert ev1["route_risk_event_id"] != ev2["route_risk_event_id"]
+
+    events = route_risk.list_route_risk_events("LOAD-STUB-001")
+    assert len(events) == 2
+    summaries = [e["condition_summary"] for e in events]
+    assert "Minor delay at rest stop." in summaries
+    assert "Severe accident blocking both lanes." in summaries
+
+    latest = route_risk.get_route_risk("LOAD-STUB-001")
+    assert latest["available"] is True
+    assert latest["risk_level"] == "Level 4"
