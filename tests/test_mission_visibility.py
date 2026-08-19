@@ -59,7 +59,7 @@ class TestGetMissionVisibility:
 
         assert mv["customer_note"] == "Running on time"
 
-    def test_internal_note_never_in_returned_dict(self):
+    def test_internal_note_included_in_accessor(self):
         load = services.create_load(customer="Mission Vis Internal Co")
         services.update_visibility_notes(
             load["load_id"],
@@ -69,8 +69,8 @@ class TestGetMissionVisibility:
 
         mv = services.get_mission_visibility(load["load_id"])
 
-        assert "internal_note" not in mv
-        assert "Driver called in sick once" not in mv.values()
+        assert "internal_note" in mv
+        assert mv["internal_note"] == "Driver called in sick once"
 
     def test_no_visibility_record_returns_empty_shape_not_none(self):
         mv = services.get_mission_visibility("LOAD-DOES-NOT-EXIST")
@@ -81,9 +81,9 @@ class TestGetMissionVisibility:
             "last_milestone": None,
             "next_expected_milestone": None,
             "customer_note": "",
+            "internal_note": "",
             "updated_at": None,
         }
-        assert "internal_note" not in mv
 
 
 # ── Driver Portal ────────────────────────────────────────────────────────

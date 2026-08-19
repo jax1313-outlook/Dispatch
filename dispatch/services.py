@@ -339,14 +339,18 @@ def get_visibility(load_id: str) -> dict | None:
 
 
 def get_mission_visibility(load_id: str) -> dict:
-    """Unified, externally-safe visibility snapshot for a load.
+    """Single authoritative accessor for Mission Visibility.
 
-    Wraps store.get_visibility() and deliberately EXCLUDES internal_note
-    (internal-only content -- matches the precedent set by
-    build_stakeholder_view(), which also withholds internal_note from
-    external-facing payloads). Always returns the same dict shape, even
-    when no visibility record exists yet, so callers never need a
-    None-check before accessing fields.
+    Provides a clean, uniform snapshot wrapping store.get_visibility():
+    - current_status
+    - last_milestone
+    - next_expected_milestone
+    - customer_note
+    - internal_note
+    - updated_at
+
+    Always returns the same dict shape even when no record exists yet,
+    so callers never need a None-check.
     """
     visibility = store.get_visibility(load_id)
     if not visibility:
@@ -355,6 +359,7 @@ def get_mission_visibility(load_id: str) -> dict:
             "last_milestone": None,
             "next_expected_milestone": None,
             "customer_note": "",
+            "internal_note": "",
             "updated_at": None,
         }
     return {
@@ -362,6 +367,7 @@ def get_mission_visibility(load_id: str) -> dict:
         "last_milestone": visibility.get("last_milestone"),
         "next_expected_milestone": visibility.get("next_expected_milestone"),
         "customer_note": visibility.get("customer_note", ""),
+        "internal_note": visibility.get("internal_note", ""),
         "updated_at": visibility.get("updated_at"),
     }
 
