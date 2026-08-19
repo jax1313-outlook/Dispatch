@@ -95,7 +95,7 @@ Triggers initiate Route Risk updates, Mission Visibility transitions, and COMI r
 
 ## SECTION 4: MISSION VISIBILITY MILESTONES
 
-Mission Visibility tracks the sequential lifecycle of a freight movement through ten discrete, standardized milestones:
+Mission Visibility tracks the sequential lifecycle of a freight movement through discrete, standardized milestones:
 
 * **M1: Order Booked & Dispatched**: Load assigned to driver and equipment; rate confirmation and route plan initialized.
 * **M2: En Route to Origin**: Driver rolling toward origin shipper facility for pickup.
@@ -103,10 +103,125 @@ Mission Visibility tracks the sequential lifecycle of a freight movement through
 * **M4: Loading Started**: Vehicle docked at door; loading operations underway.
 * **M5: Loaded & Clean BOL Signed**: Loading complete, trailer sealed, Bill of Lading (BOL) signed and uploaded.
 * **M6: In Transit / On Route**: Driver departed origin facility and operating along designated highway corridor.
+* **M6A: Mid-Route Load Securement Check**: Internal Operations Intelligence checkpoint conducted in-transit to verify ongoing cargo integrity, load securement, trailer condition, and freight status before reaching destination.
 * **M7: Midway / Waypoint Check**: Vehicle crosses pre-calculated midpoint or planned rest/fuel waypoint; ETA confirmed.
 * **M8: Arrived at Destination Consignee**: Vehicle enters consignee facility geofence; gate-in logged.
 * **M9: Unloading Started**: Vehicle docked at consignee door; offloading underway.
 * **M10: Delivered / POD Secured & Closeout Ready**: Cargo offloaded, Proof of Delivery (POD) signed and verified, load ready for closeout.
+
+---
+
+## ADDENDUM: M6A – MID-ROUTE LOAD SECUREMENT CHECK
+
+### Classification & Position
+* **Classification**: Mission Visibility Milestone (Internal Operations Intelligence Checkpoint)
+* **Milestone Code**: M6A
+* **Position in Load Lifecycle**: Positioned between **M6 (In Transit / On Route)** and **M7 (Midway / Waypoint Check)**.
+
+### Purpose
+M6A exists to verify ongoing cargo integrity, load securement, trailer condition, and freight status while the load is actively moving.
+
+This milestone is intended to detect cargo shift, securement failure, seal issues, temperature concerns, trailer damage, load contamination risk, and other developing conditions before they become delivery failures, claims, cargo loss incidents, or safety hazards.
+
+M6A functions as an Operations Intelligence checkpoint rather than a customer-facing milestone.
+
+### Trigger Conditions
+M6A may be triggered by any of the following:
+
+#### Automatic Triggers:
+* Transit exceeds 150 miles from origin.
+* Transit exceeds 3 hours continuous driving.
+* High-risk commodity classification.
+* Flatbed cargo requiring periodic securement verification.
+* Hazardous materials movement.
+* Reefer cargo requiring condition verification.
+* High-value cargo movements.
+* Security-sensitive freight movements.
+
+#### Manual Triggers:
+* Driver initiates securement review via Driver Portal.
+* Dispatcher requests securement verification.
+* Route Risk event suggests inspection.
+* Hard braking event detected via telematics.
+* Collision avoidance event detected.
+* Severe weather event encountered en route.
+* Cargo shift concern reported.
+
+### Required Data Collection
+The Mid-Route Load Securement Check requires collection of the following structured data:
+
+1. **Cargo Photos**:
+   * *Required*: Cargo overview photos, left side cargo photos, right side cargo photos, rear cargo photos (when applicable), trailer interior cargo photos (when safe).
+   * *Purpose*: 1) Verify load integrity; 2) Verify no cargo shift; 3) Verify no damage.
+2. **Securement Photos**:
+   * *Required*: Straps, chains, binders, load bars, E-track systems, blocking and bracing, seal integrity.
+   * *Purpose*: 1) Verify cargo remains secured; 2) Verify tension maintained; 3) Verify securement devices not damaged.
+3. **Driver Status Submission**:
+   * *Driver Questions*:
+     * Load Secure? [Yes / No]
+     * Any concerns? [Yes / No]
+     * Safe to continue? [Yes / No]
+   * *Optional Notes*: Observed conditions, road conditions, weather impacts, customer requirements.
+4. **Issues Observed (If Present)**:
+   * *Categories*: Cargo shift, broken securement, loose straps, missing chains, damaged pallet, damaged packaging, leaking cargo, seal discrepancy, trailer damage, temperature concerns.
+   * *Must Include*: Detailed description, severity rating, photo evidence.
+5. **Corrective Actions (If Issues Identified)**:
+   * *Examples*: Retightened straps, added chain securement, replaced damaged strap, adjusted weight distribution, verified trailer seal, re-secured pallet stack, contacted operations.
+   * *Operational Requirement*: Operations must receive full documentation of all corrective actions taken.
+
+### Recipient Matrix & Information Boundaries
+
+#### Internal Recipients Only:
+M6A information is routed ONLY to:
+* Operations
+* Fleet Management
+* Route Risk Engine
+* Archive System
+* Mission History
+* Claims Support (if required)
+
+#### Explicitly Excluded External Parties:
+The following parties do **NOT** receive M6A details:
+* Customers
+* Brokers
+* Shippers
+* Consignees
+* External Stakeholders
+
+*(Unless a related Route Risk event escalates to a consequence level requiring external communication).*
+
+### COMI Routing Rules for M6A
+
+* **Normal Check** (Result: Load Secure / No Issues / Continue Transit):
+  * *COMI Action*: Operations Feed update only. No Publisher Draft. No Customer Communication. No Stakeholder Update.
+* **Minor Issue** (Examples: Loose strap, minor pallet movement, securement adjustment required):
+  * *Consequence Level*: Level 1.
+  * *COMI Action*: Operations Feed card generated, Archive notation added, No external communication.
+* **Significant Securement Issue** (Examples: Cargo shift, broken straps, load instability, potential cargo damage):
+  * *Consequence Level*: Level 2–3.
+  * *COMI Action*: Operations Review required, Route Risk Entry generated, Mission Visibility Internal Alert created, Publisher Draft Candidate initiated.
+* **Cargo Integrity Threat** (Examples: Product damage, cargo collapse, compromised food safety, temperature excursion, seal breach):
+  * *Consequence Level*: Level 4–5.
+  * *COMI Action*: Immediate Operations Alert, Publisher Draft Generated, Management Escalation, Claims Preparation initiated, Mission Visibility Update executed.
+
+### Operations Feed Card Format for M6A
+
+* **Header**: `LOAD-#### | M6A SECUREMENT CHECK`
+* **Body**: Driver Status, Cargo Condition, Securement Status, Issues Observed, Corrective Actions, Photo Package Received.
+* **Status Indicators**:
+  * `GREEN`: Secure / Continue
+  * `YELLOW`: Monitor
+  * `ORANGE`: Operational Review Required
+  * `RED`: Immediate Action Required
+* **Action Buttons**: `[Acknowledge]`, `[Open Photo Package]`, `[Route Risk Review]`, `[Create Publisher Draft]`, `[Escalate]`
+
+### Archive Requirements
+M6A records must be archived with:
+* Load ID, Driver ID, Timestamp, GPS Location, Photo Package, Driver Notes, Issues List, Corrective Actions Taken, Consequence Level, Related Route Risk Event IDs.
+* **Retention**: Permanent Archive Record for future claims defense, cargo disputes, carrier packet support, customer confidence packages, and operational intelligence analysis.
+
+### M6A Doctrinal Statement
+M6A exists to verify that a load remains secure after departure and before delivery. It is an Operations Intelligence checkpoint, not a customer communication event. Its purpose is early detection, claims prevention, cargo protection, and mission assurance. If M6A exists and no issues are found, the mission continues. If issues are found, Route Risk, Mission Visibility, and COMI determine the appropriate escalation path.
 
 ---
 
@@ -122,7 +237,7 @@ Operational roles are categorized as **Internal** or **External**:
 #### Data Sanitization Boundaries (Fail-Closed):
 * **Internal Views See**: Gross pay, linehaul rate, fuel surcharge, driver pay, profit margin, internal carrier risk scores, dispatcher private notes, driver phone/license numbers, private routing codes.
 * **External Driver Views See**: Trip origin/destination, pickup/delivery windows, load weight/commodity, special handling instructions, safe turn-by-turn corridor notes, appointment numbers.
-* **External Customer/Broker Views See**: Milestone status (M1-M10), real-time sanitized ETA, current city/state location (or corridor zip code), delay summaries, non-sensitive route risk alerts.
+* **External Customer/Broker Views See**: Milestone status (M1-M10, excluding internal M6A), real-time sanitized ETA, current city/state location (or corridor zip code), delay summaries, non-sensitive route risk alerts.
 
 ### Rule 2: Escalation Matrix & Channel Selection
 * **Consequence Level 0**: Logged to audit database. No external alert. Operations Feed remains clean.
@@ -721,10 +836,10 @@ The following 50 real-world scenarios demonstrate how Route Risk, Mission Visibi
 * **Equipment**: 53ft Dry Van
 * **Commodity**: Heavy Steel Coils on Pallets
 * **Corridor**: I-70 Westbound, Columbus, OH
-* **Milestone**: M6 (In Transit)
+* **Milestone**: M6A (Mid-Route Load Securement Check)
 * **Route Risk Event Type**: RR-CRG-DEV (Cargo Shift Hazard)
 * **Consequence Level**: Level 3 (High Impact)
-* **Trigger Condition**: Telematics registers hard braking (12.4 mph/sec deceleration); driver calls reporting load shifted against trailer wall.
+* **Trigger Condition**: Telematics registers hard braking (12.4 mph/sec deceleration); driver completes M6A check and reports load shifted against trailer wall.
 * **Mission Impact**: Dangerous trailer lean; vehicle must stop at nearest dock for freight restrapping/rework.
 * **Driver Communication**: "CAUTION: Reduce speed. Pull into Pilot Exit 112 carefully. Cross-dock team dispatched to inspect freight."
 * **Stakeholder Communication (Publisher Draft)**: "Load LOAD-3004 executing safety inspection and cargo re-securing following hard emergency maneuver. Revised ETA +3 hours."
@@ -849,7 +964,7 @@ The following 50 real-world scenarios demonstrate how Route Risk, Mission Visibi
 * **Equipment**: 53ft Stepdeck Flatbed
 * **Commodity**: Heavy Machinery Component
 * **Corridor**: I-40 Eastbound, Nashville, TN
-* **Milestone**: M6 (In Transit)
+* **Milestone**: M6A (Mid-Route Load Securement Check)
 * **Route Risk Event Type**: RR-EQP-BRK (Suspension Breakdown)
 * **Consequence Level**: Level 3 (High Impact)
 * **Trigger Condition**: Trailer air suspension line pinhole puncture causes air spring bags to collapse; trailer frame riding on axle stops.
@@ -945,10 +1060,10 @@ The following 50 real-world scenarios demonstrate how Route Risk, Mission Visibi
 * **Equipment**: 53ft Oversize Flatbed (12ft Wide Load with Escort)
 * **Commodity**: Prefabricated Concrete Girder
 * **Corridor**: I-65 Northbound, MP 110, IN
-* **Milestone**: M6 (In Transit)
+* **Milestone**: M6A (Mid-Route Load Securement Check)
 * **Route Risk Event Type**: RR-REG-PER (Permit Corridor Obstruction)
 * **Consequence Level**: Level 3 (High Impact)
-* **Trigger Condition**: INDOT construction shrinks lane width to 11ft 0in; 12ft wide oversize load cannot physically fit through construction zone.
+* **Trigger Condition**: INDOT construction shrinks lane width to 11ft 0in; 12ft wide oversize load cannot physically fit through construction zone. M6A check verifies securement before pulling over for police escort.
 * **Mission Impact**: Vehicle forced to pull over on wide shoulder until state police escort arrives to clear counter-flow route.
 * **Driver Communication**: "DO NOT ENTER construction zone. Hold position on right shoulder at MP 108. State escort officer en route."
 * **Stakeholder Communication (Publisher Draft)**: "Load LOAD-4008 holding on I-65 N pending state police escort around emergency lane narrowing. Delivery ETA +3.5 hours."
@@ -961,10 +1076,10 @@ The following 50 real-world scenarios demonstrate how Route Risk, Mission Visibi
 * **Equipment**: 53ft Refrigerated Trailer
 * **Commodity**: Ice Cream Products (Set point: -20°F)
 * **Corridor**: I-10 Westbound, Palm Springs, CA
-* **Milestone**: M6 (In Transit)
+* **Milestone**: M6A (Mid-Route Load Securement Check)
 * **Route Risk Event Type**: RR-CRG-DEV (Extreme Low-Temp Cargo Risk)
 * **Consequence Level**: Level 4 (Severe Impact)
-* **Trigger Condition**: Ambient temperature 118°F; reefer evap coil ice buildup triggers prolonged defrost cycle; box temp warms to +5°F.
+* **Trigger Condition**: Ambient temperature 118°F; reefer evap coil ice buildup triggers prolonged defrost cycle; box temp warms to +5°F detected during M6A check.
 * **Mission Impact**: Critical product melt hazard for deep-frozen ice cream.
 * **Driver Communication**: "CRITICAL DEFROST ALERT: Temp at +5F. Pull into Indio Thermo King immediately for manual coil defrost and diagnostic."
 * **Stakeholder Communication (Publisher Draft)**: "Load LOAD-4009 experiencing reefer thermal defrost variance in extreme ambient heat. Unit routed to service facility. Emergency update to follow."
@@ -1006,10 +1121,10 @@ The following 50 real-world scenarios demonstrate how Route Risk, Mission Visibi
 
 ## SECTION 11: DOCTRINAL VERIFICATION & COMPLIANCE
 
-Every operational record, route risk event, milestone update, and COMI transmission processed by DISPATCH must strictly adhere to the rules set forth in this playbook:
+Every operational record, route risk event, milestone update (including internal M6A securement checks), and COMI transmission processed by DISPATCH must strictly adhere to the rules set forth in this playbook:
 
 1. **Deterministic Rule Supremacy**: No AI or non-deterministic component may override these consequence levels or bypass Publisher human approval gates.
-2. **Auditability**: Every change in consequence level, driver notification, and stakeholder communication draft must be logged permanently in the system archive with an immutable timestamp and event reference ID.
-3. **Fail-Closed Privacy Guard**: Any automated system output that exposes non-sanitized financial or internal operational details to external roles shall be treated as a critical system fault.
+2. **Auditability**: Every change in consequence level, driver notification, M6A photo package submission, and stakeholder communication draft must be logged permanently in the system archive with an immutable timestamp and event reference ID.
+3. **Fail-Closed Privacy Guard**: Any automated system output that exposes non-sanitized financial, driver contact, or internal securement check (M6A) details to external roles shall be treated as a critical system fault.
 
 *Mike decides. DISPATCH executes.*
