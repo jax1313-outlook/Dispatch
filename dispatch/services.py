@@ -302,6 +302,38 @@ def _try_auto_dispatch(load_id: str) -> None:
         _notify_safe(lambda: notifications.notify_dispatched(updated))
 
 
+def record_route_risk_event(
+    load_id: str,
+    condition_summary: str,
+    consequence_level: int = 1,
+    estimated_delay_minutes: int = 0,
+    source_type: str = "manual_entry",
+    source_label: str = "Internal Dispatcher Entry",
+    affected_area: str = "",
+    affected_corridor: str = "",
+    delivery_commitment_status: str = "achievable",
+    has_map_visual: bool = True,
+) -> dict:
+    from dispatch import route_risk
+    return route_risk.record_route_risk_event(
+        load_id=load_id,
+        condition_summary=condition_summary,
+        consequence_level=consequence_level,
+        estimated_delay_minutes=estimated_delay_minutes,
+        source_type=source_type,
+        source_label=source_label,
+        affected_area=affected_area,
+        affected_corridor=affected_corridor,
+        delivery_commitment_status=delivery_commitment_status,
+        has_map_visual=has_map_visual,
+    )
+
+
+def get_route_risk(load_id: str) -> dict:
+    from dispatch import route_risk
+    return route_risk.get_route_risk(load_id)
+
+
 def get_visibility(load_id: str) -> dict | None:
     return store.get_visibility(load_id)
 
@@ -660,6 +692,30 @@ def get_comi_status(load_id: str) -> dict:
     if not pkg:
         return {"exists": False, "status": None}
     return {"exists": True, "status": pkg["status"]}
+
+
+def evaluate_comi_routing(
+    load_id: str,
+    trigger_type: str,
+    consequence_level: int = 1,
+    source_refs: dict | None = None,
+    custom_notes: dict | None = None,
+) -> dict:
+    """COMI routing helper evaluating triggers and recipient role visibility."""
+    from dispatch import comi_routing
+    return comi_routing.evaluate_comi_routing(
+        load_id=load_id,
+        trigger_type=trigger_type,
+        consequence_level=consequence_level,
+        source_refs=source_refs,
+        custom_notes=custom_notes,
+    )
+
+
+def sanitize_payload_for_role(payload: dict, role: str) -> dict:
+    """Role-based payload sanitization ensuring internal-only information is excluded for external recipients."""
+    from dispatch import comi_routing
+    return comi_routing.sanitize_payload_for_role(payload, role)
 
 
 def archive_load(load_id: str) -> dict:

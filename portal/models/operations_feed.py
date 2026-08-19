@@ -266,6 +266,32 @@ def _library_gap_cards() -> list[dict]:
     return cards
 
 
+def _route_risk_cards() -> list[dict]:
+    cards = []
+    from dispatch import route_risk
+    for event in route_risk.list_route_risk_events():
+        if event.get("status") != "active":
+            continue
+        load = dispatch_svc.get_load(event["load_id"]) or {}
+        title = f"Route Risk (Level {event['consequence_level']})"
+        if load.get("customer"):
+            title = f"{title} — {load['customer']}"
+        summary = f"{event['condition_summary']} (Est delay: {event['estimated_delay_minutes']}m)"
+        mv = dispatch_svc.get_mission_visibility(event["load_id"])
+        if mv.get("next_expected_milestone"):
+            summary += f" [Next expected: {mv['next_expected_milestone']}]"
+        cards.append(_card(
+            card_id=f"routerisk-{event['route_risk_event_id']}",
+            source="route_risk",
+            card_level=max(1, event["consequence_level"]),
+            title=title,
+            summary=summary,
+            url=f"/dispatch/{event['load_id']}",
+            created_at=event.get("created_at", ""),
+        ))
+    return cards
+
+
 _SOURCE_BUILDERS = (
     _publisher_cards,
     _conflict_cards,
@@ -276,6 +302,7 @@ _SOURCE_BUILDERS = (
     _queue_cards,
     _library_gap_cards,
     _comi_cards,
+    _route_risk_cards,
 )
 
 
