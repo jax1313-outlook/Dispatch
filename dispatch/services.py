@@ -649,6 +649,19 @@ def list_pods(load_id: str) -> list[dict]:
     return store.list_pods(load_id)
 
 
+def get_comi_status(load_id: str) -> dict:
+    """Shared COMI (Freight Closeout Communications) status lookup, so every
+    surface -- Driver Portal, Stakeholder Portal, Operations Feed, and any
+    future consumer -- reads the same DRAFT/REVIEWED/SUBMITTED signal from
+    portal.models.email_helper instead of re-deriving it independently."""
+    from portal.models import email_helper
+
+    pkg = email_helper.get_package(load_id)
+    if not pkg:
+        return {"exists": False, "status": None}
+    return {"exists": True, "status": pkg["status"]}
+
+
 def archive_load(load_id: str) -> dict:
     load = store.get_load(load_id)
     if not load:
@@ -1579,6 +1592,7 @@ def build_stakeholder_view(load_id: str) -> dict | None:
         "settlement": settlement,
         "assigned_driver": assigned_driver,
         "assigned_equipment": assigned_equipment,
+        "comi_status": get_comi_status(load_id),
     }
 
 
