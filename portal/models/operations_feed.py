@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dispatch import services as dispatch_svc
 
-from portal.models import conflict, publisher
+from portal.models import conflict, publisher, email_helper
 from portal.models import library as lib_model
 
 CARD_LEVELS: dict[int, str] = {
@@ -221,6 +221,29 @@ def _queue_cards() -> list[dict]:
     return cards
 
 
+def _comi_cards() -> list[dict]:
+    cards = []
+    for package in email_helper.list_packages():
+        if package.get("status") == "SUBMITTED":
+            continue
+        load = dispatch_svc.get_load(package["load_id"])
+        title = (
+            f"Closeout Communications — {load['customer']}"
+            if load and load.get("customer")
+            else package["load_id"]
+        )
+        cards.append(_card(
+            card_id=f"comi-{package.get('id', '')}",
+            source="comi",
+            card_level=2,
+            title=title,
+            summary=f"Status: {package['status']}",
+            url=f"/dispatch/{package['load_id']}",
+            created_at=package.get("updated_at") or package.get("created_at") or "",
+        ))
+    return cards
+
+
 def _library_gap_cards() -> list[dict]:
     cards = []
     for asset in lib_model.get_missing_company_assets():
@@ -245,6 +268,7 @@ _SOURCE_BUILDERS = (
     _stalled_load_cards,
     _queue_cards,
     _library_gap_cards,
+    _comi_cards,
 )
 
 
