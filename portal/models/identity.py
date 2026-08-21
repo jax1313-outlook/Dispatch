@@ -19,7 +19,7 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from portal.models import get_data_dir
+from portal.models import get_data_dir, atomic_write_json
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
@@ -49,7 +49,7 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     path = _identity_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def _public(record: dict) -> dict:

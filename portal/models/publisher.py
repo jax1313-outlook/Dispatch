@@ -16,7 +16,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir
+from portal.models import get_data_dir, atomic_write_json
 
 # Identities that may never be used as an approver -- Publisher may not approve itself. Matches
 # dispatch_publisher.models.RESERVED_SYSTEM_IDENTITIES from the tri-department build.
@@ -75,7 +75,7 @@ def _load() -> list[dict]:
 
 def _save(data: list[dict]) -> None:
     path = _publisher_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def get_queue() -> list[dict]:

@@ -6,10 +6,15 @@ validate_status_transition() entirely, so a load could be "archived" from any
 status at all. This adds the missing gate (and the "cancelled" -> "archived"
 entry in _VALID_TRANSITIONS that a cancelled load needs to be archivable).
 
-Scope: only archive_load()'s own status check plus the one _VALID_TRANSITIONS
-entry. add_milestone()'s status-cascade logic is untouched (see CLAUDE.md /
-the deployment blueprint's decision register -- that's a separate, not-yet
--attempted item referred to elsewhere as finding #5 / A1).
+Scope when written: only archive_load()'s own status check plus the one
+_VALID_TRANSITIONS entry. add_milestone()'s status-cascade logic was left
+untouched at the time -- the separate item referred to elsewhere as finding
+#5 / A1.
+
+That item is now closed by M1 (DISPATCH_BUILD_MATRIX_v1): add_milestone()
+gates its cascade on the same validate_status_transition() table. The helpers
+below therefore walk the real ladder instead of jumping states, and
+tests/test_milestone_transition_gate.py covers the gate itself.
 """
 
 from __future__ import annotations
@@ -38,13 +43,22 @@ def load():
 
 
 def _deliver(load_id: str) -> None:
-    """Drive a load to "delivered" via the milestone cascade (untouched logic)."""
-    dispatch_svc.add_milestone(load_id, "dispatched")
-    dispatch_svc.add_milestone(load_id, "delivered")
+    """Drive a load to "delivered" by walking the full milestone ladder.
+
+    This helper used to jump straight from "dispatched" to "delivered", which
+    worked only because add_milestone()'s cascade wrote through
+    store.update_load() without validating anything. M1
+    (DISPATCH_BUILD_MATRIX_v1) closed that bypass, so the ladder is now walked
+    for real -- which is the behavior this module was always asserting the
+    archive path had.
+    """
+    for evt in ("dispatched", "en_route_pickup", "arrived_pickup", "loaded",
+                "departed_pickup", "arrived_delivery", "delivered"):
+        dispatch_svc.add_milestone(load_id, evt)
 
 
 def _complete(load_id: str) -> None:
-    """Drive a load to "completed" via the milestone cascade (untouched logic)."""
+    """Drive a load to "completed" via the milestone cascade."""
     _deliver(load_id)
     dispatch_svc.add_milestone(load_id, "completed")
 
@@ -96,6 +110,8 @@ class TestArchiveRejectsInvalidSourceStatus:
         # "picked_up" only allows -> {"in_transit"}.
         load_id = load["load_id"]
         dispatch_svc.add_milestone(load_id, "dispatched")
+        dispatch_svc.add_milestone(load_id, "en_route_pickup")
+        dispatch_svc.add_milestone(load_id, "arrived_pickup")
         dispatch_svc.add_milestone(load_id, "loaded")  # -> "picked_up"
         assert dispatch_svc.get_load(load_id)["status"] == "picked_up"
         with pytest.raises(ValueError, match="Invalid status transition"):

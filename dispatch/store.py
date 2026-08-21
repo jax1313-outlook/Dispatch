@@ -2133,3 +2133,100 @@ def get_expiring_compliance_documents(days_ahead: int = 30) -> list[dict]:
         _enrich_compliance_doc(d)
         results.append(d)
     return results
+
+
+# ── Route Risk Events ───────────────────────────────────────────────
+
+_ROUTE_RISK_COLUMNS = (
+    "route_risk_event_id", "load_id", "source_type", "source_label",
+    "affected_area", "affected_corridor", "condition_summary",
+    "estimated_delay_minutes", "delivery_commitment_status",
+    "route_risk_level", "consequence_level",
+    "driver_notification_required", "stakeholder_notification_required",
+    "mission_visibility_update_required", "comi_required",
+    "created_at", "status", "has_map_visual",
+)
+
+_ROUTE_RISK_BOOL_COLUMNS = (
+    "driver_notification_required", "stakeholder_notification_required",
+    "mission_visibility_update_required", "comi_required", "has_map_visual",
+)
+
+
+def _route_risk_row_to_event(row) -> dict:
+    """Rebuild the engine's event shape from a stored row.
+
+    Two fields are not stored because they are strictly derived, and storing a
+    derived value is how two sources of truth start:
+
+      * ``map_visual_placeholder`` -- reconstructed from ``has_map_visual`` plus
+        the corridor/area, exactly as route_risk.engine builds it.
+      * ``is_live_data`` -- always False. No live feed is connected; the engine
+        hardcodes it, and this must not become a stored value that could
+        disagree with reality.
+
+    ``has_map_visual`` itself *is* stored (rather than assumed True) so a
+    round-tripped event equals the event that was recorded. A durability fix
+    that quietly reconstructs a field is not a durability fix.
+    """
+    d = dict(row)
+    for col in _ROUTE_RISK_BOOL_COLUMNS:
+        d[col] = bool(d.get(col))
+    has_map_visual = d.pop("has_map_visual")
+    corridor = d.get("affected_corridor") or ""
+    area = d.get("affected_area") or ""
+    d["map_visual_placeholder"] = {
+        "available": has_map_visual,
+        "placeholder_type": "embedded_corridor_map_placeholder",
+        "label": f"Corridor Map Placeholder: {corridor or area or 'Route Segment'}",
+    }
+    d["is_live_data"] = False
+    return d
+
+
+def create_route_risk_event(event: dict) -> dict:
+    """Persist one Route Risk event.
+
+    Returns the event as it will be read back, so a caller cannot come to
+    depend on an in-memory shape the database would not reproduce.
+    """
+    placeholder = event.get("map_visual_placeholder") or {}
+    values = {
+        col: event.get(col) for col in _ROUTE_RISK_COLUMNS if col != "has_map_visual"
+    }
+    values["has_map_visual"] = 1 if placeholder.get("available") else 0
+    for col in _ROUTE_RISK_BOOL_COLUMNS:
+        if col in values and col != "has_map_visual":
+            values[col] = 1 if values[col] else 0
+
+    cols = ", ".join(_ROUTE_RISK_COLUMNS)
+    marks = ", ".join("?" for _ in _ROUTE_RISK_COLUMNS)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO route_risk_events ({cols}) VALUES ({marks})",
+            [values[c] for c in _ROUTE_RISK_COLUMNS],
+        )
+    stored = get_route_risk_event(event["route_risk_event_id"])
+    return stored if stored is not None else event
+
+
+def get_route_risk_event(route_risk_event_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM route_risk_events WHERE route_risk_event_id=?",
+            (route_risk_event_id,),
+        ).fetchone()
+    return _route_risk_row_to_event(row) if row else None
+
+
+def list_route_risk_events(load_id: str | None = None) -> list[dict]:
+    """Newest first, matching the engine's in-memory ordering."""
+    sql = "SELECT * FROM route_risk_events"
+    params: list = []
+    if load_id:
+        sql += " WHERE load_id=?"
+        params.append(load_id)
+    sql += " ORDER BY created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_route_risk_row_to_event(r) for r in rows]

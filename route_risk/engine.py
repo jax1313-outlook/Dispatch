@@ -31,8 +31,21 @@ def record_route_risk_event(
     delivery_commitment_status: str = "achievable",
     has_map_visual: bool = True,
     comi_eval_fn: Callable[..., dict[str, Any]] | None = None,
+    store_fn: Callable[[dict], dict] | None = None,
 ) -> dict:
-    """Records a Route Risk event independently without hard-coded imports to Dispatch."""
+    """Records a Route Risk event independently without hard-coded imports to Dispatch.
+
+    Persistence is *injected*, never imported -- the same decoupling contract
+    this module already uses for ``comi_eval_fn``. Pass ``store_fn`` and the
+    event is handed to it and not retained here; omit it and the event stays in
+    the module-level dict, which is what a standalone consumer of this engine
+    gets. There is deliberately no dual write: two copies of an operational
+    record is two sources of truth.
+
+    Dispatch injects a SQLite-backed ``store_fn`` (dispatch/route_risk.py) so
+    that a process restart no longer destroys recorded conditions -- see M3 in
+    DISPATCH_BUILD_MATRIX_v1.
+    """
     consequence_level = max(0, min(5, int(consequence_level)))
     event_id = f"rr-{uuid.uuid4().hex[:10]}"
 
@@ -77,6 +90,9 @@ def record_route_risk_event(
         "is_live_data": False,
     }
 
+    if store_fn is not None:
+        return store_fn(event)
+
     if load_id not in _ROUTE_RISK_EVENTS:
         _ROUTE_RISK_EVENTS[load_id] = []
     _ROUTE_RISK_EVENTS[load_id].append(event)
@@ -84,9 +100,19 @@ def record_route_risk_event(
     return event
 
 
-def get_route_risk(load_id: str) -> dict:
-    """Route Risk lookup for a single load."""
-    events = _ROUTE_RISK_EVENTS.get(load_id, [])
+def get_route_risk(
+    load_id: str,
+    load_events_fn: Callable[[str], list[dict]] | None = None,
+) -> dict:
+    """Route Risk lookup for a single load.
+
+    ``load_events_fn`` is the read side of the same injection ``store_fn``
+    provides on the write side; omit it for the in-memory store.
+    """
+    if load_events_fn is not None:
+        events = load_events_fn(load_id)
+    else:
+        events = _ROUTE_RISK_EVENTS.get(load_id, [])
     if events:
         latest = max(events, key=lambda x: x["created_at"])
         return {
@@ -124,7 +150,12 @@ def get_route_risk(load_id: str) -> dict:
     }
 
 
-def list_route_risk_events(load_id: str | None = None) -> list[dict]:
+def list_route_risk_events(
+    load_id: str | None = None,
+    load_events_fn: Callable[[str | None], list[dict]] | None = None,
+) -> list[dict]:
+    if load_events_fn is not None:
+        return load_events_fn(load_id)
     if load_id:
         return list(_ROUTE_RISK_EVENTS.get(load_id, []))
     all_events = []

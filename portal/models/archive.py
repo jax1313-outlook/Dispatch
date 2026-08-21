@@ -17,7 +17,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_archive_dir
+from portal.models import get_archive_dir, atomic_write_json
 
 # Same reserved-identity set as portal.models.publisher.RESERVED_SYSTEM_IDENTITIES. Duplicated
 # rather than imported to keep this module's only real dependency (portal.models) unchanged --
@@ -68,7 +68,7 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     path = _archive_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def get_all() -> dict:

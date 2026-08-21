@@ -17,7 +17,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir
+from portal.models import get_data_dir, atomic_write_json
 
 STATUSES = ["ASSEMBLED", "ROUTED", "CLUSTERED", "ARCHIVED"]
 
@@ -41,7 +41,7 @@ def _load() -> list[dict]:
 
 def _save(data: list[dict]) -> None:
     path = _packets_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def get_packet(load_id: str) -> dict | None:

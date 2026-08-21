@@ -971,6 +971,10 @@ class TestConflictAllTypes:
             "scheduling_overlap", "turnaround_too_tight",
             "publisher_missing_document", "library_missing_asset",
             "corrupt_sandbox_data",
+            # Added by M1 (DISPATCH_BUILD_MATRIX_v1): raised when a milestone
+            # would move a load between two statuses the transition table
+            # does not allow. The milestone is recorded; the status is not.
+            "invalid_status_transition",
         ]
         assert CONFLICT_TYPES == expected
 

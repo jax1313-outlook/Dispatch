@@ -85,4 +85,33 @@ Each entry records the literal, verbatim approval text given for that specific c
 
 ---
 
+## 2026-08-21 — Build Matrix adopted; Level 1 defect missions built (M1, M3, M-A)
+
+**PR:** (this change)
+**Capability:** Mission-state transition enforcement (`dispatch/services.py`'s `add_milestone()`, `portal/models/conflict.py`, `portal/routes/dispatch_api.py`); Route Risk persistence (`route_risk/engine.py`, `dispatch/route_risk.py`, `dispatch/store.py`, `dispatch/db.py` schema + migration); JSON store durability (`portal/models/__init__.py` and the eleven `portal/models/*.py` stores, `dispatch/email_helper.py`); test isolation (`tests/conftest.py`).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** "You are now authorized to produce the Build Matrix and implement approved missions in dependency order. Follow repository governance. Follow constitutions. Follow ontology. Follow source-of-truth boundaries. Do not introduce new architecture without review. Do not reactivate Manager. Do not create a second calendar. Do not turn Portal into a source of truth. Do not turn Website into a source of truth. Do not assign judgment to deterministic layers. Document every assumption. continue until completed by pass review checkpoints. use best judgement and conserative preception." — in response to `DISPATCH_REPO_RECONCILIATION_PLAN_v1`, the repository-grounded reconciliation of the proposed context architecture (Ontology, Mission/Scheduling/Orchestration/Outlook constitutions, Driver Portal context, and the startup/shutdown/reset review) against this repository.
+
+**Scope taken, conservatively.** The Build Matrix (`DISPATCH_BUILD_MATRIX_v1.md`) registers eleven missions. Only the four requiring **no doctrine and no new architecture** were built: M0 (documentation only), M1, M3, and M-A — all Level 1 defect fixes or read-only evidence. Every other mission is recorded as **held** or **blocked**, because it would either introduce a new component (BM-01: M2, M5, M6) or depend on doctrine that does not exist (BM-07: M9, M10) or on an unanswered Level 0 adjudication (M4, M7, M8).
+
+**The Level 0 adjudication is NOT resolved by this change and blocks the layer work.** Constitution v3 §6.4 assigns deterministic runtime machinery to **Dispatch Spine**, specified in `DISPATCH_SPINE_SPECIFICATION_v1` (Claude-3 repo); the proposed package divides the same responsibilities across three new layers and does not mention the Spine. None of M1/M3/M-A creates or names a layer, so none of them presumes an answer. Mike must settle it before any mission that does.
+
+**Assumptions requiring confirmation** (BM-08), each argued in its walkthrough report:
+1. **M1** — a refused transition still records the milestone; only the status change is refused. The alternative (refuse the whole operation) would discard reported evidence and would break `generate_pod()` on completed/archived loads.
+2. **M1** — refusals are raised at severity `warning`, not `critical`.
+3. **M3** — no dual write: a persisted event is not also kept in module memory, so `_ROUTE_RISK_EVENTS` is now always empty in Dispatch use.
+4. **M3** — one column (`has_map_visual`) added via the existing idempotent migration, judged in-scope for exact round-trip fidelity; adding a table would not have been.
+5. **M-A** — `dispatch/email_helper.py` duplicates the atomic-write routine rather than importing it, preserving THE MIKE RULE standalone boundary.
+
+**Behavior change enumerated** (BM-09): M1 refuses **90 of 121** (load status × milestone type) pairs that previously succeeded; 31 remain accepted. The full matrix is in the M1 walkthrough report and the count is pinned by a test so it cannot move silently.
+
+**Incidental fix disclosed:** the test suite was writing into the live `portal/data/` directory (400 accumulated conflict notices, including two types no longer in `CONFLICT_TYPES`). One line added to the existing `tmp_archive` isolation fixture; zero tests changed behavior.
+
+**Tests:** full suite **2771 passed**, from a 2705 baseline — 66 new tests, no test deleted or weakened. Live walkthroughs run against a real Flask server and, for M3, across two separate interpreter processes.
+
+**Walkthroughs:** `M1_MISSION_TRANSITION_GATE_WALKTHROUGH_REPORT_v1.md`, `M3_ROUTE_RISK_DURABILITY_WALKTHROUGH_REPORT_v1.md`, `MA_ATOMIC_STORE_WRITES_WALKTHROUGH_REPORT_v1.md`
+**Registers:** `DISPATCH_BUILD_MATRIX_v1.md`, `DISPATCH_TRIGGER_AND_SIDE_EFFECT_INVENTORY_v1.md` (M0)
+
+---
+
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

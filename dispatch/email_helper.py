@@ -57,8 +57,41 @@ def _load() -> list[dict]:
 
 
 def _save(data: list[dict]) -> None:
+    """Atomic write: temp file in the same directory, then os.replace().
+
+    A plain write_text() truncates before writing, so a crash mid-write leaves
+    a half-written JSON file that every later _load() fails to parse -- the
+    whole package store, not one record.
+
+    portal/models/__init__.py::atomic_write_json is the same routine, and this
+    is deliberately NOT imported from there: this module is a "local Dispatch
+    copy, duplicated to enforce standalone ownership under THE MIKE RULE" (see
+    the module docstring), so dispatch/ must not acquire a dependency on
+    portal/. Same reasoning as RESERVED_SYSTEM_IDENTITIES above, which is
+    duplicated here for the same reason.
+
+    Does not make concurrent writers safe -- last replace wins. See M-A in
+    DISPATCH_BUILD_MATRIX_v1.
+    """
+    import tempfile
+
     path = _packages_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def get_package(load_id: str) -> dict | None:
