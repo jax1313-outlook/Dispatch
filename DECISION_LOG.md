@@ -157,4 +157,36 @@ Each entry records the literal, verbatim approval text given for that specific c
 
 ---
 
+## 2026-08-21 — C3: status-change audit symmetry
+
+**PR:** (this change)
+**Capability:** Mission-state audit trail (`dispatch/services.py` — new `_record_status_change()` helper plus four call sites: `update_load()`, `add_milestone()`, `_try_auto_dispatch()`, `archive_load()`).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** "MISSION: C3 STATUS-CHANGE AUDIT SYMMETRY — Mike Zachary authorizes implementation of corrective mission C3 only. … Correct the status-change audit asymmetry between the repository's approved status-transition paths. … Required outcome: Every accepted status change, regardless of approved entry path, must produce one consistent audit event containing the required transition evidence. … Do not begin C1, C2a, C2b, C4, or any other Build Matrix mission without separate authorization."
+
+**Analysis before editing found four status-change paths, not two.** The brief named `update_load()` (audited) and `add_milestone()` (unaudited). Two further unaudited paths were found and included on the strength of "regardless of approved entry path": `_try_auto_dispatch()` (`created → dispatched`) and `archive_load()` (`… → archived`). Both were moving loads between states with no audit trail at all.
+
+**Narrowest implementation point: the service layer, not the store layer.** `store.update_load()` is the single point every path passes through, and was rejected for two reasons — it is deliberately the raw unvalidated write (M1 asserts this), and, decisively, **it cannot satisfy the audit requirement**: only the service call sites know which operation moved the status, and the originating operation must be recorded.
+
+**No schema change.** The existing `activities` table carries the event. Load id, timestamp and actor land in real columns; previous state, new state and originating operation land in the message, which is the format this repository already used.
+
+**Assumptions requiring confirmation** (BM-08), argued in the walkthrough:
+1. The existing `activities` shape is the "approved repository equivalent" for previous/new state. Spine §8 wants structured `previous_state`/`new_state` fields — that is the Spine Event-schema mission, which C3 was not authorized to begin.
+2. `source="user"` when an actor is known, `"system"` otherwise, because `ACTIVITY_SOURCES` admits only those two. A milestone's own source vocabulary is preserved in the operation string instead. Actor is never fabricated.
+3. Paths 3 and 4 are in scope. If a strictly two-path fix was intended, they are two lines each and trivially removable.
+
+**The no-op divergence is preserved, not resolved.** `update_load()` has always written an event when previous == new — `"Status changed from dispatched to dispatched"` — which is a false statement in an audit log. Current behavior was identified by probe before editing, as the mission required, and then **left alone**, because changing it would alter existing repository policy. The three paths C3 added fire only on a real change. Both behaviors are asserted by tests so neither can drift. **Recommendation for Mike: stop auditing no-ops on `update_load()` too — a one-line guard that removes only false entries and makes all four paths identical.** Not done here.
+
+**Behavior change enumerated** (BM-09): every `status_change` message now carries a `(via …)` suffix naming the originating operation. Additive; these messages render on the load detail pages; no existing test broke.
+
+**Disclosed:** analysis probe scripts ran outside the test harness and wrote two Conflict Notices into the working copy's live `portal/data/conflicts.json` (400 → 402 entries). Not cleaned up deliberately — unresolved conflict notices are classified protected, and purge is an Archive function under a retention policy that does not exist. `portal/data/` is gitignored; nothing entered the repository.
+
+**Tests:** full suite **2804 passed**, from a 2771 baseline — 33 new, none deleted or weakened. Test isolation proven by mtime rather than asserted: `portal/data/conflicts.json` is byte-identical before and after the refusal-heavy test modules.
+
+**Files changed: 2** — `dispatch/services.py` and the new `tests/test_status_change_audit.py`. No schema, migration, template, route or dependency change.
+
+**Walkthrough:** `C3_STATUS_CHANGE_AUDIT_WALKTHROUGH_REPORT_v1.md`
+
+---
+
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

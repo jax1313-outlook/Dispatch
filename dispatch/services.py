@@ -27,6 +27,7 @@ from dispatch.models import (
     IFTAReportApproval,
     IFTATripLeg,
     Load,
+    LoadActivity,
     LoadVisibilityRecord,
     MilestoneEvent,
     PODPackage,
@@ -177,6 +178,58 @@ def list_loads(
     )
 
 
+def _record_status_change(
+    load_id: str,
+    previous_state: str,
+    new_state: str,
+    operation: str,
+    actor: str = "",
+) -> None:
+    """Write the one audit event for an accepted status change.
+
+    Mission C3. Four service paths change a load's status -- update_load(),
+    add_milestone(), _try_auto_dispatch() and archive_load() -- and before C3
+    only the first wrote a status_change activity. The other three moved a load
+    between states leaving no audit trail at all.
+
+    This is the narrowest point that can satisfy the audit requirement, and it
+    has to live in the service layer rather than in store.update_load(): the
+    store layer cannot know *which operation* moved the status, and recording
+    the originating operation is required. store.update_load() therefore stays
+    the raw, unvalidated, unaudited write it was designed to be (see
+    tests/test_milestone_transition_gate.py, which asserts exactly that).
+
+    Fields recorded, against the existing `activities` shape:
+
+        load identifier   -> load_id
+        previous / new    -> message, in the format this repository already used
+        originating op    -> message suffix, "(via ...)"
+        timestamp         -> created_at, via the repository's _utc_now()
+        actor             -> author, and source="user" when an actor is known
+
+    Actor is never fabricated. Only add_milestone() carries one (`entered_by`);
+    the other three paths pass nothing and the event records source="system"
+    with an empty author, which is what the audited path already did.
+
+    Whether a no-op (previous_state == new_state) is worth an event is decided
+    by the CALLER, deliberately -- this helper does not filter. update_load()
+    has always written one and keeps doing so; the three paths added by C3 fire
+    only on a real change. See the C3 walkthrough report: the divergence is
+    reported for Mike rather than resolved here, because changing update_load()
+    would alter existing repository policy.
+    """
+    store.create_activity(LoadActivity(
+        load_id=load_id,
+        activity_type="status_change",
+        message=(
+            f"Status changed from {previous_state} to {new_state} "
+            f"(via {operation})"
+        ),
+        author=actor,
+        source="user" if actor else "system",
+    ))
+
+
 def update_load(load_id: str, **fields) -> dict | None:
     if "driver_id" in fields and fields["driver_id"]:
         _validate_driver_assignment(fields["driver_id"])
@@ -193,13 +246,12 @@ def update_load(load_id: str, **fields) -> dict | None:
             validate_status_transition(old_status, fields["status"])
     result = store.update_load(load_id, **fields)
     if result and old_status and "status" in fields:
-        from dispatch.models import LoadActivity
-        store.create_activity(LoadActivity(
-            load_id=load_id,
-            activity_type="status_change",
-            message=f"Status changed from {old_status} to {fields['status']}",
-            source="system",
-        ))
+        # Trigger condition deliberately unchanged from before C3, including
+        # for a no-op write where old_status == fields["status"]. Preserving
+        # existing repository policy; see _record_status_change().
+        _record_status_change(
+            load_id, old_status, fields["status"], operation="load update",
+        )
     return result
 
 
@@ -282,6 +334,10 @@ def _try_auto_dispatch(load_id: str) -> None:
     if not load.get("driver_id") or not load.get("equipment_id"):
         return
     store.update_load(load_id, status="dispatched")
+    # C3: previous state is "created" by the guard above, not a re-read.
+    _record_status_change(
+        load_id, "created", "dispatched", operation="auto-dispatch",
+    )
     ms = MilestoneEvent(
         load_id=load_id,
         event_type="dispatched",
@@ -467,6 +523,20 @@ def add_milestone(
         else:
             store.update_load(load_id, status=target_status)
             effective_status = target_status
+            # C3: audit the accepted transition. Guarded on a real change --
+            # several milestone types map to the status the load already holds
+            # (departed_pickup and in_transit both -> in_transit; delivered and
+            # pod_received both -> delivered), and recording "changed from
+            # in_transit to in_transit" would put a false statement in the
+            # audit log on a routine, correct operation.
+            if target_status != current_status:
+                _record_status_change(
+                    load_id,
+                    current_status,
+                    target_status,
+                    operation=f"milestone '{event_type}' from {source}",
+                    actor=entered_by,
+                )
 
     has_open = bool(store.list_exceptions(load_id=load_id, status="open"))
 
@@ -837,6 +907,15 @@ def archive_load(load_id: str) -> dict:
     result = store.create_retention(ret)
 
     store.update_load(load_id, status="archived")
+    # C3: `load` was read at the top of archive_load() and nothing between
+    # there and here changes status, so load["status"] is the true previous
+    # state. Guarded on a real change for consistency with the other C3 sites,
+    # though validate_status_transition() above already refuses archived ->
+    # archived by way of the "already archived" retention check.
+    if load["status"] != "archived":
+        _record_status_change(
+            load_id, load["status"], "archived", operation="archive",
+        )
     vis = store.get_visibility(load_id)
     if vis:
         updated = LoadVisibilityRecord(
