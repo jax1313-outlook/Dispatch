@@ -357,8 +357,10 @@ CREATE TABLE IF NOT EXISTS route_risk_events (
     mission_visibility_update_required INTEGER DEFAULT 0,
     comi_required INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active'
+    status TEXT NOT NULL DEFAULT 'active',
+    has_map_visual INTEGER NOT NULL DEFAULT 1
 );
+CREATE INDEX IF NOT EXISTS idx_route_risk_load ON route_risk_events(load_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_driver ON driver_pay(driver_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_load ON driver_pay(load_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_status ON driver_pay(status);
@@ -455,6 +457,17 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         pass
     try:
         conn.execute("ALTER TABLE ifta_fuel_purchases ADD COLUMN extraction_confidence REAL")
+    except sqlite3.OperationalError:
+        pass
+    # route_risk_events has existed in _SCHEMA since it was written but was
+    # never written to -- Route Risk events lived only in a module-level dict
+    # (route_risk/engine.py), so a process restart destroyed them. M3
+    # (DISPATCH_BUILD_MATRIX_v1) starts writing this table, and needs the one
+    # column the in-memory event carried that the table did not.
+    try:
+        conn.execute(
+            "ALTER TABLE route_risk_events ADD COLUMN has_map_visual INTEGER NOT NULL DEFAULT 1"
+        )
     except sqlite3.OperationalError:
         pass
 

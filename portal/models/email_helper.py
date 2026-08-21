@@ -34,7 +34,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir
+from portal.models import get_data_dir, atomic_write_json
 from portal.models.publisher import RESERVED_SYSTEM_IDENTITIES
 
 STATUSES = ["DRAFT", "REVIEWED", "SUBMITTED"]
@@ -70,7 +70,7 @@ def _load() -> list[dict]:
 
 def _save(data: list[dict]) -> None:
     path = _packages_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def get_package(load_id: str) -> dict | None:

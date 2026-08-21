@@ -33,7 +33,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir
+from portal.models import get_data_dir, atomic_write_json
 
 # The seven integration types specified by D4. Fixed set -- this is a generic container, not a
 # per-vendor model, so callers must pick one of these rather than inventing new types.
@@ -70,7 +70,7 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     path = _registry_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def _default_entry(integration_type: str) -> dict:

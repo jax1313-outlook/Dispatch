@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir
+from portal.models import get_data_dir, atomic_write_json
 
 STATUSES = [
     "OPEN",
@@ -78,7 +78,7 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     path = _sandbox_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def get_all() -> dict:

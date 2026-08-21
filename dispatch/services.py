@@ -27,6 +27,7 @@ from dispatch.models import (
     IFTAReportApproval,
     IFTATripLeg,
     Load,
+    LoadActivity,
     LoadVisibilityRecord,
     MilestoneEvent,
     PODPackage,
@@ -177,6 +178,58 @@ def list_loads(
     )
 
 
+def _record_status_change(
+    load_id: str,
+    previous_state: str,
+    new_state: str,
+    operation: str,
+    actor: str = "",
+) -> None:
+    """Write the one audit event for an accepted status change.
+
+    Mission C3. Four service paths change a load's status -- update_load(),
+    add_milestone(), _try_auto_dispatch() and archive_load() -- and before C3
+    only the first wrote a status_change activity. The other three moved a load
+    between states leaving no audit trail at all.
+
+    This is the narrowest point that can satisfy the audit requirement, and it
+    has to live in the service layer rather than in store.update_load(): the
+    store layer cannot know *which operation* moved the status, and recording
+    the originating operation is required. store.update_load() therefore stays
+    the raw, unvalidated, unaudited write it was designed to be (see
+    tests/test_milestone_transition_gate.py, which asserts exactly that).
+
+    Fields recorded, against the existing `activities` shape:
+
+        load identifier   -> load_id
+        previous / new    -> message, in the format this repository already used
+        originating op    -> message suffix, "(via ...)"
+        timestamp         -> created_at, via the repository's _utc_now()
+        actor             -> author, and source="user" when an actor is known
+
+    Actor is never fabricated. Only add_milestone() carries one (`entered_by`);
+    the other three paths pass nothing and the event records source="system"
+    with an empty author, which is what the audited path already did.
+
+    Whether a no-op (previous_state == new_state) is worth an event is decided
+    by the CALLER, deliberately -- this helper does not filter. update_load()
+    has always written one and keeps doing so; the three paths added by C3 fire
+    only on a real change. See the C3 walkthrough report: the divergence is
+    reported for Mike rather than resolved here, because changing update_load()
+    would alter existing repository policy.
+    """
+    store.create_activity(LoadActivity(
+        load_id=load_id,
+        activity_type="status_change",
+        message=(
+            f"Status changed from {previous_state} to {new_state} "
+            f"(via {operation})"
+        ),
+        author=actor,
+        source="user" if actor else "system",
+    ))
+
+
 def update_load(load_id: str, **fields) -> dict | None:
     if "driver_id" in fields and fields["driver_id"]:
         _validate_driver_assignment(fields["driver_id"])
@@ -193,13 +246,12 @@ def update_load(load_id: str, **fields) -> dict | None:
             validate_status_transition(old_status, fields["status"])
     result = store.update_load(load_id, **fields)
     if result and old_status and "status" in fields:
-        from dispatch.models import LoadActivity
-        store.create_activity(LoadActivity(
-            load_id=load_id,
-            activity_type="status_change",
-            message=f"Status changed from {old_status} to {fields['status']}",
-            source="system",
-        ))
+        # Trigger condition deliberately unchanged from before C3, including
+        # for a no-op write where old_status == fields["status"]. Preserving
+        # existing repository policy; see _record_status_change().
+        _record_status_change(
+            load_id, old_status, fields["status"], operation="load update",
+        )
     return result
 
 
@@ -282,6 +334,10 @@ def _try_auto_dispatch(load_id: str) -> None:
     if not load.get("driver_id") or not load.get("equipment_id"):
         return
     store.update_load(load_id, status="dispatched")
+    # C3: previous state is "created" by the guard above, not a re-read.
+    _record_status_change(
+        load_id, "created", "dispatched", operation="auto-dispatch",
+    )
     ms = MilestoneEvent(
         load_id=load_id,
         event_type="dispatched",
@@ -366,6 +422,45 @@ def get_mission_visibility(load_id: str) -> dict:
     }
 
 
+def _raise_transition_refusal_card(load_id: str, current: str, target: str, reason: str) -> None:
+    """Surface a refused status transition as a Conflict Notice.
+
+    M-08 / Constitution v3 §19: a refusal is raised as a card, never silently
+    swallowed. The notice store is the repository's existing card mechanism
+    (portal/models/conflict.py) -- reused rather than duplicated, and keyed by
+    the same "LOAD-{load_id}" scope get_publisher_status() and the End Load
+    route already use.
+
+    The import is deliberately soft, matching get_publisher_status()'s existing
+    pattern: the load engine must keep working when the portal package is not
+    importable (a plain `python -c "from dispatch import services"` in an
+    engine-only deployment). A missing portal is a missing *card surface*, not a
+    reason to lose the refusal -- so the fallback still writes to stderr.
+    """
+    explanation = (
+        f"Refused status transition for load {load_id}: "
+        f"{current} -> {target}. {reason}"
+    )
+    try:
+        from portal.models import conflict as conflict_model
+    except ImportError:
+        print(f"[dispatch.services] {explanation}", file=sys.stderr)
+        return
+    try:
+        conflict_model.create_notice(
+            conflict_type="invalid_status_transition",
+            severity="warning",
+            sandbox_id=f"LOAD-{load_id}",
+            explanation=explanation,
+            recommended_action=(
+                f"Record the intervening milestone(s) in order, or correct the load's "
+                f"status, before recording a '{target}' event."
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - a card-surface failure must not lose the milestone
+        print(f"[dispatch.services] {explanation} (card not raised: {exc})", file=sys.stderr)
+
+
 def add_milestone(
     load_id: str,
     event_type: str,
@@ -375,6 +470,23 @@ def add_milestone(
     entered_by: str = "",
     event_time: str = "",
 ) -> dict:
+    """Record a milestone, and advance the load's status only if the resulting
+    transition is legal.
+
+    The status cascade is gated by validate_status_transition() -- the same
+    table archive_load() already enforces. Previously this path wrote the
+    derived status straight through store.update_load(), which performs no
+    validation, so a load could move between any two statuses (created ->
+    delivered in one call, skipping five states).
+
+    The milestone itself is always recorded. A milestone is a record that
+    something was reported to have happened; refusing to store it would
+    discard evidence, which is the opposite of what the gate is for. What the
+    gate refuses is the *transition* -- the load's status is left exactly as it
+    was, a Conflict Notice is raised, and the returned dict carries a
+    non-persisted "status_transition_refused" key so the caller can surface it
+    immediately rather than waiting for someone to read the card.
+    """
     load = store.get_load(load_id)
     if not load:
         raise ValueError(f"Load not found: {load_id}")
@@ -390,24 +502,64 @@ def add_milestone(
     )
     result = store.create_milestone(ms)
 
-    new_status = _MILESTONE_TO_STATUS.get(event_type)
-    if new_status and new_status in LOAD_STATUSES:
-        store.update_load(load_id, status=new_status)
+    current_status = load["status"]
+    target_status = _MILESTONE_TO_STATUS.get(event_type)
+    refusal: dict | None = None
+    effective_status = current_status
+
+    if target_status and target_status in LOAD_STATUSES:
+        try:
+            validate_status_transition(current_status, target_status)
+        except ValueError as exc:
+            refusal = {
+                "from_status": current_status,
+                "to_status": target_status,
+                "event_type": event_type,
+                "reason": str(exc),
+            }
+            _raise_transition_refusal_card(
+                load_id, current_status, target_status, str(exc)
+            )
+        else:
+            store.update_load(load_id, status=target_status)
+            effective_status = target_status
+            # C3: audit the accepted transition. Guarded on a real change --
+            # several milestone types map to the status the load already holds
+            # (departed_pickup and in_transit both -> in_transit; delivered and
+            # pod_received both -> delivered), and recording "changed from
+            # in_transit to in_transit" would put a false statement in the
+            # audit log on a routine, correct operation.
+            if target_status != current_status:
+                _record_status_change(
+                    load_id,
+                    current_status,
+                    target_status,
+                    operation=f"milestone '{event_type}' from {source}",
+                    actor=entered_by,
+                )
 
     has_open = bool(store.list_exceptions(load_id=load_id, status="open"))
 
     vis = LoadVisibilityRecord(
         load_id=load_id,
-        current_status=new_status or load["status"],
+        current_status=effective_status,
         last_milestone=event_type,
         next_expected_milestone=_MILESTONE_NEXT.get(event_type),
         exception_flag=has_open,
     )
     store.upsert_visibility(vis)
 
-    if event_type == "delivered":
+    # Only notify on a delivery the load actually reached. Announcing a
+    # delivery for a load whose transition was just refused would report a
+    # state the load is not in -- and this notification is one step from
+    # being broker-facing.
+    if event_type == "delivered" and effective_status == "delivered":
         updated_load = store.get_load(load_id) or load
         _notify_safe(lambda: notifications.notify_delivered(updated_load, result))
+
+    if refusal:
+        result = dict(result)
+        result["status_transition_refused"] = refusal
 
     return result
 
@@ -755,6 +907,15 @@ def archive_load(load_id: str) -> dict:
     result = store.create_retention(ret)
 
     store.update_load(load_id, status="archived")
+    # C3: `load` was read at the top of archive_load() and nothing between
+    # there and here changes status, so load["status"] is the true previous
+    # state. Guarded on a real change for consistency with the other C3 sites,
+    # though validate_status_transition() above already refuses archived ->
+    # archived by way of the "already archived" retention check.
+    if load["status"] != "archived":
+        _record_status_change(
+            load_id, load["status"], "archived", operation="archive",
+        )
     vis = store.get_visibility(load_id)
     if vis:
         updated = LoadVisibilityRecord(

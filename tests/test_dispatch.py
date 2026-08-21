@@ -48,6 +48,12 @@ def dispatched_load(sample_load):
 @pytest.fixture
 def delivered_load(dispatched_load):
     load_id = dispatched_load["load_id"]
+    # Walks the full ladder. "en_route_pickup" used to be skipped here: the
+    # status cascade wrote straight through store.update_load(), which does no
+    # validation, so dispatched -> at_pickup silently succeeded. add_milestone()
+    # now gates the cascade on the same transition table archive_load() uses,
+    # so the intervening step has to be real. See DISPATCH_BUILD_MATRIX_v1 / M1.
+    services.add_milestone(load_id, "en_route_pickup")
     services.add_milestone(load_id, "arrived_pickup")
     services.add_milestone(load_id, "loaded")
     services.add_milestone(load_id, "departed_pickup")
@@ -603,7 +609,9 @@ class TestDispatchAPI:
         return client.post("/api/dispatch/loads", json=data)
 
     def _deliver_load(self, client, load_id):
-        for evt in ("dispatched", "arrived_pickup", "loaded",
+        # Full ladder -- "en_route_pickup" is no longer skippable; the milestone
+        # route now returns 409 when a milestone would jump the transition table.
+        for evt in ("dispatched", "en_route_pickup", "arrived_pickup", "loaded",
                      "departed_pickup", "arrived_delivery", "delivered"):
             client.post(f"/api/dispatch/loads/{load_id}/milestones",
                         json={"event_type": evt})
@@ -1100,6 +1108,7 @@ class TestNotificationIntegration:
 
     def test_delivery_milestone_triggers_notification(self, dispatched_load):
         with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.add_milestone(dispatched_load["load_id"], "en_route_pickup")
             services.add_milestone(dispatched_load["load_id"], "arrived_pickup")
             services.add_milestone(dispatched_load["load_id"], "loaded")
             services.add_milestone(dispatched_load["load_id"], "departed_pickup")
