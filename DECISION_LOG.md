@@ -114,4 +114,47 @@ Each entry records the literal, verbatim approval text given for that specific c
 
 ---
 
+## 2026-08-21 — Architectural adjudication: Spine ownership partitions, state models, load identity, Driver-First
+
+**PR:** (this change)
+**Capability:** Governance only. No code changed. Documents added: `DISPATCH_SPINE_OWNERSHIP_PARTITION_AMENDMENT_v1.md`, `DRIVER_FIRST_DOCTRINE_v2.md`, `DISPATCH_GOVERNANCE_MANIFEST_REPAIR_PLAN_v1.md`, `DISPATCH_OWNERSHIP_MATRIX_v1.md`, `DISPATCH_BUILD_MATRIX_v2.md`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:**
+
+> "MIKE ZACHARY ARCHITECTURAL ADJUDICATION — The reconciliation findings are accepted for the next governance-alignment stage.
+>
+> DECISION 1: SPINE AND OWNERSHIP PARTITIONS. Dispatch Spine remains the single deterministic runtime element named by Constitution v3 and governed by DISPATCH_SPINE_SPECIFICATION_v1. Mission, Scheduling, and Orchestration are adopted as named deterministic ownership partitions inside Dispatch Spine. They are not departments. They are not agents. They are not independent systems. They do not replace Dispatch Spine. They exercise no judgment or discretion. Their ownership questions are: Mission: Where does this load stand, and what evidence supports that standing? Scheduling: Does this proposed commitment fit approved time, capacity, reserve, conflict, and repositioning rules? Orchestration: What approved deterministic action happens next, and where is the work handed? The Scheduling ownership partition adds capacity responsibilities not currently present in Spine. Amendment of Spine §3 and §15 to include capacity is approved in principle but remains blocked from implementation until Reserve Capacity Doctrine and Jacksonville Repositioning Doctrine are supplied and adopted.
+>
+> DECISION 2: STATE MODELS. The existing repository load-status model remains authoritative for freight execution through physical space. The Spine work-item-state model remains the governing model for review, routing, approval, conflict, and processing state. These models describe different subjects and may coexist. Fable's proposed transition vocabulary shall not become a third parallel state model. Its useful evidence and transition requirements shall be mapped into the appropriate existing load-status or Spine work-item-state model. No builder may merge these models, replace either model, or create a third state authority without Mike Zachary's explicit approval.
+>
+> DECISION 3: LOAD IDENTITY. The existing SBX, LOAD, and CIN identifiers may remain where their separate record classes require them. The governing requirement is one answerable retrieval chain, not forced migration to one physical identifier. Every related opportunity, load, communication, document, mission event, and archived record must remain retrievable through explicit correlation. No identifier migration is authorized in this mission.
+>
+> DECISION 4: DRIVER-FIRST DOCTRINE. DRIVER_FIRST_DOCTRINE_v1 is substantively accepted as governing doctrine subordinate to Constitution v3, but it is not yet adopted because its clause numbering conflicts with existing repository citations. Produce a clause reconciliation that: 1. Preserves the existing intended meanings of D6, D9, and D11. 2. Adds the missing external-disclosure doctrine explicitly. 3. Produces one authoritative citation map. 4. Identifies every code, test, docstring, and governance reference affected. 5. Does not modify code until the doctrine numbering is approved.
+>
+> DECISION 5: GOVERNANCE MANIFEST. Repair of the repository manifest and supersession records is authorized as governance alignment. The repair must: 1. Correct the Spine Specification filename. 2. account for the missing stress-test prompt. 3. list all governing documents currently on disk. 4. state the status of the Round 2 SUPERSESSION_MAP against v3 artifacts. 5. identify authoritative, proposed, superseded, dormant, and unadopted documents clearly. 6. make no substantive doctrine changes.
+>
+> DECISION 6: CURRENT IMPLEMENTATION CONFLICTS. Record the following as bounded corrective missions, not architectural redesign: 1. Retire the duplicate sandbox mission-state copy through an approved read-through design. 2. Reconcile or retire the current /calendar page so Outlook remains the only calendar and the Driver Portal presents a Visual Capacity Board. 3. Correct status-change audit asymmetry between update_load() and add_milestone(). 4. Continue replay-protection work before authorizing unattended scheduled operations. Do not combine these into one mission.
+>
+> DECISION 7: OVERNIGHT BOUNDARY. Pending formal Overnight Operations Doctrine, the provisional safe boundary is: The VPS may serve existing read-only surfaces and perform approved detection. It may not automatically send externally, make commitments, change mission state, consume reserve, purge records, or execute unapproved workflows. Detection may accumulate cards for review at the next local session. This provisional boundary authorizes planning only, not implementation of a scheduler or overnight worker."
+
+**Also, verbatim, the standing instruction that opened the mission:** "Renumber DRIVER_FIRST_DOCTRINE_v1 to match existing code citations."
+
+**What was produced.** Six deliverables, all governance documents. **No code was modified**, per Decision 4.5. The full test suite was re-run to confirm the repository is unchanged: 2771 passing, identical to the prior commit.
+
+**Findings recorded during production, requiring Mike's attention:**
+
+1. **The Driver-First renumbering is clean.** D6 (Operational Retrieval), D9 (Retrieval Is Not Modification) and D11 (External Disclosure Chain) are pinned to their established code meanings. Nine of v1's twelve clauses keep their number; three relocate to D13/D14/D15. **17 clause citations across 8 files remain correct with no edit.** One reference — `portal/models/operations_feed.py:18`, which cites Driver-First "§0" rather than a clause — goes stale because v2 restructured §0; the posture it names is now D10. That is the only invalidated reference in the repository.
+
+2. **A second collision layer exists that the adjudication did not cover.** The repository contains at least three separate `D<n>` registers cited in bare form: Driver-First (D6, D9, D11), a deployment decision register (D1), and a requirements register (D3, D4, D10). A bare "D3", "D4" or "D10" is ambiguous today, and adopting Driver-First D1–D15 widens the overlap. A `DF-` citation prefix is recommended and **not** performed — Decision 4.5 bars code change until numbering is approved.
+
+3. **Corrective mission C2 must split.** Decision 6.2 requires both retiring `/calendar` and presenting a Visual Capacity Board. The Board displays capacity, and capacity is blocked on Reserve Capacity Doctrine. C2a (retire or rename, available now) and C2b (build the Board, blocked) are registered separately so C2a cannot silently become C2b.
+
+4. **Manifest repair needs four answers before it can execute**, one of which requires recall rather than judgment: what became of `DISPATCH_FINAL_ARCHITECTURE_STRESS_TEST_PROMPT.md`, which the manifest lists and which is absent from disk.
+
+**Recommended first executable mission:** C3 (status-change audit asymmetry) — the only corrective mission needing neither doctrine nor a design decision, with the smallest blast radius, and a direct Spine §8 compliance fix that closes a gap M1 exposed.
+
+**Deliverables:** `DISPATCH_SPINE_OWNERSHIP_PARTITION_AMENDMENT_v1.md`, `DRIVER_FIRST_DOCTRINE_v2.md`, `DISPATCH_GOVERNANCE_MANIFEST_REPAIR_PLAN_v1.md`, `DISPATCH_OWNERSHIP_MATRIX_v1.md`, `DISPATCH_BUILD_MATRIX_v2.md`
+
+---
+
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*
