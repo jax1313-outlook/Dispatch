@@ -22,7 +22,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_memory_dir
+from portal.models import get_memory_dir, atomic_write_json
 
 SECTIONS = [
     "company",
@@ -78,7 +78,7 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     path = _library_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def get_all() -> dict:

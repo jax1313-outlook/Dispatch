@@ -61,6 +61,12 @@ def tmp_archive(tmp_path, monkeypatch):
     monkeypatch.setattr(archive, "ARCHIVE_ROOT", root)
     monkeypatch.setattr(email_delivery, "_OUTBOX", root / "Outbox")
     monkeypatch.setattr(pending, "_PENDING_DIR", root / "Pending")
+    # The portal's JSON stores resolve through PORTAL_DATA_DIR
+    # (portal/models/__init__.py::get_data_dir). _scrub_env deletes that var,
+    # so without this the stores fall back to the real portal/data/ directory
+    # and the suite writes into a developer's live conflict/publisher/sandbox
+    # files -- exactly what this fixture exists to prevent for archive writes.
+    monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path / "PortalData"))
     return root
 
 

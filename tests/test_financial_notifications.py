@@ -214,7 +214,9 @@ class TestAgingCheck:
 
 class TestArchiveFinancialSummary:
     def _deliver_load(self, load_id):
-        dispatch_svc.add_milestone(load_id, event_type="dispatched")
+        for _evt in ("dispatched", "en_route_pickup", "arrived_pickup", "loaded",
+                     "departed_pickup", "arrived_delivery"):
+            dispatch_svc.add_milestone(load_id, event_type=_evt)
         dispatch_svc.add_milestone(load_id, event_type="delivered")
 
     def test_archive_includes_financial_summary(self, load_with_rate):

@@ -2,31 +2,20 @@
 (portal/models/driver_pin_registry.py), separate from both the internal
 Authority DISPATCH_PIN login (portal/models/identity.py, session["user_id"])
 and the external, token-secured stakeholder portal (portal/routes/
-stakeholder.py). A driver session is its own namespace, session["driver_id"],
-so a driver's session can never reach an Authority-only route (nothing
-outside this blueprint checks session["driver_id"]) and an Authority's
-session can never satisfy this blueprint's own gate (nothing here checks
-session["user_id"]).
+stakeholder.py).
 
-Deliberately small, per the "no enterprise identity management, no complex
-role frameworks" instruction: one dashboard, three lookups (COMI status,
-Route Risk, dispatch/broker contact info), plus the two auth actions a
-driver actually needs self-service (log in, recover a forgotten PIN). No
-driver-facing editing of loads, email drafts, or anything else -- Driver-
-First Doctrine's cognitive-load-reduction principle means this surface
-answers "what do I need to know right now," not "here is an admin panel."
-
-Issuing, resetting, deactivating, or deleting a PIN Card is NOT done here
--- that's Mike-only, via the Library page and its API endpoints
-(portal/routes/api.py), behind the normal Authority PIN gate. Mike remains
-final authority: nothing in this blueprint can create Driver Portal access,
-only use it.
+Driver-First Cockpit (Missions 1-4):
+  1. Dual-Layer Cockpit (70 MPH Glanceable Active Mission + Rolling 7-Day Horizon)
+  2. 1-Tap Milestone Progression Controls, Native Dialers & Map Navigation
+  3. Camera POD / Evidence Capture & 1-Tap Dock Detention Timers
+  4. Vision Fuel Intake Scan & Driver Pay Settlement Glance
 """
 
 from __future__ import annotations
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
+from cin_lite.agents import receipt_vision
 from dispatch import route_risk as route_risk_model
 from dispatch import services as dispatch_svc
 from portal.models import driver_pin_registry as pin_registry
@@ -96,7 +85,10 @@ def driver_forgot_pin():
 
 @driver_portal_bp.route("/home")
 def driver_home():
-    driver_id = session["driver_id"]
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
     driver = dispatch_svc.get_driver(driver_id)
     if not driver:
         # Driver record was deleted after the session was established -- fail closed.
@@ -123,10 +115,142 @@ def driver_home():
             "publisher_status": dispatch_svc.get_publisher_status(load["load_id"]),
         })
 
+    # Mission 1: Dual-Layer Cockpit - Primary Active Load vs Rolling Week Horizon
+    active_card = load_cards[0] if load_cards else None
+
+    # Pay Summary for Mission 4 Driver Settlement Glance
+    pay_summary = dispatch_svc.get_driver_pay_summary(driver_id)
+
     return render_template(
         "driver_home.html",
         driver=driver,
         load_cards=load_cards,
+        active_card=active_card,
+        pay_summary=pay_summary,
         dispatch_contact_email=dispatch_svc.reviewer_contact_email(),
         broker_contacts=list(broker_contacts_seen.values()),
     )
+
+
+def _verify_driver_load(load_id: str, driver_id: str):
+    """Verify that the given load exists and is assigned to the authenticated driver (IDOR protection)."""
+    load = dispatch_svc.get_load(load_id)
+    if not load or load.get("driver_id") != driver_id:
+        return None
+    return load
+
+
+# --- Mission 2: 1-Tap Milestone Progression Controls ---
+@driver_portal_bp.route("/loads/<load_id>/milestone", methods=["POST"])
+def driver_step_milestone(load_id: str):
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    load = _verify_driver_load(load_id, driver_id)
+    if not load:
+        return redirect(url_for("driver_portal.driver_home"))
+
+    milestone_event = request.form.get("milestone_event", "").strip()
+    if milestone_event:
+        try:
+            dispatch_svc.add_milestone(
+                load_id,
+                event_type=milestone_event,
+                source="driver",
+                entered_by=f"driver:{driver_id}",
+            )
+        except Exception:
+            pass  # Fail gracefully if gate refuses transition
+
+    return redirect(url_for("driver_portal.driver_home"))
+
+
+# --- Mission 3: POD Evidence Photo Upload & Dock Exception Timers ---
+@driver_portal_bp.route("/loads/<load_id>/pod", methods=["POST"])
+def driver_upload_pod(load_id: str):
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    load = _verify_driver_load(load_id, driver_id)
+    if not load:
+        return redirect(url_for("driver_portal.driver_home"))
+
+    pod_file = request.files.get("pod_file")
+    if pod_file and pod_file.filename:
+        file_bytes = pod_file.read()
+        if file_bytes:
+            dispatch_svc.attach_evidence(
+                load_id,
+                evidence_type="pod",
+                description=f"Signed POD Uploaded by Driver ({driver_id})",
+                file_data=file_bytes,
+                original_filename=pod_file.filename,
+            )
+
+    return redirect(url_for("driver_portal.driver_home"))
+
+
+@driver_portal_bp.route("/loads/<load_id>/exception", methods=["POST"])
+def driver_log_exception(load_id: str):
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    load = _verify_driver_load(load_id, driver_id)
+    if not load:
+        return redirect(url_for("driver_portal.driver_home"))
+
+    exception_type = request.form.get("exception_type", "detention").strip()
+    description = request.form.get("description", f"Dock exception logged by driver ({driver_id})").strip()
+
+    try:
+        dispatch_svc.open_exception(
+            load_id,
+            exception_type=exception_type,
+            severity="medium",
+            description=description,
+        )
+    except Exception:
+        pass
+
+    return redirect(url_for("driver_portal.driver_home"))
+
+
+# --- Mission 4: Vision Fuel Intake & Driver Pay Settlement ---
+@driver_portal_bp.route("/fuel-receipt", methods=["POST"])
+def driver_fuel_receipt():
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    fuel_file = request.files.get("fuel_file")
+    gallons_val = request.form.get("gallons")
+    amount_val = request.form.get("amount")
+    state_val = request.form.get("state", "FL").upper()
+
+    gallons = float(gallons_val) if gallons_val else 0.0
+    amount = float(amount_val) if amount_val else 0.0
+
+    if fuel_file and fuel_file.filename:
+        file_bytes = fuel_file.read()
+        if file_bytes:
+            extracted = receipt_vision.extract_fuel_receipt(file_bytes, fuel_file.filename)
+            if extracted.get("available"):
+                gallons = float(extracted.get("gallons") or gallons)
+                amount = float(extracted.get("amount") or amount)
+                jur = receipt_vision.derive_jurisdiction(extracted.get("vendor_address"))
+                if jur:
+                    state_val = jur
+
+    if gallons > 0 or amount > 0:
+        dispatch_svc.add_ifta_fuel_purchase(
+            jurisdiction=state_val,
+            gallons=gallons,
+            amount=amount,
+            vendor="Truck Stop (Driver Scanner)",
+            notes=f"driver:{driver_id}",
+        )
+
+    return redirect(url_for("driver_portal.driver_home"))

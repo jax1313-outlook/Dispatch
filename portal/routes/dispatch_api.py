@@ -282,6 +282,24 @@ def add_milestone(load_id):
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+
+    # The milestone was recorded, but the status change it implied was refused
+    # by the transition gate (dispatch/services.py::add_milestone). Report that
+    # in the response rather than letting the caller read "201 ok" and assume
+    # the load advanced -- the Conflict Notice alone is too slow a signal for
+    # someone standing at a dock.
+    refusal = ms.get("status_transition_refused")
+    if refusal:
+        return jsonify({
+            "status": "refused",
+            "milestone": ms,
+            "error": (
+                f"Milestone recorded, but the load stays in "
+                f"'{refusal['from_status']}': {refusal['reason']}"
+            ),
+            "status_transition_refused": refusal,
+        }), 409
+
     return jsonify({"status": "ok", "milestone": ms}), 201
 
 
