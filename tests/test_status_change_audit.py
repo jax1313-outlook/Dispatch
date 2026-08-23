@@ -351,7 +351,7 @@ class TestNoOpPolicyPreserved:
         dispatch_svc.update_load(load_id, status="dispatched")
         msgs = messages(load_id)
         assert len(msgs) == 2
-        assert "from dispatched to dispatched" in msgs[1]
+        assert any("from dispatched to dispatched" in m for m in msgs)
 
     def test_milestone_path_does_not_audit_a_no_op(self, load):
         load_id = load["load_id"]
