@@ -36,6 +36,61 @@ def test_unconfigured_asset_and_unknown_hos():
     assert any("NEEDS_REVIEW" in r for r in reasons)
 
 
+def test_insufficient_data_findings_when_metrics_missing():
+    cap = DynamicCapacity()
+    # Partially configured physical status
+    cap.physical.configuration_status = "PARTIAL"
+    cap.physical.max_weight_lbs = 0.0
+
+    can_fit, reasons = cap.can_accommodate(weight_lbs=5000.0)
+    assert can_fit is False
+    assert any("INSUFFICIENT_DATA" in r for r in reasons)
+
+
+def test_stale_hos_handling_in_simulation_vs_current_reality():
+    cap = DynamicCapacity()
+    cap.apply_asset_profile(
+        asset_profile_id="TRK-01",
+        max_weight_lbs=44000.0,
+        max_volume_cuft=3400.0,
+        max_linear_feet=53.0,
+        max_pallets=26,
+    )
+    cap.time.remaining_drive_hours = 8.0
+    cap.time.hos_status = "STALE"
+
+    # Current Reality evaluation fails or returns NEEDS_REVIEW
+    can_fit_cr, reasons_cr = cap.can_accommodate(drive_hours=4.0, is_simulation=False)
+    assert any("NEEDS_REVIEW: Driver HOS snapshot is stale" in r for r in reasons_cr)
+
+    # Possible Future / simulation allows stale HOS as simulated scenario
+    can_fit_sim, reasons_sim = cap.can_accommodate(drive_hours=4.0, is_simulation=True)
+    assert can_fit_sim is True
+
+
+def test_stacking_and_top_load_policies():
+    cap = DynamicCapacity()
+    cap.apply_asset_profile(
+        asset_profile_id="TRK-01",
+        max_weight_lbs=44000.0,
+        max_volume_cuft=3400.0,
+        max_linear_feet=53.0,
+        max_pallets=26,
+    )
+    cap.set_verified_hos(remaining_drive_hours=10.0, remaining_duty_hours=10.0, remaining_cycle_hours=50.0)
+
+    # Unknown stacking policy produces NEEDS_REVIEW
+    can_fit_unk, reasons_unk = cap.can_accommodate(stacking_policy="UNKNOWN")
+    assert can_fit_unk is False
+    assert any("NEEDS_REVIEW: Cargo stacking policy is unknown" in r for r in reasons_unk)
+
+    # Top load policy check on arrangement forbidding top load
+    cap.cargo.allows_top_load = False
+    can_fit_top, reasons_top = cap.can_accommodate(stacking_policy="TOP_LOAD")
+    assert can_fit_top is False
+    assert any("Top-load freight cannot be placed" in r for r in reasons_top)
+
+
 def test_verified_asset_profile_and_hos_evaluation():
     cap = DynamicCapacity()
     cap.apply_asset_profile(
