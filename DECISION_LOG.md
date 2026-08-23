@@ -250,6 +250,64 @@ the repository, **all 19 module imports succeed** and all four console scripts i
 `DISPATCH_RECOVERY_WAVE_1_REPORT.md`. No Spine, Driver Transformation or Archive Review Queue code
 was recovered, and no broad repair was begun.
 
+## 2026-08-23 — Driver Transformation recovered and repaired (campaign W5)
+
+**PR:** (this change) · **Branch:** `claude/dispatch-repo-context-reconcile-7mblbb`
+**Capability:** Driver Portal write surface — milestone progression, POD/evidence capture, dock
+exception logging, fuel-receipt intake. Recovered from an unmerged branch and repaired before landing.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** "Proceed with Driver Transformation repairs and recovery"
+
+**Source:** `origin/jules-driver-transformation-missions-1-4-12863749728267333928` @ `afd6e00`,
+built 2026-08-22 and never merged. Recovered **by path, not by commit** — the commit also
+re-implements the whole of PR #111, which is already on `main`.
+
+**Why it mattered:** before this, the Driver Portal had exactly one interactive control (Sign Out).
+The whole-program audit named that the largest gap in the program, measured against Driver-First §0.
+
+**Five defects fixed before landing, two of them High:**
+
+1. **A refused transition never reached the driver.** `add_milestone()` does not raise on refusal —
+   it returns `status_transition_refused` — and the branch discarded the return value entirely, with
+   a bare `except Exception: pass` on top. A driver tapped, was redirected, and could not tell
+   whether anything was recorded. That is the 70 MPH test failing, not passing.
+2. **Exception logging swallowed failures** the same way.
+3. **The fuel scanner had no ownership check of any kind** — the only write endpoint on the branch
+   without one. Any authenticated driver could post arbitrary gallons, dollars and a jurisdiction
+   into the company IFTA fuel ledger, unattached to anything. **IFTA is a quarterly tax filing.**
+   Now scoped to a load the driver holds, via the same `_verify_driver_load()` the other routes use,
+   with `driver:<id> load:<id>` recorded on the ledger row.
+4. **Non-numeric form fields were a 500.**
+5. **A rejected POD file was a 500** — `attach_evidence()` raises `ValueError` for a disallowed
+   extension or an oversize file, and nothing caught it. This defect was **missed by the Wave 1
+   report** and is recorded here.
+
+**Two truth defects fixed inside the fuel route**, same class as the audit's optimistic-default
+findings but in a tax record: the jurisdiction no longer defaults to `"FL"` when the scan cannot read
+a state (an unknown stays unknown), and it is validated against `IFTA_JURISDICTIONS`.
+
+**The accepted ruling is preserved:** a refused status transition still retains the reported
+milestone evidence, and a test asserts it.
+
+**Assumption requiring confirmation (BM-08):** requiring an *active load* to log fuel is the
+conservative reading. **Fuelling between loads is normal**, and under this rule a driver with no
+active mission cannot log a receipt. Relaxing it is one condition — but only ever to another
+driver-scoped check, never back to unscoped. **Open decision for Mike.**
+
+**Also open, and not silently assumed away:** CSRF (W2-5) and session expiry/cookie flags (W2-3) were
+listed in the campaign as preceding this unit. Neither was authorized; this work proceeded on the
+explicit instruction. These four endpoints are no worse than the other 105 mutating routes, and no
+better.
+
+**Tests: 6 → 24.** The branch's six proved the happy paths and asserted nothing about refusals,
+rejected files, or scoping. Every negative test added asserts both that the driver is told and that
+the store is unchanged. Two Mission 4 tests were rewritten to the new scoping rule; both gained
+assertions. **No test was deleted or weakened.**
+
+**Full suite: 2,841 passed, exit 0** (baseline 2,817). Files changed: 3. Conflicts against `main`: 0.
+
+**Walkthrough:** `DRIVER_TRANSFORMATION_RECOVERY_WALKTHROUGH_REPORT_v1.md`
+
 ---
 
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

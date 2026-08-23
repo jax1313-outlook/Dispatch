@@ -2,33 +2,23 @@
 (portal/models/driver_pin_registry.py), separate from both the internal
 Authority DISPATCH_PIN login (portal/models/identity.py, session["user_id"])
 and the external, token-secured stakeholder portal (portal/routes/
-stakeholder.py). A driver session is its own namespace, session["driver_id"],
-so a driver's session can never reach an Authority-only route (nothing
-outside this blueprint checks session["driver_id"]) and an Authority's
-session can never satisfy this blueprint's own gate (nothing here checks
-session["user_id"]).
+stakeholder.py).
 
-Deliberately small, per the "no enterprise identity management, no complex
-role frameworks" instruction: one dashboard, three lookups (COMI status,
-Route Risk, dispatch/broker contact info), plus the two auth actions a
-driver actually needs self-service (log in, recover a forgotten PIN). No
-driver-facing editing of loads, email drafts, or anything else -- Driver-
-First Doctrine's cognitive-load-reduction principle means this surface
-answers "what do I need to know right now," not "here is an admin panel."
-
-Issuing, resetting, deactivating, or deleting a PIN Card is NOT done here
--- that's Mike-only, via the Library page and its API endpoints
-(portal/routes/api.py), behind the normal Authority PIN gate. Mike remains
-final authority: nothing in this blueprint can create Driver Portal access,
-only use it.
+Driver-First Cockpit (Missions 1-4):
+  1. Dual-Layer Cockpit (70 MPH Glanceable Active Mission + Rolling 7-Day Horizon)
+  2. 1-Tap Milestone Progression Controls, Native Dialers & Map Navigation
+  3. Camera POD / Evidence Capture & 1-Tap Dock Detention Timers
+  4. Vision Fuel Intake Scan & Driver Pay Settlement Glance
 """
 
 from __future__ import annotations
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
+from cin_lite.agents import receipt_vision
 from dispatch import route_risk as route_risk_model
 from dispatch import services as dispatch_svc
+from dispatch.models import IFTA_JURISDICTIONS
 from portal.models import driver_pin_registry as pin_registry
 
 driver_portal_bp = Blueprint("driver_portal", __name__)
@@ -96,7 +86,10 @@ def driver_forgot_pin():
 
 @driver_portal_bp.route("/home")
 def driver_home():
-    driver_id = session["driver_id"]
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
     driver = dispatch_svc.get_driver(driver_id)
     if not driver:
         # Driver record was deleted after the session was established -- fail closed.
@@ -123,10 +116,253 @@ def driver_home():
             "publisher_status": dispatch_svc.get_publisher_status(load["load_id"]),
         })
 
+    # Mission 1: Dual-Layer Cockpit - Primary Active Load vs Rolling Week Horizon
+    active_card = load_cards[0] if load_cards else None
+
+    # Pay Summary for Mission 4 Driver Settlement Glance
+    pay_summary = dispatch_svc.get_driver_pay_summary(driver_id)
+
     return render_template(
         "driver_home.html",
         driver=driver,
         load_cards=load_cards,
+        active_card=active_card,
+        pay_summary=pay_summary,
         dispatch_contact_email=dispatch_svc.reviewer_contact_email(),
         broker_contacts=list(broker_contacts_seen.values()),
+    )
+
+
+def _verify_driver_load(load_id: str, driver_id: str):
+    """Verify that the given load exists and is assigned to the authenticated driver (IDOR protection)."""
+    load = dispatch_svc.get_load(load_id)
+    if not load or load.get("driver_id") != driver_id:
+        return None
+    return load
+
+
+def _home():
+    return redirect(url_for("driver_portal.driver_home"))
+
+
+def _tell_driver(message: str, category: str = "error"):
+    """Say something back, then return to the cockpit.
+
+    Every write control on this surface is a single tap taken by someone who
+    may be standing at a dock or sitting in a cab. A tap that produces a
+    silent redirect is indistinguishable from a tap that worked -- which is
+    the 70 MPH test failing, not passing. Nothing here is allowed to fail
+    quietly: every refusal, every rejected file and every missing field comes
+    back as a message the driver can read on the page they land on.
+    """
+    flash(message, category)
+    return _home()
+
+
+# --- Mission 2: 1-Tap Milestone Progression Controls ---
+@driver_portal_bp.route("/loads/<load_id>/milestone", methods=["POST"])
+def driver_step_milestone(load_id: str):
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    load = _verify_driver_load(load_id, driver_id)
+    if not load:
+        return redirect(url_for("driver_portal.driver_home"))
+
+    milestone_event = request.form.get("milestone_event", "").strip()
+    if not milestone_event:
+        return _tell_driver("No milestone was selected.")
+
+    # add_milestone() does NOT raise when the transition gate refuses -- it
+    # records the milestone, leaves the status alone, and hands the refusal
+    # back on the returned dict under "status_transition_refused" (M1; see
+    # dispatch/services.py::add_milestone and the same read in
+    # portal/routes/dispatch_api.py::add_milestone, which answers 409).
+    # The original driver build wrapped this call in `except Exception: pass`
+    # and then discarded the return value, so a refused step looked exactly
+    # like a successful one from the cab. ValueError here means the load
+    # vanished between the ownership check and the write, not a refusal.
+    try:
+        result = dispatch_svc.add_milestone(
+            load_id,
+            event_type=milestone_event,
+            source="driver",
+            entered_by=f"driver:{driver_id}",
+        )
+    except ValueError as exc:
+        return _tell_driver(str(exc))
+
+    refusal = result.get("status_transition_refused")
+    if refusal:
+        return _tell_driver(
+            f"Recorded, but the load stays in "
+            f"{refusal['from_status'].replace('_', ' ')}: {refusal['reason']}",
+            "warning",
+        )
+
+    return _tell_driver(
+        f"{milestone_event.replace('_', ' ').title()} recorded.", "success"
+    )
+
+
+# --- Mission 3: POD Evidence Photo Upload & Dock Exception Timers ---
+@driver_portal_bp.route("/loads/<load_id>/pod", methods=["POST"])
+def driver_upload_pod(load_id: str):
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    load = _verify_driver_load(load_id, driver_id)
+    if not load:
+        return redirect(url_for("driver_portal.driver_home"))
+
+    pod_file = request.files.get("pod_file")
+    if not pod_file or not pod_file.filename:
+        return _tell_driver("No photo or file was attached.")
+
+    file_bytes = pod_file.read()
+    if not file_bytes:
+        return _tell_driver("That file came through empty. Try the photo again.")
+
+    # attach_evidence() refuses a disallowed extension or an oversize file by
+    # raising ValueError (dispatch/services.py::_save_upload, ALLOWED_EXTENSIONS
+    # and MAX_FILE_SIZE). Unhandled, that is a 500 on a driver's phone with no
+    # explanation -- so the message is surfaced instead.
+    try:
+        dispatch_svc.attach_evidence(
+            load_id,
+            evidence_type="pod",
+            description=f"Signed POD Uploaded by Driver ({driver_id})",
+            file_data=file_bytes,
+            original_filename=pod_file.filename,
+        )
+    except ValueError as exc:
+        return _tell_driver(str(exc))
+
+    return _tell_driver("POD uploaded.", "success")
+
+
+@driver_portal_bp.route("/loads/<load_id>/exception", methods=["POST"])
+def driver_log_exception(load_id: str):
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    load = _verify_driver_load(load_id, driver_id)
+    if not load:
+        return redirect(url_for("driver_portal.driver_home"))
+
+    exception_type = request.form.get("exception_type", "detention").strip()
+    description = request.form.get("description", f"Dock exception logged by driver ({driver_id})").strip()
+
+    try:
+        dispatch_svc.open_exception(
+            load_id,
+            exception_type=exception_type,
+            severity="medium",
+            description=description,
+        )
+    except ValueError as exc:
+        return _tell_driver(str(exc))
+
+    return _tell_driver(
+        f"{exception_type.replace('_', ' ').title()} logged. Dispatch can see it.",
+        "success",
+    )
+
+
+# --- Mission 4: Vision Fuel Intake & Driver Pay Settlement ---
+@driver_portal_bp.route("/fuel-receipt", methods=["POST"])
+def driver_fuel_receipt():
+    """Log a fuel purchase into the IFTA ledger from a receipt photo.
+
+    SCOPING -- the reason this route carries a load_id at all. The original
+    driver build was the only write endpoint here with no ownership check of
+    any kind: any authenticated driver could post arbitrary gallons, dollars
+    and a jurisdiction straight into the company IFTA fuel ledger, for any
+    state, unattached to anything. IFTA is a quarterly tax filing, so an
+    unscoped write here is a write into a government submission.
+
+    The rule applied: the request must name a load assigned to the driver
+    making it, verified through the same _verify_driver_load() the other three
+    routes use. The cockpit supplies it from the active mission card, and the
+    control is not rendered when there is no active load.
+
+    This is deliberately the narrow reading, and it is a real restriction:
+    fuelling between loads is normal, and under this rule a driver with no
+    active mission cannot log a receipt. Relaxing it is one condition -- but
+    it must be relaxed to some other driver-scoped check, never back to none.
+    Flagged for Mike in the walkthrough report rather than decided here.
+    """
+    driver_id = session.get("driver_id")
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+
+    load_id = request.form.get("load_id", "").strip()
+    if not load_id:
+        return _tell_driver("Fuel receipts are logged against your current load.")
+    if not _verify_driver_load(load_id, driver_id):
+        return _tell_driver("Fuel receipts are logged against your current load.")
+
+    fuel_file = request.files.get("fuel_file")
+
+    # A hand-posted form field is not guaranteed to be a number. float() on
+    # "" or "abc" is a 500; the driver sees a crash instead of a message.
+    def _number(field: str) -> float | None:
+        raw = (request.form.get(field) or "").strip()
+        if not raw:
+            return 0.0
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        return value if value >= 0 else None
+
+    gallons = _number("gallons")
+    amount = _number("amount")
+    if gallons is None or amount is None:
+        return _tell_driver("Gallons and amount must be numbers.")
+
+    jurisdiction = (request.form.get("state") or "").strip().upper()
+
+    if fuel_file and fuel_file.filename:
+        file_bytes = fuel_file.read()
+        if file_bytes:
+            extracted = receipt_vision.extract_fuel_receipt(file_bytes, fuel_file.filename)
+            if extracted.get("available"):
+                gallons = float(extracted.get("gallons") or gallons)
+                amount = float(extracted.get("amount") or amount)
+                scanned = receipt_vision.derive_jurisdiction(extracted.get("vendor_address"))
+                if scanned:
+                    jurisdiction = scanned
+
+    if gallons <= 0 and amount <= 0:
+        return _tell_driver(
+            "Nothing readable on that receipt. Enter the gallons and amount by hand."
+        )
+
+    # No default jurisdiction. The original build fell back to "FL" whenever
+    # the scan could not read one, which silently files another state's fuel
+    # under Florida -- an unknown becoming a fact, in a tax record.
+    if not jurisdiction:
+        return _tell_driver(
+            "Could not read the state from that receipt. Enter it by hand."
+        )
+    if jurisdiction not in IFTA_JURISDICTIONS:
+        return _tell_driver(f"{jurisdiction} is not an IFTA jurisdiction.")
+
+    try:
+        dispatch_svc.add_ifta_fuel_purchase(
+            jurisdiction=jurisdiction,
+            gallons=gallons,
+            amount=amount,
+            vendor="Truck Stop (Driver Scanner)",
+            notes=f"driver:{driver_id} load:{load_id}",
+        )
+    except ValueError as exc:
+        return _tell_driver(str(exc))
+
+    return _tell_driver(
+        f"{gallons:g} gal / ${amount:,.2f} logged in {jurisdiction}.", "success"
     )
