@@ -178,6 +178,14 @@ class TestStakeholderViewJsonContract:
 # ── Email Helper: opt-in Stakeholder Portal Link inclusion ─────────────
 
 
+def _token_in(body: str) -> str:
+    """Pull the ?token=... value out of a rendered stakeholder link."""
+    import re
+    match = re.search(r"[?&]token=([^\s&]+)", body)
+    assert match, f"no stakeholder token found in: {body!r}"
+    return match.group(1)
+
+
 class TestEmailHelperStakeholderLinkInclusion:
     """Implemented server-side: the PATCH /email-package endpoint accepts an
     optional `include_stakeholder_link` bool and appends the link to whichever
@@ -208,7 +216,6 @@ class TestEmailHelperStakeholderLinkInclusion:
         load = self._delivered_load_with_client(client)
         self._draft(client, load["load_id"])
 
-        expected_link = notifications.make_stakeholder_token(load["load_id"])
         resp = client.patch(
             f"/api/dispatch/loads/{load['load_id']}/email-package",
             json={
@@ -220,7 +227,12 @@ class TestEmailHelperStakeholderLinkInclusion:
         assert resp.status_code == 200
         package = resp.get_json()["package"]
         assert f"/portal/loads/{load['load_id']}" in package["broker_body"]
-        assert expected_link in package["broker_body"]
+        # Tokens carry a nonce and an expiry now, so a second call produces a
+        # different string and comparing against a separately-minted token
+        # proves nothing. Assert the stronger property instead: the token that
+        # actually landed in the email verifies for this load.
+        embedded = _token_in(package["broker_body"])
+        assert notifications.verify_stakeholder_token(load["load_id"], embedded)
         assert f"/portal/loads/{load['load_id']}" in package["customer_body"]
         assert "Broker body text." in package["broker_body"]
         assert "Customer body text." in package["customer_body"]

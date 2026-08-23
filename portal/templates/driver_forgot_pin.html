@@ -78,6 +78,7 @@
         <div class="success-message">PIN updated. You can sign in with your new PIN now.</div>
         {% else %}
         <form method="POST" action="{{ url_for('driver_portal.driver_forgot_pin') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="tel" name="phone" inputmode="tel" autocomplete="tel"
                    placeholder="Phone number" autofocus required>
             <input type="text" name="recovery_word" autocomplete="off"

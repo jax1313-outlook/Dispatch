@@ -79,9 +79,14 @@ class TestArchivePageCrossReferences:
 
         resp = client.get("/archive")
         html = resp.data.decode("utf-8")
-        expected_token = notifications.make_stakeholder_token(load["load_id"])
-        assert expected_token in html
         assert f"/portal/loads/{load['load_id']}" in html
+        # Tokens are nonced and expiring now, so a separately-minted one will
+        # never match the rendered page. Assert the stronger property: the
+        # token the page actually rendered verifies for this load.
+        import re
+        match = re.search(r"[?&]token=([^\s&\"']+)", html)
+        assert match, "no stakeholder token rendered on the archive page"
+        assert notifications.verify_stakeholder_token(load["load_id"], match.group(1))
         assert "Copy Stakeholder Link" in html
 
     def test_stakeholder_link_from_archive_page_actually_works(self, client):

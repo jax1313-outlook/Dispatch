@@ -77,7 +77,17 @@ class TestConfigurablePortalUrl:
 
 
 class TestHmacSecretWarning:
-    def test_using_default_secret_true(self):
+    def test_using_default_secret_true(self, monkeypatch):
+        """The unset case has to be arranged deliberately now.
+
+        tests/conftest.py supplies real signing secrets to the whole suite, so
+        that `portal.config.check_secrets()` -- which since the security
+        campaign REFUSES to build an app on a published default outside
+        development mode -- exercises its real path in every one of the 87
+        create_app() call sites rather than being bypassed. That means "no
+        secret configured" is no longer the ambient state and this test has to
+        create it."""
+        monkeypatch.delenv("DISPATCH_EMAIL_SECRET", raising=False)
         assert email_delivery._using_default_secret() is True
 
     def test_using_default_secret_false(self, monkeypatch):

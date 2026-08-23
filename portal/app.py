@@ -19,7 +19,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from flask import Flask, redirect, request, session, url_for
 
-from portal.config import Config, check_secret_key
+from portal.config import Config, check_secrets, development_host
+from portal.csrf import init_csrf
 from portal.routes import register_routes
 
 
@@ -33,8 +34,11 @@ def create_app(config: dict | None = None) -> Flask:
     if config:
         app.config.update(config)
     if not app.config.get("TESTING"):
-        check_secret_key()
+        # Raises InsecureConfigurationError in operational mode, so a
+        # misconfigured deployment never reaches a route at all.
+        check_secrets()
     register_routes(app)
+    init_csrf(app)
 
     @app.before_request
     def _require_authority_login():
@@ -189,7 +193,7 @@ def _print_storage_map() -> None:
 if __name__ == "__main__":
     _ensure_storage_dirs()
     app = create_app()
-    host = Config.HOST
+    host = development_host(Config.HOST)
     port = Config.PORT
     print(f"\n  L2-COS Operations Portal v1")
     print(f"  http://{host}:{port}\n")

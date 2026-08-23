@@ -66,6 +66,7 @@
         <div class="error-message">{{ error }}</div>
         {% endif %}
         <form method="POST" action="{{ url_for('driver_portal.driver_login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="tel" name="phone" inputmode="tel" autocomplete="tel"
                    placeholder="Phone number" autofocus required>
             <input type="password" name="pin" inputmode="numeric" autocomplete="off"

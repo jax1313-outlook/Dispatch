@@ -408,6 +408,60 @@ machines now exist in the tree, expected and temporary — nothing consumes `opp
 
 **Report:** `DISPATCH_RECOVERY_WAVE_1_COMPLETION_REPORT.md`
 
+## 2026-08-23 — Repair, Connection, Security and Durability Campaign (Workstreams A–F)
+
+**PR:** (this change) · **Branch:** `claude/dispatch-repo-context-reconcile-7mblbb`
+**Capability:** Dynamic Capacity truth and integration; Opportunity lifecycle alignment; secret
+refusal; backup and restore; token expiry and revocation; CSRF protection.
+**Approved by:** Mike (owner)
+
+**Approval, verbatim:** "CLAUDE CODE MISSION: DISPATCH MAXIMUM-CAPACITY REPAIR, CONNECTION, AND COMPLETION CAMPAIGN … The authorized work package includes: 1. Dynamic Capacity integration and truth hardening 2. Opportunity lifecycle alignment with Spine 3. Security hardening 4. Backup and restore 5. Token expiration and revocation 6. CSRF protection … Continue until the entire authorized campaign is complete, all unblocked units are implemented, the completion report is published, and one integrated review package is ready for Mike Zachary's final review."
+
+**Result: all six workstreams COMPLETE. No unit blocked.**
+**Tests 2,882 → 3,087, exit 0. Coverage 93.73 % against the 90 % gate.**
+
+**Implied Mike authority removed.** `apply_asset_profile` no longer defaults `verified_by="Mike
+Zachary"`; `set_verified_hos` no longer defaults `source="ELD_LOG"`; a commitment refuses an empty
+or reserved-system actor and records a real `ApprovalEvent`. Nothing in Dispatch now stamps Mike's
+name on a decision he did not make.
+
+**Competing lifecycle authority removed.** Opportunity's second state list, second transition
+table, `transition_to()`, stored `stage` and construction-time validation are gone. Stage is read
+through the correlated Spine work item. `Filtered` became a query; `Calendar Event` left the
+lifecycle entirely. `commit_opportunity_to_reality()` — which walked four stages and then created
+the load and confirmed the rate itself — is replaced by a request that Spine answers, with the load
+created on the Spine side against a recorded human approval. A structural test fails if a competing
+table or a stored lifecycle position reappears.
+
+**The three highest-rated security findings are closed.** An operational deployment now **refuses
+to start** on the published default secret rather than warning; development mode is explicit and
+**pins the bind to loopback**; tokens carry purpose, object, issue time, expiry and a nonce, and can
+be revoked individually or per load with a full audit trail; CSRF protects every mutating route.
+
+**Backup and restore exist for the first time.** The acceptance test deletes the entire live estate
+and recovers the load, the milestone and the POD bytes from the archive, hash-verified. Secrets are
+proven absent from every byte of it.
+
+**On the brief's explicit warning about test bypass:** CSRF is NOT disabled under TESTING, and the
+suite is not exempted from the secret check. A CSRF-carrying test client and real test secrets in
+`conftest.py` mean all ~1,160 HTTP tests run through the protected path; the dedicated CSRF tests
+send raw unprotected requests and assert refusal.
+
+**Three tests were rewritten, each to a stronger assertion, and none weakened** — token determinism
+(which was inseparable from the never-expires defect), two page assertions that compared a
+separately-minted token instead of verifying the one actually rendered, and one that relied on no
+secret being configured. All three are itemised in §11 of the report.
+
+**Schema:** two additive tables, `operational_tokens` and `token_audit`. **No existing table
+altered. `loads.status` untouched**, per the narrow CF-04 reading Mike specified.
+
+**Still unverified, stated plainly:** the `D:` delivery path (no session has ever written to that
+drive); HOS readings (no ELD exists, and the code now refuses to imply one); Route Risk feeds
+(`is_live_data: False` on every event); fuel and drive-hour constants; scheduler fit (there is no
+scheduler, and Outlook remains the schedule); backup point-in-time consistency across stores.
+
+**Report:** `DISPATCH_REPAIR_CONNECTION_COMPLETION_REPORT.md`
+
 ---
 
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

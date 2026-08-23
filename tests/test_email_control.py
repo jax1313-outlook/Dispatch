@@ -13,11 +13,43 @@ from cin_lite import control, email_delivery, pending, archive
 # --------------------------------------------------------------------------- tokens
 
 class TestTokens:
-    def test_make_token_deterministic(self):
+    def test_tokens_carry_their_own_expiry_and_both_verify(self):
+        """Was `test_make_token_deterministic`, which asserted t1 == t2 and a
+        64-char SHA-256 hex digest. Determinism was a property of the old
+        design, not a requirement -- and it was inseparable from the defect:
+        a token with nothing in it but contract and action has nothing to
+        expire on, so every link ever mailed stayed valid forever. The
+        replacement asserts the property that actually matters."""
         t1 = email_delivery.make_token("CIN-001", "approve_archive")
         t2 = email_delivery.make_token("CIN-001", "approve_archive")
-        assert t1 == t2
-        assert len(t1) == 64  # SHA-256 hex
+        assert email_delivery.verify_token("CIN-001", "approve_archive", t1)
+        assert email_delivery.verify_token("CIN-001", "approve_archive", t2)
+        assert t1.startswith("ce1.")
+
+    def test_expired_token_is_refused(self):
+        token = email_delivery.make_token("CIN-001", "approve_archive", ttl_hours=-1)
+        assert email_delivery.verify_token("CIN-001", "approve_archive", token) is False
+
+    def test_legacy_digest_is_refused_without_an_explicit_grace_window(self):
+        """A pre-expiry link must not be permanently valid just because it was
+        issued before expiry existed."""
+        import hashlib, hmac, os
+        legacy = hmac.new(
+            os.environ.get("DISPATCH_EMAIL_SECRET", "dispatch-dev-secret").encode(),
+            b"CIN-001:approve_archive", hashlib.sha256,
+        ).hexdigest()
+        assert email_delivery.verify_token("CIN-001", "approve_archive", legacy) is False
+
+    def test_legacy_digest_accepted_only_inside_the_grace_window(self, monkeypatch):
+        import hashlib, hmac, os
+        legacy = hmac.new(
+            os.environ.get("DISPATCH_EMAIL_SECRET", "dispatch-dev-secret").encode(),
+            b"CIN-001:approve_archive", hashlib.sha256,
+        ).hexdigest()
+        monkeypatch.setenv("DISPATCH_LEGACY_TOKENS_UNTIL", "2099-01-01")
+        assert email_delivery.verify_token("CIN-001", "approve_archive", legacy) is True
+        monkeypatch.setenv("DISPATCH_LEGACY_TOKENS_UNTIL", "2000-01-01")
+        assert email_delivery.verify_token("CIN-001", "approve_archive", legacy) is False
 
     def test_verify_token_valid(self):
         token = email_delivery.make_token("CIN-002", "reject")

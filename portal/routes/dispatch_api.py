@@ -652,16 +652,34 @@ def update_email_package(load_id):
     data = request.get_json(silent=True) or {}
     include_link = data.pop("include_stakeholder_link", False)
     if include_link:
-        stakeholder_url = url_for(
-            "stakeholder.stakeholder_view",
-            load_id=load_id,
-            token=notifications.make_stakeholder_token(load_id),
-            _external=True,
+        # Idempotency has to key on the token-free path, not the whole URL.
+        # Tokens carry a nonce and an expiry now (dispatch/tokens.py), so the
+        # same load produces a different URL on every call -- comparing full
+        # URLs would append a second link on every re-save, and each of those
+        # saves would also mint another live stakeholder token that then has to
+        # be revoked separately. Check first, mint only if a body actually
+        # needs one.
+        link_prefix = url_for(
+            "stakeholder.stakeholder_view", load_id=load_id, _external=True
         )
-        for field in ("broker_body", "customer_body"):
-            body = data.get(field)
-            if body and stakeholder_url not in body:
-                data[field] = f"{body.rstrip()}\n\nStakeholder Portal Link: {stakeholder_url}"
+        needs_link = [
+            field
+            for field in ("broker_body", "customer_body")
+            if data.get(field) and link_prefix not in data[field]
+        ]
+        if needs_link:
+            stakeholder_url = url_for(
+                "stakeholder.stakeholder_view",
+                load_id=load_id,
+                token=notifications.make_stakeholder_token(
+                    load_id, issued_by="email_package_draft"
+                ),
+                _external=True,
+            )
+            for field in needs_link:
+                data[field] = (
+                    f"{data[field].rstrip()}\n\nStakeholder Portal Link: {stakeholder_url}"
+                )
     try:
         package = email_helper.update_draft(load_id, **data)
     except KeyError as e:

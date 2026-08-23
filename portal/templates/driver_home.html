@@ -65,6 +65,7 @@
         <div class="sub">{{ driver.name }} &middot; Level 1 Transport</div>
     </div>
     <form method="POST" action="{{ url_for('driver_portal.driver_logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="logout-btn">Sign Out</button>
     </form>
 </div>
@@ -137,6 +138,7 @@
     </div>
 
     <form method="POST" action="{{ url_for('driver_portal.driver_step_milestone', load_id=active_card.load.load_id) }}" style="margin-top:10px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="btn-grid btn-grid-full">
             {% if active_card.load.status == 'dispatched' %}
                 <button type="submit" name="milestone_event" value="en_route_pickup" class="touch-btn">EN ROUTE PICKUP</button>
@@ -161,6 +163,7 @@
         <div style="font-size:13px; font-weight:800; text-transform:uppercase; margin-bottom:8px;">Dock Actions & Evidence</div>
         <div class="btn-grid">
             <form method="POST" action="{{ url_for('driver_portal.driver_upload_pod', load_id=active_card.load.load_id) }}" enctype="multipart/form-data" id="pod-form-{{ active_card.load.load_id }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label class="file-label">
                     📸 UPLOAD POD PHOTO
                     <input type="file" name="pod_file" accept="image/*" capture="environment" class="file-input" onchange="document.getElementById('pod-form-{{ active_card.load.load_id }}').submit()">
@@ -168,6 +171,7 @@
             </form>
 
             <form method="POST" action="{{ url_for('driver_portal.driver_log_exception', load_id=active_card.load.load_id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="exception_type" value="detention">
                 <input type="hidden" name="description" value="Dock Detention Timer Triggered by Driver">
                 <button type="submit" class="touch-btn warning">⏱ START DETENTION</button>
@@ -207,6 +211,7 @@
     <h2>Truck Stop & Fuel Scanner</h2>
     {% if trucks %}
     <form method="POST" action="{{ url_for('driver_portal.driver_fuel_receipt') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if active_card %}
         <input type="hidden" name="load_id" value="{{ active_card.load.load_id }}">
         {% endif %}

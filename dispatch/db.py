@@ -448,8 +448,10 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # `dispatch.security` schema here; that stack is superseded by the Portal
     # PIN gate already on main (CF-03) and was deliberately not recovered.
     from dispatch.spine.db import init_spine_schema
+    from dispatch.tokens import init_token_schema
 
     init_spine_schema(conn)
+    init_token_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:

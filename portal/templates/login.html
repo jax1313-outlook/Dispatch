@@ -74,6 +74,7 @@
         <div class="error-message">{{ error }}</div>
         {% endif %}
         <form method="POST" action="{{ url_for('auth.login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="password" name="pin" inputmode="numeric" autocomplete="off"
                    placeholder="PIN" autofocus required>
             <button type="submit">Sign In</button>
