@@ -1,6 +1,6 @@
 """Auth routes — DISPATCH_PIN login/logout (Authority role only).
 
-See portal/models/identity.py and PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md (Claude-3 repo)
+See portal/models/identity.py and governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md
 for the full design and what's deferred. The identity itself is created out-of-band by the
 `cin-portal-init-admin` CLI command (portal/cli.py) -- there is no "register" route here, by
 design (see identity.bootstrap_authority's single-use refusal).

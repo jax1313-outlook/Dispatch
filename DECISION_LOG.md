@@ -351,6 +351,63 @@ its most production-capable part. **Blocks exactly one unit, OPP-04.**
 
 **No code was changed by this adjudication.**
 
+## 2026-08-23 — Fuel-receipt ownership chain; Recovery Wave 1 (R-01…R-04)
+
+**PR:** (this change) · **Branch:** `claude/dispatch-repo-context-reconcile-7mblbb`
+**Capability:** IFTA fuel-receipt ownership; Dispatch Spine recovery; Archive Review Queue model;
+Route Risk ordering; CI coverage scope; governance-document recovery.
+**Approved by:** Mike (owner)
+
+**Approval, verbatim (ownership):** "DECISION\n\nFuel receipt ownership shall remain scoped.\n\nFuel receipts shall never be anonymous.\n\nMinimum ownership chain:\n\nDriver Identity\nTruck Identity\nTimestamp\nJurisdiction\nReceipt Evidence\n\nAssociation with an active load is preferred but not required.\n\nOwner/Operator workflows must support reporting fuel receipts when no active load exists.\n\nWhen no active load exists:\n- receipt remains linked to Driver and Truck;\n- receipt remains auditable;\n- receipt remains available for IFTA reporting;\n- no artificial load association may be created.\n\nDispatch must enforce ownership,\nbut must not require a mission when operational reality does not. continue with R1-R4"
+
+**My earlier reading was too strict and is corrected here.** The Driver Transformation repair
+required an *active load* to log fuel. The ruling is that ownership is required and a mission is
+not. The scanner is now offered whenever active fleet equipment exists; a load rides along only when
+one is present; **no artificial load association is created**, and a test asserts its absence.
+
+All five links are mandatory and a receipt that cannot supply all five is refused rather than filed
+thin. Because the chain requires evidence, the receipt is validated **before** any record is
+written, and if the attach still fails the purchase is deleted — a fuel row with no receipt is
+exactly what "never anonymous" forbids.
+
+**Recovery Wave 1, R-01…R-04:**
+
+- **R-02a** CI coverage widened to `cin_lite`, `dispatch`, `portal`. **The threshold did not need
+  lowering** — measured coverage is **93.77 %**, already above the existing 90 % gate. The gate was
+  never too strict; it was pointed at one seventh of the program.
+- **R-02b** `dispatch/spine/` recovered and wired — 835 lines, 25 states, six tables, five
+  hand-written lines, **23 tests**. Per CF-04 it is now the authoritative lifecycle engine.
+  `dispatch/opportunities.py` is untouched and still unwired; OPP-01…OPP-09 were not authorized and
+  were not started.
+- **R-02c** Archive Review Queue **model** recovered. Its decision route was **not** — it depends on
+  `dispatch/security/`, superseded by main's PIN gate (CF-03). Nine of the branch's 21 tests went
+  with the route; the file records exactly what was left and why. **11 tests.**
+- **R-02d** portal card levels — **BLOCKED, not forced.** The branch's `conflict.py` uses
+  `path.write_text` and would regress M-A's atomic writes; its `sandbox.py` collides with the open
+  C1 corrective mission. Recover after C1 closes, as a patch.
+- **R-03** Route Risk `ORDER BY created_at DESC, rowid DESC`. `created_at` is second precision, so
+  which condition a driver saw could flip between runs. The branch's test targeted an
+  implementation main does not have; a new one was written against the real design.
+- **R-04** `governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md` recovered (177 lines) and its
+  ten citations corrected — they named the wrong repository.
+
+**Two regressions caught during recovery, both of which a file-level copy would have shipped
+silently.** The branch's `portal/models/archive.py` is from an older base: taking it whole dropped
+**58 lines of main's work** (`ArchiveApprovalError`, `RESERVED_SYSTEM_IDENTITIES`, the intelligence
+section, `archive_from_intelligence()`) and replaced `atomic_write_json()` with a bare
+`path.write_text()`. Reverted to main; the Review Queue re-applied as a patch. The same
+`write_text` regression sits in the branch's `conflict.py` and is part of why R-02d is blocked.
+
+**Assumptions and open items (BM-08):** `REVIEW_AGE_DAYS = 180` is **not doctrine** — the policy's
+literal "Current + 3 Previous" trigger is unimplementable because Archive records have no version
+history; Mike sets the number or approves version history. **17 further cross-repository citations**
+were found and left for OWN-02. **CSRF (W2-5) and session expiry (W2-3) remain open.** Three state
+machines now exist in the tree, expected and temporary — nothing consumes `opportunities.py`.
+
+**Full suite: 2,882 passed, exit 0** (baseline 2,817). **+65 tests, none removed or weakened.**
+
+**Report:** `DISPATCH_RECOVERY_WAVE_1_COMPLETION_REPORT.md`
+
 ---
 
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

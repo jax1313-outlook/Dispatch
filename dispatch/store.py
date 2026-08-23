@@ -2220,13 +2220,21 @@ def get_route_risk_event(route_risk_event_id: str) -> dict | None:
 
 
 def list_route_risk_events(load_id: str | None = None) -> list[dict]:
-    """Newest first, matching the engine's in-memory ordering."""
+    """Newest first, matching the engine's in-memory ordering.
+
+    The `rowid DESC` tie-break is load-bearing. `created_at` is second
+    precision, so two conditions recorded in the same second have no defined
+    order without it -- and `get_route_risk()` takes the first row as "the
+    latest", which then flips between runs. Recovered from
+    jules-401783631158985267-177d2e11 @ 28b5e65, which found the same gap
+    against a different implementation of this module.
+    """
     sql = "SELECT * FROM route_risk_events"
     params: list = []
     if load_id:
         sql += " WHERE load_id=?"
         params.append(load_id)
-    sql += " ORDER BY created_at DESC"
+    sql += " ORDER BY created_at DESC, rowid DESC"
     with get_connection() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [_route_risk_row_to_event(r) for r in rows]

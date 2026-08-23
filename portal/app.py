@@ -38,8 +38,7 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.before_request
     def _require_authority_login():
-        """DISPATCH_PIN login gate (PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md, Claude-3
-        repo). Fails closed in real (non-TESTING) use: a missing/unbootstrapped identity does
+        """DISPATCH_PIN login gate (governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md). Fails closed in real (non-TESTING) use: a missing/unbootstrapped identity does
         NOT bypass this gate -- it just means /login correctly reports there's nothing to log
         into yet, rather than the rest of Portal silently staying open.
 

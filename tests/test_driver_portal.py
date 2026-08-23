@@ -44,6 +44,12 @@ def driver():
 
 
 @pytest.fixture
+def truck():
+    """Truck identity -- required by the fuel-receipt ownership chain."""
+    return services.create_equipment(unit_number="TRK-101", equipment_type="dry_van")
+
+
+@pytest.fixture
 def load(driver):
     """A load assigned to `driver` -- the scope every driver write endpoint
     now requires."""
@@ -134,48 +140,223 @@ class TestDriverPortalMission3:
         assert "2 hour dock delay" in exceptions[0]["description"]
 
 
+def _receipt(name: str = "receipt.jpg"):
+    return (io.BytesIO(b"fake receipt image bytes"), name)
+
+
 class TestDriverPortalMission4:
-    def test_fuel_receipt_logging(self, client, driver, load):
-        """Updated for the scoping repair: a fuel receipt is logged against a
-        load this driver holds. Previously this posted with no load at all and
-        passed, which is the defect -- see test_fuel_receipt_requires_a_load."""
+    def test_fuel_receipt_logging(self, client, driver, truck, load):
+        """The full ownership chain, with a load present."""
         _login(client, driver)
         resp = client.post(
             "/driver/fuel-receipt",
-            data={"load_id": load["load_id"], "gallons": "120.5",
-                  "amount": "450.00", "state": "GA"},
+            data={"equipment_id": truck["equipment_id"], "load_id": load["load_id"],
+                  "gallons": "120.5", "amount": "450.00", "state": "GA",
+                  "fuel_file": _receipt()},
+            content_type="multipart/form-data",
             follow_redirects=True,
         )
         assert resp.status_code == 200
         purchases = services.list_ifta_fuel_purchases()
         assert len(purchases) == 1
-        assert purchases[0]["gallons"] == 120.5
-        assert purchases[0]["amount"] == 450.00
-        assert purchases[0]["jurisdiction"] == "GA"
-        # Provenance: the ledger row records who logged it and against what.
-        assert f"driver:{driver['driver_id']}" in purchases[0]["notes"]
-        assert f"load:{load['load_id']}" in purchases[0]["notes"]
+        p = purchases[0]
+        assert p["gallons"] == 120.5
+        assert p["amount"] == 450.00
+        assert p["jurisdiction"] == "GA"
+        # The five links of the chain.
+        assert f"driver:{driver['driver_id']}" in p["notes"]      # driver identity
+        assert p["vehicle_id"] == truck["equipment_id"]            # truck identity
+        assert p["date"]                                           # timestamp
+        assert p["jurisdiction"] == "GA"                           # jurisdiction
+        assert p["evidence_id"]                                    # receipt evidence
+        # Load association, present because a load was named.
+        assert f"load:{load['load_id']}" in p["notes"]
 
     def test_driver_settlement_glance_renders(self, client, driver):
         _login(client, driver)
         resp = client.get("/driver/home")
-        html = resp.data.decode("utf-8")
         assert resp.status_code == 200
-        assert "Driver Settlement Glance" in html
+        assert "Driver Settlement Glance" in resp.data.decode("utf-8")
 
-    def test_fuel_scanner_hidden_without_an_active_load(self, client, driver):
-        """The control writes into the IFTA ledger and the endpoint refuses an
-        unscoped post, so it must not be offered when there is nothing to
-        scope it to. A button that always fails is worse than no button."""
-        _login(client, driver)
-        html = client.get("/driver/home").data.decode("utf-8")
-        assert "Fuel Scanner" not in html
-
-    def test_fuel_scanner_shown_with_an_active_load(self, client, driver, load):
+    def test_fuel_scanner_offered_without_any_active_load(self, client, driver, truck):
+        """Mike's ruling: association with an active load is preferred but not
+        required. An owner/operator fuels between loads, so the control must be
+        there when no mission is."""
         _login(client, driver)
         html = client.get("/driver/home").data.decode("utf-8")
         assert "Fuel Scanner" in html
-        assert f'name="load_id" value="{load["load_id"]}"' in html
+        assert truck["equipment_id"] in html
+
+    def test_fuel_scanner_closed_when_no_active_truck_exists(self, client, driver):
+        """Truck identity is mandatory, so with no active fleet there is nothing
+        the receipt could be scoped to."""
+        _login(client, driver)
+        html = client.get("/driver/home").data.decode("utf-8")
+        assert "has to name one" in html
+
+
+class TestDriverFuelReceiptOwnershipChain:
+    """Mike's ruling, 2026-08-23: "Fuel receipt ownership shall remain scoped.
+    Fuel receipts shall never be anonymous." Minimum chain: Driver Identity,
+    Truck Identity, Timestamp, Jurisdiction, Receipt Evidence. Load association
+    preferred but NOT required, and never fabricated."""
+
+    def test_logged_without_a_load_and_no_load_is_invented(self, client, driver, truck):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "80",
+                  "amount": "300", "state": "FL", "fuel_file": _receipt()},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        purchases = services.list_ifta_fuel_purchases()
+        assert len(purchases) == 1
+        p = purchases[0]
+        # Fully owned...
+        assert f"driver:{driver['driver_id']}" in p["notes"]
+        assert p["vehicle_id"] == truck["equipment_id"]
+        assert p["evidence_id"]
+        # ...and no artificial load association was created.
+        assert "load:" not in p["notes"]
+
+    def test_receipt_without_a_load_is_still_auditable_and_reportable(self, client, driver, truck):
+        """It must remain visible to IFTA reporting, not stranded."""
+        _login(client, driver)
+        client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "80",
+                  "amount": "300", "state": "FL", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        p = services.list_ifta_fuel_purchases()[0]
+        evidence_records = services.list_ifta_fuel_evidence(p["purchase_id"])
+        assert len(evidence_records) == 1
+        evidence = evidence_records[0]
+        assert evidence["evidence_id"] == p["evidence_id"]
+        assert evidence["checksum"]
+        assert f"driver:{driver['driver_id']}" in evidence["uploaded_by"]
+        assert any(q["purchase_id"] == p["purchase_id"]
+                   for q in services.list_ifta_fuel_purchases(jurisdiction="FL"))
+
+    # --- Truck identity ---
+    def test_missing_truck_is_refused(self, client, driver, truck):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"gallons": "80", "amount": "300", "state": "FL", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "Which truck?" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    def test_unknown_truck_is_refused(self, client, driver):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": "EQ-NOPE", "gallons": "80", "amount": "300",
+                  "state": "FL", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "not on the active fleet" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    def test_retired_truck_is_refused(self, client, driver, truck):
+        services.retire_equipment(truck["equipment_id"])
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "80",
+                  "amount": "300", "state": "FL", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "not on the active fleet" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    # --- Receipt evidence ---
+    def test_missing_receipt_is_refused(self, client, driver, truck):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "80",
+                  "amount": "300", "state": "FL"},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "never logged without one" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    def test_rejected_receipt_type_leaves_nothing_behind(self, client, driver, truck):
+        """The chain requires evidence, so a purchase must never survive a
+        receipt that could not be stored."""
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "80",
+                  "amount": "300", "state": "FL", "fuel_file": _receipt("receipt.exe")},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "File type not allowed" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    # --- Load association, when offered ---
+    def test_another_drivers_load_is_refused(self, client, driver, other_driver, truck):
+        theirs = services.create_load(customer="Not Yours", driver_id=other_driver["driver_id"])
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "load_id": theirs["load_id"],
+                  "gallons": "50", "amount": "200", "state": "GA", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "not yours" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    # --- Numbers and jurisdiction ---
+    def test_non_numeric_gallons_is_reported_not_a_crash(self, client, driver, truck):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "eighty",
+                  "amount": "200", "state": "GA", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert "must be numbers" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    def test_negative_amount_is_refused(self, client, driver, truck):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "10",
+                  "amount": "-5", "state": "GA", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "must be numbers" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    def test_unknown_jurisdiction_is_refused(self, client, driver, truck):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "10",
+                  "amount": "40", "state": "ZZ", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "not an IFTA jurisdiction" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
+
+    def test_missing_jurisdiction_does_not_default_to_florida(self, client, driver, truck):
+        _login(client, driver)
+        resp = client.post(
+            "/driver/fuel-receipt",
+            data={"equipment_id": truck["equipment_id"], "gallons": "10",
+                  "amount": "40", "fuel_file": _receipt()},
+            content_type="multipart/form-data", follow_redirects=True,
+        )
+        assert "Enter it by hand" in resp.data.decode("utf-8")
+        assert services.list_ifta_fuel_purchases() == []
 
 
 class TestDriverPortalNothingFailsQuietly:
@@ -297,80 +478,3 @@ class TestDriverPortalNothingFailsQuietly:
             follow_redirects=True,
         )
         assert "Detention logged." in resp.data.decode("utf-8")
-
-
-class TestDriverFuelReceiptScoping:
-    """D-3. The fuel scanner writes into the IFTA ledger -- a quarterly tax
-    filing. On the recovery branch it was the one write endpoint with no
-    ownership check of any kind."""
-
-    def test_unscoped_post_is_refused_and_writes_nothing(self, client, driver):
-        _login(client, driver)
-        resp = client.post(
-            "/driver/fuel-receipt",
-            data={"gallons": "120.5", "amount": "450.00", "state": "GA"},
-            follow_redirects=True,
-        )
-        assert resp.status_code == 200
-        assert "logged against your current load" in resp.data.decode("utf-8")
-        assert services.list_ifta_fuel_purchases() == []
-
-    def test_another_drivers_load_is_refused(self, client, driver, other_driver):
-        """IDOR: naming a real load that belongs to someone else must fail the
-        same way as naming no load at all."""
-        theirs = services.create_load(
-            customer="Not Yours", driver_id=other_driver["driver_id"]
-        )
-        _login(client, driver)
-        resp = client.post(
-            "/driver/fuel-receipt",
-            data={"load_id": theirs["load_id"], "gallons": "50", "amount": "200", "state": "GA"},
-            follow_redirects=True,
-        )
-        assert "logged against your current load" in resp.data.decode("utf-8")
-        assert services.list_ifta_fuel_purchases() == []
-
-    # --- D-4: a non-numeric field must not be a 500 ---
-    def test_non_numeric_gallons_is_reported_not_a_crash(self, client, driver, load):
-        _login(client, driver)
-        resp = client.post(
-            "/driver/fuel-receipt",
-            data={"load_id": load["load_id"], "gallons": "eighty", "amount": "200", "state": "GA"},
-            follow_redirects=True,
-        )
-        assert resp.status_code == 200
-        assert "must be numbers" in resp.data.decode("utf-8")
-        assert services.list_ifta_fuel_purchases() == []
-
-    def test_negative_amount_is_refused(self, client, driver, load):
-        _login(client, driver)
-        resp = client.post(
-            "/driver/fuel-receipt",
-            data={"load_id": load["load_id"], "gallons": "10", "amount": "-5", "state": "GA"},
-            follow_redirects=True,
-        )
-        assert "must be numbers" in resp.data.decode("utf-8")
-        assert services.list_ifta_fuel_purchases() == []
-
-    def test_unknown_jurisdiction_is_refused(self, client, driver, load):
-        _login(client, driver)
-        resp = client.post(
-            "/driver/fuel-receipt",
-            data={"load_id": load["load_id"], "gallons": "10", "amount": "40", "state": "ZZ"},
-            follow_redirects=True,
-        )
-        assert "not an IFTA jurisdiction" in resp.data.decode("utf-8")
-        assert services.list_ifta_fuel_purchases() == []
-
-    def test_missing_jurisdiction_does_not_default_to_florida(self, client, driver, load):
-        """The original build fell back to "FL" whenever the scan could not read
-        a state -- filing another state's fuel under Florida. An unknown must
-        stay unknown, especially in a tax record."""
-        _login(client, driver)
-        resp = client.post(
-            "/driver/fuel-receipt",
-            data={"load_id": load["load_id"], "gallons": "10", "amount": "40"},
-            follow_redirects=True,
-        )
-        assert "Enter it by hand" in resp.data.decode("utf-8")
-        assert services.list_ifta_fuel_purchases() == []

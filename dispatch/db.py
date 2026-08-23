@@ -441,6 +441,15 @@ def get_db_path() -> Path:
 def _init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
     _apply_migrations(conn)
+    # Dispatch Spine owns the work-item lifecycle in its own six tables, in
+    # this same database file. CF-04, adjudicated 2026-08-23: "Dispatch Spine
+    # shall become the authoritative lifecycle engine and single source of
+    # lifecycle truth." The branch this was recovered from also initialised a
+    # `dispatch.security` schema here; that stack is superseded by the Portal
+    # PIN gate already on main (CF-03) and was deliberately not recovered.
+    from dispatch.spine.db import init_spine_schema
+
+    init_spine_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:

@@ -13,15 +13,22 @@ Driver-First Cockpit (Missions 1-4):
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
+
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from cin_lite.agents import receipt_vision
 from dispatch import route_risk as route_risk_model
 from dispatch import services as dispatch_svc
-from dispatch.models import IFTA_JURISDICTIONS
+from dispatch.models import ALLOWED_EXTENSIONS, IFTA_JURISDICTIONS, MAX_FILE_SIZE
 from portal.models import driver_pin_registry as pin_registry
 
 driver_portal_bp = Blueprint("driver_portal", __name__)
+
+
+def _utc_today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 _ACTIVE_LOAD_STATUSES_EXCLUDED = ("archived", "cancelled", "completed")
 
@@ -122,12 +129,22 @@ def driver_home():
     # Pay Summary for Mission 4 Driver Settlement Glance
     pay_summary = dispatch_svc.get_driver_pay_summary(driver_id)
 
+    # Truck identity for the fuel scanner. Required by the fuel-receipt
+    # ownership chain, and deliberately NOT dependent on there being an active
+    # load -- an owner/operator fuels between loads, and the equipment schema
+    # has no driver assignment to derive it from, so the driver names it. The
+    # active mission's truck is pre-selected when there is one.
+    trucks = dispatch_svc.list_equipment(status="active")
+    default_equipment_id = (active_card or {}).get("load", {}).get("equipment_id", "")
+
     return render_template(
         "driver_home.html",
         driver=driver,
         load_cards=load_cards,
         active_card=active_card,
         pay_summary=pay_summary,
+        trucks=trucks,
+        default_equipment_id=default_equipment_id,
         dispatch_contact_email=dispatch_svc.reviewer_contact_email(),
         broker_contacts=list(broker_contacts_seen.values()),
     )
@@ -273,42 +290,81 @@ def driver_log_exception(load_id: str):
 
 
 # --- Mission 4: Vision Fuel Intake & Driver Pay Settlement ---
+def _validate_receipt_file(upload):
+    """Pre-flight the receipt against the same rules attach_ifta_fuel_evidence()
+    will apply, before any record is created.
+
+    The ownership chain requires receipt evidence, so a purchase must never
+    exist without its receipt. Attaching is a two-step service flow (create the
+    purchase, then attach) -- validating here means the common rejections
+    (wrong type, too large, empty) are refused before step one, instead of
+    leaving a purchase behind that violates the chain.
+    """
+    if not upload or not upload.filename:
+        return None, "A photo of the receipt is required. Fuel is never logged without one."
+    data = upload.read()
+    if not data:
+        return None, "That file came through empty. Try the photo again."
+    if len(data) > MAX_FILE_SIZE:
+        return None, f"That file is over the {MAX_FILE_SIZE // (1024 * 1024)} MB limit."
+    ext = Path(upload.filename).suffix.lstrip(".").lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return None, f"File type not allowed: .{ext}"
+    return data, None
+
+
 @driver_portal_bp.route("/fuel-receipt", methods=["POST"])
 def driver_fuel_receipt():
     """Log a fuel purchase into the IFTA ledger from a receipt photo.
 
-    SCOPING -- the reason this route carries a load_id at all. The original
-    driver build was the only write endpoint here with no ownership check of
-    any kind: any authenticated driver could post arbitrary gallons, dollars
-    and a jurisdiction straight into the company IFTA fuel ledger, for any
-    state, unattached to anything. IFTA is a quarterly tax filing, so an
-    unscoped write here is a write into a government submission.
+    OWNERSHIP -- Mike's ruling of 2026-08-23, verbatim: "Fuel receipt ownership
+    shall remain scoped. Fuel receipts shall never be anonymous." The minimum
+    chain is Driver Identity, Truck Identity, Timestamp, Jurisdiction, Receipt
+    Evidence. All five are required here, and a receipt that cannot supply all
+    five is refused rather than filed thin.
 
-    The rule applied: the request must name a load assigned to the driver
-    making it, verified through the same _verify_driver_load() the other three
-    routes use. The cockpit supplies it from the active mission card, and the
-    control is not rendered when there is no active load.
+    LOAD ASSOCIATION IS OPTIONAL, and that is deliberate. An owner/operator
+    fuels between loads; requiring a mission would make Dispatch refuse a real
+    operational event. When a load is named it must belong to this driver
+    (IDOR, same check the other three routes use). When none is named the
+    receipt is still fully owned, still auditable, and still available for IFTA
+    reporting -- and NO ARTIFICIAL LOAD ASSOCIATION IS CREATED. Dispatch
+    enforces ownership; it does not require a mission that operational reality
+    does not have.
 
-    This is deliberately the narrow reading, and it is a real restriction:
-    fuelling between loads is normal, and under this rule a driver with no
-    active mission cannot log a receipt. Relaxing it is one condition -- but
-    it must be relaxed to some other driver-scoped check, never back to none.
-    Flagged for Mike in the walkthrough report rather than decided here.
+    This replaces an earlier, stricter reading that required an active load.
+    That was over-tight and is recorded as such in the walkthrough report.
     """
     driver_id = session.get("driver_id")
     if not driver_id:
         return redirect(url_for("driver_portal.driver_login"))
 
-    load_id = request.form.get("load_id", "").strip()
-    if not load_id:
-        return _tell_driver("Fuel receipts are logged against your current load.")
-    if not _verify_driver_load(load_id, driver_id):
-        return _tell_driver("Fuel receipts are logged against your current load.")
+    # 1. DRIVER IDENTITY -- from the session, and it must still be a real driver.
+    driver = dispatch_svc.get_driver(driver_id)
+    if not driver:
+        session.clear()
+        return redirect(url_for("driver_portal.driver_login"))
 
-    fuel_file = request.files.get("fuel_file")
+    # 2. TRUCK IDENTITY -- required, and it must name real, active equipment.
+    equipment_id = request.form.get("equipment_id", "").strip()
+    if not equipment_id:
+        return _tell_driver("Which truck? A fuel receipt has to name one.")
+    equipment = dispatch_svc.get_equipment(equipment_id)
+    if not equipment or equipment.get("status") != "active":
+        return _tell_driver("That truck is not on the active fleet.")
+
+    # 3. RECEIPT EVIDENCE -- required, validated before anything is written.
+    receipt_bytes, problem = _validate_receipt_file(request.files.get("fuel_file"))
+    if problem:
+        return _tell_driver(problem)
+
+    # Optional load association. Verified when present, never invented.
+    load_id = request.form.get("load_id", "").strip()
+    if load_id and not _verify_driver_load(load_id, driver_id):
+        return _tell_driver("That load is not yours.")
 
     # A hand-posted form field is not guaranteed to be a number. float() on
-    # "" or "abc" is a 500; the driver sees a crash instead of a message.
+    # "abc" is a 500; the driver sees a crash instead of a message.
     def _number(field: str) -> float | None:
         raw = (request.form.get(field) or "").strip()
         if not raw:
@@ -326,25 +382,23 @@ def driver_fuel_receipt():
 
     jurisdiction = (request.form.get("state") or "").strip().upper()
 
-    if fuel_file and fuel_file.filename:
-        file_bytes = fuel_file.read()
-        if file_bytes:
-            extracted = receipt_vision.extract_fuel_receipt(file_bytes, fuel_file.filename)
-            if extracted.get("available"):
-                gallons = float(extracted.get("gallons") or gallons)
-                amount = float(extracted.get("amount") or amount)
-                scanned = receipt_vision.derive_jurisdiction(extracted.get("vendor_address"))
-                if scanned:
-                    jurisdiction = scanned
+    extracted = receipt_vision.extract_fuel_receipt(receipt_bytes, request.files["fuel_file"].filename)
+    if extracted.get("available"):
+        gallons = float(extracted.get("gallons") or gallons)
+        amount = float(extracted.get("amount") or amount)
+        scanned = receipt_vision.derive_jurisdiction(extracted.get("vendor_address"))
+        if scanned:
+            jurisdiction = scanned
 
     if gallons <= 0 and amount <= 0:
         return _tell_driver(
             "Nothing readable on that receipt. Enter the gallons and amount by hand."
         )
 
-    # No default jurisdiction. The original build fell back to "FL" whenever
-    # the scan could not read one, which silently files another state's fuel
-    # under Florida -- an unknown becoming a fact, in a tax record.
+    # 4. JURISDICTION -- required and validated. No default. The original build
+    # fell back to "FL" whenever the scan could not read a state, silently
+    # filing another state's fuel under Florida: an unknown becoming a fact, in
+    # a tax record.
     if not jurisdiction:
         return _tell_driver(
             "Could not read the state from that receipt. Enter it by hand."
@@ -352,17 +406,43 @@ def driver_fuel_receipt():
     if jurisdiction not in IFTA_JURISDICTIONS:
         return _tell_driver(f"{jurisdiction} is not an IFTA jurisdiction.")
 
+    # 5. TIMESTAMP -- recorded explicitly rather than left to a default.
+    purchased_on = (request.form.get("date") or "").strip() or _utc_today()
+
+    ownership = f"driver:{driver_id}"
+    if load_id:
+        ownership += f" load:{load_id}"
+
     try:
-        dispatch_svc.add_ifta_fuel_purchase(
+        purchase = dispatch_svc.add_ifta_fuel_purchase(
             jurisdiction=jurisdiction,
             gallons=gallons,
             amount=amount,
+            date=purchased_on,
+            vehicle_id=equipment_id,
             vendor="Truck Stop (Driver Scanner)",
-            notes=f"driver:{driver_id} load:{load_id}",
+            notes=ownership,
+            extraction_confidence=extracted.get("confidence") if extracted.get("available") else None,
         )
     except ValueError as exc:
         return _tell_driver(str(exc))
 
+    # The receipt completes the chain. If this fails despite the pre-flight,
+    # the purchase is removed rather than left standing without its evidence --
+    # a fuel row with no receipt is exactly what "never anonymous" forbids.
+    try:
+        dispatch_svc.attach_ifta_fuel_evidence(
+            purchase["purchase_id"],
+            file_data=receipt_bytes,
+            original_filename=request.files["fuel_file"].filename,
+            description=f"Fuel receipt, {equipment.get('unit_number') or equipment_id}",
+            uploaded_by=f"driver:{driver_id}",
+        )
+    except ValueError as exc:
+        dispatch_svc.delete_ifta_fuel_purchase(purchase["purchase_id"])
+        return _tell_driver(f"Receipt could not be stored, so nothing was logged: {exc}")
+
+    unit = equipment.get("unit_number") or equipment_id
     return _tell_driver(
-        f"{gallons:g} gal / ${amount:,.2f} logged in {jurisdiction}.", "success"
+        f"{gallons:g} gal / ${amount:,.2f} logged in {jurisdiction} for {unit}.", "success"
     )
