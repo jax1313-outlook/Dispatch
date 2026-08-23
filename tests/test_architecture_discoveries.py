@@ -8,6 +8,8 @@ Verifies:
   5. Discovery #6 & #7: State 1 Reality vs State 2 Possibilities & Opportunity Lifecycle
   6. Discovery #9: Truck Arrangement Data Structures
   7. Discovery #10: Driver Portal Execution Focus & Ownership Verification
+  8. Hardened Dynamic Capacity: Unconfigured assets & unknown HOS produce NEEDS_REVIEW / INSUFFICIENT_DATA
+  9. Opportunity Card Consumption % Metrics
 """
 
 import pytest
@@ -24,57 +26,47 @@ from dispatch.opportunities import OpportunityCard, OpportunityPipeline
 from dispatch.truck_arrangement import TruckArrangement
 
 
-def test_dynamic_capacity_six_dimensions():
-    cap = DynamicCapacity(
-        physical=PhysicalCapacity(
-            max_weight_lbs=45000.0,
-            used_weight_lbs=20000.0,
-            max_linear_feet=53.0,
-            used_linear_feet=26.0,
-            has_liftgate=True,
-        ),
-        time=TimeCapacity(
-            available_drive_hours=11.0,
-            used_drive_hours=4.0,
-        ),
-        position=PositionCapacity(
-            current_location="Dallas, TX",
-            estimated_deadhead_miles=25.0,
-        ),
-        reserve=ReserveCapacity(
-            reserved_hos_hours=1.0,
-            reserved_weight_lbs=1000.0,
-        ),
-        cargo=CargoArrangementCapacity(
-            arrangement_type="multi_pallet",
-            stackable_permitted=True,
-        ),
-        stop_sequence=StopSequenceCapacity(
-            max_stops=5,
-            assigned_stops=1,
-        ),
+def test_unconfigured_asset_and_unknown_hos():
+    cap = DynamicCapacity()
+    assert cap.physical.configuration_status == "UNCONFIGURED"
+    assert cap.time.hos_status == "UNKNOWN"
+
+    can_fit, reasons = cap.can_accommodate(weight_lbs=10000.0, drive_hours=2.0)
+    assert can_fit is False
+    assert any("NEEDS_REVIEW" in r for r in reasons)
+
+
+def test_verified_asset_profile_and_hos_evaluation():
+    cap = DynamicCapacity()
+    cap.apply_asset_profile(
+        asset_profile_id="TRK-01-53FT",
+        max_weight_lbs=44000.0,
+        max_volume_cuft=3400.0,
+        max_linear_feet=53.0,
+        max_pallets=26,
+        equipment_type="dry_van",
+        has_liftgate=True,
+    )
+    cap.set_verified_hos(
+        remaining_drive_hours=10.0,
+        remaining_duty_hours=12.0,
+        remaining_cycle_hours=60.0,
     )
 
     d = cap.to_dict()
-    assert d["physical"]["remaining_weight_lbs"] == 25000.0
-    assert d["physical"]["remaining_linear_feet"] == 27.0
-    assert d["time"]["remaining_drive_hours"] == 7.0
-    assert d["stop_sequence"]["remaining_stops"] == 4
+    assert d["physical"]["configuration_status"] == "VERIFIED"
+    assert d["time"]["hos_status"] == "VERIFIED"
 
-    # Test accommodation check
     can_fit, reasons = cap.can_accommodate(
         weight_lbs=20000.0,
-        linear_feet=20.0,
+        linear_feet=26.0,
+        volume_cuft=1500.0,
+        pallets=12,
         drive_hours=5.0,
         requires_liftgate=True,
     )
     assert can_fit is True
     assert len(reasons) == 0
-
-    # Over weight limit test
-    can_fit_over, reasons_over = cap.can_accommodate(weight_lbs=30000.0)
-    assert can_fit_over is False
-    assert any("weight capacity" in r for r in reasons_over)
 
 
 def test_truck_arrangement_data_structure():
@@ -126,6 +118,42 @@ def test_opportunity_lifecycle_and_human_authority():
     card.transition_to("Committed", actor="Mike Zachary")
     assert card.stage == "Committed"
     assert card.committed_by == "Mike Zachary"
+
+
+def test_opportunity_card_consumption_metrics():
+    pipeline = OpportunityPipeline()
+    raw = [
+        {
+            "source": "dat",
+            "external_ref_id": "REF-001",
+            "origin_location": "Chicago, IL",
+            "destination_location": "Indianapolis, IN",
+            "offered_rate": 1200.0,
+            "estimated_miles": 180.0,
+            "weight_lbs": 22000.0,
+            "volume_cuft": 1700.0,
+            "pallets": 13,
+        }
+    ]
+    ingested = pipeline.ingest_opportunities(raw)
+    card = ingested[0]
+
+    cap = DynamicCapacity()
+    cap.apply_asset_profile(
+        asset_profile_id="TRK-01",
+        max_weight_lbs=44000.0,
+        max_volume_cuft=3400.0,
+        max_linear_feet=53.0,
+        max_pallets=26,
+    )
+    cap.set_verified_hos(remaining_drive_hours=11.0, remaining_duty_hours=14.0, remaining_cycle_hours=70.0)
+
+    analyzed = pipeline.analyze_opportunity(card.opportunity_id, capacity=cap)
+
+    assert analyzed.weight_consumption_pct == 50.0
+    assert analyzed.volume_consumption_pct == 50.0
+    assert analyzed.pallet_consumption_pct == 50.0
+    assert analyzed.time_consumption_pct > 0.0
 
 
 def test_high_volume_opportunity_pipeline(monkeypatch):

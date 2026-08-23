@@ -62,7 +62,16 @@ class OpportunityCard:
     estimated_miles: float = 0.0
     commodity: str = ""
     weight_lbs: float = 0.0
+    volume_cuft: float = 0.0
+    pallets: int = 0
+    linear_feet: float = 0.0
     equipment_type: str = "dry_van"
+
+    # Dynamic Capacity Consumption % Metrics
+    weight_consumption_pct: float = 0.0
+    volume_consumption_pct: float = 0.0
+    pallet_consumption_pct: float = 0.0
+    time_consumption_pct: float = 0.0
 
     # Analysis fields
     deadhead_miles: float = 0.0
@@ -150,6 +159,9 @@ class OpportunityPipeline:
                 estimated_miles=float(raw.get("estimated_miles", 0.0)),
                 commodity=raw.get("commodity", ""),
                 weight_lbs=float(raw.get("weight_lbs", 0.0)),
+                volume_cuft=float(raw.get("volume_cuft", 0.0)),
+                pallets=int(raw.get("pallets", 0)),
+                linear_feet=float(raw.get("linear_feet", 0.0)),
                 equipment_type=raw.get("equipment_type", "dry_van"),
             )
             self._opportunities[card.opportunity_id] = card
@@ -173,9 +185,20 @@ class OpportunityPipeline:
         if capacity:
             card.deadhead_miles = capacity.position.estimated_deadhead_miles
 
+            # Calculate Consumption % Metrics
+            if capacity.physical.max_weight_lbs > 0:
+                card.weight_consumption_pct = round((card.weight_lbs / capacity.physical.max_weight_lbs) * 100.0, 1)
+            if capacity.physical.max_volume_cuft > 0:
+                card.volume_consumption_pct = round((card.volume_cuft / capacity.physical.max_volume_cuft) * 100.0, 1)
+            if capacity.physical.max_pallets > 0:
+                card.pallet_consumption_pct = round((card.pallets / capacity.physical.max_pallets) * 100.0, 1)
+
         # Estimate HOS drive hours
         if card.estimated_miles > 0:
             card.estimated_hos_drive_hours = round((card.estimated_miles + card.deadhead_miles) / 50.0, 1)
+
+        if capacity and capacity.time.drive_limit_hours > 0:
+            card.time_consumption_pct = round((card.estimated_hos_drive_hours / capacity.time.drive_limit_hours) * 100.0, 1)
 
         # Estimate fuel cost ($3.80/gal @ 6.5 mpg)
         total_miles = card.estimated_miles + card.deadhead_miles

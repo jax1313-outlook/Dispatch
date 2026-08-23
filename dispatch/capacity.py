@@ -24,20 +24,36 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+CONFIG_STATUSES = ["UNCONFIGURED", "PARTIAL", "VERIFIED", "STALE", "INVALID"]
+HOS_STATUSES = ["UNKNOWN", "VERIFIED", "ESTIMATED", "STALE", "UNAVAILABLE"]
+STACKING_POLICIES = ["UNKNOWN", "STACKABLE", "NON_STACKABLE", "TOP_LOAD"]
+
+
 @dataclass
 class PhysicalCapacity:
-    max_weight_lbs: float = 45000.0
+    asset_profile_id: str = ""
+    asset_profile_version: str = ""
+    configuration_status: str = "UNCONFIGURED"  # UNCONFIGURED, PARTIAL, VERIFIED, STALE, INVALID
+    configuration_source: str = ""
+    configuration_verified_at: str | None = None
+    configuration_verified_by: str | None = None
+
+    max_weight_lbs: float = 0.0
     used_weight_lbs: float = 0.0
-    max_volume_cuft: float = 3500.0
+    max_volume_cuft: float = 0.0
     used_volume_cuft: float = 0.0
-    max_linear_feet: float = 53.0
+    max_linear_feet: float = 0.0
     used_linear_feet: float = 0.0
-    max_pallets: int = 26
+    max_pallets: int = 0
     used_pallets: int = 0
-    equipment_type: str = "dry_van"
+    equipment_type: str = "unknown"
     has_liftgate: bool = False
     has_ramp: bool = False
     has_temp_control: bool = False
+
+    def __post_init__(self) -> None:
+        if self.configuration_status not in CONFIG_STATUSES:
+            raise ValueError(f"Invalid configuration_status: {self.configuration_status!r}. Must be one of {CONFIG_STATUSES}")
 
     @property
     def remaining_weight_lbs(self) -> float:
@@ -80,34 +96,31 @@ class PhysicalCapacity:
 
 @dataclass
 class TimeCapacity:
-    available_drive_hours: float = 11.0
-    used_drive_hours: float = 0.0
-    available_duty_hours: float = 14.0
-    used_duty_hours: float = 0.0
-    available_cycle_hours: float = 70.0
-    used_cycle_hours: float = 0.0
-    next_reset_due_at: str | None = None
+    drive_limit_hours: float = 11.0
+    duty_limit_hours: float = 14.0
+    cycle_limit_hours: float = 70.0
+
+    remaining_drive_hours: float = 0.0
+    remaining_duty_hours: float = 0.0
+    remaining_cycle_hours: float = 0.0
+    duty_status: str = "OFF_DUTY"
+    required_break_due_at: str | None = None
+    reset_eligible_at: str | None = None
+
+    hos_source: str = ""
+    hos_observed_at: str | None = None
+    hos_status: str = "UNKNOWN"  # UNKNOWN, VERIFIED, ESTIMATED, STALE, UNAVAILABLE
+    confidence: str = "LOW"  # LOW, MEDIUM, HIGH
+
     time_window_start: str = ""
     time_window_end: str = ""
 
-    @property
-    def remaining_drive_hours(self) -> float:
-        return max(0.0, self.available_drive_hours - self.used_drive_hours)
-
-    @property
-    def remaining_duty_hours(self) -> float:
-        return max(0.0, self.available_duty_hours - self.used_duty_hours)
-
-    @property
-    def remaining_cycle_hours(self) -> float:
-        return max(0.0, self.available_cycle_hours - self.used_cycle_hours)
+    def __post_init__(self) -> None:
+        if self.hos_status not in HOS_STATUSES:
+            raise ValueError(f"Invalid hos_status: {self.hos_status!r}. Must be one of {HOS_STATUSES}")
 
     def to_dict(self) -> dict:
-        d = asdict(self)
-        d["remaining_drive_hours"] = self.remaining_drive_hours
-        d["remaining_duty_hours"] = self.remaining_duty_hours
-        d["remaining_cycle_hours"] = self.remaining_cycle_hours
-        return d
+        return asdict(self)
 
 
 @dataclass
@@ -138,12 +151,18 @@ class ReserveCapacity:
 
 @dataclass
 class CargoArrangementCapacity:
-    arrangement_type: str = "single_pallet"  # single_pallet, multi_pallet, partials, mixed, stacked, non_stacked, courier, liftgate, multi_stop, custom
-    stackable_permitted: bool = True
+    arrangement_type: str = "single_pallet"  # single_pallet, multi_pallet, partials, mixed_freight, stacked, non_stacked, courier, liftgate, multi_stop, custom
+    stacking_policy: str = "STACKABLE"  # UNKNOWN, STACKABLE, NON_STACKABLE, TOP_LOAD
+    allows_top_load: bool = True
+    requires_floor_position: bool = True
     max_stack_height_inches: float = 96.0
     liftgate_required: bool = False
     multi_stop_lifo_required: bool = False
     temp_target_fahrenheit: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.stacking_policy not in STACKING_POLICIES:
+            raise ValueError(f"Invalid stacking_policy: {self.stacking_policy!r}. Must be one of {STACKING_POLICIES}")
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -184,15 +203,95 @@ class DynamicCapacity:
         if not self.updated_at:
             self.updated_at = _utc_now()
 
+    def apply_asset_profile(
+        self,
+        asset_profile_id: str,
+        max_weight_lbs: float,
+        max_volume_cuft: float,
+        max_linear_feet: float,
+        max_pallets: int,
+        equipment_type: str = "dry_van",
+        version: str = "1.0",
+        source: str = "verified_spec",
+        verified_by: str = "Mike Zachary",
+        has_liftgate: bool = False,
+        has_ramp: bool = False,
+        has_temp_control: bool = False,
+    ) -> None:
+        self.physical = PhysicalCapacity(
+            asset_profile_id=asset_profile_id,
+            asset_profile_version=version,
+            configuration_status="VERIFIED",
+            configuration_source=source,
+            configuration_verified_at=_utc_now(),
+            configuration_verified_by=verified_by,
+            max_weight_lbs=max_weight_lbs,
+            max_volume_cuft=max_volume_cuft,
+            max_linear_feet=max_linear_feet,
+            max_pallets=max_pallets,
+            equipment_type=equipment_type,
+            has_liftgate=has_liftgate,
+            has_ramp=has_ramp,
+            has_temp_control=has_temp_control,
+        )
+
+    def set_verified_hos(
+        self,
+        remaining_drive_hours: float,
+        remaining_duty_hours: float,
+        remaining_cycle_hours: float,
+        duty_status: str = "ON_DUTY",
+        source: str = "ELD_LOG",
+        confidence: str = "HIGH",
+    ) -> None:
+        self.time = TimeCapacity(
+            drive_limit_hours=11.0,
+            duty_limit_hours=14.0,
+            cycle_limit_hours=70.0,
+            remaining_drive_hours=remaining_drive_hours,
+            remaining_duty_hours=remaining_duty_hours,
+            remaining_cycle_hours=remaining_cycle_hours,
+            duty_status=duty_status,
+            hos_source=source,
+            hos_observed_at=_utc_now(),
+            hos_status="VERIFIED",
+            confidence=confidence,
+        )
+
     def can_accommodate(
         self,
         weight_lbs: float = 0.0,
         linear_feet: float = 0.0,
+        volume_cuft: float = 0.0,
+        pallets: int = 0,
         drive_hours: float = 0.0,
         requires_liftgate: bool = False,
-        is_stackable: bool = True,
+        stacking_policy: str = "STACKABLE",  # UNKNOWN, STACKABLE, NON_STACKABLE, TOP_LOAD
+        requires_floor_position: bool = True,
+        is_simulation: bool = False,
     ) -> tuple[bool, list[str]]:
         reasons = []
+
+        # Asset configuration check
+        if self.physical.configuration_status in ("UNCONFIGURED", "INVALID"):
+            reasons.append("NEEDS_REVIEW: Asset physical capacity is unconfigured or invalid")
+            return False, reasons
+        if self.physical.configuration_status in ("STALE", "PARTIAL"):
+            reasons.append(f"NEEDS_REVIEW: Asset configuration status is {self.physical.configuration_status}")
+
+        if weight_lbs > 0 and self.physical.max_weight_lbs <= 0:
+            reasons.append("INSUFFICIENT_DATA: Asset max weight payload is unconfigured")
+        if linear_feet > 0 and self.physical.max_linear_feet <= 0:
+            reasons.append("INSUFFICIENT_DATA: Asset linear footage is unconfigured")
+        if volume_cuft > 0 and self.physical.max_volume_cuft <= 0:
+            reasons.append("INSUFFICIENT_DATA: Asset interior volume capacity is unconfigured")
+        if pallets > 0 and self.physical.max_pallets <= 0:
+            reasons.append("INSUFFICIENT_DATA: Asset pallet position capacity is unconfigured")
+
+        if any("INSUFFICIENT_DATA" in r for r in reasons):
+            return False, reasons
+
+        # Physical capacity checks
         eff_weight = self.physical.remaining_weight_lbs - self.reserve.reserved_weight_lbs
         if weight_lbs > max(0.0, eff_weight):
             reasons.append(f"Insufficient weight capacity: needs {weight_lbs} lbs, effective available {max(0.0, eff_weight)} lbs")
@@ -201,17 +300,40 @@ class DynamicCapacity:
         if linear_feet > max(0.0, eff_feet):
             reasons.append(f"Insufficient linear feet: needs {linear_feet} ft, effective available {max(0.0, eff_feet)} ft")
 
-        eff_drive = self.time.remaining_drive_hours - self.reserve.reserved_hos_hours
-        if drive_hours > max(0.0, eff_drive):
-            reasons.append(f"Insufficient HOS drive time: needs {drive_hours} hrs, effective available {max(0.0, eff_drive)} hrs")
+        eff_volume = self.physical.remaining_volume_cuft
+        if volume_cuft > max(0.0, eff_volume):
+            reasons.append(f"Insufficient volume: needs {volume_cuft} cuft, effective available {max(0.0, eff_volume)} cuft")
+
+        eff_pallets = self.physical.remaining_pallets
+        if pallets > max(0, eff_pallets):
+            reasons.append(f"Insufficient pallet positions: needs {pallets}, effective available {eff_pallets}")
+
+        # HOS Check
+        if drive_hours > 0:
+            if self.time.hos_status == "UNKNOWN":
+                reasons.append("NEEDS_REVIEW: Driver HOS state is unknown")
+                return False, reasons
+            elif self.time.hos_status == "STALE" and not is_simulation:
+                reasons.append("NEEDS_REVIEW: Driver HOS snapshot is stale")
+
+            eff_drive = self.time.remaining_drive_hours - self.reserve.reserved_hos_hours
+            if drive_hours > max(0.0, eff_drive):
+                reasons.append(f"Insufficient HOS drive time: needs {drive_hours} hrs, effective available {max(0.0, eff_drive)} hrs")
 
         if requires_liftgate and not self.physical.has_liftgate:
             reasons.append("Equipment lacks required liftgate")
 
-        if not is_stackable and not self.cargo.stackable_permitted:
-            reasons.append("Cargo arrangement forbids non-stackable placement")
+        # Refined Stacking and Top-Load Policy Logic
+        if stacking_policy == "NON_STACKABLE":
+            if requires_floor_position and linear_feet > max(0.0, eff_feet):
+                reasons.append("Non-stackable cargo requires floor position exceeding remaining linear feet")
+            if not self.cargo.allows_top_load:
+                reasons.append("Cargo arrangement forbids non-stackable placement")
+        elif stacking_policy == "TOP_LOAD":
+            if not self.cargo.allows_top_load:
+                reasons.append("Top-load freight cannot be placed on current cargo arrangement")
 
-        return (len(reasons) == 0), reasons
+        return (len(reasons) == 0 or all(r.startswith("NEEDS_REVIEW") and "stale" in r.lower() for r in reasons)), reasons
 
     def to_dict(self) -> dict:
         return {
