@@ -324,11 +324,13 @@ class DynamicCapacity:
             reasons.append("Equipment lacks required liftgate")
 
         # Refined Stacking and Top-Load Policy Logic
-        if stacking_policy == "NON_STACKABLE":
+        if stacking_policy == "UNKNOWN":
+            reasons.append("NEEDS_REVIEW: Cargo stacking policy is unknown")
+        elif stacking_policy == "NON_STACKABLE":
             if requires_floor_position and linear_feet > max(0.0, eff_feet):
                 reasons.append("Non-stackable cargo requires floor position exceeding remaining linear feet")
-            if not self.cargo.allows_top_load:
-                reasons.append("Cargo arrangement forbids non-stackable placement")
+            if self.cargo.stacking_policy == "NON_STACKABLE" and not self.cargo.allows_top_load:
+                reasons.append("Cargo arrangement forbids stacking or top-load placement")
         elif stacking_policy == "TOP_LOAD":
             if not self.cargo.allows_top_load:
                 reasons.append("Top-load freight cannot be placed on current cargo arrangement")
