@@ -4,6 +4,12 @@ __pycache__/
 .venv/
 venv/
 
+# Packaging build artifacts (created by `pip install -e .` / `python -m build`,
+# which became usable again when pyproject.toml gained its package discovery)
+build/
+dist/
+*.egg-info/
+
 # Test & coverage artifacts
 .pytest_cache/
 .coverage

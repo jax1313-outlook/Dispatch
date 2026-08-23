@@ -187,6 +187,69 @@ Each entry records the literal, verbatim approval text given for that specific c
 
 **Walkthrough:** `C3_STATUS_CHANGE_AUDIT_WALKTHROUGH_REPORT_v1.md`
 
+## 2026-08-23 — W0-3: Portal adjudication; W0-1 security cleanup; packaging repair
+
+**PR:** (this change) · **Branch:** `claude/dispatch-repo-context-reconcile-7mblbb`
+**Capability:** Process/governance — names the operational portal; plus two contained repairs.
+**Approved by:** Mike (owner)
+
+**Approval, verbatim (this entry):** "You are authorized to proceed with:\n\n1. Portal adjudication recording\n2. Packaging repair (Path B)\n3. Recovery Wave 1 planning\n\nDo not begin broad repairs yet."
+
+**Prior approval, verbatim (W0-1):** "MISSION: W0-1 SECURITY CLEANUP … Mike Zachary authorizes W0-1. … Delete Jules/flask_app.log if and only if the file contains a Werkzeug debugger PIN or similar runtime debug secret as identified in the cross-repository audit."
+
+### Decision recorded — W0-3, Portal adjudication
+
+**`Dispatch/portal/` is Dispatch.** `jax1313-outlook/Jules` is a design archive, read-only and not
+maintained as a product. Its presentation design (the driver cockpit and the public site) may be
+harvested into Dispatch later, as a separate, separately-approved mission; its runtime is not
+recovered.
+
+**Basis, from `W0-3_PORTAL_ADJUDICATION_BRIEF.md`:** Dispatch/portal/ has 218 routes, 26 SQLite
+tables, a fail-closed PIN gate with three disjoint session namespaces, and 2,817 passing tests, and
+its persistence was proven across a real process restart during the W0-2 rehearsal. Jules has 13
+routes, no persistence (a module singleton seeded by `_bootstrap_sample_data()`), no authentication
+on any route, and a POD endpoint that returns `"POD uploaded successfully"` when no file was posted.
+
+**Interpretation flag — read this.** The authorization above says "portal adjudication recording"
+without naming a portal. This entry records the **recommendation** the brief made. That is an
+interpretation, not Mike's verbatim words, and it is marked as such deliberately rather than
+presented as a quotation. **If a different portal was intended, this entry is corrected by a new
+appended entry — it is not edited.** Nothing downstream has been built on it yet; W0-4 (governance
+home) is the first unit that depends on it.
+
+### W0-1 — security cleanup (executed under its own authorization)
+
+`Jules/flask_app.log` removed: a committed Werkzeug runtime log containing `Debugger PIN:
+631-326-424`, for an app that `run_portal.sh` binds to `0.0.0.0` and that has no authentication.
+Verified before removal as not source code (a `>`-recreated artifact of `run_portal.sh:28`) and not
+an operational record (16 lines, five GETs, zero state-changing requests, against an app that
+persists nothing). A `.gitignore` with `*.log` was added; the repository had none.
+**Jules commit `2aeb2beb0950c370e6f557858c1fb5a38eeb5052`.**
+**Disclosed:** the blob remains reachable in history at `cadc0de`. History was not rewritten.
+
+### Packaging repair — Path B
+
+**Defect:** `pyproject.toml` declared four console scripts and no package configuration, with no
+`setup.py` or `setup.cfg`. `pip install -e .` — the documented Quick Start in `DEPLOY_LOCAL.md` —
+failed on a clean clone with *"Multiple top-level packages discovered in a flat-layout"*, so
+`cin-portal-init-admin` could never be installed. `DEPLOY_LOCAL.md` states that without that step
+"the app runs but nothing past the login page is reachable." **The documented install path was
+unusable.** Found by rehearsing W0-2 against a fresh clone, not by reading the file.
+
+**Fix:** a `[tool.setuptools.packages.find]` block with six `include` patterns. `find` rather than a
+literal `packages = [...]` list on purpose — six of the twelve packages are subpackages, and a
+literal list omits them silently: the install succeeds and `import portal.routes` then fails from
+the installed distribution. That trap was hit and backed out during this change.
+
+**Evidence:** a real wheel builds; installed into a clean venv with the working directory outside
+the repository, **all 19 module imports succeed** and all four console scripts install;
+`pip install -e .` on the repository exits 0; `cin-portal-init-admin` runs and prompts.
+**Full suite: 2,817 passed, exit 0 — unchanged.** One file, +26 lines, no application code touched.
+
+**Not done here:** Recovery Wave 1 remains planning only — see
+`DISPATCH_RECOVERY_WAVE_1_REPORT.md`. No Spine, Driver Transformation or Archive Review Queue code
+was recovered, and no broad repair was begun.
+
 ---
 
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

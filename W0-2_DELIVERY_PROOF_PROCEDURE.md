@@ -35,13 +35,18 @@ pip 24.0, setuptools 79.0.1.
 skipping that step means *"the app runs but nothing past the login page is reachable."* **W0-2 as
 documented is not completable.**
 
-**Two ways forward. Path A needs no repository change and is what this procedure uses.**
+> **UPDATE 2026-08-23 — Path B was authorized and applied.** `pyproject.toml` now carries a
+> `[tool.setuptools.packages.find]` block; `pip install -e .` works. The blocker below is kept as
+> the record of what was found and why the fix exists. **Use the Quick Start as written in
+> `DEPLOY_LOCAL.md`**; steps 2 and 4 of this procedure show both paths, and either works.
 
-### Path A — run from source (no install). Rehearsed ✅, use this today.
+**Two ways forward. Path A needs no repository change; Path B has since been applied.**
+
+### Path A — run from source (no install). Rehearsed ✅. Still works; no longer necessary.
 
 Everything works; only the `pip install -e .` convenience layer is skipped.
 
-### Path B — fix the packaging. Rehearsed ✅, but **needs its own authorization.**
+### Path B — fix the packaging. Rehearsed ✅, authorized, and **now applied.**
 
 Four lines appended to `pyproject.toml`:
 
@@ -54,9 +59,14 @@ Verified in the rehearsal clone: `pip install -e .` then exits 0, all six packag
 installed distribution, and `cin-portal-init-admin` installs and behaves correctly (it refuses a
 second run with *"An identity already exists."*).
 
-**This was NOT applied to the repository.** `pyproject.toml` on `main` is untouched. It is a
-production packaging change and is outside W0-2's authorization. Say the word and it becomes a
-one-file, four-line unit.
+**Applied 2026-08-23** under the authorization *"2. Packaging repair (Path B)"*. The shipped form
+uses `[tool.setuptools.packages.find]` with `include` patterns rather than a literal list: six of
+the twelve packages here are subpackages, and a literal list omits them silently — the install
+succeeds and `import portal.routes` then fails from the installed distribution. That trap was hit
+and backed out during the change. Verified after applying: a real wheel builds, all 19 module
+imports succeed from a clean venv with the working directory outside the repository, all four
+console scripts install, `pip install -e .` exits 0, and the full suite is **2,817 passed, exit 0** —
+unchanged.
 
 ---
 
@@ -80,10 +90,11 @@ cd Dispatch
 ```bat
 python -m venv .venv
 .venv\Scripts\activate
-pip install flask
+pip install -e .
 ```
 
-**Not `pip install -e .`** — see the blocker above. `flask` is the only hard runtime dependency
+**`pip install -e .` now works** (Path B, applied). If you prefer to skip the install entirely,
+`pip install flask` and run from the repository root also works — `flask` is the only hard runtime dependency
 (`portal/requirements.txt`). `paramiko` is needed only for `sync/`; `anthropic` only for the
 optional Claude summarizer, which falls back deterministically without it.
 
@@ -107,8 +118,10 @@ makes the app refuse to start without them; until that lands, this step is yours
 ### 4 · Create the Authority identity — **once, interactively** ⬜
 
 ```bat
-python -c "from portal.cli import init_admin; init_admin()"
+cin-portal-init-admin
 ```
+
+(or, without the install: `python -c "from portal.cli import init_admin; init_admin()"`)
 
 It asks for a user id, a display name, and a PIN (twice, not echoed). Minimum 4 characters.
 
