@@ -130,6 +130,8 @@ production operations you should set:
 | `python -m cin_lite.run`    | Run the CIN-Lite contract pipeline             |
 | `python run_sync.py`        | Run the sync utility (VPS ↔ local)             |
 | `.\run_sync.bat`            | Same, via the Windows batch launcher           |
+| `python bootstrap_d_drive.py` | Migrate workspace & data into D:\ structure    |
+| `.\run_bootstrap_d_drive.bat` | Same, via the Windows batch launcher           |
 
 `run_sync.py` requires `sync/sync_config.json` (copy `sync/sync_config.example.json`
 and fill in `vps.hostname`, `vps.username`, `vps.ssh_key_path` — must point to an
