@@ -60,7 +60,7 @@ implementation → 8. Completion reports and narrative claims.
 
 ---
 
-## CF-04 · Two Spine implementations, and a third state machine
+## CF-04 · Lifecycle authority — **ADJUDICATED 2026-08-23**
 
 | | |
 |---|---|
@@ -71,8 +71,11 @@ implementation → 8. Completion reports and narrative claims.
 | **Applicable doctrine** | **BM-10**: *"No mission may merge the load-status and work-item state models, replace either, or create a third state authority."* The adjudication established that load status and work-item state **coexist**. |
 | **Which appears authoritative** | **`dispatch/spine/` is the legitimate second model** — it is the work-item model BM-10 protects, implemented to specification. **`dispatch/opportunities.py` is the third model BM-10 forbids**, and it is the one that is on `main`. |
 | **Why** | The baseline audit flagged `opportunities.py` as a third state machine and was right. What it could not see is that the *second* model — the sanctioned one — was already built and left on a branch. **The wrong one shipped.** |
-| **Mike decision required** | **YES — this is the single most consequential decision in the register.** |
-| **Recommended disposition** | Adjudicate together, not separately: (a) recover `dispatch/spine/` as the work-item model, and (b) map `opportunities.py`'s 9 stages onto it or onto load status. Do **not** wire `opportunities.py` as-is. Do **not** recover `dispatch/spine/` while a third model sits unadjudicated on `main`. |
+| **Mike decision required** | **ANSWERED.** |
+| **Ruling, verbatim (2026-08-23)** | *"This is not a Spine-versus-Opportunity decision. Dispatch Spine shall become the authoritative lifecycle engine and single source of lifecycle truth. Dispatch Opportunity shall remain the authoritative opportunity-analysis, scoring, Dynamic Capacity, Scheduler, Route Risk, Special Requirements, and decision-support subsystem. Opportunity recommends. Spine records reality. Opportunity may request transitions. Spine owns transitions. Opportunity may not maintain a competing lifecycle authority. Scheduler, Dynamic Capacity, Route Risk, and Intelligence remain advisory systems and do not become lifecycle authorities."* |
+| **Framing correction** | This register put CF-04 as *"Spine versus Opportunity."* **The ruling rejects that framing.** They are not competitors; they are different offices. Both are retained. |
+| **Disposition** | Recover `dispatch/spine/` as the lifecycle engine. Strip Opportunity's competing lifecycle authority — eight surfaces, enumerated by line — and replace it with *requested* transitions Spine accepts or refuses. **`Filtered` and `Calendar Event` disappear**: §3 of the model shows neither was ever a lifecycle state. Nine alignment units, dependency-ordered, in `DISPATCH_CF04_LIFECYCLE_AUTHORITY_MODEL_v1.md`. |
+| **Still open, and it gates one unit** | Whether *"single source of lifecycle truth"* absorbs `loads.status` (11 values, live, ~1,800 tests) or covers only the review/decision lifecycle. **Reading A (narrow) recommended** — see the model, §7. Blocks OPP-04 only. |
 
 ---
 
@@ -164,7 +167,7 @@ implementation → 8. Completion reports and narrative claims.
 | CF-01 governance home | **YES** | Open |
 | CF-02 D-numbering collision | **YES** | Open |
 | CF-03 two auth stacks | NO | Resolved — `main` wins |
-| CF-04 Spine vs Opportunity lifecycle | **YES** | Open — **highest consequence** |
+| CF-04 lifecycle authority | ANSWERED | **ADJUDICATED 2026-08-23** — one sub-question open (`loads.status` scope) |
 | CF-05 Manager wired on a branch vs BM-02 | **YES** | Open |
 | CF-06 wrong-repository citation | NO | Resolved — recover and correct |
 | CF-07 four empty commits | NO | Resolved — nothing exists |

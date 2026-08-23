@@ -308,6 +308,49 @@ assertions. **No test was deleted or weakened.**
 
 **Walkthrough:** `DRIVER_TRANSFORMATION_RECOVERY_WALKTHROUGH_REPORT_v1.md`
 
+## 2026-08-23 — CF-04 adjudicated: Spine is the lifecycle authority; Opportunity advises
+
+**PR:** (this change) · **Branch:** `claude/dispatch-repo-context-reconcile-7mblbb`
+**Capability:** Architecture — names the single lifecycle authority and the standing of every
+advisory subsystem.
+**Approved by:** Mike (owner)
+
+**Approval, verbatim:** "CF-04 ADJUDICATION\n\nThis is not a Spine-versus-Opportunity decision.\n\nDispatch Spine shall become the authoritative lifecycle engine and single source of lifecycle truth.\n\nDispatch Opportunity shall remain the authoritative opportunity-analysis, scoring, Dynamic Capacity, Scheduler, Route Risk, Special Requirements, and decision-support subsystem.\n\nOpportunity recommends.\n\nSpine records reality.\n\nOpportunity may request transitions.\n\nSpine owns transitions.\n\nOpportunity may not maintain a competing lifecycle authority.\n\nScheduler, Dynamic Capacity, Route Risk, and Intelligence remain advisory systems and do not become lifecycle authorities.\n\nProceed with updating the CF-04 decision brief using this architecture model and identify recovery work required to align Opportunities with Spine authority."
+
+**The framing this repository had was wrong, and the ruling says so.** Both the conflict register and
+the Wave 1 report put CF-04 as "Spine versus Opportunity" — a choice between two implementations.
+It is not a choice. They are different offices, and both are retained.
+
+**BM-10 is refined, not repealed.** BM-10 forbade a third state authority and held the load-status
+and work-item models coexist. The ruling satisfies it by removing the third model from Opportunity
+rather than blessing it.
+
+**Eight competing-authority surfaces identified by line** in `dispatch/opportunities.py`: the second
+state list (25–35), the second transition table (37–47), the stored `stage` (87), `transition_to()`
+itself (111–131), construction-time validation (102–103), auto-advance as a side effect of analysis
+(182, 216, 252, 254), `commit_opportunity_to_reality()` walking four stages and then **creating the
+Load and confirming the rate itself** (261–297), and the human-authority rule living on a dataclass
+string (124–129) instead of at Spine's approval gate.
+
+**Two of the nine stages were never lifecycle states.** `Filtered` is a query over scores.
+`Calendar Event` is an external side effect of an approval — Outlook is the scheduling source of
+truth and there is no integration in any repository. Seven of nine map directly onto Spine's 25
+states. That is corroboration of the ruling, not a coincidence: Opportunity's stage list was a
+pipeline narrative wearing a state machine's clothes.
+
+**Nine alignment units identified** (SPINE-R, OPP-01…OPP-09), dependency-ordered, in
+`DISPATCH_CF04_LIFECYCLE_AUTHORITY_MODEL_v1.md`. **None is authorized by this entry** — the
+instruction was to identify the work.
+
+**Open sub-question, referred back to Mike:** does "single source of lifecycle truth" absorb
+`loads.status` — 11 values, live, gated, audited, behind roughly 1,800 tests — or does it cover the
+review/decision lifecycle only? **Reading A (narrow) recommended**, on the ruling's own words: the
+competing authority it names is Opportunity's stage machine, and `loads.status` is a different
+subject, not a duplicate. Reading B would be the largest change ever proposed to this program, over
+its most production-capable part. **Blocks exactly one unit, OPP-04.**
+
+**No code was changed by this adjudication.**
+
 ---
 
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

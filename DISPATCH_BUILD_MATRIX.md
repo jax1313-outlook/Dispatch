@@ -48,11 +48,25 @@ RUN-09 → recover 3 lines · PORTAL-01/02/03/04 → recover + repair one commit
 are located · Archive retention → recover · Stop Sequence → recover after adjudication.
 Details in `DISPATCH_RECOVERABLE_WORK_MATRIX.md`.
 
-### 0.3 Four decisions added
+### 0.3 CF-04 adjudicated 2026-08-23 — BM-10 refined, not repealed
+
+Mike's ruling: **Dispatch Spine is the authoritative lifecycle engine and single source of lifecycle
+truth. Opportunity recommends, may request transitions, and may not maintain a competing lifecycle
+authority. Scheduler, Dynamic Capacity, Route Risk and Intelligence remain advisory.**
+
+BM-10 forbade a third state authority and held that the load-status and work-item models coexist.
+The ruling **satisfies** BM-10 rather than repealing it: the third model is removed from Opportunity,
+not blessed. One sub-question remains open — whether "single source of lifecycle truth" absorbs
+`loads.status` — and it gates exactly one alignment unit. See
+`DISPATCH_CF04_LIFECYCLE_AUTHORITY_MODEL_v1.md`.
+
+### 0.4 Three decisions still open
+
+### 0.5 Four decisions added (CF-04 now answered)
 
 CF-01 governance home (five families, not three) · CF-02 the `DF-` prefix (D11/D12/D13 collide with
-a live register) · CF-04 `dispatch/spine/` versus `opportunities.py` · CF-05 whether BM-02 survives
-the discovery that Manager is built, wired and tested.
+a live register) · ~~CF-04~~ **answered above** · CF-05 whether BM-02 survives the discovery that
+Manager is built, wired and tested.
 
 ### 0.4 The builder recommendation, revisited on evidence
 
