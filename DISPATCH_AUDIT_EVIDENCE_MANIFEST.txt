@@ -1,0 +1,199 @@
+DISPATCH WHOLE-PROGRAM AUDIT — EVIDENCE MANIFEST
+================================================
+Generated 2026-08-23. Every conclusion in the audit deliverables traces to an item below.
+
+--------------------------------------------------------------------------------
+1. REPOSITORIES, BRANCHES, COMMITS
+--------------------------------------------------------------------------------
+Dispatch     https://github.com/jax1313-outlook/Dispatch
+             audit HEAD          37f4fd033e57c55f46dfd0568d3371e8473d683f  (origin/main)
+             working branch      claude/dispatch-repo-context-reconcile-7mblbb
+             working tree        clean (git status --porcelain -> 0 entries)
+             prior consolidation 748f8211857f848aca08747c44916606be6743dc  (PR #111 merge)
+             post-#111 merges    f898b5b (PR #113)  <- 8374a0f, 2b9d3d8, f4da3dc
+                                 b7e0611 (PR #114)  <- ac92424eb6e0099169c0914e338c6451b941de5c
+                                 37f4fd0 (PR #115)  <- d0dfdc00257b0884e8779e7c9b3007cd433ed41e
+             remote heads        55  (git ls-remote --heads origin | wc -l)
+             commits local-only  0
+             commits remote-only 0
+
+Jules        https://github.com/jax1313-outlook/Jules
+             HEAD                fe35b13cd601c83592ab78d43d740f507fe158b1
+             working tree        clean
+
+Claude-3     https://github.com/jax1313-outlook/Claude-3
+             HEAD                29e7ae09d609758f39fb9948b194add2da869e21
+             working tree        clean
+
+/app                             DOES NOT EXIST  (ls /app -> No such file or directory)
+Windows filesystem               NOT MOUNTED     (mount -> no drvfs/cifs/D:)
+D:\Dispatch Operations           NOT WRITTEN, NOT READ BACK
+D:\Archive                       NOT WRITTEN, NOT READ BACK
+D:\Memory                        NOT WRITTEN, NOT READ BACK
+D:\SANDBOX\Jules                 NOT WRITTEN, NOT READ BACK
+
+--------------------------------------------------------------------------------
+2. SCALE MEASUREMENTS
+--------------------------------------------------------------------------------
+Tracked files (Dispatch)                        297
+Production Python                            22,193 lines
+  dispatch/                                   9,834
+  portal/                                     7,832
+  cin_lite/                                   3,145
+  sync/                                         723
+  reconciliation/                               480
+  route_risk/                                   179
+Test Python (tests/)                         29,520 lines, 112 files
+Flask routes                                    218   (109 mutating: POST/PATCH/PUT/DELETE)
+SQLite tables                                    26   (grep -c "CREATE TABLE" dispatch/db.py)
+Jinja templates                                  40
+Portal JSON model modules                        11
+
+--------------------------------------------------------------------------------
+3. TEST EXECUTION — EXACT
+--------------------------------------------------------------------------------
+Command   python3 -m pytest -p no:cacheprovider -rN
+Config    pytest.ini -> testpaths=tests, python_files=test_*.py, addopts=-q
+Env       Python 3.12 / Flask 3.1.3 / pytest 9.1.1 / Linux 6.18.44
+Final line (verbatim):   2817 passed in 314.87s (0:05:14)
+Exit code                0
+Collected 2817 | Passed 2817 | Failed 0 | Skipped 0 | Errors 0 | Warnings 0 | xfail 0
+Raw output saved to the audit scratchpad as pytest_full.txt
+
+AST classification totals (2,813 parser-resolved of 2,817 collected):
+  behavioral/unit            1389
+  HTTP/integration           1162
+  behavioral+negative         190
+  flagged construction-only     72  -> read individually: 31 false positive,
+                                       2 structural contract, 37 confirmed
+                                       constant-only, 2 trivial existence
+
+--------------------------------------------------------------------------------
+4. SOURCE PATHS CITED, BY FINDING
+--------------------------------------------------------------------------------
+UNWIRED DYNAMIC CAPACITY PACKAGE
+  dispatch/capacity.py                    352 lines
+  dispatch/opportunities.py               297 lines
+  dispatch/truck_arrangement.py            69 lines
+  only inbound references:  dispatch/opportunities.py:17, :18
+  no table:  grep -inE "capacit|opportunit|arrangement" dispatch/db.py -> 0 matches
+  tests:     tests/test_architecture_discoveries.py (252 lines, 9 tests)
+
+THIRD STATE MODEL vs BM-10
+  dispatch/opportunities.py:26-46   OPPORTUNITY_LIFECYCLE_STAGES,
+                                    ALLOWED_LIFECYCLE_TRANSITIONS
+  constraint:  DISPATCH_BUILD_MATRIX_v2.md, section 2, BM-10
+  DECISION_LOG.md  last entry = C3; no entry for PR #113/#114/#115
+
+OPTIMISTIC DEFAULTS (Phase 8)
+  dispatch/capacity.py:155   stacking_policy = "STACKABLE"
+  dispatch/capacity.py:156   allows_top_load = True
+  dispatch/capacity.py:216   verified_by: str = "Mike Zachary"
+  dispatch/capacity.py:224   configuration_status = "VERIFIED"  (unconditional)
+  dispatch/capacity.py:244   source: str = "ELD_LOG"
+  dispatch/capacity.py:257   hos_status = "VERIFIED"
+  dispatch/capacity.py:338   stale-tolerant feasibility return
+  dispatch/truck_arrangement.py:43   is_stackable = True
+  route_risk/engine.py:32    has_map_visual = True
+  route_risk/engine.py:83-87 map_visual_placeholder.available = has_map_visual
+  route_risk/engine.py:144   delivery_commitment_status = "achievable" with available=False
+  dispatch/services.py:370-371  same two defaults on the service wrapper
+  dispatch/acquisition.py:47 sample directory as default source
+  Jules/app.py:148-167       POD "success" with no file, "Simulated upload"
+
+HONEST MARKERS (counter-evidence)
+  route_risk/engine.py:90,129,148   is_live_data: False
+  dispatch/store.py:2164-2183       is_live_data never stored, always False on read
+  route_risk/engine.py:132-145      no-data summary states integrations are not connected
+
+SECURITY
+  dispatch/notifications.py:37      _secret() default "dispatch-dev-secret"
+  cin_lite/email_delivery.py:37     _secret() default "dispatch-dev-secret"
+  dispatch/notifications.py:41-49   make_token / verify_token (no expiry)
+  dispatch/notifications.py:56-65   stakeholder token (no expiry, no revocation)
+  portal/config.py:9,33,42-45       SECRET_KEY default + warning-only check
+  portal/app.py                     _require_authority_login (fail-closed gate)
+  portal/routes/driver_portal.py:40-46   driver gate, session["driver_id"]
+  portal/routes/stakeholder.py:83-92     IDOR check, flat 404
+  portal/models/identity.py:20,107,146   werkzeug scrypt hashing, lockout
+  portal/models/driver_pin_registry.py:132-133,231-244  same, plus recovery word
+  dispatch/services.py:622-632      upload allowlist, size cap, filename regenerated
+  dispatch/models.py:228,233        ALLOWED_EXTENSIONS, MAX_FILE_SIZE = 25 MB
+  portal/models/integrations_registry.py:15-30  plaintext secret storage, self-disclosed
+  CSRF        grep -rniE "csrf" portal/ -> 0 matches
+  Jules/flask_app.log               "Debug mode: on", "Debugger is active!",
+                                    "Debugger PIN: 631-326-424"
+  Jules/run_portal.sh:10            HOST=${HOST:-"0.0.0.0"}
+
+PERSISTENCE
+  dispatch/db.py:413-424            _default_db_path()
+  dispatch/db.py:481-482            PRAGMA journal_mode=WAL, foreign_keys=ON
+  dispatch/db.py:446-460            _apply_migrations, guarded ALTER TABLE
+  portal/models/__init__.py         atomic_write_json
+  portal/config.py:12-29            data/upload dir resolution
+  .gitignore:19                     portal/data/
+  find / -name "dispatch.db"        -> only pytest temporaries; NO operational DB
+  portal/data/                      6 JSON files, ~336 KB, all test residue
+                                    conflicts.json holds 402 notices
+
+GOVERNANCE SPLIT
+  Dispatch .md files                35  (git ls-files '*.md')
+  Absent from Dispatch, present in Jules and Claude-3:  20 documents
+  cmp Claude-3/X Jules/X  -> IDENTICAL for DISPATCH_CONSTITUTION_v3.md,
+                             DISPATCH_SPINE_SPECIFICATION_v1.md, MANAGER.md,
+                             ARCHITECTURE.md, SUPERSESSION_MAP.md
+  comm: Claude-3 has no file Jules lacks
+  PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md -> in NO repository
+       cited 10 times in 4 files: portal/models/identity.py, portal/app.py,
+       portal/routes/auth.py, tests/test_portal.py
+
+OPEN CORRECTIVE MISSIONS
+  C1  portal/models/sandbox.py:231-240; portal/routes/pages.py:989-992;
+      portal/routes/api.py:494,509; portal/templates/dispatch.html:403;
+      portal/templates/brief.html:137
+  C2a portal/routes/pages.py:310; portal/templates/calendar.html;
+      portal/templates/base.html; dispatch_api /calendar
+  C3  CLOSED — dispatch/services.py:181-230 + four call sites; 33 tests
+  C4  DISPATCH_TRIGGER_AND_SIDE_EFFECT_INVENTORY_v1.md section 8 — 15 sites open
+
+CI
+  .github/workflows/ci.yml   py3.11/3.12/3.13; --cov=cin_lite --cov-fail-under=90
+  .coveragerc                source = cin_lite, dispatch  (OVERRIDDEN by the CLI flag)
+  measured scope             3,145 of 22,193 production lines = 14%
+
+INTEGRATION ABSENCE
+  grep -riE "graph\.microsoft|outlook|\bews\b|icalendar|\.ics\b|msal|exchangelib"
+    across dispatch portal cin_lite route_risk sync reconciliation
+    -> 1 line: cin_lite/rules/vendor_network.py  ("outlook.com" in a consumer-domain list)
+
+JULES PORTAL
+  Jules/app.py               9,373 bytes; routes /,/about,/capabilities,/contact,
+                             /driver,/operations,/stakeholder,/api/v1/*
+  Jules/dispatch_spine.py    16,258 bytes; _bootstrap_sample_data at line 183
+  persistence grep           sqlite|json.dump|open(|Path( -> 0 matches
+  Jules/tests/test_portals.py  the only test file
+
+--------------------------------------------------------------------------------
+5. DELIVERABLES PRODUCED BY THIS AUDIT
+--------------------------------------------------------------------------------
+DISPATCH_WHOLE_PROGRAM_AUDIT.md
+DISPATCH_CURRENT_STATE_INVENTORY.md
+DISPATCH_ARCHITECTURE_CONFORMANCE_REPORT.md
+DISPATCH_TEST_TRUTH_REPORT.md
+DISPATCH_SECURITY_AND_RUNTIME_REPORT.md
+DISPATCH_RETAIN_REPAIR_REPLACE_REMOVE_MATRIX.md
+DISPATCH_WORKABLE_PRODUCT_DEFINITION.md
+DISPATCH_COMPLETION_BLUEPRINT.md
+DISPATCH_BUILD_MATRIX.md
+DISPATCH_ARTIFACT_AND_REPOSITORY_RECOVERY_PLAN.md
+DISPATCH_AUDIT_EVIDENCE_MANIFEST.txt   (this file)
+
+--------------------------------------------------------------------------------
+6. WHAT THIS AUDIT DID NOT AND COULD NOT INSPECT
+--------------------------------------------------------------------------------
+- /app                          does not exist in this environment
+- Mike's D: drive               no Windows filesystem is reachable
+- Mike's local operational copy  never observed
+- The running instance of either portal   only source was inspected
+- Any ZIP or tar recovery artifact        none present in the workspace
+Each of these is classified UNVERIFIABLE in the audit, never inferred.
