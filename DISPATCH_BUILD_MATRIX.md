@@ -3,6 +3,7 @@
 **Phases 14 and 15 — build order and builder recommendation**
 **Audit commit:** `37f4fd033e57c55f46dfd0568d3371e8473d683f`
 **Status:** Proposed. **This document does not supersede `DISPATCH_BUILD_MATRIX_v2`.**
+**Amended 2026-08-23** by the cross-repository reconciliation — see §0.
 
 ### Relationship to the existing matrices
 
@@ -25,6 +26,49 @@ overnight worker).
 | **BM-13** | No mission merges. Each mission in the blueprint is approved, built, reviewed and accepted on its own. C2a must not become C2b; PORTAL-01 must not absorb PORTAL-02. |
 | **BM-14** | No mission ships without its artifact chain complete: source, commit, remote branch, pull request, behavioral tests, **exact test output**, reviewer disposition, Mike's acceptance. A sandbox path is not delivery. |
 | **BM-15** | No builder wires an unadjudicated model into the running system. `dispatch/capacity.py`, `dispatch/opportunities.py` and `dispatch/truck_arrangement.py` stay unwired until SPINE-01 is decided. |
+
+---
+
+## 0. Cross-repository amendment (2026-08-23)
+
+This matrix was written from the Dispatch repository alone. The cross-repository reconciliation
+changes three things in it. **The rest stands.**
+
+### 0.1 Three constraints added, for Mike's decision
+
+| # | Proposed constraint |
+|---|---|
+| **BM-16** | **A branch is not evidence of delivery, and a commit message is not evidence of work.** Classify a branch by content (`git diff --numstat main..branch`), never by commit count: of Dispatch's 31 branches ahead of `main`, 8 were squash-merged and 1 has a zero-byte delta. Four commits on Jules `main` claim Blueprint, Roadmap and Walkthrough assembly and changed **0 files each**. |
+| **BM-17** | **Recovery is cherry-pick, not merge.** Every recovery candidate is stale-based; merging its commit drags duplicate history in. A recovered file arrives with its tests re-run against today's `main`, never against the branch it came from. |
+| **BM-18** | **No module is connected before its model is adjudicated.** `dispatch/opportunities.py` reached `main` unadjudicated; that is the failure this bar prevents repeating. |
+
+### 0.2 Nine missions re-scoped from build to recover
+
+RUN-09 → recover 3 lines · PORTAL-01/02/03/04 → recover + repair one commit · OWN-02 → the documents
+are located · Archive retention → recover · Stop Sequence → recover after adjudication.
+Details in `DISPATCH_RECOVERABLE_WORK_MATRIX.md`.
+
+### 0.3 Four decisions added
+
+CF-01 governance home (five families, not three) · CF-02 the `DF-` prefix (D11/D12/D13 collide with
+a live register) · CF-04 `dispatch/spine/` versus `opportunities.py` · CF-05 whether BM-02 survives
+the discovery that Manager is built, wired and tested.
+
+### 0.4 The builder recommendation, revisited on evidence
+
+§3 below declined to recommend Jules pending a reliable artifact-delivery path. **That
+recommendation is unchanged, and the evidence for it is now sharper in both directions.**
+
+*Against:* four empty commits merged as delivered work; a portal that reports
+`"POD uploaded successfully"` for uploads that never happened; a committed debugger PIN.
+
+*For:* `afd6e00` — the Driver Transformation — is a **genuinely good piece of work** by the same
+builder. It routes writes through the M1 gate and the C3 audit rather than around them, uses the
+real evidence path with its checksum, and carries its own IDOR check. It has four real defects and
+it closes the largest gap in the program. **It was never delivered — which is the point.** The
+constraint was never the builder's capability; it was the absence of a path from what a builder
+produces to what Mike owns. **Build the path (OWN-01, OWN-05, BM-14), then judge builders by what
+arrives through it.**
 
 ---
 

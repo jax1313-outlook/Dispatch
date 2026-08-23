@@ -197,3 +197,101 @@ DISPATCH_AUDIT_EVIDENCE_MANIFEST.txt   (this file)
 - The running instance of either portal   only source was inspected
 - Any ZIP or tar recovery artifact        none present in the workspace
 Each of these is classified UNVERIFIABLE in the audit, never inferred.
+
+================================================================================
+ADDENDUM — CROSS-REPOSITORY RECONCILIATION (2026-08-23)
+================================================================================
+Baseline audit commit  dd5d6c113a8fd2992bdcbcd7f3ef42c646e15d11
+
+REPOSITORIES
+  Dispatch    main 37f4fd033e57c55f46dfd0568d3371e8473d683f   55 heads, 31 ahead
+  Jules       main d1dfc9ac                                    7 heads,  5 ahead
+  Claude-3    main b7fc31d4                                    5 heads,  4 ahead
+  Publisher   HEAD 7f195486   src/dispatch_publisher/  590 LOC
+  Library     HEAD 7e455279   src/dispatch_library/    540 LOC
+  Hold        HEAD 484e40db   68 files, 0 LOC Python, 7 constitution files
+  Dispatch-Old HEAD be6c593f  86 files, cin_lite, REPO_TO_DISPATCH_MAP.md
+  Route-Risk  EMPTY — zero commits
+  NOT INSPECTED: SAM, Gemini, Claude, Claude-2, Test-Grounds, L2-intelligence-agent.
+  Total under jax1313-outlook: 14 (list_repos)
+
+RECOVERY CANDIDATES — commit, delta vs main
+  stage13-testing-hold-review          0e2096a   +9175 lines, 44 new files
+  harden-dispatch-dynamic-capacity     e75acb0    +827 lines
+  jules-401783631158985267-177d2e11    0eccd58    +605 lines, 2 new files
+  jules-driver-transformation-1-4      afd6e00    +491 lines, 1 new file
+  dispatch-operational-intel-playbook  fbe0542    +442 lines, 2 docs
+
+TEST EXECUTION — stage13-testing-hold-review, detached worktree
+  python3 -m pytest -p no:cacheprovider
+    -> 2489 passed in 298.48s (0:04:58)   exit 0
+  python3 -m pytest tests/test_spine.py tests/test_security_foundation.py \
+       tests/test_manager_foundation.py tests/test_archive_review_queue.py \
+       tests/test_version_doctrine.py
+    -> 160 passed in 38.81s               exit 0
+
+SPINE (unmerged, wired)
+  dispatch/spine/state.py    len(STATE_LIST)=25  len(ALLOWED_TRANSITIONS)=25
+  dispatch/spine/db.py       work_items, events, portal_cards, audit_events,
+                             approval_events, conflict_events
+  wired at                   dispatch/db.py:422 ; portal/routes/api.py:16-17
+  main                       grep -rn "spine" --include=*.py -> 0 matches
+
+CI COVERAGE FIX (unmerged)
+  stage13 .github/workflows/ci.yml
+    --cov=cin_lite --cov=dispatch --cov=portal --cov-fail-under=90
+  main
+    --cov=cin_lite  (14% of production)
+
+DRIVER TRANSFORMATION (unmerged) afd6e00
+  portal/routes/driver_portal.py  +166   4 write endpoints:
+     /loads/<id>/milestone  /loads/<id>/pod  /loads/<id>/exception  /fuel-receipt
+  _verify_driver_load()  IDOR check on the first three; ABSENT on /fuel-receipt
+  except Exception: pass  at driver_step_milestone and driver_log_exception
+  portal/templates/driver_home.html +235 ; tests/test_driver_portal.py 144 (new)
+
+EMPTY COMMITS — Jules main, PR #1
+  56001f9 15d35fd ab3d836 db224d6   git diff-tree --name-only -r -> 0 files each
+  git diff --stat fe35b13 origin/main -> empty
+
+GOVERNANCE
+  G1 Claude-3 claude/dispatch-jules-arch-review-i87dru
+     DISPATCH_DEPLOYMENT_BLUEPRINT.md  656 lines  commit 8a55c33
+     §0 Driver-First (LOCKED) §0b COMI Doctrine v1 (LOCKED)
+     §0c Dispatch Momentum Doctrine (LOCKED) §6 register D1-D13
+     §18 verbatim: "jax1313-outlook/Jules is a sandbox artifact, not part of
+         Dispatch's architecture ... that document stack is explicitly out of
+         scope here and not adopted."
+  G2 DISPATCH_CONSTITUTION_v3.md + 20 more — Claude-3 main, Jules main,
+     Library repo; cmp -> IDENTICAL on all 5 core files; NOT ADOPTED per G1 §18
+  G3 Dispatch main: BUILD_MATRIX_v1/v2, DRIVER_FIRST_DOCTRINE_v2, DECISION_LOG
+  G4 Hold/docs/governance/: DISPATCH_BASE_CONSTITUTION_v1, IFTA_, LIBRARIAN_,
+     MANAGER_, RECEIPT_CONSTITUTION_v1, MEMORY_DOCTRINE_v1, APPROVAL_REGISTER
+  G5 Publisher DISPATCH_CONSTITUTION_v2.md ; Library DISPATCH_CONSTITUTION_v3.md
+
+DOCUMENT FOUND (baseline reported MISSING)
+  PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md  177 lines
+  Jules  claude/dispatch-tri-department-build-899qjm  (tip 4459f73)
+  cited 10x in 4 Dispatch files, all naming "(Claude-3 repo)" — wrong repository
+
+CROSS-REPOSITORY CITATIONS IN DISPATCH CODE
+  portal/models/library.py:39-41       -> dispatch_library / dispatch_publisher
+  reconciliation/contracts.py:3,35,71  -> DISPATCH_SHARED_OBJECT_CONTRACTS_v1.md
+  portal/models/operations_feed.py:17  -> "Jules sandbox PortalCard (§18)"
+  portal/models/identity.py:5 + 3 more -> PORTAL_AUTHENTICATION_..._v1.md
+
+CORROBORATION OF THE D: FINDING
+  Claude-3 main RECOVERY_REPORT.md, independent session, different path:
+  "Not reachable, ever, from this session ... no mount, network path, or
+   credential that reaches a user's local Windows machine. This is a hard
+   environment boundary, not a permission that could be granted."
+
+DELIVERABLES ADDED BY THIS RECONCILIATION
+  DISPATCH_CROSS_REPOSITORY_RECONCILIATION.md
+  DISPATCH_THREE_REPOSITORY_ARTIFACT_INVENTORY.md
+  DISPATCH_RECOVERABLE_WORK_MATRIX.md
+  DISPATCH_CONFLICT_AND_AUTHORITY_REGISTER.md
+  DISPATCH_AUDIT_AMENDMENT.md
+  DISPATCH_BLUEPRINT_TO_COMPLETION_v1.md
+  DISPATCH_REPAIR_AND_CONNECTION_CAMPAIGN_v1.md
+  DISPATCH_BUILD_MATRIX.md  (amended, §0)
