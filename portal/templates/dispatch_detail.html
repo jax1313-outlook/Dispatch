@@ -49,7 +49,7 @@
     {# Read-only view #}
     <div id="load-info-view">
         <div class="brief-fields">
-            <div><strong>Load ID:</strong> {{ load.load_id }}</div>
+            <div><strong>Load ID:</strong> {{ load.load_id }}{{ rehearsal_badge(load) }}</div>
             <div><strong>Status:</strong> <span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></div>
             <div><strong>Customer:</strong> {{ load.customer }}</div>
             <div><strong>Broker / Shipper:</strong> {{ load.broker_shipper or '—' }}</div>
@@ -72,7 +72,7 @@
     <div id="load-info-edit" style="display:none;">
         <form onsubmit="saveLoadInfo(event, '{{ load.load_id }}')">
             <div class="brief-fields" style="margin-bottom:12px;">
-                <div><strong>Load ID:</strong> {{ load.load_id }}</div>
+                <div><strong>Load ID:</strong> {{ load.load_id }}{{ rehearsal_badge(load) }}</div>
                 <div><label><strong>Status</strong><br>
                     <select name="status" style="width:100%;padding:4px 8px;">
                         {% for s in load_statuses %}

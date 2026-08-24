@@ -142,12 +142,12 @@
     {% endif %}
 
     <section class="brief-section">
-        <h3>Position / HOS Assessment</h3>
+        <h3>Position / Drive-Time Assessment <small style="font-weight:400;">(estimated — Dispatch is not an ELD)</small></h3>
         <div class="brief-fields">
             <div><strong>Position Impact:</strong> {{ entry.position_impact or 'Unknown' }}</div>
             <div><strong>Return Home Required:</strong> {{ entry.return_home_required or 'Unknown' }}</div>
             <div><strong>Tomorrow Position Risk:</strong> {{ entry.tomorrow_position_risk or 'Unknown' }}</div>
-            <div><strong>HOS Risk:</strong> {{ entry.hos_risk or 'Unknown' }}</div>
+            <div><strong>Drive-Time Risk (estimated):</strong> {{ entry.hos_risk or 'Unknown' }}</div>
             <div><strong>Route Risk:</strong> {{ entry.route_risk or 'Unknown' }}</div>
             <div><strong>Economic Opportunity:</strong> {{ entry.economic_opportunity_flag or 'Unknown' }}</div>
         </div>

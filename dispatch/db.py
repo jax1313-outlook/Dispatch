@@ -441,6 +441,19 @@ def get_db_path() -> Path:
 def _init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
     _apply_migrations(conn)
+    # Dispatch Spine owns the work-item lifecycle in its own six tables, in
+    # this same database file. CF-04, adjudicated 2026-08-23: "Dispatch Spine
+    # shall become the authoritative lifecycle engine and single source of
+    # lifecycle truth." The branch this was recovered from also initialised a
+    # `dispatch.security` schema here; that stack is superseded by the Portal
+    # PIN gate already on main (CF-03) and was deliberately not recovered.
+    from dispatch.connectors.audit import init_connector_schema
+    from dispatch.spine.db import init_spine_schema
+    from dispatch.tokens import init_token_schema
+
+    init_connector_schema(conn)
+    init_spine_schema(conn)
+    init_token_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
@@ -470,6 +483,14 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         )
     except sqlite3.OperationalError:
         pass
+    # Rehearsal mode (Operational Readiness Mission Section 4.2) tags records so
+    # a proof run can never display as an unlabeled live mission. One TEXT
+    # column per tagged table, empty for operational records -- see
+    # dispatch/rehearsal.py for why a column rather than a join table. The
+    # guarded ALTERs live in that module beside the tables they belong to.
+    from dispatch.rehearsal import init_rehearsal_schema
+
+    init_rehearsal_schema(conn)
 
 
 @contextmanager

@@ -26,6 +26,10 @@
 </style>
 </head>
 <body>
+{% if rehearsal_active %}<div class="rehearsal-banner" role="status" style="background:#b91c1c;color:#fff;padding:10px 16px;font-weight:900;letter-spacing:1px;text-align:center;font-size:15px;border-bottom:3px solid #fca5a5;">
+  {{ rehearsal_label }} MODE — THIS IS NOT A LIVE MISSION.
+  <span style="font-weight:600;letter-spacing:0;">Session {{ rehearsal_session_id }}{% if rehearsal_session_label %} &middot; {{ rehearsal_session_label }}{% endif %}. Every record created now is tagged {{ rehearsal_label }}.</span>
+</div>{% endif %}
 <div class="wrap">
 
 {% if error %}
@@ -37,7 +41,7 @@
 {% else %}
     <div class="header">
         <h1>Level 1 Transport — Shipment Status</h1>
-        <div class="sub">Load {{ load.load_id }}</div>
+        <div class="sub">Load {{ load.load_id }}{{ rehearsal_badge(load) }}</div>
     </div>
 
     <div class="card">

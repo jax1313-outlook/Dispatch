@@ -2,11 +2,41 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+    // Every mutating fetch() in this app -- 35 call sites across a dozen
+    // templates -- has to carry the CSRF token. Wrapping fetch once here is
+    // what makes that true for all of them, including any added later, rather
+    // than depending on each author remembering. Same-origin only: the header
+    // must never be attached to a request leaving this site.
+    (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        var token = meta ? meta.getAttribute('content') : '';
+        var MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
+        var nativeFetch = window.fetch.bind(window);
+        window.fetch = function (input, init) {
+            init = init || {};
+            var method = (init.method || (typeof input === 'object' && input.method) || 'GET').toUpperCase();
+            var url = typeof input === 'string' ? input : (input && input.url) || '';
+            var sameOrigin = !/^https?:\/\//i.test(url) || url.indexOf(window.location.origin) === 0;
+            if (MUTATING.indexOf(method) !== -1 && sameOrigin && token) {
+                var headers = new Headers(init.headers || (typeof input === 'object' && input.headers) || {});
+                if (!headers.has('X-CSRF-Token')) { headers.set('X-CSRF-Token', token); }
+                init.headers = headers;
+            }
+            return nativeFetch(input, init);
+        };
+    })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}L2-COS Operations Portal{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+{% if rehearsal_active %}<div class="rehearsal-banner" role="status" style="background:#b91c1c;color:#fff;padding:10px 16px;font-weight:900;letter-spacing:1px;text-align:center;font-size:15px;border-bottom:3px solid #fca5a5;">
+  {{ rehearsal_label }} MODE — THIS IS NOT A LIVE MISSION.
+  <span style="font-weight:600;letter-spacing:0;">Session {{ rehearsal_session_id }}{% if rehearsal_session_label %} &middot; {{ rehearsal_session_label }}{% endif %}. Every record created now is tagged {{ rehearsal_label }}.</span>
+</div>{% endif %}
     <nav class="sidebar">
         <div class="sidebar-header">
             <h2>L2-COS Portal</h2>

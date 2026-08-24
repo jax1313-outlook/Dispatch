@@ -59,6 +59,10 @@
     </style>
 </head>
 <body>
+{% if rehearsal_active %}<div class="rehearsal-banner" role="status" style="background:#b91c1c;color:#fff;padding:10px 16px;font-weight:900;letter-spacing:1px;text-align:center;font-size:15px;border-bottom:3px solid #fca5a5;">
+  {{ rehearsal_label }} MODE — THIS IS NOT A LIVE MISSION.
+  <span style="font-weight:600;letter-spacing:0;">Session {{ rehearsal_session_id }}{% if rehearsal_session_label %} &middot; {{ rehearsal_session_label }}{% endif %}. Every record created now is tagged {{ rehearsal_label }}.</span>
+</div>{% endif %}
     <div class="login-box">
         <h1>Level 1 Transport — Driver Portal</h1>
         <p class="subtitle">Enter your phone number and PIN</p>
@@ -66,6 +70,7 @@
         <div class="error-message">{{ error }}</div>
         {% endif %}
         <form method="POST" action="{{ url_for('driver_portal.driver_login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="tel" name="phone" inputmode="tel" autocomplete="tel"
                    placeholder="Phone number" autofocus required>
             <input type="password" name="pin" inputmode="numeric" autocomplete="off"

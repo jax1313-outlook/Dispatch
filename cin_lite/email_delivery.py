@@ -23,10 +23,12 @@ import hashlib
 import hmac
 import html as _html
 import os
+import base64
 import smtplib
 import ssl
 import sys
 from email.message import EmailMessage
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from cin_lite import archive, control
@@ -38,15 +40,79 @@ def _secret() -> bytes:
     return os.environ.get("DISPATCH_EMAIL_SECRET", "dispatch-dev-secret").encode()
 
 
-def make_token(contract_id: str, action: str) -> str:
-    """HMAC-SHA256 token for an email action link."""
+_TOKEN_VERSION = "ce1"
+DECISION_TOKEN_TTL_HOURS = 14 * 24
+
+
+def _legacy_token(contract_id: str, action: str) -> str:
+    """The pre-expiry token shape. Nothing issues these any more; it exists so
+    verify_token() can recognise a link mailed before expiry existed and decide
+    whether the operator's grace window still admits it."""
     return hmac.new(_secret(), f"{contract_id}:{action}".encode(), hashlib.sha256).hexdigest()
 
 
+def _legacy_grace_open() -> bool:
+    until = os.environ.get("DISPATCH_LEGACY_TOKENS_UNTIL", "").strip()
+    if not until:
+        return False
+    try:
+        deadline = datetime.strptime(until, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return False
+    return datetime.now(timezone.utc) <= deadline + timedelta(days=1)
+
+
+def make_token(contract_id: str, action: str, *, ttl_hours: int = DECISION_TOKEN_TTL_HOURS) -> str:
+    """Scoped, expiring token for an email action link.
+
+    Was a bare digest of "<contract>:<action>" -- correct about scope, and
+    valid forever. The expiry now travels inside the signed payload, so this
+    module needs no store to enforce it, which matters: cin_lite is standalone
+    by design (THE MIKE RULE) and has no database to keep a revocation ledger
+    in. Revocation here is by consumption instead, and it is real: a decision
+    can only be resolved once, after which pending.load() returns nothing and
+    portal/routes/decisions.py answers "already processed" regardless of how
+    good the token is. Dispatch's own operational tokens, which do have a
+    database, carry explicit per-token revocation -- see dispatch/tokens.py.
+    """
+    expires = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
+    # "|" rather than ":" as the field separator: the ISO timestamp contains
+    # colons of its own, so a colon-delimited payload cannot be split back
+    # apart unambiguously.
+    payload = f"{contract_id}|{action}|{expires.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+    encoded = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    signature = hmac.new(_secret(), encoded.encode(), hashlib.sha256).hexdigest()
+    return f"{_TOKEN_VERSION}.{encoded}.{signature}"
+
+
 def verify_token(contract_id: str, action: str, token: str) -> bool:
-    """Constant-time verification of an email action token."""
-    expected = make_token(contract_id, action)
-    return hmac.compare_digest(expected, token)
+    """Constant-time verification, failing closed on every non-success path:
+    malformed, wrong version, bad signature, wrong contract, wrong action, or
+    expired."""
+    if not token:
+        return False
+
+    parts = token.split(".")
+    if len(parts) != 3 or parts[0] != _TOKEN_VERSION:
+        if hmac.compare_digest(_legacy_token(contract_id, action), token):
+            return _legacy_grace_open()
+        return False
+
+    _, encoded, signature = parts
+    expected = hmac.new(_secret(), encoded.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        return False
+
+    try:
+        decoded = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)).decode()
+        signed_contract, signed_action, expires_at = decoded.split("|")
+        expires = datetime.strptime(expires_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (ValueError, UnicodeDecodeError):
+        return False
+
+    if signed_contract != contract_id or signed_action != action:
+        return False
+    return datetime.now(timezone.utc) <= expires
 
 
 def domain() -> str:

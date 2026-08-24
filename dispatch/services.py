@@ -170,11 +170,12 @@ def list_loads(
     *,
     page: int | None = None,
     per_page: int | None = None,
+    include_rehearsal: bool = True,
 ) -> list[dict] | dict:
     return store.list_loads(
         status=status, customer=customer,
         date_from=date_from, date_to=date_to, driver_id=driver_id,
-        page=page, per_page=per_page,
+        page=page, per_page=per_page, include_rehearsal=include_rehearsal,
     )
 
 

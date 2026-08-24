@@ -19,7 +19,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from flask import Flask, redirect, request, session, url_for
 
-from portal.config import Config, check_secret_key
+from portal.config import Config, check_secrets, development_host
+from portal.csrf import init_csrf
 from portal.routes import register_routes
 
 
@@ -33,13 +34,15 @@ def create_app(config: dict | None = None) -> Flask:
     if config:
         app.config.update(config)
     if not app.config.get("TESTING"):
-        check_secret_key()
+        # Raises InsecureConfigurationError in operational mode, so a
+        # misconfigured deployment never reaches a route at all.
+        check_secrets()
     register_routes(app)
+    init_csrf(app)
 
     @app.before_request
     def _require_authority_login():
-        """DISPATCH_PIN login gate (PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md, Claude-3
-        repo). Fails closed in real (non-TESTING) use: a missing/unbootstrapped identity does
+        """DISPATCH_PIN login gate (governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md). Fails closed in real (non-TESTING) use: a missing/unbootstrapped identity does
         NOT bypass this gate -- it just means /login correctly reports there's nothing to log
         into yet, rather than the rest of Portal silently staying open.
 
@@ -98,6 +101,61 @@ def create_app(config: dict | None = None) -> Flask:
         if not session.get("user_id"):
             return redirect(url_for("auth.login"))
         return None
+
+    @app.context_processor
+    def _rehearsal_banner():
+        """Rehearsal labelling for every template, without any of them asking.
+
+        Mission Section 4.2: "No rehearsal record may ever display as an
+        unlabeled live mission." A context processor is the only way to make
+        that true for templates that have not been written yet -- a per-view
+        variable would have been correct on the day it was added and wrong the
+        first time someone added a view and forgot.
+
+        Returns rehearsal_active=False in the operational default, so the
+        banner block renders nothing at all when no rehearsal is running.
+        """
+        from dispatch.rehearsal import banner_context
+
+        try:
+            return banner_context()
+        except Exception:  # pragma: no cover - a banner must never 500 a page
+            return {
+                "rehearsal_active": False,
+                "rehearsal_label": "REHEARSAL",
+                "rehearsal_session_id": "",
+                "rehearsal_session_label": "",
+            }
+
+    @app.template_global("rehearsal_badge")
+    def _rehearsal_badge(record) -> "Markup":
+        """The per-RECORD label, as opposed to the per-SESSION banner above.
+
+        The banner says "a rehearsal is running now". This says "this specific
+        record was created during one" -- which still has to be visible months
+        later, with rehearsal mode long since off, when Mike opens an old load
+        and needs to know in one glance that it was never real freight. Without
+        it, a rehearsal record viewed outside its session would display as an
+        unlabeled live mission, which Section 4.2 forbids outright.
+
+        Reads the stored column, so the label comes from the record rather than
+        from anything the view was asked to remember to pass in.
+        """
+        from markupsafe import Markup, escape
+
+        from dispatch.rehearsal import label_for
+
+        label = label_for(record if isinstance(record, dict) else None)
+        if not label:
+            return Markup("")
+        session_id = escape((record or {}).get("rehearsal_session", ""))
+        return Markup(
+            '<span class="rehearsal-badge" title="Created during rehearsal session '
+            f'{session_id} — not a live mission" '
+            'style="display:inline-block;background:#b91c1c;color:#fff;padding:2px 8px;'
+            'border-radius:4px;font-size:12px;font-weight:900;letter-spacing:1px;'
+            f'margin-left:8px;vertical-align:middle;">{escape(label)}</span>'
+        )
 
     @app.template_filter("time_ago")
     def _time_ago(iso_str: str) -> str:
@@ -190,7 +248,7 @@ def _print_storage_map() -> None:
 if __name__ == "__main__":
     _ensure_storage_dirs()
     app = create_app()
-    host = Config.HOST
+    host = development_host(Config.HOST)
     port = Config.PORT
     print(f"\n  L2-COS Operations Portal v1")
     print(f"  http://{host}:{port}\n")

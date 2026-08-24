@@ -2,7 +2,7 @@
 
 Minimal first build against SECURITY_AND_AUTHENTICATION_SPECIFICATION_v1.md (Claude-3 repo,
 found in the Jules-3/Claude-2 doctrine-review repos) -- Authority role only, per
-PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md (Claude-3 repo). PIN records are never stored in
+governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md. PIN records are never stored in
 Library here -- the specification makes that storage choice conditional on Mike's decision
 (Section 11), not a default, and Library's real schema (portal/models/library.py) has no
 credential concept to retrofit.

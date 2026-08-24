@@ -2082,8 +2082,8 @@ class TestPresentationLayerConsolidation:
 
 
 class TestDispatchPinAuthentication:
-    """DISPATCH_PIN authentication -- PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md (Claude-3
-    repo), Authority-role-only minimal build. Uses its own app fixture (no LOGIN_DISABLED) to
+    """DISPATCH_PIN authentication -- governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md,
+    Authority-role-only minimal build. Uses its own app fixture (no LOGIN_DISABLED) to
     exercise the real login gate; every other test class in this file uses the shared `client`
     fixture, which sets LOGIN_DISABLED so ~150 pre-existing tests need no individual changes."""
 

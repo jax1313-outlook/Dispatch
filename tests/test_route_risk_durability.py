@@ -323,3 +323,41 @@ class TestMigration:
             with get_connection() as conn:
                 conn.execute("SELECT 1").fetchone()
         assert len(dispatch_store.list_route_risk_events(load["load_id"])) == 1
+
+
+class TestRouteRiskOrderingTieBreak:
+    """R-03, recovered from jules-401783631158985267-177d2e11 @ 28b5e65.
+
+    `created_at` is second precision. Two conditions recorded in the same
+    second had no defined order, and `get_route_risk()` takes the first row as
+    "the latest" -- so which one a driver saw could flip between runs. The
+    branch's own test targeted a `_StubRouteRisk` adapter this module does not
+    have, so it could not be recovered; this is written against the real
+    post-M3 injection design instead.
+    """
+
+    def test_same_second_events_resolve_deterministically(self, load):
+        from dispatch.db import get_connection
+
+        first = dispatch_svc.record_route_risk_event(
+            load["load_id"], condition_summary="Earlier condition", consequence_level=1
+        )
+        second = dispatch_svc.record_route_risk_event(
+            load["load_id"], condition_summary="Later condition", consequence_level=4
+        )
+
+        # Force both rows to share a timestamp -- the exact collision the
+        # tie-break exists for. Without `rowid DESC` the winner is undefined.
+        stamp = "2026-08-23T12:00:00Z"
+        with get_connection() as conn:
+            conn.execute("UPDATE route_risk_events SET created_at=?", (stamp,))
+
+        events = dispatch_store.list_route_risk_events(load["load_id"])
+        assert [e["created_at"] for e in events] == [stamp, stamp]
+        # Newest first means the row inserted second, every time.
+        assert events[0]["route_risk_event_id"] == second["route_risk_event_id"]
+        assert events[1]["route_risk_event_id"] == first["route_risk_event_id"]
+
+        risk = dispatch_svc.get_route_risk(load["load_id"])
+        assert risk["summary"] == "Later condition"
+        assert risk["consequence_level"] == 4

@@ -14,6 +14,9 @@ import types
 
 import pytest
 
+from flask import Flask
+from flask.testing import FlaskClient
+
 from cin_lite import acquisition, processing
 
 _ENV_VARS = [
@@ -47,9 +50,23 @@ _ENV_VARS = [
 
 @pytest.fixture(autouse=True)
 def _scrub_env(monkeypatch):
-    """Remove all integration config so tests are deterministic and offline."""
+    """Remove all integration config so tests are deterministic and offline.
+
+    The two signing secrets are then set to fixed test values rather than left
+    unset. Since the security-hardening campaign, `portal.config.check_secrets()`
+    REFUSES to build an app on a published default outside development mode --
+    so leaving them unset would mean 87 `create_app()` call sites in this suite
+    either had to change or had to be exempted. Supplying real (if
+    well-known-to-the-suite) values instead means the tests exercise the actual
+    production path with no bypass at all, which is the point.
+
+    Tests that care about the refusal itself delete these deliberately -- see
+    tests/test_security_hardening.py::_clear_secrets.
+    """
     for var in _ENV_VARS:
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("PORTAL_SECRET_KEY", "test-suite-portal-secret")
+    monkeypatch.setenv("DISPATCH_EMAIL_SECRET", "test-suite-email-secret")
 
 
 @pytest.fixture(autouse=True)
@@ -69,6 +86,59 @@ def tmp_archive(tmp_path, monkeypatch):
     monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path / "PortalData"))
     return root
 
+
+
+# --------------------------------------------------------------------------- CSRF
+
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+class CSRFTestClient(FlaskClient):
+    """A test client that carries the CSRF token, so the suite runs WITH the
+    protection on rather than around it.
+
+    The alternative was to disable CSRF under TESTING, which would have meant
+    the ~1,160 HTTP tests in this suite proving that routes work with the
+    protection switched off -- the exact thing the campaign brief forbids
+    ("do not declare completion while most HTTP tests bypass the security
+    gates being claimed as protected").
+
+    The token is read from the `csrf_token` cookie on every mutating call
+    rather than cached, because logging in and out calls session.clear(),
+    which mints a new one. Tests that are ABOUT csrf pass an explicit
+    X-CSRF-Token header (or `csrf=False`) and this wrapper leaves them alone.
+    """
+
+    def open(self, *args, **kwargs):
+        method = (kwargs.get("method") or (args[1] if len(args) > 1 else "GET")).upper()
+        send_token = kwargs.pop("csrf", True)
+
+        if send_token and method in _MUTATING_METHODS:
+            headers = kwargs.get("headers") or {}
+            already = any(str(k).lower() == "x-csrf-token" for k in headers)
+            if not already:
+                token = self._csrf_token()
+                if token:
+                    headers = dict(headers)
+                    headers["X-CSRF-Token"] = token
+                    kwargs["headers"] = headers
+        return super().open(*args, **kwargs)
+
+    def _csrf_token(self) -> str:
+        cookie = self.get_cookie("csrf_token")
+        if cookie is not None:
+            return cookie.value
+        # No session yet. A GET on any non-exempt endpoint mints one.
+        super().open("/login", method="GET")
+        cookie = self.get_cookie("csrf_token")
+        return cookie.value if cookie is not None else ""
+
+
+@pytest.fixture(autouse=True)
+def _csrf_aware_test_client(monkeypatch):
+    """Every app built in this suite gets the CSRF-carrying client, without
+    each of the 87 create_app() call sites having to know."""
+    monkeypatch.setattr(Flask, "test_client_class", CSRFTestClient, raising=False)
 
 @pytest.fixture
 def sam_opportunity() -> dict:

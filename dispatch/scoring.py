@@ -185,6 +185,19 @@ def compute_tomorrow_position_risk(load: dict) -> str:
 
 
 def compute_hos_risk(load: dict) -> str:
+    """Drive-time risk ESTIMATED from distance and the appointment window.
+
+    This is not an hours-of-service reading and must never be presented as one.
+    Dispatch is not an ELD, holds no duty-clock data, and has no telematics feed
+    of any kind -- the driver is responsible for legal HOS compliance
+    (Operational Readiness Mission Section 1.6). What this computes is how much
+    of a normal driving day a lane consumes at a nominal speed, which is a
+    planning signal and nothing more.
+
+    The key and the function keep their historical `hos_` names so no caller or
+    stored record changes shape; every surface that DISPLAYS the value labels it
+    as an estimate.
+    """
     distance = load.get("distance_miles")
     if distance is None:
         return "Unknown"
@@ -200,14 +213,17 @@ def compute_hos_risk(load: dict) -> str:
     elif drive_time <= _HOURS_AVAILABLE_DEFAULT:
         base = "High"
     else:
-        return f"Critical — {drive_time:.1f}h exceeds single-day HOS limit"
+        return (
+            f"Critical — {drive_time:.1f}h estimated drive time exceeds a single "
+            f"driving day. Estimated from distance; Dispatch holds no ELD reading."
+        )
 
     if pickup_start and delivery_end:
         available = (delivery_end - pickup_start).total_seconds() / 3600
         if available < drive_time + 1:
             return f"High — tight window ({available:.1f}h for {drive_time:.1f}h drive)"
 
-    return f"{base} — {drive_time:.1f}h estimated drive time"
+    return f"{base} — {drive_time:.1f}h estimated drive time (no ELD reading)"
 
 
 def compute_route_risk(load: dict) -> str:

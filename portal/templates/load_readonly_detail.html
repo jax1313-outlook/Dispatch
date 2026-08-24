@@ -30,7 +30,7 @@
 <div class="brief-section">
     <h3>Load Information</h3>
     <div class="brief-fields">
-        <div><strong>Load ID:</strong> {{ load.load_id }}</div>
+        <div><strong>Load ID:</strong> {{ load.load_id }}{{ rehearsal_badge(load) }}</div>
         <div><strong>Status:</strong> <span class="status-tag dispatch-{{ load.status }}">{{ load.status|replace('_', ' ') }}</span></div>
         <div><strong>Customer:</strong> {{ load.customer }}</div>
         <div><strong>Broker / Shipper:</strong> {{ load.broker_shipper or '—' }}</div>
