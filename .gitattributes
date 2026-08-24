@@ -1,14 +1,20 @@
-# Windows entry points must keep CRLF line endings in the working tree on every
-# platform. cmd.exe tolerates LF in most cases but not all -- a `goto :label`
-# whose line ends in a bare LF has been observed to fail -- and PowerShell's
-# here-strings and `param()` block are likewise sensitive. tests/test_launcher.py
-# asserts CRLF on these files, so without this a clone on Linux (which is what CI
-# runs) would check them out normalized and fail the assertion.
+# ORDER MATTERS HERE, and it is the opposite of what reads naturally: in
+# gitattributes the LAST matching pattern wins, so the catch-all must come
+# first and the specific overrides after it. Written the other way round -- the
+# specific rules on top, the `*` line at the bottom -- the catch-all silently
+# wins and every override below is dead. That is not hypothetical: it is the
+# bug this file shipped with, and CI caught it on a fresh clone while the
+# authoring machine kept the right bytes on disk and saw nothing wrong.
+
+# Default: normalize to LF in the repository and check out LF. Git's usual
+# behaviour, stated explicitly so a contributor's core.autocrlf cannot change it.
+* text=auto eol=lf
+
+# Windows entry points must be checked out CRLF on every platform, including the
+# Linux runner that CI uses. cmd.exe does not reliably tolerate a bare LF before
+# a `goto :label`, and PowerShell's param() block and here-strings are likewise
+# sensitive. tests/test_launcher.py asserts CRLF on these three, so this rule is
+# load-bearing rather than cosmetic.
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
-
-# Everything else: normalize to LF in the repository, let git decide the working
-# tree. This is git's default behaviour, stated explicitly so a future
-# core.autocrlf setting on a contributor's machine cannot change it.
-* text=auto eol=lf
