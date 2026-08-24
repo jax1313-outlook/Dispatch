@@ -1,5 +1,15 @@
 # WEEK VIEW CAPACITY VISUALIZATION ARCHITECTURE
 
+> **HOS / ELD boundary (Operational Readiness Mission, Section 1.6).** Dispatch is not an
+> ELD and holds no hours-of-service data. There is no ELD, GPS, or telematics integration
+> anywhere in the program, and none is configured. Every reference to HOS below describes
+> either (a) a value **estimated** from distance and appointment windows, or (b) a
+> capability that would require a live trusted external source that does not exist today.
+> The driver is responsible for legal HOS compliance. Nothing in this document is a
+> readiness claim that Dispatch knows a duty clock. Where an HOS value is displayed, it is
+> labeled as an estimate at the surface.
+
+
 **Document Type:** Architecture Specification
 **Program:** Dispatch
 **Authority:** Mike Zachary remains final authority.
@@ -21,9 +31,9 @@ Purpose:
 
 Week View presents five key operational indicators across a rolling 7-day or 14-day window:
 
-1. **Available Capacity:** Uncommitted time windows, available driver HOS, and unallocated equipment space where new freight can be accepted.
+1. **Available Capacity:** Uncommitted time windows, estimated drive-time headroom (not a duty-clock reading — Dispatch holds none), and unallocated equipment space where new freight can be accepted.
 2. **Consumed Capacity:** Fully committed time, driver duty hours, and trailer space assigned to active/scheduled loads.
-3. **Reserve Capacity:** Intentionally held safety buffers (e.g., 2 hours HOS reserve for weather/traffic, maintenance inspection buffers).
+3. **Reserve Capacity:** Intentionally held safety buffers (e.g., a 2-hour drive-time reserve for weather/traffic, maintenance inspection buffers). The reserve is a planning allowance, not a measured remaining duty clock.
 4. **Position Capacity:** Anticipated geographic truck location at the end of each committed load (e.g., "Inbound Chicago Friday 14:00").
 5. **Schedule Gaps:** Unplanned dead time, deadhead traps, or utilization gaps where asset generation is zero.
 

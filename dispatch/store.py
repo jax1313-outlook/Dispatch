@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 
+from dispatch import rehearsal
 from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
 from dispatch.models import (
     DetentionEvent,
@@ -83,6 +84,7 @@ def create_load(load: Load) -> dict:
              load.equipment_id, load.status, load.source,
              load.notes, load.created_at, load.updated_at),
         )
+        rehearsal.tag_in(conn, "loads", load.load_id)
     return load.to_dict()
 
 
@@ -101,9 +103,20 @@ def list_loads(
     *,
     page: int | None = None,
     per_page: int | None = None,
+    include_rehearsal: bool = True,
 ) -> list[dict] | dict:
+    """``include_rehearsal=False`` restricts the result to operational loads.
+
+    The default is True so every existing caller keeps its current behaviour --
+    a rehearsal record must be *excludable*, not invisible, since a reviewer
+    looking at the Operations page during a rehearsal needs to see the rehearsal
+    load, clearly labeled, rather than wonder where it went. Reports that state
+    operational truth pass False.
+    """
     clauses: list[str] = []
     params: list = []
+    if not include_rehearsal:
+        clauses.append(rehearsal.operational_only())
     if status:
         clauses.append("status=?")
         params.append(status)
@@ -250,6 +263,7 @@ def create_milestone(ms: MilestoneEvent) -> dict:
              ms.location, ms.source, ms.note, ms.entered_by,
              ms.validation_status),
         )
+        rehearsal.tag_in(conn, "milestones", ms.milestone_id)
     return ms.to_dict()
 
 
@@ -315,6 +329,7 @@ def create_evidence(ev: EvidenceItem) -> dict:
              ev.file_size, ev.mime_type, ev.capture_time,
              ev.description, ev.uploaded_by, ev.checksum),
         )
+        rehearsal.tag_in(conn, "evidence", ev.evidence_id)
     return ev.to_dict()
 
 
@@ -378,6 +393,7 @@ def create_exception(exc: ExceptionNotice) -> dict:
              exc.first_reported, exc.status, exc.resolution_note,
              exc.resolved_at),
         )
+        rehearsal.tag_in(conn, "exceptions", exc.exception_id)
     return exc.to_dict()
 
 
@@ -442,6 +458,7 @@ def create_pod(pod: PODPackage) -> dict:
              pod.generated_at, pod.status, pod.recipient,
              pod.file_path, pod.notes),
         )
+        rehearsal.tag_in(conn, "pod_packages", pod.pod_id)
     return pod.to_dict()
 
 
@@ -761,6 +778,7 @@ def create_driver(drv: Driver) -> dict:
              drv.status, drv.hire_date, drv.notes,
              drv.created_at, drv.updated_at),
         )
+        rehearsal.tag_in(conn, "drivers", drv.driver_id)
     return drv.to_dict()
 
 
@@ -853,6 +871,7 @@ def create_equipment(eqp: Equipment) -> dict:
              eqp.license_plate, eqp.status, eqp.notes,
              eqp.created_at, eqp.updated_at),
         )
+        rehearsal.tag_in(conn, "equipment", eqp.equipment_id)
     return eqp.to_dict()
 
 

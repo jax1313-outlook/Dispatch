@@ -40,3 +40,17 @@ portal/data/
 
 # Claude agent workspace
 .claude/
+
+# Local-machine proof artifacts (Operational Readiness Mission Section 10.2).
+# These are produced by running Dispatch on the target machine and contain real
+# paths, real record identifiers, real evidence hashes, and a rehearsal
+# database. None of that belongs in version control. The committed, inspectable
+# versions of these documents live in docs/readiness/.
+proof/
+
+# Launcher runtime state: PID files, launch logs, and the last-failure record.
+# Section 3.4 requires the logs directory to sit outside version control, and a
+# launch log can carry an environment dump.
+.dispatch/
+dispatch_launcher_logs/
+run/

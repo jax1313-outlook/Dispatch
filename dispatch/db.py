@@ -481,6 +481,14 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         )
     except sqlite3.OperationalError:
         pass
+    # Rehearsal mode (Operational Readiness Mission Section 4.2) tags records so
+    # a proof run can never display as an unlabeled live mission. One TEXT
+    # column per tagged table, empty for operational records -- see
+    # dispatch/rehearsal.py for why a column rather than a join table. The
+    # guarded ALTERs live in that module beside the tables they belong to.
+    from dispatch.rehearsal import init_rehearsal_schema
+
+    init_rehearsal_schema(conn)
 
 
 @contextmanager

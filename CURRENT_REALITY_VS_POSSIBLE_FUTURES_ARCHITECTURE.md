@@ -1,5 +1,15 @@
 # CURRENT REALITY VERSUS POSSIBLE FUTURES ARCHITECTURE
 
+> **HOS / ELD boundary (Operational Readiness Mission, Section 1.6).** Dispatch is not an
+> ELD and holds no hours-of-service data. There is no ELD, GPS, or telematics integration
+> anywhere in the program, and none is configured. Every reference to HOS below describes
+> either (a) a value **estimated** from distance and appointment windows, or (b) a
+> capability that would require a live trusted external source that does not exist today.
+> The driver is responsible for legal HOS compliance. Nothing in this document is a
+> readiness claim that Dispatch knows a duty clock. Where an HOS value is displayed, it is
+> labeled as an estimate at the surface.
+
+
 **Document Type:** Core Architecture Specification
 **Program:** Dispatch
 **Authority:** Mike Zachary remains final authority.
@@ -24,7 +34,7 @@ The boundary between Reality and Possibilities is absolute. Mixing or blurring t
 │                    STATE 1: CURRENT REALITY                 │
 │  • Current Mission (Executing)                              │
 │  • Week View (Capacity Visualization)                       │
-│  • Truck / Asset Position (Verified GPS / HOS)               │
+│  • Truck / Asset Position (no GPS or HOS feed exists)        │
 │  • Commitments (Calendar Events & Rate Confirmations)       │
 │  • Active Capacity (Consumed vs Available)                  │
 └──────────────────────────────┬──────────────────────────────┘

@@ -56,6 +56,10 @@
 </style>
 </head>
 <body>
+{% if rehearsal_active %}<div class="rehearsal-banner" role="status" style="background:#b91c1c;color:#fff;padding:10px 16px;font-weight:900;letter-spacing:1px;text-align:center;font-size:15px;border-bottom:3px solid #fca5a5;">
+  {{ rehearsal_label }} MODE — THIS IS NOT A LIVE MISSION.
+  <span style="font-weight:600;letter-spacing:0;">Session {{ rehearsal_session_id }}{% if rehearsal_session_label %} &middot; {{ rehearsal_session_label }}{% endif %}. Every record created now is tagged {{ rehearsal_label }}.</span>
+</div>{% endif %}
 <div class="wrap">
 
 <!-- Header -->
@@ -85,6 +89,7 @@
     <div class="active-title">
         {{ active_card.load.pickup_location or '—' }} &rarr; {{ active_card.load.delivery_location or '—' }}
         <span class="status-badge">{{ active_card.load.status.replace('_', ' ') }}</span>
+        {{ rehearsal_badge(active_card.load) }}
     </div>
 
     <!-- Dock Reference Number Bar -->

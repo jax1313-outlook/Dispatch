@@ -1,5 +1,15 @@
 # DISPATCH DYNAMIC CAPACITY ARCHITECTURE
 
+> **HOS / ELD boundary (Operational Readiness Mission, Section 1.6).** Dispatch is not an
+> ELD and holds no hours-of-service data. There is no ELD, GPS, or telematics integration
+> anywhere in the program, and none is configured. Every reference to HOS below describes
+> either (a) a value **estimated** from distance and appointment windows, or (b) a
+> capability that would require a live trusted external source that does not exist today.
+> The driver is responsible for legal HOS compliance. Nothing in this document is a
+> readiness claim that Dispatch knows a duty clock. Where an HOS value is displayed, it is
+> labeled as an estimate at the surface.
+
+
 **Document Type:** Core Architecture Specification
 **Program:** Dispatch
 **Authority:** Mike Zachary remains final authority.
@@ -80,6 +90,6 @@ Dynamic Capacity is designed to be fully reusable across all Dispatch systems an
 
 ## 4. Operational Rules & Constraints
 
-1. **Reality Bound:** Dynamic Capacity calculation for State 1 (Reality) must be rooted in verified asset states (driver HOS log, truck GPS, assigned load weight/volume).
+1. **Reality Bound:** Dynamic Capacity calculation for State 1 (Reality) must be rooted in asset states whose provenance is recorded. Today that means assigned load weight/volume and operator-entered asset configuration. Driver HOS and truck GPS are listed here as *intended future inputs from a live trusted external source*; no such source exists, so `capacity.py` refuses to treat an HOS snapshot as `VERIFIED` without an explicit named source and a timezone-aware observation time, and `UNKNOWN`/`UNAVAILABLE` HOS makes the drive-hours comparison unavailable rather than optimistic.
 2. **Simulated Capacity for Possibilities:** In State 2 (Possibilities), Dynamic Capacity evaluates hypothetical consumption without mutating actual current capacity.
 3. **No Autonomous Allocation:** Dynamic Capacity reports available and consumed metrics; it does **NOT** automatically assign or lock capacity without explicit owner/operator commitment.
