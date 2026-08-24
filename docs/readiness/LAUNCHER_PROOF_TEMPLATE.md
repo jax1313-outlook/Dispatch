@@ -292,3 +292,30 @@ The launcher's own confirmation was correct throughout — it polls the PID and 
 it finds. The ad-hoc check was the unreliable one. This is precisely the failure mode
 Section 4.3 step 16 warns about, hit here in the harness rather than in the product, and it
 is why the proof procedure tells Mike to believe the PID rather than the browser.
+
+
+---
+
+## Control Center v1 — the three controls added after this document was written
+
+`Settings`, `Version` and `Reset Session` joined the eight-item menu when
+Dispatch Control Center v1 was specified. Two of them observe and one changes
+state, so only the third needs acceptance evidence of its own.
+
+| | Item | Command Mike runs | Result |
+|---|---|---|---|
+| 9 | The menu shows all eight controls in the specified order, with icons | Double-click `dispatch.bat` | `UNVERIFIED` |
+| 10 | The icons render, or are cleanly absent on a legacy code page | Same. If the console is not UTF-8 the rows show `[1] Start` with no icon — that is correct, not a fault | `UNVERIFIED` |
+| 11 | Settings names every setting and never prints a secret value | `python -m dispatch_launcher settings` | `UNVERIFIED` |
+| 12 | Settings exits non-zero while a setting is blocking a start | `python -m dispatch_launcher settings` then `echo %ERRORLEVEL%` | `UNVERIFIED` |
+| 13 | Version reports the commit of the code actually running | `python -m dispatch_launcher version` | `UNVERIFIED` |
+| 14 | Reset Session **refuses** while Dispatch is running | Start Dispatch, then choose `[7]`. It must refuse and name the process ID | `UNVERIFIED` |
+| 15 | Reset Session clears a stale record and nothing else | Stop Dispatch, choose `[7]`, then confirm in the portal that every load, milestone and evidence file is still there | `UNVERIFIED` |
+
+**Observed** — paste the real output beside each item, and replace `UNVERIFIED`
+with `LIVE` or `UNAVAILABLE`. No other word.
+
+Item 14 is the one that matters most. Clearing the record of a live server is how
+an orphan is created: the process keeps holding the port and can no longer be
+stopped from the Control Center. The refusal is tested in the repository, but a
+test on Linux is not evidence about Windows.

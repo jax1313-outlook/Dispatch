@@ -111,6 +111,22 @@ def _backup_lines(status: BackupStatus) -> list[str]:
     return lines
 
 
+
+def _root_line(value: str | None, from_env: bool, setting: str) -> str:
+    """A storage root, and whether anybody chose it.
+
+    The resolver answers with a real path whether or not the setting is set, so
+    printing the path alone would show a defaulted root exactly as it shows a
+    configured one. The operator needs to be able to tell those apart at a
+    glance: one of them survives a reinstall and the other does not.
+    """
+    if not value:
+        return f"UNCONFIGURED - {setting} is not set"
+    if from_env:
+        return value
+    return f"{value}  (default - {setting} is not set)"
+
+
 def render(status: LauncherStatus) -> str:
     """The whole status block, as printed by the menu and by `--status`."""
     facts = status.runtime
@@ -164,8 +180,10 @@ def render(status: LauncherStatus) -> str:
     lines.append(_line("Database", facts.database_path))
     lines.append(_line("Portal data", facts.portal_data_dir))
     lines.append(_line("Operations root", facts.operations_root or "UNCONFIGURED - using defaults"))
-    lines.append(_line("Archive root", facts.archive_root or "UNCONFIGURED - using defaults"))
-    lines.append(_line("Memory root", facts.memory_root or "UNCONFIGURED - using defaults"))
+    lines.append(_line("Archive root", _root_line(facts.archive_root, facts.archive_root_from_env,
+                                                  "DISPATCH_ARCHIVE_ROOT")))
+    lines.append(_line("Memory root", _root_line(facts.memory_root, facts.memory_root_from_env,
+                                                 "DISPATCH_MEMORY_ROOT")))
     lines.append(_line("Contract archive", facts.contract_archive_root))
 
     lines.append("")

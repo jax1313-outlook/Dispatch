@@ -62,6 +62,13 @@ UNCONFIRMED = "UNVERIFIED"
 
 #: How long a freshly started server gets to answer on its port before the
 #: launcher stops waiting and says so.
+#: The variable dispatch/rehearsal.py reads to decide whether records created
+#: now are rehearsal records. Duplicated here as a literal rather than imported:
+#: the launcher must not import any dispatch.* application module, and
+#: tests/test_launcher.py::TestNoPathToCurrentReality enforces that. A test
+#: below pins the two spellings together so a rename cannot silently break this.
+REHEARSAL_ENV_VAR = "DISPATCH_REHEARSAL_SESSION"
+
 SETTLE_SECONDS = 10.0
 #: How long a graceful stop is given before escalating, and again after.
 STOP_TIMEOUT_SECONDS = 10.0
@@ -677,6 +684,107 @@ def restart(*, facts: RuntimeFacts | None = None) -> ControlResult:
         action="restart", ok=started.ok, pid=started.pid,
         message=f"{prefix} {started.message}",
         details=stopped.details + started.details,
+    )
+
+
+def reset_session(*, facts: RuntimeFacts | None = None) -> ControlResult:
+    """Clear the launcher's own transient state so the next Start begins clean.
+
+    What this clears, and nothing else:
+
+    * a **stale PID record** -- one that names a process which is gone, or one
+      the platform will not confirm is Dispatch. This is the thing that makes a
+      launcher say "already running" about a machine where nothing is running.
+    * the **last-failure record**, so an old error stops appearing on the status
+      screen after it has been dealt with.
+    * the **rehearsal binding** in this launcher's environment, so a Start after
+      a reset produces live records rather than silently continuing to tag
+      everything REHEARSAL because a variable was left set in this window.
+
+    What it never touches: the database, evidence, the archive, the memory root,
+    any load, milestone, driver, POD or rehearsal *record*, and the log files
+    themselves. Nothing operational is deleted here, and there is no flag that
+    makes it so -- purging rehearsal data is Mike's decision and lives in
+    ``scripts/dispatch_proof.py``, which reports and refuses rather than deletes.
+
+    **It refuses while Dispatch is running.** Deleting the PID record of a live
+    server is precisely how an orphan is created: the process keeps holding the
+    port, the launcher forgets it exists, and the next Start collides with
+    something it can no longer identify or stop. Stop first, then reset.
+    """
+    facts = facts or probe.probe_runtime()
+    ownership = inspect_pidfile()
+
+    if ownership.state == RUNNING:
+        return ControlResult(
+            action="reset-session",
+            ok=False,
+            message=(
+                f"Dispatch is running (process ID {ownership.pid}). Nothing was reset."
+            ),
+            details=[
+                "Resetting now would discard the record of a live server and leave it "
+                "orphaned -- still holding the port, no longer stoppable from here.",
+                "Stop Dispatch first, then Reset Session.",
+            ],
+            pid=ownership.pid,
+        )
+
+    cleared: list[str] = []
+    kept: list[str] = []
+
+    if ownership.state == UNCONFIRMED:
+        # A live process the platform will not identify. Clearing its record is
+        # the same mistake as clearing a confirmed one, so it is refused too.
+        return ControlResult(
+            action="reset-session",
+            ok=False,
+            message="A process this launcher cannot identify is still alive. Nothing was reset.",
+            details=[
+                ownership.explanation,
+                "Stop Dispatch first, or close that process yourself, then Reset Session.",
+            ],
+            pid=ownership.pid,
+        )
+
+    if ownership.state == NO_RECORD:
+        kept.append("There was no process record to clear.")
+    elif pidfile.clear_record():
+        cleared.append(f"Cleared a stale process record ({ownership.explanation})")
+    else:
+        kept.append("A process record exists but could not be removed. Check the log directory.")
+
+    if read_failure() is not None:
+        clear_failure()
+        cleared.append("Cleared the recorded last start failure")
+    else:
+        kept.append("There was no recorded failure to clear.")
+
+    rehearsal = os.environ.pop(REHEARSAL_ENV_VAR, None)
+    if rehearsal:
+        cleared.append(
+            f"Cleared the rehearsal binding in this window ({REHEARSAL_ENV_VAR}={rehearsal}). "
+            f"The next Start will record live data."
+        )
+    else:
+        kept.append("No rehearsal was bound in this window; records were already live.")
+
+    log_action(f"reset-session: cleared {len(cleared)} item(s)")
+
+    message = (
+        "Session reset. Dispatch is stopped and the next Start begins clean."
+        if cleared
+        else "Nothing needed resetting. Dispatch is stopped and the session is already clean."
+    )
+    return ControlResult(
+        action="reset-session",
+        ok=True,
+        message=message,
+        details=[
+            *cleared,
+            *kept,
+            "No load, milestone, driver, evidence file or database record was touched.",
+        ],
     )
 
 

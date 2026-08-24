@@ -11,6 +11,13 @@ REM batch file is not allowed to hold logic.
 setlocal
 cd /d "%~dp0"
 
+REM Ask for the UTF-8 code page so the Control Center menu can draw its icons.
+REM Failure here is fine and is not reported: dispatch_launcher.glyphs asks the
+REM output stream whether it can encode them and simply omits them if not, so a
+REM console stuck on cp437 gets a clean menu rather than mojibake or a crash.
+chcp 65001 >nul 2>&1
+set "PYTHONIOENCODING=utf-8"
+
 REM Prefer the Windows Python launcher (py.exe), which is installed with
 REM Python on Windows and picks a real interpreter even when PATH does not.
 set "DISPATCH_PY=py -3"

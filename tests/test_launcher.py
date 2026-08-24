@@ -1153,8 +1153,21 @@ class TestCommandLine:
         assert "PORTAL_SECRET_KEY" in capsys.readouterr().out
 
     def test_the_menu_runs_an_action_and_quits(self, capsys, monkeypatch, facts):
+        """[8] is Stop in Control Center v1. Stop is deliberately last -- it is
+        the one control you must not hit by reaching for a neighbour."""
         monkeypatch.setattr(probe, "probe_runtime", lambda **k: facts)
-        answers = iter(["2", "q"])
+        answers = iter(["8", "q"])
+
+        assert cli.run_menu(input_fn=lambda _prompt: next(answers)) == 0
+        out = capsys.readouterr().out
+        assert "Nothing to stop" in out
+        # A control that changed something is followed by a fresh reading, so
+        # the operator never has to ask for the status they just earned.
+        assert out.count("DISPATCH - Operations Control") == 2
+
+    def test_the_menu_accepts_the_word_as_well_as_the_number(self, capsys, monkeypatch, facts):
+        monkeypatch.setattr(probe, "probe_runtime", lambda **k: facts)
+        answers = iter(["stop", "q"])
 
         assert cli.run_menu(input_fn=lambda _prompt: next(answers)) == 0
         assert "Nothing to stop" in capsys.readouterr().out

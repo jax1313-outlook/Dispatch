@@ -32,6 +32,13 @@ $ErrorActionPreference = "Stop"
 
 Set-Location -Path $PSScriptRoot
 
+# So the Control Center menu can draw its icons. Wrapped because a restricted
+# host can refuse to set OutputEncoding, and a launcher that will not start
+# because it could not change a code page is worse than one without icons --
+# dispatch_launcher.glyphs omits them cleanly when the stream cannot encode them.
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+$env:PYTHONIOENCODING = "utf-8"
+
 # Prefer the Windows Python launcher, which is installed alongside Python and
 # resolves a real interpreter even when PATH does not.
 $python = "python"

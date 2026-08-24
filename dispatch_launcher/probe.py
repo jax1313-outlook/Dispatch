@@ -77,6 +77,15 @@ class RuntimeFacts:
     archive_root: str | None = None
     memory_root: str | None = None
 
+    #: Whether each root above came from the environment or from a fallback the
+    #: code chose. Without these, a defaulted Archive root renders identically to
+    #: a configured one -- the screen shows a real path either way, and an
+    #: operator reading it cannot tell that nothing is set. That is precisely the
+    #: "plausible value the screen did not read" failure this module exists to
+    #: avoid, and it needed a flag rather than a comment to actually prevent.
+    archive_root_from_env: bool = False
+    memory_root_from_env: bool = False
+
     mode: str = UNVERIFIED
     dispatch_mode_setting: str | None = None
 
@@ -241,10 +250,15 @@ def collect() -> dict:
     facts["archive_root"] = os.environ.get("DISPATCH_ARCHIVE_ROOT")
     facts["memory_root"] = os.environ.get("DISPATCH_MEMORY_ROOT")
     facts["backup_dir"] = os.environ.get("DISPATCH_BACKUP_DIR")
+    facts["archive_root_from_env"] = bool(facts["archive_root"])
+    facts["memory_root_from_env"] = bool(facts["memory_root"])
 
     try:
         from portal.models import get_archive_dir, get_memory_dir  # noqa: PLC0415
 
+        # Filling these in with the resolver's answer is right -- it is where the
+        # files actually go. Recording that it WAS filled in is what keeps the
+        # screen honest about it.
         if not facts["archive_root"]:
             facts["archive_root"] = str(get_archive_dir().resolve())
         if not facts["memory_root"]:
