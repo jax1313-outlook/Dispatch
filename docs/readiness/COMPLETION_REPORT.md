@@ -274,17 +274,29 @@ The tool's behaviour against your real Sandbox is `UNVERIFIED` until you run it.
 
 | Connector | Status | Provider |
 |---|---|---|
-| Route Risk | `UNCONFIGURED` | no provider selected |
-| Accounting | `UNCONFIGURED` | no provider selected |
-| Scanner | `UNCONFIGURED` | no provider selected |
-| Outlook | `UNCONFIGURED` | no provider selected |
-| Email Transport | `UNCONFIGURED` | Archive/Outbox `.eml` fallback (no relay configured) |
-| Load Board | `UNCONFIGURED` | no provider selected |
-| Mapping and Routing | `UNCONFIGURED` | no provider selected |
-| Future External Intelligence | `UNCONFIGURED` | no provider selected |
-| *Mock Route Risk* | `SIMULATED` | mock, used only by tests |
+| Connector | Connector status | Notes |
+|---|---|---|
+| Route Risk | `UNCONFIGURED` | Refuses. It never reports "road clear". |
+| Accounting | `UNCONFIGURED` | For live posting. The local settlement export that does exist returns `MANUAL`. |
+| Scanner | `UNCONFIGURED` | |
+| Outlook | `UNCONFIGURED` | Event creation without a human returns `ABSENT` + `not_authorized`. |
+| Email Transport | `UNCONFIGURED` | No relay host set. A send on that path returns a `SIMULATED` payload — an `.eml` in the Outbox, delivered to nobody. |
+| Load Board | `UNCONFIGURED` | For `fetch_loads`. The explicit `sample_loads` operation returns `SIMULATED`. |
+| Mapping and Routing | `UNCONFIGURED` | |
+| Future External Intelligence | `UNCONFIGURED` | Declares no capabilities at all. |
 
-Read live from `registry.status_board()` while writing this report, not transcribed.
+All eight read live from `registry.status_board()` while writing this report, not transcribed.
+
+The mock (`mock.route_risk`) returns `SIMULATED` and is **deliberately not registered** — it is
+reachable only out-of-band via `registry.mock_connector()`, so it cannot appear on a status board
+or be mistaken for a provider.
+
+Two distinctions the table above depends on, worth stating because collapsing either would make it
+a lie: a **connector's** status describes its configuration, while a **payload's** status describes
+where that particular answer came from — so an `UNCONFIGURED` email transport still returns a
+`SIMULATED` payload rather than nothing. And `LIVE` is per accepted message, with exchange
+evidence attached; `Provenance` raises at construction on `status=LIVE` without evidence, and
+raises again on evidence attached to a non-`LIVE` status.
 
 ### The boundary is structural
 
@@ -301,13 +313,30 @@ that in its own capability block, and the boundary enforces it.
 
 ### Existing integrations were wrapped, not duplicated
 
-The Email Transport Connector reports on `cin_lite/email_delivery.py` — the program's sole
-mail transport — without changing its behaviour, and maps its two real states honestly: a
-configured SMTP relay would be `CONFIGURED`, and the `.eml`-to-Outbox fallback that is
-actually in force reports as such rather than as a working mail system. The Outlook
-Connector wraps the scheduling-fit code in `dispatch/opportunities.py` and creates no event;
-Outlook remains the single source of scheduling truth. The Accounting Connector fronts
-`dispatch/accounting_export.py`. Nothing was reimplemented.
+The Email Transport Connector calls `cin_lite/email_delivery.py` — the program's sole mail
+transport — without changing it, and classifies the receipt string it returns: `sent via` →
+`LIVE` with a fingerprinted evidence record, `not sent (SMTP not configured)` → `SIMULATED`,
+`delivery failed` → `UNAVAILABLE`, anything else → a malformed-payload error rather than a
+guess. A test drives the real module through all three branches with a stub `smtplib.SMTP`,
+so a change to that wording fails a test instead of silently flipping a truth word.
+
+The Accounting Connector calls `dispatch/accounting_export.py::export_settlement` and labels
+the result `MANUAL` with the file path as its source reference. The Load Board Connector
+calls `dispatch/acquisition.py` for the `sample_loads` path only, labelled `SIMULATED`; it
+deliberately does **not** reuse `acquire()`'s silent local fallback for `fetch_loads`,
+because a silent fallback is exactly the thing this boundary exists to stop.
+
+**Correction to an earlier statement of mine:** there was no existing Outlook *code* to wrap.
+`dispatch/opportunities.py` contains a doctrine sentence about Outlook in its module
+docstring and nothing else — no client, no API call, no credential path, no scheduling-fit
+function. The Outlook Connector therefore adds a boundary where none existed rather than
+wrapping one: inbound schedule information is read-only and labelled, and any request to
+create an event without human authorization returns `ABSENT` with reason `not_authorized`.
+Outlook remains the single source of scheduling truth and Dispatch still creates no event.
+
+`route_risk/engine.py` and `dispatch/route_risk.py` are untouched; the connector's separate
+evaluation layer translates a finding into their existing kwargs shape rather than recording
+anything itself.
 
 ### Resilience proof (Section 6.7): **passes**
 
@@ -329,8 +358,23 @@ construction, attempt count, and on a `LIVE` row the SHA-256 of the response. A 
 beside an empty table is indistinguishable from a provider that answered with nothing; this
 table exists so that sentence can be written instead.
 
+Every connector attempt is sealed at runtime as well as scanned statically:
+`boundary.execute()` runs `fetch()` inside `sealed()`, which swaps `sqlite3.connect` for a
+ContextVar-keyed guard so other threads are unaffected. A breach raises `BoundaryViolation`
+and is never downgraded to a result — and the attempt is still audited. The paired tests
+prove this is real rather than decorative: the mock's `boundary_probe` mode reaches for
+sqlite via `__import__`, which the static scan cannot see, and is refused when sealed and
+succeeds when not — so the refusal provably comes from the seal.
+
+Refusal to declare authority happens at construction, not at call time.
+`CapabilityDeclaration` raises if a connector so much as *declares* lifecycle, decision,
+pricing, acceptance, scheduling-truth or doctrine authority, so a connector that wanted to
+overstep could not be built.
+
 Provider insertion: `docs/connectors/PROVIDER_INSERTION.md` — six steps, identical for all
-eight, with the Mike decisions that gate activation collected in its Section 7.
+eight, with the ten Mike decisions that gate activation collected in its Section 7. Two of
+those are worth naming here because they are easy to miss: whether the plaintext System Keys
+registry is ever wired to connectors, and what deactivating a live connector means.
 
 ---
 
