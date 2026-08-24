@@ -447,9 +447,11 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # lifecycle truth." The branch this was recovered from also initialised a
     # `dispatch.security` schema here; that stack is superseded by the Portal
     # PIN gate already on main (CF-03) and was deliberately not recovered.
+    from dispatch.connectors.audit import init_connector_schema
     from dispatch.spine.db import init_spine_schema
     from dispatch.tokens import init_token_schema
 
+    init_connector_schema(conn)
     init_spine_schema(conn)
     init_token_schema(conn)
 
