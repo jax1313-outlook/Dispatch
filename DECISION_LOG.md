@@ -524,4 +524,176 @@ say so on their first line by construction.
 
 ---
 
+## 2026-08-25 — Five standing doctrines recorded; repository context reconciled
+
+Recorded under the Repository Context and Build Mission. None of the five existed in this
+file under these names; each is reproduced **verbatim** as supplied, because a paraphrased
+doctrine is a different doctrine.
+
+### Dispatch General Contractor Doctrine
+
+```
+Dispatch is the General Contractor, System of Record,
+and Operational Authority.
+
+Dispatch coordinates core operational work and uses external
+wheels or optional plug-ins where appropriate.
+
+Dispatch remains complete and operational without optional plug-ins.
+```
+
+*What it settles:* Dispatch is not one component among peers. It coordinates, it holds the
+record, and it is the operational authority — while deliberately **using** external wheels
+rather than rebuilding them. The third line is the testable one, and
+`tests/test_repository_doctrine.py` tests it.
+
+### Repository Doctrine
+
+```
+The repository is the durable source of architectural,
+operational, maintenance, and readiness context.
+
+Conversations are temporary and do not replace repository records.
+```
+
+*What it settles:* a decision that exists only in a chat log does not exist. This is why the
+mission that recorded this entry also created
+`docs/architecture/DISPATCH_ARCHITECTURE.md`, `docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md`,
+`docs/operations/DISPATCH_OPERATOR_GUIDE.md`, `docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md`,
+`docs/readiness/OPERATIONAL_PROOF.md` and `docs/readiness/KNOWN_LIMITATIONS.md`, and rewrote
+`CLAUDE.md` as a cold-start brief.
+
+It also means the ~50 historical reports at the repository root are **kept**, not tidied
+away. They are records. `docs/architecture/DISPATCH_ARCHITECTURE.md` §1.6 marks them as
+history rather than instructions, which is the correct way to stop a superseded matrix being
+mistaken for doctrine.
+
+### Repository Handoff Rule
+
+```
+Website and desktop sessions do not share conversation context.
+
+The repository, CLAUDE.md, governing documents, decision logs,
+guides, code, tests, and reports form the durable handoff.
+
+Whoever is actively working pushes accepted work.
+
+The next builder pulls before beginning work.
+
+Two builders must not modify the same branch and files concurrently.
+```
+
+*What it settles:* the practical consequence of the Repository Doctrine. A web session and a
+desktop session are strangers to each other. The handoff is the pushed repository and
+nothing else.
+
+**One active builder per repository.** Before modifying: check repository status, check the
+current branch, pull accepted work, identify uncommitted changes, and **do not overwrite
+unexplained local work**. At completion: run the tests, record exact results, update the
+readiness documents, commit, push, report the exact branch and commit — and **do not claim a
+push occurred unless it was verified.**
+
+### Plug-In Separation Doctrine
+
+```
+SAM, Route Risk, Mission Visibility, Assistant, and future
+optional programs remain separately bounded.
+
+Dispatch must not require their presence for core operation.
+
+Communication occurs through controlled interfaces.
+```
+
+*What it settles:* Dispatch owns the interface. A plug-in may request permitted facts or
+submit findings and requests. A plug-in may **not** directly alter Dispatch operational
+truth, define its own access, become the normal authoritative route to Dispatch data, or
+prevent Dispatch from working when unavailable.
+
+**No direct Dispatch write authority may be granted to Assistant.** Assistant is not
+integrated, and Dispatch is not redesigned around it.
+
+Degradation is permitted. Incapacity is not. Tested in `tests/test_repository_doctrine.py`.
+
+### No Manager Doctrine
+
+```
+There is no Manager component in the current architecture.
+
+Do not restore historical Manager terminology, authority,
+agent behavior, or routing assumptions.
+```
+
+*What it settles:* `docs/MANAGER.md` stays as the permanent record of a capability named in
+planning and never built — that is what stops it being re-proposed as new — but it authorizes
+no code, no route, no data model and no runtime behaviour.
+
+**One conflict found, recorded, and deliberately not resolved by a builder.**
+`dispatch/spine/models.py` `STATE_LIST` contains `ROUTED_TO_MANAGER`. It is a string in a
+state list, not a component — there is no Manager module, class, route, table, agent or
+authority anywhere in the code. But it is **persisted data**: any load that has been in that
+state carries the string in `events` and `audit_events`, so renaming it rewrites audit
+history. Three options and a recommendation are in
+`docs/architecture/DISPATCH_ARCHITECTURE.md` §7.1. **This needs Mike, not a builder.**
+
+### Also recorded in this pass
+
+**Outlook remains the scheduling authority** (mission Section 12). Dispatch may create or
+request schedule information through an approved interface, read it, present it, use it for
+capacity awareness, and show gaps and conflicts. **Dispatch must not create a separate
+competing scheduling system.** The Driver Portal Calendar is a Monday-through-Sunday visual
+capacity board presenting Outlook schedule data — **not an independent calendar database**.
+Familiar terms (`Calendar`, `PU`, `DEL`); no scheduling jargon.
+
+**The visible interface was renamed from "L2-COS Operations Portal" to "Dispatch."** The
+program is Dispatch and its own chrome said otherwise across ~30 page titles, the sidebar
+heading, the login page, the startup banner and two package docstrings. Recorded as gap 10
+in `docs/readiness/COMPLETION_REPORT.md` §10 and deferred there deliberately, because
+renaming touches templates and tests together. Done here, with three test assertions updated
+and a drift test added. `docs/readiness/COMPLETION_REPORT.md` is left as written — it is that
+mission's record, not a live status board.
+
+**The portal could not start without the Route Risk plug-in — found by the drift test that
+was written to check exactly this.** `portal/routes/driver_portal.py` imported
+`dispatch.route_risk` at module scope, and that module imported the standalone `route_risk`
+engine at module scope. With the engine uninstalled, blueprint registration raised and
+`create_app()` never returned: an optional risk advisor took down every driver surface,
+every load and every milestone. That is the incapacity the Plug-In Separation Doctrine
+forbids, and it had been true for as long as the binding has existed.
+
+Fixed at the binding rather than at each of the four call sites. `dispatch/route_risk.py`
+now absorbs the `ImportError`, reports `ENGINE_STATUS` as `ABSENT` or `CONFIGURED` (truth
+words, never `LIVE` — the engine has no live feed either way), and degrades reads to a
+reading whose `summary` says *"Route Risk is ABSENT … This is not a statement that the
+route is clear."* Already-recorded events stay retrievable, because they live in Dispatch's
+own `route_risk_events` table and losing sight of a logged hazard is not an acceptable
+degradation.
+
+**Writes do not degrade.** `record_route_risk_event` raises `RouteRiskUnavailable` with a
+message beginning "this condition was NOT recorded". Silently discarding a hazard would
+leave the operator believing something was logged when nothing was — the same failure shape
+as the milestone gate that swallowed refused transitions.
+
+**`CLAUDE.md` described only the CIN-Lite half of the repository** and read as though that
+were the whole program, which is how a cold-start builder concludes Dispatch is a
+contract-archiving tool. Rewritten. The conflict is recorded in `CLAUDE.md` §1 rather than
+quietly overwritten, per the rule immediately below.
+
+**Fifteen `UNVERIFIED` first-start items: the count holds.** The mission asked whether the
+repository still supports that figure rather than assuming it.
+`docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` carries eight original acceptance items plus
+seven added for Control Center v1 — fifteen numbered items, every one `UNVERIFIED`. The live
+document at `proof/launcher/LAUNCHER_PROOF.md` is gitignored because a completed one carries
+real paths and process IDs.
+
+### Standing rule on this file
+
+**Do not edit old decisions to hide their history.** If a decision has been superseded, mark
+it `SUPERSEDED` and cite the replacing ruling. A decision log that has been tidied is a
+decision log nobody can trust.
+
+**Reports:** `docs/readiness/OPERATIONAL_PROOF.md` · `docs/readiness/KNOWN_LIMITATIONS.md` ·
+`docs/architecture/DISPATCH_ARCHITECTURE.md` §7
+
+---
+
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

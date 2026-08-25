@@ -1,56 +1,76 @@
-# DISPATCH
+# Dispatch
 
-[![CI](https://github.com/jax1313-outlook/cin-hybrid/actions/workflows/ci.yml/badge.svg)](https://github.com/jax1313-outlook/cin-hybrid/actions/workflows/ci.yml)
+[![CI](https://github.com/jax1313-outlook/Dispatch/actions/workflows/ci.yml/badge.svg)](https://github.com/jax1313-outlook/Dispatch/actions/workflows/ci.yml)
 
-A contract-locating, intelligence-processing, and archive-building platform for
-federal opportunities. It acquires solicitations, runs deterministic rule modules
-that extract intelligence as JSON, emails a human a checkbox decision, and
-archives or routes the result — with Claude agents handling the non-deterministic
-helpers (summarization, routing recommendation, proposal drafting).
+**Dispatch** is the freight-operations platform of Level 1 Transport — a small
+owner-operator trucking business. It exists to reduce the owner/operator's cognitive load:
+see what is true now, lay out what could become true, let a human choose, then help execute
+the mission that was chosen.
 
+It also carries a second, smaller program: **CIN-Lite**, a government-contracting pipeline
+that acquires solicitations, runs deterministic rule modules over them, and emails a human a
+checkbox decision. CIN-Lite is additionally Dispatch's only mail transport.
+
+> **New here? Read [`CLAUDE.md`](CLAUDE.md) first.** It is the cold-start brief: program,
+> mission, authority, boundaries, working rules, and current build status — written so
+> somebody arriving with no prior context can be useful in one reading.
+
+---
+
+## Status
+
+`0.1.0` · suite green on Python 3.11–3.13 · **nothing has been run on the target machine.**
+
+Everything in this repository is `IMPLEMENTED`. **Nothing is `OPERATIONALLY PROVEN`** — the
+distinction is load-bearing here and is explained in
+[`docs/readiness/OPERATIONAL_PROOF.md`](docs/readiness/OPERATIONAL_PROOF.md). The repository
+test suite is evidence of software behaviour, never of operational deployment.
+
+Current gaps, assumptions and the next blocker:
+[`docs/readiness/KNOWN_LIMITATIONS.md`](docs/readiness/KNOWN_LIMITATIONS.md).
+
+---
+
+## Running it
+
+**On Windows** — double-click **`dispatch.bat`**. That is the whole answer, and
+[`DISPATCH_FIRST_START_GUIDE.md`](DISPATCH_FIRST_START_GUIDE.md) covers a first start end to
+end: prerequisites, what appears, and what to do about it.
+
+**From a shell:**
+
+```bash
+pip install flask                      # the only hard dependency
+python -m dispatch_launcher status     # what this machine is configured with
+python -m dispatch_launcher start      # start Dispatch
+python portal/app.py                   # or start the portal directly
 ```
-acquire (SAM.gov) -> process (9 rule modules) -> summarize + recommend route
-        -> control email -> human decides -> archive + route + email
-        -> [if approved for proposal] proposal-trigger workflow
-```
 
-## Quick start
+Opens at `http://127.0.0.1:8080`.
 
-Runs with zero setup on bundled sample data; configure environment variables to
-switch on the real integrations (each falls back gracefully when unconfigured).
+**CIN-Lite, on bundled sample data:**
 
 ```bash
 python -m cin_lite.run --action approve_proposal   # non-interactive demo
 python -m cin_lite.run                              # interactive
 ```
 
-## L2-COS Operations Portal v1
-
-Local-first operations cockpit combining SAM/government contract and
-Dispatch/load board workflows into one unified portal.
-
-```bash
-pip install -r portal/requirements.txt
-python portal/app.py
-# Opens at http://127.0.0.1:8080
-```
-
-On Windows/PowerShell: `.\run_portal.bat`
-
 ## Tests
 
 ```bash
 pip install pytest pytest-cov flask
-python -m pytest --cov=cin_lite --cov-report=term-missing --cov-fail-under=90
+python -m pytest -q
 ```
 
-CI runs the suite with coverage on every push and pull request across Python
-3.11–3.13 (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
+CI runs the suite with coverage on every push and pull request across Python 3.11–3.13
+(see [.github/workflows/ci.yml](.github/workflows/ci.yml)). The gate is 90% over
+`cin_lite`, `dispatch` and `portal`. The suite must stay at **0 failed / 0 skipped /
+0 warnings**.
 
 ## Pipeline API
 
-The portal exposes a JSON API at `/api/pipeline/` for external automation
-(n8n, cron, webhooks). Key endpoints:
+The portal exposes a JSON API at `/api/pipeline/` for external automation (n8n, cron,
+webhooks):
 
 ```bash
 curl -X POST http://127.0.0.1:8080/api/pipeline/run          # trigger pipeline
@@ -61,12 +81,39 @@ curl -X POST http://127.0.0.1:8080/api/pipeline/decide \
 curl http://127.0.0.1:8080/api/pipeline/archive               # browse archive
 ```
 
-See **[cin_lite/README.md](cin_lite/README.md)** for the full API reference and
-n8n integration guide.
+---
 
 ## Documentation
 
-- **[cin_lite/README.md](cin_lite/README.md)** — full layer-by-layer guide
-  (acquisition, rules, agents, control email, archive, proposal workflow,
-  API reference, n8n integration).
-- **[CLAUDE.md](CLAUDE.md)** — architecture and constraints (authoritative spec).
+The repository has a lot of documents. These are the ones that bind — everything else is
+history, and [`docs/architecture/DISPATCH_ARCHITECTURE.md`](docs/architecture/DISPATCH_ARCHITECTURE.md) §1
+is the full map.
+
+| | |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | **Start here.** Cold-start brief |
+| [`DISPATCH_PURPOSE_STATEMENT.md`](DISPATCH_PURPOSE_STATEMENT.md) | Why Dispatch exists; the guiding principles |
+| [`DRIVER_FIRST_DOCTRINE_v2.md`](DRIVER_FIRST_DOCTRINE_v2.md) | D1–D15, including the 70 MPH Test |
+| [`DECISION_LOG.md`](DECISION_LOG.md) | Every decision, in order. Authority of last resort |
+| [`docs/architecture/DISPATCH_ARCHITECTURE.md`](docs/architecture/DISPATCH_ARCHITECTURE.md) | Subsystems, data flow, boundaries, document map |
+| [`docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md`](docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md) | Who decides what; what software may never do |
+| [`DISPATCH_FIRST_START_GUIDE.md`](DISPATCH_FIRST_START_GUIDE.md) | Never started it before |
+| [`docs/operations/DISPATCH_OPERATOR_GUIDE.md`](docs/operations/DISPATCH_OPERATOR_GUIDE.md) | Day-to-day operation |
+| [`docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md`](docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md) | Backups, restores, upgrades, moving machines |
+| [`docs/readiness/OPERATIONAL_PROOF.md`](docs/readiness/OPERATIONAL_PROOF.md) | What is proven, and what is not |
+| [`docs/readiness/KNOWN_LIMITATIONS.md`](docs/readiness/KNOWN_LIMITATIONS.md) | What is broken, missing or assumed |
+| [`docs/connectors/PROVIDER_INSERTION.md`](docs/connectors/PROVIDER_INSERTION.md) | Adding an external provider |
+| [`cin_lite/README.md`](cin_lite/README.md) | CIN-Lite, layer by layer |
+
+---
+
+## Two things to know before changing anything
+
+**Mike Zachary is the final authority.** Software, automation and AI in this repository hold
+zero decision authority. No record may claim he verified, approved, accepted, authorized or
+confirmed anything unless he personally performed an authenticated action that produced it —
+not as a default, a seed, or a test fixture.
+
+**Status words are fixed.** `LIVE`, `CONFIGURED`, `UNCONFIGURED`, `SIMULATED`, `UNAVAILABLE`,
+`MANUAL`, `ABSENT`, `UNVERIFIED`. No synonyms, no invented variants — several modules
+validate this and will raise on one.

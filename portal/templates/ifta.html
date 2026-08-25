@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}IFTA — L2-COS Portal{% endblock %}
+{% block title %}IFTA — Dispatch{% endblock %}
 {% block page_title %}IFTA Mileage & Fuel Report{% if report %} — {{ report.quarter_label or report.month_label }}{% endif %}{% endblock %}
 {% block page_actions %}
 <a class="btn btn-sm" href="{{ url_for('pages.ifta_review', year=sel_year, quarter=sel_quarter, vehicle_id=sel_vehicle) }}">Review Dashboard</a>

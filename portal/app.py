@@ -1,4 +1,4 @@
-"""L2-COS Operations Portal v1 — app.py entry point.
+"""Dispatch — the portal application entry point.
 
 Run locally:
     python portal/app.py
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     app = create_app()
     host = development_host(Config.HOST)
     port = Config.PORT
-    print(f"\n  L2-COS Operations Portal v1")
+    print(f"\n  Dispatch")
     print(f"  http://{host}:{port}\n")
     _print_storage_map()
     app.run(host=host, port=port, debug=_debug_enabled())

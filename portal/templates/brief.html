@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Brief — {{ entry.title }} — L2-COS Portal{% endblock %}
+{% block title %}Brief — {{ entry.title }} — Dispatch{% endblock %}
 {% block page_title %}Brief: {{ entry.title }}{% endblock %}
 {% block page_actions %}
 <a href="{{ url_for('pages.dispatch') if entry.source_type == 'dispatch' else url_for('pages.sam') }}" class="btn btn-sm">Back</a>
