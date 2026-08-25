@@ -122,10 +122,30 @@ digitally signed — not because anything is wrong with it.
 If you click "Don't run", nothing happens and Dispatch will not start. Windows shows this
 warning for every unsigned downloaded file; you will see it once.
 
+### It will ask you to choose a PIN
+
+The first time only, the black window stops and asks:
+
+```
+  Dispatch needs a PIN before you can sign in.
+  You choose it now, you only do this once, and nothing is shown as you type.
+  It must be at least 4 characters. Digits are fine.
+
+  Choose a PIN:
+  Type it again:
+```
+
+**Nothing appears as you type — not even dots.** That is deliberate, not a frozen window.
+Type your PIN, press Enter, type it again, press Enter.
+
+Pick something you will remember. Dispatch stores it scrambled and **cannot show it back to
+you** — nobody can, including me. If you forget it there is a way back in (`[P] Reset PIN`
+in the Control Center), but it is easier not to need it.
+
 ### What should happen next
 
 A black window opens and prints a short list. Then your browser opens on the Dispatch
-sign-in page.
+sign-in page — **enter the PIN you just chose**.
 
 The black window will also tell you it has put a **Dispatch icon on your Desktop.** From
 then on, that icon is how you start Dispatch — you never need to open `C:\Dispatch` again.
@@ -138,6 +158,7 @@ then on, that icon is how you start Dispatch — you never need to open `C:\Disp
 
 - The black window says **`Dispatch is RUNNING at http://127.0.0.1:8080`**
 - Your browser shows a Dispatch sign-in page
+- **Your PIN gets you in**
 - The black window stays open
 
 **Open black window = Dispatch is running.** To stop Dispatch, press any key in it.
@@ -173,6 +194,10 @@ Whatever happens, this tells me everything:
    Edit → Select All → Copy, then paste it.
 2. **What the browser showed**, if it opened.
 3. **Whether a Dispatch icon appeared on your Desktop.**
+4. **Whether your PIN got you past the sign-in page.**
+
+**Never send me the PIN itself.** I do not need it and should not have it. "It worked" or
+"it said incorrect PIN" is the whole answer.
 
 If it did not work, that is not a wasted attempt — a failure that names its reason is the
 first real information anybody has had about how Dispatch behaves on your machine.

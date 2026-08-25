@@ -117,6 +117,45 @@ def bootstrap_authority(user_id: str, display_name: str, pin: str) -> dict:
     return _public(record)
 
 
+def set_pin(user_id: str, pin: str) -> dict:
+    """Replace an existing identity's PIN. The recovery path for a forgotten one.
+
+    `bootstrap_authority` deliberately refuses once an identity exists, which is correct for a
+    one-time bootstrap and left the build with no way back in: a forgotten PIN meant deleting
+    `identity.json` by hand or losing access to Dispatch entirely. This is that missing path,
+    and it is a **reset**, not a change -- it does not ask for the old PIN, because the person
+    who needs it by definition does not have it.
+
+    What makes that acceptable is the trust basis, and it is worth stating plainly rather than
+    leaving implied: this function is reachable only from the launcher running locally on the
+    machine that holds the data. Somebody with physical access to that machine can already read
+    `identity.json`, delete it, or copy the whole database. A local reset grants no authority
+    they did not already have; it just means they do not have to destroy anything to use it.
+    There is no route, no token and no remote caller -- adding one would change the trust basis
+    completely and is not what this is.
+
+    A deliberate reset also clears a lockout. A person locked out by failed attempts and then
+    resetting their PIN at the keyboard has proven the only thing lockout was protecting
+    against, and leaving them locked for the remainder of the window would punish the recovery.
+    """
+    data = _load()
+    record = data.get(user_id)
+    if not record:
+        raise IdentityError(f"No identity named {user_id!r} exists.")
+    if not pin or len(pin) < 4:
+        raise IdentityError("PIN must be at least 4 characters.")
+
+    record["pin_hash"] = generate_password_hash(pin)
+    record["failed_attempt_count"] = 0
+    record["locked_until"] = None
+    record["updated_at"] = _utc_now()
+    _save(data)
+    # PIN_CHANGED is the event type this build already emits for a bootstrap; the reason
+    # distinguishes the two in the log without inventing an event type the spec defers.
+    _log_event("PIN_CHANGED", user_id, {"reason": "reset"})
+    return _public(record)
+
+
 def _is_locked(record: dict) -> bool:
     locked_until = record.get("locked_until")
     if not locked_until:

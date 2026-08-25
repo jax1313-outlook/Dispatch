@@ -55,6 +55,20 @@ MENU_ITEMS: tuple[tuple[str, str, str, str], ...] = (
     ("8", glyphs.STOP, "Stop Dispatch", "stop"),
 )
 
+#: Controls added after Control Center v1 was specified. They are **lettered, not
+#: numbered**, and deliberately so: the eight above are a settled specification and
+#: renumbering them to slot a ninth into the middle would break the one thing an
+#: operator learns by muscle memory. `[Q] Quit` already established the convention,
+#: so a lettered control is not a new idea here -- just an unused shelf.
+#:
+#: Reset PIN lives here because a forgotten PIN previously had no recovery path at
+#: all: `bootstrap_authority()` refuses once an identity exists, so the only way back
+#: in was deleting identity.json by hand. Ruling recorded in DECISION_LOG.md
+#: 2026-08-25.
+EXTRA_ITEMS: tuple[tuple[str, str, str, str], ...] = (
+    ("P", glyphs.RESET_PIN, "Reset PIN", "reset-pin"),
+)
+
 #: Every spelling the menu accepts for each item, so an operator who types the
 #: word instead of the number is not told they are wrong.
 _ALIASES: dict[str, tuple[str, ...]] = {
@@ -65,13 +79,14 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "version": ("version", "about"),
     "restart": ("restart",),
     "reset-session": ("reset", "reset session", "reset-session"),
+    "reset-pin": ("reset pin", "reset-pin", "pin", "forgot pin", "forgotten pin"),
     "stop": ("stop", "stop dispatch"),
 }
 
 #: Actions that change something. `status`, `settings` and `version` observe and
 #: are therefore not here -- the one-shot command line runs them without the
 #: launcher ever writing a file.
-_ACTIONS = ("start", "stop", "restart", "open", "reset-session")
+_ACTIONS = ("start", "stop", "restart", "open", "reset-session", "reset-pin")
 
 #: Everything the command line accepts, including the read-only views.
 #: `start-here` is what DISPATCH_START_HERE.cmd calls. It is not on the menu:
@@ -85,6 +100,8 @@ def render_menu() -> str:
     lines = [""]
     for key, glyph, label, _action in MENU_ITEMS:
         lines.append(f"  [{key}] {glyphs.prefix(glyph)}{label}")
+    for key, glyph, label, _action in EXTRA_ITEMS:
+        lines.append(f"  [{key}] {glyphs.prefix(glyph)}{label}")
     lines.append("  [Q] Quit")
     lines.append("")
     return "\n".join(lines)
@@ -93,8 +110,8 @@ def render_menu() -> str:
 def resolve_choice(choice: str) -> str | None:
     """Which action a typed choice means, or None if it means nothing."""
     cleaned = choice.strip().lower()
-    for key, _glyph, _label, action in MENU_ITEMS:
-        if cleaned == key:
+    for key, _glyph, _label, action in MENU_ITEMS + EXTRA_ITEMS:
+        if cleaned == key.lower():
             return action
     for action, spellings in _ALIASES.items():
         if cleaned in spellings:
@@ -146,6 +163,10 @@ def run_action(action: str) -> control.ControlResult:
         return control.open_portal()
     if action == "reset-session":
         return control.reset_session()
+    if action == "reset-pin":
+        from dispatch_launcher import first_run as _first_run
+
+        return _first_run.reset_pin()
     raise ValueError(f"unknown action: {action}")
 
 

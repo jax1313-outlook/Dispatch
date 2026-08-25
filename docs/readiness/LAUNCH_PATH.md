@@ -202,7 +202,27 @@ But the documented remedy is `setx` in a Command Prompt, and requiring that of a
 non-developer means Dispatch never starts at all.
 
 `DISPATCH_START_HERE.cmd` does what an installer does: generates real per-machine secrets,
-persists them with `setx`, checks the dependency, starts, and opens the browser.
+persists them with `setx`, checks the dependency, sets up the sign-in PIN, starts, and opens
+the browser.
+
+### 5.1 The sign-in PIN — the defect one screen further in
+
+The first version of this document ended at "the browser opens". It did — onto a sign-in page
+that rejected every PIN with *"No identity configured yet. Run cin-portal-init-admin on the
+server first."*
+
+That message is accurate and useless: `cin-portal-init-admin` is a console script that only
+exists after `pip install -e .`, which the launcher deliberately does not do, and running it
+is a Command Prompt task — the exact thing this whole investigation existed to remove.
+
+Dispatch ships with **no default PIN**, and that is right. A default PIN in a public
+repository is a PIN everybody knows, the same reasoning that makes the published secrets
+`UNCONFIGURED` rather than configured. So first run asks him to choose one, in the window he
+is already looking at, and hands it to the existing one-time `bootstrap_authority()`. No
+default, no new route, no weakened gate.
+
+The PIN is never printed, never logged, and never stored in a form anybody can read back —
+tests assert its absence from the rendered screen, the report object, and the security log.
 
 **It does not weaken the refusal — it satisfies it.** The published defaults stay rejected;
 `tests/test_first_run.py` asserts exactly that. What changes is that the machine now has
@@ -217,11 +237,16 @@ no flag that reveals them.
 
 1. Open the Dispatch folder.
 2. Double-click **`DISPATCH_START_HERE`**.
-3. Wait. A black window opens and prints a short list.
-4. The browser opens at `http://127.0.0.1:8080`.
+3. It asks him to **choose a sign-in PIN** — typed twice, nothing echoed. Once only.
+4. A black window prints a short list.
+5. The browser opens at `http://127.0.0.1:8080`; he enters the PIN he just chose.
 
 Everything else is automatic: security settings created, Flask installed if missing, a
 **Dispatch icon placed on the Desktop.**
+
+The PIN step is step 3 and not step 5 for a reason recorded in §5.1: a running server behind
+a sign-in page nobody can pass is a worse failure than not starting, because it looks like
+success.
 
 ### Every time after that
 
@@ -248,6 +273,11 @@ anyway — a browser that would not open is the usual one.
 ### How he stops it
 
 Press any key in the black window. It stops Dispatch and confirms the process is gone.
+
+### If he forgets the PIN
+
+`dispatch.bat` → `[P] Reset PIN`. It does not ask for the old one; it asks him to type
+`RESET`, then to choose a new PIN. Nothing else is touched.
 
 ---
 

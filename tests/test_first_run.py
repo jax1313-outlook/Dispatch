@@ -16,6 +16,7 @@ Two rules run through all of it:
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +26,26 @@ import pytest
 from dispatch_launcher import control, first_run
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+#: The PIN used by every "is it stored or printed in plaintext?" assertion.
+#:
+#: Those assertions are substring searches, and a short numeric PIN makes them a coin
+#: flip rather than a test. `generate_password_hash` renders a 128-character digest in
+#: hex -- an alphabet of `0-9a-f` that **contains every digit a numeric PIN is made
+#: of** -- so a 4-digit PIN appears inside an unrelated hash by pure chance about
+#: 0.19% of the time, or 0.57% across the three Python versions CI runs.
+#:
+#: That is not a hypothetical: `test_it_stores_a_hash_and_never_the_pin` failed exactly
+#: this way on py3.11 while 3.12 and 3.13 passed on the same commit, with `4417` found
+#: inside `...36a1beb2594417a13679761c...`. The code was correct; the assertion was
+#: unsound. A test that fails one run in 175 for a reason unrelated to the defect it
+#: guards teaches people to re-run CI, which is how a real failure gets waved through.
+#:
+#: This value contains characters that cannot occur in a hex digest at all, and is long
+#: enough that a chance match in the alphanumeric salt is not worth a number. A hit is
+#: therefore a real leak, which is the only thing the assertion should be able to mean.
+LEAK_PROBE_PIN = "leak-probe-pin-never-stored-in-plaintext"
 
 
 @pytest.fixture(autouse=True)
@@ -347,6 +368,7 @@ class TestFirstRun:
             "Dispatch folder",
             "Security settings",
             "Flask",
+            "Sign-in PIN",
             "Start",
             "Desktop shortcut",
         ]
@@ -609,3 +631,277 @@ class TestDesktopShortcut:
         created, detail = first_run.create_desktop_shortcut(Path("x.cmd"))
         assert created is False
         assert detail == "skipped"
+
+
+# ── the sign-in PIN ──────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def _isolated_identity(tmp_path, monkeypatch):
+    """Point the identity store at a temp directory so no test touches a real one."""
+    from portal.models import identity as identity_model
+
+    store = tmp_path / "identity-store"
+    store.mkdir()
+    monkeypatch.setattr(identity_model, "get_data_dir", lambda: store)
+    return identity_model
+
+
+class TestSignInPin:
+    """A fresh install had no PIN, and no way for a non-developer to make one.
+
+    What shipped before this: Dispatch started, the browser opened on the sign-in page, and
+    every PIN was rejected with *"No identity configured yet. Run cin-portal-init-admin on
+    the server first."* — a console script that only exists after `pip install -e .`, which
+    the launcher does not do. A running server behind a door nobody can open is a worse
+    failure than not starting, because it looks like success.
+    """
+
+    def test_a_matching_pin_is_accepted(self):
+        assert first_run.prompt_for_pin(getpass_fn=lambda _p: "8265") == "8265"
+
+    def test_a_mismatch_is_retried_and_named(self, capsys):
+        typed = iter(["8265", "8266", "4417", "4417"])
+        assert first_run.prompt_for_pin(getpass_fn=lambda _p: next(typed)) == "4417"
+        out = capsys.readouterr().out
+        assert "did not match" in out
+        assert "Nothing was saved" in out
+
+    def test_too_short_is_named_rather_than_just_refused(self, capsys):
+        typed = iter(["12", "12", "4417", "4417"])
+        assert first_run.prompt_for_pin(getpass_fn=lambda _p: next(typed)) == "4417"
+        assert "at least" in capsys.readouterr().out
+
+    def test_it_gives_up_rather_than_looping_forever(self):
+        typed = iter(["1", "1"] * 3)
+        assert first_run.prompt_for_pin(getpass_fn=lambda _p: next(typed), attempts=3) is None
+
+    def test_ctrl_c_is_not_a_crash(self):
+        def _interrupt(_prompt):
+            raise KeyboardInterrupt
+
+        assert first_run.prompt_for_pin(getpass_fn=_interrupt) is None
+
+    def test_the_reset_wording_does_not_claim_this_happens_once(self, capsys):
+        first_run.prompt_for_pin(getpass_fn=lambda _p: "4417", first_time=False)
+        out = capsys.readouterr().out
+        assert "only do this once" not in out
+        assert "new PIN" in out
+
+    def test_a_fresh_machine_gets_an_identity_that_authenticates(
+        self, _isolated_identity, monkeypatch
+    ):
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        assert _isolated_identity.has_any_identity() is False
+
+        typed = iter(["8265", "8265"])
+        report = first_run.FirstRunReport()
+        first_run.ensure_identity(report, getpass_fn=lambda _p: next(typed))
+
+        assert _isolated_identity.has_any_identity() is True
+        user_id = _isolated_identity.get_authority_user_id()
+        assert _isolated_identity.verify_pin(user_id, "8265")
+        assert _isolated_identity.verify_pin(user_id, "0000") is None
+        assert report.steps[-1].ok and report.steps[-1].changed
+
+    def test_the_pin_never_reaches_the_report_or_the_screen(
+        self, _isolated_identity, monkeypatch
+    ):
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        typed = iter([LEAK_PROBE_PIN, LEAK_PROBE_PIN])
+        report = first_run.FirstRunReport()
+        first_run.ensure_identity(report, getpass_fn=lambda _p: next(typed))
+
+        blob = first_run.render(report) + repr(report)
+        assert LEAK_PROBE_PIN not in blob, "the chosen PIN reached the report or the screen"
+        # The step must still be there and still say a PIN was set -- otherwise this
+        # test would pass just as well against code that silently did nothing.
+        assert report.steps[-1].changed
+        assert "Reset PIN" in report.steps[-1].detail
+
+    def test_an_existing_pin_is_left_alone(self, _isolated_identity, monkeypatch):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+
+        def _must_not_prompt(_p):
+            raise AssertionError("it asked for a PIN when one already existed")
+
+        report = first_run.FirstRunReport()
+        first_run.ensure_identity(report, getpass_fn=_must_not_prompt)
+
+        assert report.steps[-1].ok and not report.steps[-1].changed
+        assert _isolated_identity.verify_pin("mike", "8265")
+
+    def test_no_keyboard_means_dispatch_still_starts_and_says_why_you_cannot_sign_in(
+        self, _isolated_identity, monkeypatch
+    ):
+        """A scheduled task or a piped run must not hang forever on a prompt."""
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: False)
+
+        report = first_run.FirstRunReport()
+        first_run.ensure_identity(report)
+
+        step = report.steps[-1]
+        assert step.ok is True and step.fatal is False
+        assert "will not be able to sign in" in step.detail
+        assert "Reset PIN" in step.detail
+        assert _isolated_identity.has_any_identity() is False
+
+    def test_giving_up_at_the_prompt_still_starts_dispatch(
+        self, _isolated_identity, monkeypatch
+    ):
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+
+        def _interrupt(_p):
+            raise KeyboardInterrupt
+
+        report = first_run.FirstRunReport()
+        first_run.ensure_identity(report, getpass_fn=_interrupt)
+
+        step = report.steps[-1]
+        assert step.ok is True and step.fatal is False
+        assert "will not let you in" in step.detail
+
+    def test_the_pin_is_set_before_the_server_starts(self, monkeypatch):
+        """Order matters. Starting first opens a door nobody can walk through."""
+        order: list[str] = []
+        monkeypatch.setattr(
+            first_run, "ensure_identity", lambda report, **kw: order.append("pin")
+        )
+        monkeypatch.setattr(
+            control,
+            "start",
+            lambda: (order.append("start"), control.ControlResult("start", True, "up"))[1],
+        )
+        first_run.first_run(open_browser=False)
+        assert order == ["pin", "start"]
+
+
+class TestResetPin:
+    """`[P] Reset PIN`. Before this there was no way back in from a forgotten PIN."""
+
+    def test_it_refuses_when_there_is_nothing_to_reset(
+        self, _isolated_identity, monkeypatch
+    ):
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        result = first_run.reset_pin()
+        assert result.ok is False
+        assert "nothing to reset" in result.message
+        assert any("DISPATCH_START_HERE" in d for d in result.details)
+
+    def test_it_needs_a_typed_confirmation_not_just_a_menu_letter(
+        self, _isolated_identity, monkeypatch
+    ):
+        """A reset must not be reachable by mis-keying."""
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+
+        def _must_not_prompt(_p):
+            raise AssertionError("it asked for a new PIN before being confirmed")
+
+        result = first_run.reset_pin(input_fn=lambda _p: "", getpass_fn=_must_not_prompt)
+        assert result.ok is True
+        assert "not changed" in result.message
+        assert _isolated_identity.verify_pin("mike", "8265"), "the old PIN was disturbed"
+
+    def test_a_wrong_confirmation_word_cancels(self, _isolated_identity, monkeypatch):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        result = first_run.reset_pin(input_fn=lambda _p: "yes", getpass_fn=lambda _p: "4417")
+        assert "not changed" in result.message
+        assert _isolated_identity.verify_pin("mike", "8265")
+
+    def test_the_confirmation_is_case_insensitive(self, _isolated_identity, monkeypatch):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        typed = iter(["4417", "4417"])
+        result = first_run.reset_pin(
+            input_fn=lambda _p: " reset ", getpass_fn=lambda _p: next(typed)
+        )
+        assert result.ok is True
+        assert _isolated_identity.verify_pin("mike", "4417")
+
+    def test_a_confirmed_reset_replaces_the_pin(self, _isolated_identity, monkeypatch):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        typed = iter(["4417", "4417"])
+
+        result = first_run.reset_pin(
+            input_fn=lambda _p: "RESET", getpass_fn=lambda _p: next(typed)
+        )
+
+        assert result.ok is True
+        assert _isolated_identity.verify_pin("mike", "4417")
+        assert _isolated_identity.verify_pin("mike", "8265") is None
+
+    def test_a_reset_clears_a_lockout(self, _isolated_identity, monkeypatch):
+        """Somebody locked out and then resetting at the keyboard has proven the only
+        thing lockout protects against. Leaving them locked would punish the recovery."""
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        for _ in range(_isolated_identity.MAX_FAILED_ATTEMPTS + 1):
+            _isolated_identity.verify_pin("mike", "0000")
+        assert _isolated_identity.verify_pin("mike", "8265") is None, "not locked; test is moot"
+
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        typed = iter(["4417", "4417"])
+        result = first_run.reset_pin(
+            input_fn=lambda _p: "RESET", getpass_fn=lambda _p: next(typed)
+        )
+
+        assert result.ok is True
+        assert _isolated_identity.verify_pin("mike", "4417"), "still locked after a reset"
+        assert any("lockout" in d.lower() for d in result.details)
+
+    def test_it_needs_a_keyboard(self, _isolated_identity, monkeypatch):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: False)
+        result = first_run.reset_pin()
+        assert result.ok is False
+        assert "keyboard" in result.message
+
+    def test_no_pin_value_ever_reaches_the_security_log(
+        self, _isolated_identity, monkeypatch
+    ):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", LEAK_PROBE_PIN)
+        monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
+        typed = iter([LEAK_PROBE_PIN + "-new", LEAK_PROBE_PIN + "-new"])
+        first_run.reset_pin(input_fn=lambda _p: "RESET", getpass_fn=lambda _p: next(typed))
+
+        log = _isolated_identity._security_log_path().read_text(encoding="utf-8")
+        assert LEAK_PROBE_PIN not in log, "a PIN value reached the security log"
+        assert '"reason": "reset"' in log, "the reset was not recorded at all"
+
+
+class TestSetPin:
+    """The model function behind the reset."""
+
+    def test_it_refuses_an_identity_that_does_not_exist(self, _isolated_identity):
+        with pytest.raises(_isolated_identity.IdentityError):
+            _isolated_identity.set_pin("nobody", "4417")
+
+    def test_it_enforces_the_minimum_length(self, _isolated_identity):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        with pytest.raises(_isolated_identity.IdentityError):
+            _isolated_identity.set_pin("mike", "12")
+        assert _isolated_identity.verify_pin("mike", "8265"), "the old PIN was disturbed"
+
+    def test_it_stores_a_hash_and_never_the_pin(self, _isolated_identity):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        _isolated_identity.set_pin("mike", LEAK_PROBE_PIN)
+
+        raw = _isolated_identity._identity_path().read_text(encoding="utf-8")
+        assert LEAK_PROBE_PIN not in raw, "the PIN was written to disk in plaintext"
+        assert "8265" not in raw, "the previous PIN survived the reset"
+
+        # Structural, not just an absence: prove what *is* stored is a real hash that
+        # still authenticates. An absence assertion alone would also pass if set_pin
+        # had quietly stored nothing at all.
+        stored = json.loads(raw)["mike"]["pin_hash"]
+        assert stored.startswith("scrypt:")
+        assert stored != LEAK_PROBE_PIN
+        assert _isolated_identity.verify_pin("mike", LEAK_PROBE_PIN)
+
+    def test_the_returned_record_carries_no_hash(self, _isolated_identity):
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        record = _isolated_identity.set_pin("mike", "4417")
+        assert "pin_hash" not in record

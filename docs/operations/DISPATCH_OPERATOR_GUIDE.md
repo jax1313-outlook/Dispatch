@@ -32,6 +32,7 @@ status block and then the menu. From PowerShell instead:
 | `[6]` | **Restart** | Proves the old process is dead, then starts a new one |
 | `[7]` | **Reset Session** | Clears a *stale* launcher record — see §1.2 |
 | `[8]` | **Stop Dispatch** | Terminates the server and confirms it is gone |
+| `[P]` | **Reset PIN** | Sets a new sign-in PIN when the current one has been forgotten — see §1.4 |
 
 Type the number, or the word (`start`, `stop`, `restart`, `settings`, `version`, `reset`,
 `open`, `refresh`). `[Q]` quits the menu — **it does not stop Dispatch.**
@@ -61,7 +62,20 @@ made — the process keeps the port and can no longer be stopped from the Contro
 If it refuses and you believe it is wrong, stop Dispatch first. If Stop also refuses, open
 Task Manager, find the named process ID, and end it there.
 
-### 1.3 Shutting down properly
+### 1.3 Reset PIN — the way back in
+
+`[P]` sets a new sign-in PIN. It **does not ask for the old one**, because the person who
+needs it does not have it — that is the whole situation.
+
+What stands in for the old PIN is that you have to be sitting at this machine, and you have
+to type the word `RESET` to confirm. Anybody with physical access to this computer could
+already read or delete the file the PIN lives in, so a local reset grants nothing they did
+not already have; it just means they do not have to destroy anything first.
+
+It touches nothing else. Loads, milestones and evidence are untouched. A lockout from earlier
+failed attempts is cleared, deliberately — being locked out is the reason you are here.
+
+### 1.4 Shutting down properly
 
 `[8] Stop`, then close the window. Stop confirms the process is gone before saying so. If
 you close the console window without stopping, the server keeps running — the launcher will

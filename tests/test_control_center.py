@@ -564,3 +564,68 @@ class TestTheWindowsWrappers:
             text = self._read(name).lower()
             for verb in ("taskkill", "stop-process", "get-process", "netstat"):
                 assert verb not in text
+
+
+# ──────────────────────────────────── controls added after v1 was specified
+
+
+class TestLetteredControls:
+    """Controls added later are lettered, so the specified eight keep their numbers.
+
+    Renumbering the eight to slot a ninth into the middle would break the only thing an
+    operator learns by muscle memory, and the numbered set is a settled specification.
+    `[Q] Quit` had already established that a lettered control is not a new idea here.
+    """
+
+    def test_the_specified_eight_are_still_exactly_eight_and_numbered(self):
+        """The guard that makes the lettered convention worth having."""
+        assert len(cli.MENU_ITEMS) == 8
+        assert [key for key, _g, _l, _a in cli.MENU_ITEMS] == list("12345678")
+
+    def test_reset_pin_is_lettered_and_outside_the_numbered_set(self):
+        keys = {key for key, _g, _l, _a in cli.EXTRA_ITEMS}
+        actions = {action for _k, _g, _l, action in cli.EXTRA_ITEMS}
+        assert "P" in keys
+        assert "reset-pin" in actions
+        assert not keys & {key for key, _g, _l, _a in cli.MENU_ITEMS}
+        assert "Q" not in keys, "Q is Quit and must not be reused"
+
+    def test_the_menu_shows_it_between_the_eight_and_quit(self):
+        rendered = cli.render_menu().splitlines()
+        rows = [line for line in rendered if line.strip()]
+        assert "Stop Dispatch" in rows[7]
+        assert "Reset PIN" in rows[8]
+        assert "Quit" in rows[9]
+
+    @pytest.mark.parametrize(
+        "typed", ["P", "p", " p ", "reset pin", "reset-pin", "forgot pin", "forgotten pin"]
+    )
+    def test_every_spelling_an_operator_might_use_resolves(self, typed):
+        assert cli.resolve_choice(typed) == "reset-pin"
+
+    def test_it_is_not_confused_with_reset_session(self):
+        """Two controls whose names both start with "Reset", one of which touches the
+        launcher's record of a running server. They must never resolve to each other."""
+        assert cli.resolve_choice("7") == "reset-session"
+        assert cli.resolve_choice("reset") == "reset-session"
+        assert cli.resolve_choice("reset session") == "reset-session"
+        assert cli.resolve_choice("P") == "reset-pin"
+
+    def test_the_command_line_accepts_it_too(self):
+        assert "reset-pin" in cli._COMMANDS
+
+    def test_its_glyph_is_covered_by_the_all_or_none_rule(self):
+        """A menu with icons on eight rows and none on the ninth looks broken."""
+        from dispatch_launcher import glyphs
+
+        assert glyphs.RESET_PIN in glyphs.ALL
+        for _key, glyph, _label, _action in cli.EXTRA_ITEMS:
+            assert glyph in glyphs.ALL
+
+    def test_a_console_that_cannot_draw_icons_drops_this_one_too(self, monkeypatch):
+        from dispatch_launcher import glyphs
+
+        monkeypatch.setenv(glyphs.GLYPH_ENV, "0")
+        rendered = cli.render_menu()
+        assert "Reset PIN" in rendered
+        assert glyphs.RESET_PIN not in rendered
