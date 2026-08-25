@@ -1226,12 +1226,12 @@ class TestWindowsEntryPoints:
             assert "taskkill" not in text.lower()
 
     def test_new_launchers_do_not_carry_the_superseded_program_name(self):
-        for name in ("dispatch.bat", "Dispatch.ps1"):
+        for name in ("dispatch.bat", "Dispatch.ps1", "DISPATCH_START_HERE.cmd"):
             text = (REPO_ROOT / name).read_text(encoding="utf-8")
             assert "L2-COS" not in text
 
     def test_the_wrappers_use_crlf_so_windows_can_run_them(self):
-        for name in ("dispatch.bat", "Dispatch.ps1"):
+        for name in ("dispatch.bat", "Dispatch.ps1", "DISPATCH_START_HERE.cmd"):
             raw = (REPO_ROOT / name).read_bytes()
             assert b"\r\n" in raw
             assert raw.replace(b"\r\n", b"") .count(b"\n") == 0

@@ -28,6 +28,7 @@ replaces those documents; §1 tells you which one to open.
 
 | Document | What it is for |
 |---|---|
+| `docs/readiness/LAUNCH_PATH.md` | **What to double-click.** Every launcher, which are current, and the evidence. |
 | `DISPATCH_FIRST_START_GUIDE.md` | Never started it before. Where the launcher lives and what first start does. |
 | `docs/operations/DISPATCH_OPERATOR_GUIDE.md` | Day-to-day operation. |
 | `docs/readiness/CONTROL_CENTER.md` | The eight controls and seven displays. |

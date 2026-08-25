@@ -106,6 +106,7 @@ decided.
 
 | Date | Was |
 |---|---|
+| 2026-08-25 | **Dispatch had no launch path a non-developer could find.** `dispatch.bat` existed, was current and worked — but with Windows' default hidden extensions it displayed under the same name as the `dispatch` folder, which Explorer lists first, among 82 root entries. Reported as *"I cannot find it"* and treated as a defect. `DISPATCH_START_HERE.cmd` added: one double-click, generates this machine's security settings, installs Flask if missing, starts, opens the browser, and puts a Desktop icon so the folder is never needed again. Evidence: `docs/readiness/LAUNCH_PATH.md` |
 | 2026-08-25 | **The portal could not start if the Route Risk plug-in was absent.** `portal/routes/driver_portal.py` imported `dispatch.route_risk` at module scope, which imported the standalone `route_risk` engine at module scope — so an uninstalled *optional risk advisor* took down blueprint registration, and with it every driver surface, every load and every milestone. A direct violation of the Plug-In Separation Doctrine and of "degradation is permitted, incapacity is not". Reads now degrade to `ABSENT`; writes refuse loudly rather than silently discarding a recorded hazard. Guarded by `tests/test_repository_doctrine.py` |
 | 2026-08-25 | **The portal called itself "L2-COS Operations Portal" in its own chrome.** The program is Dispatch; the sidebar heading, the login page, ~30 page titles, the startup banner and two package docstrings said otherwise. Renamed across `portal/`, with three test assertions updated and a drift test added so it cannot come back. Recorded as gap 10 in `docs/readiness/COMPLETION_REPORT.md` §10, which is left as written — it is that mission's record, not a live status |
 | 2026-08-25 | **`CLAUDE.md` described only the CIN-Lite half of the repository**, so a cold-start builder concluded Dispatch was a contract-archiving tool. Rewritten as a full cold-start brief; the conflict is recorded in `CLAUDE.md` §1 rather than quietly overwritten |
@@ -118,19 +119,32 @@ decided.
 
 ## 7. The exact next operational blocker
 
-> **Nobody has ever double-clicked `dispatch.bat` on the Windows laptop.**
+> **Open the Dispatch folder on the laptop, double-click `DISPATCH_START_HERE`, and write
+> down what happens — including if nothing does.**
 
-That is the blocker. Not a missing feature — a missing observation.
+Until 2026-08-25 this section read *"nobody has ever double-clicked `dispatch.bat`"*. That
+was true, and it was the wrong diagnosis. Mike's answer was **"because I cannot find it"**,
+and he was right: the repository root holds 82 visible entries, Windows hides known
+extensions by default, and the `dispatch` **folder** and `dispatch.bat` therefore display
+under the same name — with the folder listed first, because Explorer sorts folders above
+files. Clicking the obvious thing opens a directory of Python source.
 
-Item 1 of the fifteen. Until it happens, every other readiness question downstream of it is
-unanswerable: whether `py.exe` resolves to the interpreter that has Flask, whether the
-`setx` roots reached the window, whether SmartScreen interferes with a detached process,
-whether the console renders the menu. Each is cheap to answer and impossible to guess, and
-each currently blocks the twenty-step load proof behind it.
+That is a defect in Dispatch, not a user error, and it is fixed:
+`DISPATCH_START_HERE.cmd` is one file, one double-click, no typing, and it puts a Dispatch
+icon on the Desktop so the folder never has to be opened again. Full investigation and
+evidence: `docs/readiness/LAUNCH_PATH.md`.
 
-**The one action that unblocks the most:** open the Dispatch folder on the laptop,
-double-click `dispatch.bat`, and record what appears — including if nothing does.
-`DISPATCH_FIRST_START_GUIDE.md` says what is expected;
-`docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` is where the answer goes.
+**What has not changed is that it has never been clicked on Windows.** The blocker is still
+a missing observation rather than a missing feature — but the thing to observe is now a file
+a non-developer can actually find.
+
+Three outcomes, all useful:
+
+- **A browser opens on the Dispatch sign-in page.** The launch path is proven; item 1 of the
+  fifteen moves to `LIVE` and the twenty-step load proof becomes reachable.
+- **A window opens saying `DISPATCH DID NOT START`.** Send its contents — the reason is named
+  there in plain language, and the window is built not to close.
+- **Nothing happens at all.** The most informative of the three: Windows would not run the
+  file, which means Python is missing or a security policy blocked it.
 
 It cannot be done from a build container. It has to be done there.

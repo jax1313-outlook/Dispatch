@@ -33,9 +33,18 @@ Current gaps, assumptions and the next blocker:
 
 ## Running it
 
-**On Windows** — double-click **`dispatch.bat`**. That is the whole answer, and
-[`DISPATCH_FIRST_START_GUIDE.md`](DISPATCH_FIRST_START_GUIDE.md) covers a first start end to
-end: prerequisites, what appears, and what to do about it.
+**On Windows** — double-click **`DISPATCH_START_HERE.cmd`**. That is the whole answer. It
+creates this machine's security settings, installs Flask if it is missing, starts Dispatch,
+opens your browser, and puts a Dispatch icon on your Desktop so you never have to open this
+folder again.
+
+`dispatch.bat` opens the Control Center menu instead — Start, Stop, Restart, Settings,
+Version, Reset Session. Use it once Dispatch is working.
+
+[`docs/readiness/LAUNCH_PATH.md`](docs/readiness/LAUNCH_PATH.md) is the evidence for both:
+every launcher in the repository, which are current, which are superseded, and the exact
+output each produces.
+[`DISPATCH_FIRST_START_GUIDE.md`](DISPATCH_FIRST_START_GUIDE.md) covers a first start in detail.
 
 **From a shell:**
 
@@ -100,6 +109,7 @@ is the full map.
 | [`DISPATCH_FIRST_START_GUIDE.md`](DISPATCH_FIRST_START_GUIDE.md) | Never started it before |
 | [`docs/operations/DISPATCH_OPERATOR_GUIDE.md`](docs/operations/DISPATCH_OPERATOR_GUIDE.md) | Day-to-day operation |
 | [`docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md`](docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md) | Backups, restores, upgrades, moving machines |
+| [`docs/readiness/LAUNCH_PATH.md`](docs/readiness/LAUNCH_PATH.md) | What to click, and why that file |
 | [`docs/readiness/OPERATIONAL_PROOF.md`](docs/readiness/OPERATIONAL_PROOF.md) | What is proven, and what is not |
 | [`docs/readiness/KNOWN_LIMITATIONS.md`](docs/readiness/KNOWN_LIMITATIONS.md) | What is broken, missing or assumed |
 | [`docs/connectors/PROVIDER_INSERTION.md`](docs/connectors/PROVIDER_INSERTION.md) | Adding an external provider |

@@ -74,7 +74,10 @@ _ALIASES: dict[str, tuple[str, ...]] = {
 _ACTIONS = ("start", "stop", "restart", "open", "reset-session")
 
 #: Everything the command line accepts, including the read-only views.
-_COMMANDS = ("menu", "status", "settings", "version", *_ACTIONS)
+#: `start-here` is what DISPATCH_START_HERE.cmd calls. It is not on the menu:
+#: the menu is for somebody who already has Dispatch working, and this is the
+#: path for somebody who does not yet.
+_COMMANDS = ("menu", "status", "settings", "version", "start-here", *_ACTIONS)
 
 
 def render_menu() -> str:
@@ -223,6 +226,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "version":
         _print_version()
         return 0
+
+    if args.action == "start-here":
+        from dispatch_launcher import first_run as _first_run
+
+        report = _first_run.first_run()
+        print(_first_run.render(report))
+        return 0 if report.started else 1
 
     result = run_action(args.action)
     _print_result(result)

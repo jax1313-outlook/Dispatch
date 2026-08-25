@@ -9,27 +9,48 @@ been proven on Linux and not on your Windows machine, it says so.
 
 ---
 
+> **Updated 2026-08-25 — the file to double-click has changed.**
+>
+> This guide originally said to double-click `dispatch.bat`. That file still exists and
+> still works, but it is **not** what to click first. Two reasons, both found by
+> investigating why nobody ever clicked it:
+>
+> - With Windows' default *"hide extensions for known file types"*, `dispatch.bat` displays
+>   as **`dispatch`** — and there is a **folder** in the same directory also displaying as
+>   **`dispatch`**, listed first because Explorer sorts folders above files. Among 82
+>   entries in that folder, the obvious thing to click is the wrong one.
+> - On a machine that has never run Dispatch, `dispatch.bat` opens a *menu* rather than
+>   starting anything, and then refuses to start at all until two security settings exist.
+>
+> **Double-click `DISPATCH_START_HERE` instead.** Full evidence:
+> `docs/readiness/LAUNCH_PATH.md`.
+
 ## 1. Where the launcher lives
 
-**`dispatch.bat`, in the root of the Dispatch folder** — the same folder that
+**`DISPATCH_START_HERE.cmd`, in the root of the Dispatch folder** — the same folder that
 contains `portal\`, `dispatch\` and `README.md`.
 
 ```
 Dispatch\
-├── dispatch.bat            <-- DOUBLE-CLICK THIS
-├── Dispatch.ps1                the same thing, for a PowerShell window
-├── dispatch_launcher\          the Control Center itself (13 files)
+├── DISPATCH_START_HERE.cmd <-- DOUBLE-CLICK THIS
+│                               (Windows may show it as "DISPATCH_START_HERE")
+├── dispatch.bat                the Control Center menu, once Dispatch is working
+├── Dispatch.ps1                the same menu, for a PowerShell window
+├── dispatch_launcher\          the Control Center itself
 ├── portal\                     the Dispatch portal
-├── dispatch\                   the engine
+├── dispatch\                   the engine  (a FOLDER — not the launcher)
 └── ...
 ```
+
+**After the first successful start you will not need this folder again.** The first run puts
+a **Dispatch icon on your Desktop**; double-click that from then on.
 
 I cannot tell you the absolute path, because I have never seen your machine and
 will not guess at one. To find it, open the Dispatch folder in File Explorer and
 click the address bar — or run this in PowerShell:
 
 ```powershell
-Get-ChildItem -Path C:\,D:\ -Filter dispatch.bat -Recurse -ErrorAction SilentlyContinue |
+Get-ChildItem -Path C:\,D:\ -Filter DISPATCH_START_HERE.cmd -Recurse -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty FullName
 ```
 
@@ -39,7 +60,9 @@ All paths are relative to the Dispatch folder. All are in the repository.
 
 | Path | What it is |
 |---|---|
-| `dispatch.bat` | **The file you double-click.** Sets the UTF-8 code page, finds Python, hands off. Holds no logic. |
+| `DISPATCH_START_HERE.cmd` | **The file you double-click.** Finds Python, hands off to `start-here`, holds the window open on failure. Holds no logic. |
+| `dispatch_launcher\first_run.py` | What `start-here` runs: creates this machine's security settings, installs Flask if missing, starts, opens the browser, makes the Desktop icon. |
+| `dispatch.bat` | The Control Center menu. Sets the UTF-8 code page, finds Python, hands off. Holds no logic. |
 | `Dispatch.ps1` | Same, for a PowerShell console. Also holds no logic. |
 | `dispatch_launcher\__init__.py` | Package definition and the control-not-application boundary. |
 | `dispatch_launcher\__main__.py` | Makes `python -m dispatch_launcher` work. |

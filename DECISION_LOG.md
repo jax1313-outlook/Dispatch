@@ -696,4 +696,105 @@ decision log nobody can trust.
 
 ---
 
+## 2026-08-25 — The launch path, and a defect that was reported as a user error
+
+Mike was told *"nobody has ever double-clicked `dispatch.bat`."* His answer:
+
+> **"Because I cannot find it."**
+
+Recorded here because the instinct to treat that as a user error was wrong, and the
+investigation is the reason we know it was wrong.
+
+### What the evidence showed
+
+`dispatch.bat` exists at the repository root, is current, and works — proven by running it
+(§4 of `docs/readiness/LAUNCH_PATH.md`): start, a second start refused *by process identity*
+rather than by PID number, `HTTP 200` from the portal, stop, port refusing connections
+afterwards. The launcher was never the problem.
+
+**Finding it was**, for three measurable reasons:
+
+- The repository root holds **82 visible entries** — 13 folders and 69 files, about forty of
+  them named `DISPATCH_SOMETHING.md`.
+- **Windows hides known file extensions by default**, so `dispatch.bat` displays as
+  `dispatch` — and there is a **folder** in the same directory also displaying as `dispatch`
+  (the Python package). `Dispatch.ps1` displays as `Dispatch` too. Three items, one name.
+- **Explorer sorts folders above files**, so the first `dispatch` he sees is the folder.
+  Clicking it opens a directory of `.py` files.
+
+A launch file nobody can find is a launch file that does not exist. That is a defect in
+Dispatch.
+
+### What was built
+
+**`DISPATCH_START_HERE.cmd`** — one file, one double-click, no typing. It generates this
+machine's security settings, installs Flask if it is missing, starts Dispatch, opens the
+browser, and **puts a Dispatch icon on the Desktop** so the repository folder never has to be
+opened again. The Desktop icon is the actual fix; the rest is what makes the first click
+succeed.
+
+`dispatch.bat` was **not** changed and is **not** obsolete. It opens the Control Center menu,
+which is right for somebody who already runs Dispatch and wants Restart or Settings. It is
+the wrong first contact for two reasons that only appear on a real first attempt: it presents
+a menu rather than a result, and on a fresh machine it refuses to start — correctly — over
+secrets a non-developer cannot set.
+
+### The security decision, stated plainly
+
+`portal/config.py` blocks an operational start while `PORTAL_SECRET_KEY` or
+`DISPATCH_EMAIL_SECRET` still hold the values published in this repository. That refusal is
+right: anyone who can read the source could otherwise forge a session cookie or mint a
+stakeholder link. But its documented remedy is `setx` in a Command Prompt, which means
+Dispatch never starts for its own operator.
+
+`dispatch_launcher/first_run.py` resolves this the way an installer does — it **generates real
+per-machine secrets** and persists them with `setx`.
+
+**This does not weaken the refusal. It satisfies it.** The published defaults stay rejected,
+and `tests/test_first_run.py::test_it_does_not_weaken_the_refusal_it_satisfies` asserts
+exactly that by re-running `check_secrets()` afterwards. What changed is that the machine now
+has values of its own. A generated value is never printed, logged, or returned — one test
+asserts its absence from the rendered screen and the report object, and there is no flag that
+reveals it.
+
+### Where the logic lives, and why
+
+In Python, not in the batch file. `dispatch.bat` already carries the rule in its own header:
+*"A batch file cannot be tested, so a batch file is not allowed to hold logic."*
+`DISPATCH_START_HERE.cmd` finds an interpreter, calls `python -m dispatch_launcher start-here`,
+and refuses to let the window close before the message is read. A test asserts it contains no
+control flow beyond those two exit paths.
+
+### Failure behaviour, which is most of the design
+
+Every failure ends in a `pause` — a window that vanishes instantly reads as *"nothing
+happened"*, which is the least useful thing Dispatch could tell a first-time operator.
+No Python at all is caught in the batch file and answers with python.org, the Download button,
+and the **"Add Python to PATH"** checkbox by name, because it is off by default and is the
+difference between working and appearing broken. A port conflict is translated from
+*"port 8080 is already in use"* into *"close every black Dispatch window, wait ten seconds,
+and try again"*. `[NOTE]` was introduced as distinct from `[STOP]` so a browser that will not
+open does not sit under a line reading "Dispatch is RUNNING" — marks that contradict the
+message teach an operator that the marks mean nothing.
+
+### Control Center verification
+
+All eight controls exist — Start, Open Dispatch, Refresh Status, Settings, Version, Restart,
+Reset Session, Stop Dispatch — in the specified order with the specified glyphs. **Missing:
+none.** Verified by rendering the real menu from `dispatch_launcher/cli.py` and by
+`--help` listing each as a subcommand, not by reading a document that says they exist.
+
+### Still unverified
+
+**Everything above, on Windows.** The evidence is Linux. No `py.exe` resolution, `setx`,
+detached process creation from a double-clicked file, WScript.Shell shortcut creation, Defender
+or SmartScreen interaction, or console code page has been exercised anywhere. The fifteen
+first-start items remain `UNVERIFIED`. This mission changed *what Mike clicks*; it did not, and
+from a build container cannot, prove what happens when he clicks it.
+
+**Report:** `docs/readiness/LAUNCH_PATH.md`
+
+
+---
+
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*

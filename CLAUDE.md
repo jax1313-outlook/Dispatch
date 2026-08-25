@@ -318,7 +318,8 @@ that implies otherwise is a defect.
 | | |
 |---|---|
 | Start here | `CLAUDE.md` (this file) |
-| Start Dispatch | `DISPATCH_FIRST_START_GUIDE.md` → double-click `dispatch.bat` |
+| Start Dispatch | **Double-click `DISPATCH_START_HERE.cmd`.** Why that file and not `dispatch.bat`: `docs/readiness/LAUNCH_PATH.md` |
+| First start, in detail | `DISPATCH_FIRST_START_GUIDE.md` |
 | Architecture and the document map | `docs/architecture/DISPATCH_ARCHITECTURE.md` |
 | Authority and boundaries | `docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md` |
 | Day-to-day operation | `docs/operations/DISPATCH_OPERATOR_GUIDE.md` |
