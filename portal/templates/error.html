@@ -26,6 +26,11 @@
         pre { background: #1f2328; color: #e6edf3; padding: 16px; border-radius: 6px;
               overflow-x: auto; font-size: 12.5px; line-height: 1.5;
               user-select: all; /* one click selects the whole block */ }
+        .known { background: #e7f0fe; border-left: 4px solid #1a56b8; padding: 14px 18px;
+                 border-radius: 4px; margin: 0 0 24px; }
+        .known p { margin: 8px 0; }
+        .known ol { margin: 8px 0 8px; }
+        .hint { color: #44546a; font-size: 13.5px; }
         .foot { color: #57606a; font-size: 13px; margin-top: 24px;
                 border-top: 1px solid #e1e4e8; padding-top: 16px; }
     </style>
@@ -45,7 +50,20 @@
         <span class="kind">{{ kind }}</span>: {{ message }}
     </div>
 
-    <h2>What to do</h2>
+    {% if known_headline %}
+    <div class="known">
+        <strong>Dispatch recognises this one.</strong>
+        <p>{{ known_headline }}</p>
+        <p>You can fix it yourself:</p>
+        <ol>
+            {% for step in known_steps %}<li>{{ step }}</li>{% endfor %}
+        </ol>
+        <p class="hint">If that does not work, send the block at the bottom of this page
+           and it will be looked at properly.</p>
+    </div>
+    {% endif %}
+
+    <h2>{% if known_headline %}If that did not fix it{% else %}What to do{% endif %}</h2>
     <ol>
         <li>Click once inside the black box below — it selects everything — then copy it
             (<code>Ctrl+C</code>).</li>

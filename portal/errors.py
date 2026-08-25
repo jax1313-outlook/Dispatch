@@ -119,13 +119,93 @@ def describe(exc: BaseException) -> dict:
         where = request.path
     except Exception:  # pragma: no cover - outside a request context
         where = "(unknown)"
+    known = recognise(exc)
     return {
         "kind": kind,
         "message": message,
         "traceback": trace,
         "where": where,
         "log_path": str(log_path()),
+        "known_headline": known[0] if known else "",
+        "known_steps": known[1] if known else [],
     }
+
+
+#: Failures Dispatch can recognise by sight, and what to do about each.
+#:
+#: The generic page already names the exception and hands over a traceback, which is
+#: enough for a builder. It is not enough for an operator: `sqlite3.DatabaseError: file
+#: is not a database` is a precise, correct sentence that tells Mike nothing he can act
+#: on, and the action in that case is two minutes of work he could do himself.
+#:
+#: So a condition earns an entry here when all three are true: it is recognisable from
+#: the exception alone, it has a remedy an operator can carry out, and getting it wrong
+#: is not destructive. Anything else stays generic -- a confident wrong instruction is
+#: worse than an honest "send me this".
+#:
+#: Each entry is (predicate, headline, steps).
+KNOWN_CONDITIONS = []
+
+
+def _is_corrupt_database(exc: BaseException) -> bool:
+    """A `dispatch.db` that is not a readable SQLite file.
+
+    Reproduced deliberately before this was written: a truncated database returns 500 on
+    every page that reads freight data while `/login` still works, because sign-in reads
+    a small JSON file and never opens the database. A missing database and a zero-byte
+    one are both fine -- SQLite creates or initialises those -- so this is specifically
+    the partially-written case.
+    """
+    import sqlite3
+
+    if not isinstance(exc, sqlite3.DatabaseError):
+        return False
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "file is not a database",
+            "database disk image is malformed",
+            "file is encrypted",
+        )
+    )
+
+
+def _corrupt_database_steps() -> list[str]:
+    from dispatch import db as dispatch_db
+
+    try:
+        where = str(dispatch_db.get_db_path())
+    except Exception:  # pragma: no cover - path resolution should not fail here
+        where = "dispatch.db (search for it in File Explorer)"
+    return [
+        "Stop Dispatch — press 8 in the black window, or close it.",
+        f"Open this file's folder: {where}",
+        "Rename dispatch.db to dispatch.db.old. If dispatch.db-wal or dispatch.db-shm "
+        "are beside it, rename those too.",
+        "Start Dispatch again. It rebuilds the database automatically.",
+        "Rename rather than delete, so nothing is lost if this was not the cause.",
+    ]
+
+
+KNOWN_CONDITIONS = [
+    (
+        _is_corrupt_database,
+        "Dispatch's database file is damaged and could not be opened.",
+        _corrupt_database_steps,
+    ),
+]
+
+
+def recognise(exc: BaseException) -> tuple[str, list[str]] | None:
+    """Match a known condition, or None. Never raises."""
+    for predicate, headline, steps in KNOWN_CONDITIONS:
+        try:
+            if predicate(exc):
+                return headline, steps()
+        except Exception:  # pragma: no cover - a broken recogniser must not win
+            continue
+    return None
 
 
 #: The last resort. No template, no Jinja, no context processor -- if the styled page
@@ -135,7 +215,7 @@ _PLAIN = """DISPATCH - this page could not be built
 
 Page:  {where}
 Error: {kind}: {message}
-
+{known_block}
 The rest of Dispatch is still running. Only this page failed.
 
 The full details are in:
@@ -167,6 +247,11 @@ def register(app) -> None:
             )
         except Exception:  # pragma: no cover
             pass
+        if detail["known_headline"]:
+            steps = "\n".join(f"  {i}. {s}" for i, s in enumerate(detail["known_steps"], 1))
+            detail = {**detail, "known_block": f"\n{detail['known_headline']}\n\n{steps}\n"}
+        else:
+            detail = {**detail, "known_block": ""}
         try:
             return render_template("error.html", **detail), 500
         except Exception:  # pragma: no cover - a broken template must not win

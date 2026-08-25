@@ -193,3 +193,113 @@ class TestItDoesNotDriftFromTheOtherCopies:
 
         monkeypatch.setenv("DISPATCH_LAUNCHER_LOG_DIR", str(tmp_path / "elsewhere"))
         assert errors.log_path() == locations.server_log()
+
+
+class TestRecognisedConditions:
+    """Some failures deserve a name and a remedy, not just a traceback.
+
+    `sqlite3.DatabaseError: file is not a database` is a precise, correct sentence that
+    tells an operator nothing they can act on -- and the action in that case is two
+    minutes of work they could do themselves. This is the layer that closes that gap.
+
+    A condition earns an entry only when it is recognisable from the exception alone, has
+    a remedy an operator can carry out, and is not destructive if the guess is wrong. A
+    confident wrong instruction is worse than an honest "send me this".
+    """
+
+    def test_a_corrupt_database_is_recognised(self):
+        import sqlite3
+
+        known = errors.recognise(sqlite3.DatabaseError("file is not a database"))
+        assert known is not None
+        headline, steps = known
+        assert "damaged" in headline.lower()
+        assert steps
+
+    @pytest.mark.parametrize(
+        "message",
+        ["file is not a database", "database disk image is malformed", "file is encrypted"],
+    )
+    def test_every_shape_sqlite_reports_it_in(self, message):
+        import sqlite3
+
+        assert errors.recognise(sqlite3.DatabaseError(message)) is not None
+
+    def test_the_remedy_is_non_destructive(self):
+        """Renaming, never deleting. If the diagnosis is wrong, nothing is lost."""
+        import sqlite3
+
+        _headline, steps = errors.recognise(sqlite3.DatabaseError("file is not a database"))
+        joined = " ".join(steps).lower()
+        assert "rename" in joined
+        assert "rather than delete" in joined
+        assert "delete dispatch.db" not in joined
+
+    def test_the_remedy_names_the_actual_file_on_this_machine(self):
+        import sqlite3
+
+        from dispatch import db as dispatch_db
+
+        _headline, steps = errors.recognise(sqlite3.DatabaseError("file is not a database"))
+        assert any(str(dispatch_db.get_db_path()) in step for step in steps)
+
+    def test_the_remedy_covers_the_wal_and_shm_sidecars(self):
+        """A stale -wal beside a fresh database is the next failure, not a fix."""
+        import sqlite3
+
+        _headline, steps = errors.recognise(sqlite3.DatabaseError("file is not a database"))
+        joined = " ".join(steps)
+        assert "dispatch.db-wal" in joined
+        assert "dispatch.db-shm" in joined
+
+    def test_an_unrelated_database_error_is_not_claimed(self):
+        """Over-claiming would send an operator to rename a healthy database."""
+        import sqlite3
+
+        assert errors.recognise(sqlite3.DatabaseError("no such table: loads")) is None
+        assert errors.recognise(sqlite3.OperationalError("database is locked")) is None
+
+    def test_an_ordinary_exception_is_not_claimed(self):
+        assert errors.recognise(RuntimeError("something else entirely")) is None
+
+    def test_a_recogniser_that_raises_does_not_take_the_page_down(self, monkeypatch):
+        def _explodes(exc):
+            raise ValueError("this recogniser is broken")
+
+        monkeypatch.setattr(
+            errors, "KNOWN_CONDITIONS", [(_explodes, "never seen", lambda: [])]
+        )
+        assert errors.recognise(RuntimeError("x")) is None
+
+    def test_the_page_shows_the_remedy(self, crashing_app):
+        import sqlite3
+
+        @crashing_app.route("/__corrupt_db")
+        def _corrupt():
+            raise sqlite3.DatabaseError("file is not a database")
+
+        html = crashing_app.test_client().get("/__corrupt_db").data.decode()
+        assert "Dispatch recognises this one" in html
+        assert "damaged" in html
+        assert "dispatch.db.old" in html
+        # The traceback stays available underneath -- the remedy is offered, not imposed.
+        assert "Traceback (most recent call last)" in html
+
+    def test_an_unrecognised_crash_still_gets_the_generic_page(self, crashing_app):
+        html = crashing_app.test_client().get("/__crash").data.decode()
+        assert "Dispatch recognises this one" not in html
+        assert "What to do" in html
+
+    def test_the_plain_text_fallback_carries_the_remedy_too(self, crashing_app, monkeypatch):
+        import sqlite3
+
+        @crashing_app.route("/__corrupt_db_plain")
+        def _corrupt():
+            raise sqlite3.DatabaseError("file is not a database")
+
+        monkeypatch.setattr(
+            errors, "render_template", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x"))
+        )
+        body = crashing_app.test_client().get("/__corrupt_db_plain").data.decode()
+        assert "damaged" in body
+        assert "dispatch.db.old" in body
