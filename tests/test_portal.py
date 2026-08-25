@@ -1,4 +1,4 @@
-"""Tests for L2-COS Operations Portal v1.
+"""Tests for the Dispatch operations portal.
 
 Covers the 15 testing requirements from the build spec:
  1. Portal starts locally without error
@@ -175,7 +175,13 @@ class TestHomePage:
 
     def test_home_contains_title(self, client):
         resp = client.get("/home")
-        assert b"L2-COS" in resp.data
+        # The program is Dispatch and its own chrome must say so. The superseded
+        # name is asserted absent as well, because a half-finished rename is
+        # worse than no rename: two names for one program is what confused
+        # everyone in the first place.
+        html = resp.data.decode()
+        assert "<title>Home \u2014 Dispatch</title>" in html
+        assert "L2-COS" not in html
 
     def test_index_redirects_to_home(self, client):
         resp = client.get("/")
