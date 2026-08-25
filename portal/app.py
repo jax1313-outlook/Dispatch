@@ -21,6 +21,7 @@ from flask import Flask, redirect, request, session, url_for
 
 from portal.config import Config, check_secrets, development_host
 from portal.csrf import init_csrf
+from portal import errors
 from portal.routes import register_routes
 
 
@@ -33,6 +34,11 @@ def create_app(config: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if config:
         app.config.update(config)
+
+    # Before anything else that can fail: a crash must produce a page that says what
+    # broke and where the log is, not Flask's bare "Internal Server Error". See
+    # portal/errors.py for why this exists.
+    errors.register(app)
     if not app.config.get("TESTING"):
         # Raises InsecureConfigurationError in operational mode, so a
         # misconfigured deployment never reaches a route at all.

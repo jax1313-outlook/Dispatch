@@ -919,6 +919,89 @@ nothing at all.
 
 **Reports:** `docs/readiness/LAUNCH_PATH.md` §5.1 · `docs/readiness/CONTROL_CENTER.md`
 
+---
+
+## 2026-08-25 — Dispatch ran on Windows, and the screen said nothing useful
+
+The first operational evidence this program has ever had. Recorded in full, because it
+changes a claim that has stood in every readiness document since the repository was written.
+
+### What ran
+
+Mike double-clicked `DISPATCH_START_HERE` on his laptop. Observed, from his screenshots and
+report: the launch file ran; Windows resolved a Python interpreter; Flask was available; the
+first-run PIN prompt appeared and saved a PIN; the server bound `127.0.0.1:8080`; and sign-in
+succeeded — the browser reached `/home`, which sits behind the gate.
+
+Six things that had been `UNVERIFIED` since they were written are now backed by observation
+rather than by a Linux test. **The launch path works on Windows.**
+
+### What failed
+
+`/home` and `/dispatch` both returned HTTP 500. `/login` works — it is the only page that
+neither extends `base.html` nor reads freight data.
+
+**Not reproduced.** His exact tree, from the ZIP he sent, runs here: `/home` **200**,
+`/dispatch` **200**. The cause is specific to that machine or its configuration and is not
+yet known. No fix has been attempted for a defect nobody has diagnosed.
+
+### The defect that is ours, and was fixed
+
+The screen said *"Internal Server Error. The server encountered an internal error and was
+unable to complete your request."* and nothing else.
+
+**There was no error handler in the application at all.** Every unhandled exception fell
+through to Flask's default page, which names nothing, offers nothing, and does not mention
+that a log exists. Two rounds of correspondence went by hunting for a log file whose location
+the failing page could simply have printed — and the hunt failed, because the log was not
+where the default puts it.
+
+That is a 70 MPH Test failure in the place it matters most: the moment something breaks is
+exactly when the operator has least patience and least information.
+
+`portal/errors.py` now renders a page that says four things — what happened, in the
+exception's own words; that the rest of Dispatch is still running; where the log is, as an
+exact path; and what to send, as one block that selects with a single click.
+
+Two rules hold absolutely, and both are tested:
+
+**It never fails itself.** An error page that raises replaces a useful message with a useless
+one at the worst moment. Every step is wrapped and the last resort is plain text with no
+template involved.
+
+**It never prints a secret.** The page is *meant* to be copied and sent, which makes
+redaction load-bearing rather than decorative. Values whose names look secret are replaced;
+the names are kept, because the name is the part that helps. The logged copy is redacted too.
+
+The redaction markers duplicate `dispatch_launcher.redaction` and `dispatch.backup`
+deliberately — the portal must not depend on the launcher, and THE MIKE RULE prefers a little
+duplication to a shared abstraction across a subsystem boundary. A test pins the three copies
+together, and another pins the log path to the launcher's: **an error page that names the
+wrong log file is worse than one that names none**, because the operator looks there, finds
+nothing, and stops believing the page. That test earned its place immediately by catching a
+function name I had invented.
+
+### The standing hypothesis, labelled as one
+
+His repository folder contains no `logs` directory, which the launcher's default would have
+created. That points at `DISPATCH_OPERATIONS_ROOT` being set on that machine — which moves
+both the log **and the freight database** to `<ops root>\Current Workspace\PortalData`,
+plausibly onto the external drive visible in his file manager.
+
+It would explain the exact asymmetry: `/login` reads a small file, every freight page reads a
+database. **It is a hypothesis with a mechanism, not a diagnosis, and no code was changed on
+the strength of it.**
+
+### What this does not license
+
+Six items moved to observed. **The fifteen acceptance items in
+`docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` remain `UNVERIFIED`**, because none has been
+recorded in the form that document requires — the observed output pasted beside the item by
+the person who ran it. Evidence that a thing happened is not the same as the record that
+proves it, and collapsing the two is precisely what the truth vocabulary exists to prevent.
+
+**Reports:** `docs/readiness/OPERATIONAL_PROOF.md` · `docs/readiness/KNOWN_LIMITATIONS.md` §0
+
 
 ---
 

@@ -6,6 +6,55 @@
 
 ---
 
+## 2026-08-25 — Dispatch ran on Windows for the first time
+
+**The one-line answer below is no longer the whole truth, and this section is why.**
+
+Mike ran `DISPATCH_START_HERE` on his Windows laptop. What happened, from his own screenshots
+and report:
+
+| | |
+|---|---|
+| The launch file ran when double-clicked | **observed** |
+| Windows resolved a Python interpreter | **observed** (it got past the no-Python gate) |
+| Flask was present or was installed | **observed** (the server started) |
+| The first-run PIN prompt appeared and saved a PIN | **observed** — *"i did setup a PIN"* |
+| The server started and served on `127.0.0.1:8080` | **observed** |
+| Sign-in succeeded | **observed** — the browser reached `/home`, which is behind the gate |
+| `/home` renders | **FAILED — HTTP 500** |
+| `/dispatch` renders | **FAILED — HTTP 500** |
+
+**This is evidence, not proof, and the distinction is the point of this document.** Nothing
+above has been recorded against the acceptance items in §3 in the form they require — an
+observed output pasted beside the item by the person who ran it. What it establishes is that
+the launch path works on Windows and the failure is past it.
+
+### The defect it found
+
+Every page behind the login gate returns Flask's bare *"Internal Server Error"*. `/login`
+works, because it is the only page that neither extends `base.html` nor reads freight data.
+
+The same code, from the same downloaded ZIP, was run here on Linux: `/home` **200**,
+`/dispatch` **200**. So the cause is specific to that machine or its configuration, and it
+has not been reproduced.
+
+### The second defect, which is ours
+
+The screen said *"Internal Server Error"* and nothing else. It did not name the error, did
+not say the rest of Dispatch was running, and did not mention that a log exists. **Two rounds
+of correspondence went by hunting for a log file whose location the failing page could simply
+have printed.** Fixed: `portal/errors.py` now renders a page that names the failure, prints
+the exact log path, and carries a redacted traceback in a one-click-selectable block.
+
+### What is still unknown
+
+The traceback. His `logs` folder is not where the default would put it, which points at
+`DISPATCH_OPERATIONS_ROOT` being set on that machine and moving both the log **and the
+freight database** — `<ops root>\Current Workspace\PortalData\dispatch.db`. That is a
+hypothesis with a mechanism, not a diagnosis, and it is recorded as one.
+
+---
+
 ## The answer, in one line
 
 > **Nothing in Dispatch is OPERATIONALLY PROVEN. Not one step has been executed on Mike's

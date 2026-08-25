@@ -9,6 +9,28 @@ Companion documents: `docs/readiness/OPERATIONAL_PROOF.md` (what is proven) and
 
 ---
 
+## 0. Dispatch has now run on Windows — 2026-08-25
+
+Section 1 below was written when nothing had ever run on Mike's machine. That changed today
+and the sections are left in place rather than rewritten, so the change is visible.
+
+**What worked:** the launch file, Python resolution, Flask, the first-run PIN prompt, the
+server binding `127.0.0.1:8080`, and sign-in.
+
+**What failed:** every page behind the login gate — `/home` and `/dispatch` both return HTTP
+500. `/login` works; it is the only page that neither extends `base.html` nor reads freight
+data.
+
+**Not reproduced.** The same code from the same ZIP returns 200 on both pages here.
+
+**Cause unknown.** The traceback has not been recovered yet. Leading hypothesis, recorded as
+a hypothesis: `DISPATCH_OPERATIONS_ROOT` is set on that machine — his repository folder has
+no `logs` directory, which the default would have created — and that variable moves the
+freight database to `<ops root>\Current Workspace\PortalData\dispatch.db`, plausibly onto
+an external drive. Not confirmed.
+
+Detail: `docs/readiness/OPERATIONAL_PROOF.md`.
+
 ## 1. The one that governs all the others
 
 **Nothing in Dispatch has been run on Mike's machine.** Not one step. Every build session so
@@ -121,47 +143,22 @@ decided.
 
 ## 7. The exact next operational blocker
 
-> **Open the Dispatch folder on the laptop, double-click `DISPATCH_START_HERE`, and write
-> down what happens — including if nothing does.**
+> **Recover the traceback from Mike's machine, and find out why every page behind the login
+> gate returns 500 there and 200 here.**
 
-Until 2026-08-25 this section read *"nobody has ever double-clicked `dispatch.bat`"*. That
-was true, and it was the wrong diagnosis. Mike's answer was **"because I cannot find it"**,
-and he was right: the repository root holds 82 visible entries, Windows hides known
-extensions by default, and the `dispatch` **folder** and `dispatch.bat` therefore display
-under the same name — with the folder listed first, because Explorer sorts folders above
-files. Clicking the obvious thing opens a directory of Python source.
+Updated 2026-08-25. The previous blocker — *"nobody has ever double-clicked
+`DISPATCH_START_HERE`"* — is **cleared**. He did. It worked. The launch path, Python
+resolution, Flask, the PIN prompt, the server and sign-in are all now backed by observation
+rather than by a test on Linux.
 
-That is a defect in Dispatch, not a user error, and it is fixed:
-`DISPATCH_START_HERE.cmd` is one file, one double-click, no typing, and it puts a Dispatch
-icon on the Desktop so the folder never has to be opened again. Full investigation and
-evidence: `docs/readiness/LAUNCH_PATH.md`.
+What replaced it is a real defect on real hardware, which is a much better problem to have.
 
-**Two things have to happen before it can be clicked, and neither had been established when
-this section was last written.**
+**The one action that unblocks the most:** `dispatch.bat` → `[3] Refresh Status`. It prints
+the database path, the operations root, the log directory, the mode, the secret status and
+the last start failure in one block. That names both the log's real location and, if the
+hypothesis in §0 is right, the cause.
 
-**There is no copy of Dispatch on Mike's laptop at all** (confirmed 2026-08-25). The step
-before the double-click is getting the code there:
-`docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md`.
+Once the fix in §6 reaches his machine, the failing page will carry its own traceback and
+this round-trip stops being necessary at all.
 
-**`DISPATCH_START_HERE.cmd` is not on `main`.** It is on branch
-`claude/dispatch-repo-context-reconcile-7mblbb`. A ZIP downloaded from the repository's front
-page comes from `main` and does **not** contain it — so until that branch is merged, following
-the download guide produces the old folder with the findability problem intact. A pull
-request is open.
-
-The blocker is still a missing observation rather than a missing feature. What changed is
-that two prerequisites now stand in front of it, and both are recorded rather than assumed.
-
-Three outcomes, all useful:
-
-- **A browser opens on the Dispatch sign-in page.** The launch path is proven; item 1 of the
-  fifteen moves to `LIVE` and the twenty-step load proof becomes reachable.
-- **A window opens saying `DISPATCH DID NOT START`.** Send its contents — the reason is named
-  there in plain language, and the window is built not to close.
-- **Nothing happens at all.** The most informative of the three: Windows would not run the
-  file, which means Python is missing or a security policy blocked it.
-
-Expect SmartScreen on the first double-click. It is not a fault; clicking "Don't run" makes
-Dispatch look broken when it is not.
-
-It cannot be done from a build container. It has to be done there.
+It still cannot be done from a build container. It has to be done there.
