@@ -298,6 +298,229 @@ def remedy_for(message: str, details: list[str] | None = None) -> list[str]:
     ]
 
 
+# ── the PIN, without which Dispatch opens a door he cannot walk through ──────
+
+#: Set by the suite. Also the honest escape hatch for a genuinely non-interactive
+#: run, where prompting would hang forever waiting for a keystroke nobody will type.
+NO_PIN_PROMPT_ENV = "DISPATCH_LAUNCHER_NO_PIN_PROMPT"
+
+#: The identity this build creates. `portal.models.identity` supports exactly one.
+AUTHORITY_USER_ID = "mike"
+AUTHORITY_DISPLAY_NAME = "Mike Zachary"
+
+MIN_PIN_LENGTH = 4
+
+
+def identity_exists() -> bool:
+    from portal.models import identity as identity_model
+
+    return identity_model.has_any_identity()
+
+
+def _interactive(stream=None) -> bool:
+    """Is there a person at a keyboard? Prompting when there is not, hangs."""
+    if os.environ.get(NO_PIN_PROMPT_ENV) == "1":
+        return False
+    stream = stream if stream is not None else sys.stdin
+    try:
+        return bool(stream.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
+def prompt_for_pin(*, getpass_fn=None, attempts: int = 3, first_time: bool = True) -> str | None:
+    """Ask twice, echo neither, and say what was wrong rather than just "invalid".
+
+    Returns the PIN, or None if the person gave up or ran out of attempts. `getpass_fn` is
+    injected so the suite can drive this without a terminal.
+
+    `first_time` exists because the same prompt serves setup and reset, and telling somebody
+    resetting a forgotten PIN that they "only do this once" is both false and faintly
+    insulting -- they are visibly doing it a second time.
+    """
+    import getpass as _getpass
+
+    getpass_fn = getpass_fn or _getpass.getpass
+
+    print()
+    if first_time:
+        print("  Dispatch needs a PIN before you can sign in.")
+        print("  You choose it now, you only do this once, and nothing is shown as you type.")
+    else:
+        print("  Choose the new PIN. Nothing is shown as you type.")
+    print(f"  It must be at least {MIN_PIN_LENGTH} characters. Digits are fine.")
+    print()
+
+    for remaining in range(attempts, 0, -1):
+        try:
+            pin = getpass_fn("  Choose a PIN: ")
+            confirm = getpass_fn("  Type it again: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+
+        if pin != confirm:
+            print("  Those did not match. Nothing was saved.")
+        elif len(pin) < MIN_PIN_LENGTH:
+            print(f"  Too short -- it needs at least {MIN_PIN_LENGTH} characters.")
+        else:
+            return pin
+
+        if remaining > 1:
+            print("  Try again.")
+            print()
+    return None
+
+
+def ensure_identity(report: FirstRunReport, *, getpass_fn=None) -> None:
+    """Create the sign-in identity if this machine has none.
+
+    Placed **before** Start in `first_run`, because the alternative is what shipped: Dispatch
+    starts, the browser opens on a sign-in page, and every PIN is rejected with a message
+    naming a console script that is not installed. A working server behind a door nobody can
+    open is not a working Dispatch, and it is a worse failure than not starting -- it looks
+    like success.
+
+    The PIN never appears on screen, in the report, or in a log. Only its existence does.
+    """
+    try:
+        if identity_exists():
+            report.add(
+                "Sign-in PIN",
+                True,
+                "Already set on this machine. Nothing was changed.",
+            )
+            return
+    except Exception as exc:  # pragma: no cover - unreadable data directory only
+        report.add(
+            "Sign-in PIN",
+            True,
+            f"Could not be checked ({exc.__class__.__name__}). Dispatch will still start.",
+            fatal=False,
+        )
+        return
+
+    if not _interactive():
+        report.add(
+            "Sign-in PIN",
+            True,
+            "Not set, and there is no keyboard attached to this run. Dispatch will start, "
+            "but you will not be able to sign in until a PIN is set -- run this again from a "
+            "normal window, or use Reset PIN in the Dispatch Control Center.",
+            fatal=False,
+        )
+        return
+
+    pin = prompt_for_pin(getpass_fn=getpass_fn)
+    if pin is None:
+        report.add(
+            "Sign-in PIN",
+            True,
+            "Not set. Dispatch will start, but the sign-in page will not let you in until "
+            "you set one -- double-click DISPATCH_START_HERE again, or use Reset PIN in the "
+            "Dispatch Control Center.",
+            fatal=False,
+        )
+        return
+
+    from portal.models import identity as identity_model
+
+    try:
+        identity_model.bootstrap_authority(AUTHORITY_USER_ID, AUTHORITY_DISPLAY_NAME, pin)
+    except identity_model.IdentityError as exc:
+        report.add("Sign-in PIN", False, f"Could not be set: {exc}")
+        report.blocker = "Dispatch could not save your PIN."
+        report.remedy = [
+            "Double-click DISPATCH_START_HERE again and choose a PIN once more.",
+            "If it fails the same way twice, this one needs a builder.",
+        ]
+        return
+
+    report.add(
+        "Sign-in PIN",
+        True,
+        "Set. Use it on the Dispatch sign-in page. It is not stored anywhere you can read "
+        "it back, so if you forget it, use Reset PIN in the Dispatch Control Center.",
+        changed=True,
+    )
+
+
+def reset_pin(*, getpass_fn=None, input_fn=None) -> "control.ControlResult":
+    """The Control Center's `[P] Reset PIN`. The way back in from a forgotten PIN.
+
+    Lives in this module rather than `control.py` because it is PIN work and reuses
+    `prompt_for_pin` -- `control.py` is about processes, and a second copy of the prompt is
+    exactly the duplication that produces two behaviours from one rule.
+
+    It does **not** ask for the old PIN. The person who needs this does not have it; that is
+    the whole situation. What stands in for it is a typed confirmation, because a reset must
+    not be reachable by mis-keying a menu letter, and physical access to this machine -- see
+    `identity.set_pin` for why that is the honest trust basis rather than a shortcut.
+    """
+    if not identity_exists():
+        return control.ControlResult(
+            action="reset-pin",
+            ok=False,
+            message="There is no PIN on this machine yet, so there is nothing to reset.",
+            details=[
+                "Double-click DISPATCH_START_HERE and it will ask you to choose one.",
+            ],
+        )
+
+    if not _interactive():
+        return control.ControlResult(
+            action="reset-pin",
+            ok=False,
+            message="Resetting the PIN needs a keyboard, and this run does not have one.",
+            details=["Open the Dispatch Control Center in a normal window and choose [P]."],
+        )
+
+    input_fn = input_fn or input
+    print()
+    print("  RESET PIN")
+    print()
+    print("  This replaces the Dispatch sign-in PIN with a new one you choose now.")
+    print("  You will not be asked for the old one -- this is the way back in when it")
+    print("  has been forgotten. Anyone at this keyboard can do it.")
+    print()
+    print("  Nothing else changes. Loads, milestones and evidence are untouched.")
+    print()
+    try:
+        answer = input_fn("  Type RESET to continue, or press Enter to cancel: ")
+    except (EOFError, KeyboardInterrupt):
+        answer = ""
+    if (answer or "").strip().upper() != "RESET":
+        return control.ControlResult(
+            action="reset-pin", ok=True, message="Cancelled. The PIN was not changed."
+        )
+
+    pin = prompt_for_pin(getpass_fn=getpass_fn, first_time=False)
+    if pin is None:
+        return control.ControlResult(
+            action="reset-pin", ok=True, message="Cancelled. The PIN was not changed."
+        )
+
+    from portal.models import identity as identity_model
+
+    user_id = identity_model.get_authority_user_id() or AUTHORITY_USER_ID
+    try:
+        identity_model.set_pin(user_id, pin)
+    except identity_model.IdentityError as exc:
+        return control.ControlResult(
+            action="reset-pin", ok=False, message=f"The PIN was not changed: {exc}"
+        )
+
+    return control.ControlResult(
+        action="reset-pin",
+        ok=True,
+        message="The PIN has been reset. Use the new one on the Dispatch sign-in page.",
+        details=[
+            "Any lockout from earlier failed attempts has been cleared.",
+            "If Dispatch is open in a browser, sign out and back in.",
+        ],
+    )
+
+
 # ── the desktop shortcut, which is the actual fix ────────────────────────────
 
 #: Skips shortcut creation. Set by the suite, and available to anyone who does not
@@ -416,6 +639,12 @@ def first_run(*, open_browser: bool = True) -> FirstRunReport:
 
     ensure_secrets(report)
     if not ensure_flask(report):
+        return report
+
+    # Before Start, deliberately: see ensure_identity's docstring. A server behind a
+    # door nobody can open looks like success and is not.
+    ensure_identity(report)
+    if report.blocker:
         return report
 
     result = control.start()

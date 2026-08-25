@@ -83,6 +83,28 @@ reaching for a neighbour.
 
 ---
 
+## Reset PIN — added after v1
+
+`[P] Reset PIN` is **lettered, not numbered**. The eight above are a settled specification,
+and renumbering them to slot a ninth into the middle would break the one thing an operator
+learns by muscle memory. `[Q] Quit` had already established that a lettered control is not a
+new idea here.
+
+It exists because a forgotten PIN previously had no recovery path at all: the identity is
+created once by `bootstrap_authority()`, which refuses to run a second time, so the only way
+back into Dispatch was deleting `identity.json` by hand.
+
+- It does **not** ask for the old PIN. The person who needs it does not have it.
+- It requires typing `RESET` to confirm, so a mis-keyed menu letter cannot trigger it.
+- It clears a lockout from earlier failed attempts — being locked out is why you are here.
+- It touches nothing else. Loads, milestones and evidence are untouched.
+
+The trust basis is physical access to the machine, and that is honest rather than a
+shortcut: anybody at this keyboard could already read or delete the file the PIN lives in.
+There is no route, no token, and no remote caller.
+
+Ruling recorded in `DECISION_LOG.md`, 2026-08-25.
+
 ## What the status screen shows
 
 Every line is read from this machine at the moment you look at it. Nothing on it

@@ -107,7 +107,7 @@ All paths are relative to the Dispatch folder. All are in the repository.
 | 2 | **Flask 3.0 or newer** | Required | `py -3 -m pip install "flask>=3.0"` |
 | 3 | **`PORTAL_SECRET_KEY`** | **Required — Dispatch refuses to start without it** | Control Center → `[4] Settings` |
 | 4 | **`DISPATCH_EMAIL_SECRET`** | **Required — same** | Control Center → `[4] Settings` |
-| 5 | **Authority PIN** | Required to get past the login page | `py -3 -m portal.cli` |
+| 5 | **Sign-in PIN** | Required to get past the login page — **`DISPATCH_START_HERE` now asks you to choose one** | see step 3 below |
 | 6 | Storage folders (`D:\Dispatch Operations` etc.) | **Optional** | `.\setup_dispatch_folders.ps1` |
 | 7 | Database | **Nothing to do** — created automatically | see below |
 | 8 | `pip install -e .` | **Not needed** | see below |
@@ -236,31 +236,38 @@ exact `setx` command for each. Secrets show as `not set` — never a value.
 **3. Set the two secrets** with the commands from that screen. **Close the window
 and open a new one.** `setx` does not reach windows that are already open.
 
-**4. Create the Authority PIN.** This is the one step that is not in the menu,
-because it asks for a PIN and must not run inside a logged session. At the
-terminal, in the Dispatch folder:
+**4. Create the sign-in PIN.** *(Updated 2026-08-25 — you no longer do this by hand.)*
 
-```powershell
-py -3 -m portal.cli
-```
+**`DISPATCH_START_HERE` asks you to choose a PIN on its first run**, in the same
+window, typed twice with nothing echoed. That is the whole step. There is no
+command to type and no terminal to open.
 
-It asks for a short user id (e.g. `mike`), a display name, and a PIN twice. It
-refuses to run a second time — *"An identity already exists. init-admin only runs
-once."*
+The manual route still exists and still works if you want it — `py -3 -m portal.cli`
+at the terminal, which asks for a user id, a display name and a PIN twice, and
+refuses to run a second time. It is no longer the expected path.
 
-If you skip this, Dispatch starts fine but you cannot get in. Observed: `/`
-returns `302` to `/login`, and submitting a PIN returns
-*"No identity configured yet. Run cin-portal-init-admin on the server first."*
+> **What this guide warned about, and why it is now fixed.** This section used to
+> say: *"If you skip this, Dispatch starts fine but you cannot get in."* That was
+> accurate and it was the whole problem — Dispatch shipped able to start and unable
+> to be entered, and the error it showed named `cin-portal-init-admin`, a console
+> script that only exists after `pip install -e .`, which row 8 of the table above
+> correctly says is not needed. A first-time operator was sent to a command that
+> was not installed. Now the launcher asks, and there is nothing to skip.
+
+**If you forget the PIN:** `dispatch.bat` → `[P] Reset PIN`. It does not ask for
+the old one — it asks you to type `RESET`, then to choose a new PIN. Nothing else
+is touched.
 
 **5. Double-click `dispatch.bat` again and press `1` for Start.** You should see
 `Dispatch is running (process ID …) at http://127.0.0.1:8080`.
 
-**6. Press `2` for Open Dispatch.** The browser opens the login page. Sign in with
-the user id and PIN from step 4.
+**6. Press `2` for Open Dispatch.** The browser opens the sign-in page. Enter the
+PIN from step 4.
 
-> The login page is titled **"Sign In — L2-COS Operations Portal"**. That is the
-> old name still in the portal's own chrome. It is Dispatch. This is a known
-> cosmetic gap, recorded in the completion report; it is wrong and it is harmless.
+> *(Was: a note that the login page said "Sign In — L2-COS Operations Portal",
+> the old name still in the portal's own chrome. Renamed 2026-08-25 — the page is
+> titled **"Sign In — Dispatch"** now, and a test keeps the old name from
+> returning.)*
 
 **7. When you are finished, press `8` to Stop**, and confirm it says
 `Process ID … is gone.`

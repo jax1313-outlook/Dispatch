@@ -794,6 +794,98 @@ from a build container cannot, prove what happens when he clicks it.
 
 **Report:** `docs/readiness/LAUNCH_PATH.md`
 
+---
+
+## 2026-08-25 — The sign-in PIN: a first-run dead end, and a ruling on the control set
+
+Asked what the PIN for the sign-in page was. The honest answer was that there wasn't one, and
+finding that out exposed a defect one screen further in than the launch-path work had looked.
+
+### What was actually shipped
+
+Verified by running a fresh install, not by reading the code:
+
+```
+GET  /login              -> "Enter PIN to continue"
+POST /login  pin=1234    -> "No identity configured yet.
+                             Run cin-portal-init-admin on the server first."
+GET  /                   -> 302, back to /login
+```
+
+Every route behind the gate redirects to a sign-in page that accepts nothing. The message is
+accurate and useless to its reader: `cin-portal-init-admin` is a console script that exists
+only after `pip install -e .` — which the launcher deliberately does not do, and which was
+proven unnecessary to run Dispatch — and running it is a Command Prompt task, the exact thing
+the launch-path mission existed to remove.
+
+**A running server behind a door nobody can open is worse than a server that does not start,
+because it looks like success.** The previous mission checked that Dispatch *starts*. It did
+not check that Mike could *get in*.
+
+### What was not done
+
+**No default PIN was introduced, and none ever should be.** A default PIN in a public
+repository is a PIN everybody knows — the same reasoning that makes this repository's
+published secrets report `UNCONFIGURED` rather than configured. The gate was not weakened,
+the one-time refusal in `bootstrap_authority()` was not relaxed, and no unauthenticated route
+that can create an identity was added.
+
+### What was done
+
+First run asks for a PIN in the launcher window — typed twice, echoed neither time, minimum
+four characters — and hands it to the existing `bootstrap_authority()`. It runs **before**
+Start, so the browser never opens onto a door that cannot be opened.
+
+The PIN is never printed, never logged, and never stored readably. Tests assert its absence
+from the rendered screen, from the report object, and from the security log; `set_pin` stores
+only a hash and the returned record carries none.
+
+A run with no keyboard — a scheduled task, a pipe, CI — does not hang waiting for a keystroke
+nobody will type. It starts Dispatch, marks the step `NOTE` rather than `STOP`, and says
+plainly that sign-in will not work until a PIN is set.
+
+### The ruling: a ninth control, lettered rather than numbered
+
+A forgotten PIN had no recovery path at all. `bootstrap_authority()` refuses once an identity
+exists, so the only way back into Dispatch was deleting `identity.json` by hand — which
+requires knowing that the file exists, where it lives, and that deleting it is safe.
+
+**`[P] Reset PIN` added to the Control Center.** The Control Center brief specifies eight
+controls in a stated order and says not to change settled control behaviour without a recorded
+ruling. This is that ruling, and it is deliberately the smallest possible change to the
+specification: **the eight keep their numbers and their order untouched.** The new control is
+lettered, following the convention `[Q] Quit` had already established. `MENU_ITEMS` still
+contains exactly the specified eight — a test asserts it — and the lettered controls live in a
+separate `EXTRA_ITEMS`.
+
+**It does not ask for the old PIN.** The person who needs it does not have it; that is the
+entire situation. What stands in for it:
+
+- **Physical access to the machine.** Stated plainly in `identity.set_pin`'s docstring rather
+  than left implied: anybody at that keyboard could already read `identity.json`, delete it,
+  or copy the whole database. A local reset grants no authority they did not already have — it
+  just means they do not have to destroy anything to use it. There is no route, no token, and
+  no remote caller, and adding one would change the trust basis completely.
+- **A typed `RESET`**, so a mis-keyed menu letter cannot trigger it.
+
+A reset **clears a lockout**, deliberately. Somebody locked out by failed attempts who then
+resets at the keyboard has demonstrated the only thing lockout protects against; leaving them
+locked for the rest of the window would punish the recovery.
+
+It touches nothing else — loads, milestones and evidence are untouched — and it is recorded in
+the security log as `PIN_CHANGED` with reason `reset`, distinguishing it from the bootstrap
+without inventing an event type the specification defers.
+
+### Verified end to end, over real HTTP
+
+A fresh install with no identity: PIN chosen at the prompt, identity created, `POST /login`
+with the wrong PIN refused, with the correct PIN returning 302, and `GET /home` returning 200
+on that session. Then five failed attempts to force a lockout, a confirmed reset, and the new
+PIN authenticating while the old one no longer did. No PIN value appeared in the identity
+file, the report, the screen, or the security log.
+
+**Reports:** `docs/readiness/LAUNCH_PATH.md` §5.1 · `docs/readiness/CONTROL_CENTER.md`
+
 
 ---
 
