@@ -28,6 +28,7 @@ replaces those documents; §1 tells you which one to open.
 
 | Document | What it is for |
 |---|---|
+| `docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md` | **Step one.** No copy on the machine yet: install Python, download, extract, start. |
 | `docs/readiness/LAUNCH_PATH.md` | **What to double-click.** Every launcher, which are current, and the evidence. |
 | `DISPATCH_FIRST_START_GUIDE.md` | Never started it before. Where the launcher lives and what first start does. |
 | `docs/operations/DISPATCH_OPERATOR_GUIDE.md` | Day-to-day operation. |

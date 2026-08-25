@@ -31,6 +31,13 @@ Current gaps, assumptions and the next blocker:
 
 ---
 
+## Never run Dispatch before? Start here
+
+**[docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md](docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md)**
+— install Python, download this repository, put it in `C:\Dispatch`, double-click one file.
+Written for somebody who is not a developer, including the Windows warnings you will hit on
+the way (SmartScreen will stop you once; the guide says what to click).
+
 ## Running it
 
 **On Windows** — double-click **`DISPATCH_START_HERE.cmd`**. That is the whole answer. It
@@ -109,6 +116,7 @@ is the full map.
 | [`DISPATCH_FIRST_START_GUIDE.md`](DISPATCH_FIRST_START_GUIDE.md) | Never started it before |
 | [`docs/operations/DISPATCH_OPERATOR_GUIDE.md`](docs/operations/DISPATCH_OPERATOR_GUIDE.md) | Day-to-day operation |
 | [`docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md`](docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md) | Backups, restores, upgrades, moving machines |
+| [`docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md`](docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md) | **Step one.** Getting Dispatch onto a Windows laptop from scratch |
 | [`docs/readiness/LAUNCH_PATH.md`](docs/readiness/LAUNCH_PATH.md) | What to click, and why that file |
 | [`docs/readiness/OPERATIONAL_PROOF.md`](docs/readiness/OPERATIONAL_PROOF.md) | What is proven, and what is not |
 | [`docs/readiness/KNOWN_LIMITATIONS.md`](docs/readiness/KNOWN_LIMITATIONS.md) | What is broken, missing or assumed |

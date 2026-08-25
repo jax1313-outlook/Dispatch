@@ -318,6 +318,7 @@ that implies otherwise is a defect.
 | | |
 |---|---|
 | Start here | `CLAUDE.md` (this file) |
+| Get Dispatch onto a laptop | `docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md` — step one; there is no copy on Mike's machine |
 | Start Dispatch | **Double-click `DISPATCH_START_HERE.cmd`.** Why that file and not `dispatch.bat`: `docs/readiness/LAUNCH_PATH.md` |
 | First start, in detail | `DISPATCH_FIRST_START_GUIDE.md` |
 | Architecture and the document map | `docs/architecture/DISPATCH_ARCHITECTURE.md` |

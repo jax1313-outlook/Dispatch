@@ -134,9 +134,21 @@ That is a defect in Dispatch, not a user error, and it is fixed:
 icon on the Desktop so the folder never has to be opened again. Full investigation and
 evidence: `docs/readiness/LAUNCH_PATH.md`.
 
-**What has not changed is that it has never been clicked on Windows.** The blocker is still
-a missing observation rather than a missing feature — but the thing to observe is now a file
-a non-developer can actually find.
+**Two things have to happen before it can be clicked, and neither had been established when
+this section was last written.**
+
+**There is no copy of Dispatch on Mike's laptop at all** (confirmed 2026-08-25). The step
+before the double-click is getting the code there:
+`docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md`.
+
+**`DISPATCH_START_HERE.cmd` is not on `main`.** It is on branch
+`claude/dispatch-repo-context-reconcile-7mblbb`. A ZIP downloaded from the repository's front
+page comes from `main` and does **not** contain it — so until that branch is merged, following
+the download guide produces the old folder with the findability problem intact. A pull
+request is open.
+
+The blocker is still a missing observation rather than a missing feature. What changed is
+that two prerequisites now stand in front of it, and both are recorded rather than assumed.
 
 Three outcomes, all useful:
 
@@ -146,5 +158,8 @@ Three outcomes, all useful:
   there in plain language, and the window is built not to close.
 - **Nothing happens at all.** The most informative of the three: Windows would not run the
   file, which means Python is missing or a security policy blocked it.
+
+Expect SmartScreen on the first double-click. It is not a fault; clicking "Don't run" makes
+Dispatch look broken when it is not.
 
 It cannot be done from a build container. It has to be done there.

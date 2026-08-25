@@ -313,16 +313,37 @@ container cannot, prove what happens when he clicks it.
 
 ## 10. The exact next step
 
-> **Open the Dispatch folder on the laptop, double-click `DISPATCH_START_HERE`, and write
-> down what happens — including if nothing does.**
+**There is no copy of Dispatch on Mike's laptop.** Confirmed 2026-08-25, after this document
+was first written. So the step below is not the first one — it is the second.
 
-Three outcomes, all useful:
+> **Step one: `docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md`.**
+> Install Python, download this repository, extract it to `C:\Dispatch`.
+>
+> **Step two: double-click `DISPATCH_START_HERE` and write down what happens — including
+> if nothing does.**
+
+An earlier draft of this section said only "open the Dispatch folder and double-click", which
+assumed a folder that does not exist. That assumption is the same class of mistake as the one
+this whole document exists to correct: describing a path from the repository's point of view
+rather than from the machine's.
+
+**One thing gates both steps.** `DISPATCH_START_HERE.cmd` is on branch
+`claude/dispatch-repo-context-reconcile-7mblbb`. A ZIP downloaded from the repository's front
+page comes from **`main`**, which does not contain it — so the download step produces the old
+folder, with `dispatch.bat` and the findability problem intact, until the branch is merged.
+
+Three outcomes of step two, all useful:
 
 - **A browser opens on the Dispatch sign-in page.** The launch path is proven. Item 1 of the
-  fifteen moves to `LIVE`, and the load proof becomes reachable.
-- **A window opens and says `DISPATCH DID NOT START`.** Send the window's contents. The
-  reason is named there in plain language.
-- **Nothing happens at all.** That is the most informative answer of the three, and it means
-  Windows would not run the file — Python missing, or a security policy. Say so exactly.
+  fifteen moves to `LIVE`, and the twenty-step load proof becomes reachable.
+- **A window opens saying `DISPATCH DID NOT START`.** Send its contents — the reason is named
+  there in plain language, and the window is built not to close.
+- **Nothing happens at all.** The most informative of the three: Windows would not run the
+  file, which means Python is missing or a security policy blocked it.
 
-There is no step before this one, and no way to do it from a build container.
+Expect **SmartScreen** ("Windows protected your PC") on the first double-click. It appears
+for every unsigned file downloaded from the internet and is not a fault; the guide says to
+click **More info → Run anyway**. Somebody who clicks "Don't run" sees nothing happen and
+concludes Dispatch is broken.
+
+None of this can be done from a build container.

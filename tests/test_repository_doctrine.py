@@ -559,6 +559,7 @@ REQUIRED_DOCUMENTS = {
     "docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md": "final authority",
     "docs/operations/DISPATCH_OPERATOR_GUIDE.md": "Reset Session",
     "docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md": "restore-verification.json",
+    "docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md": "Add Python to PATH",
     "docs/readiness/LAUNCH_PATH.md": "DISPATCH_START_HERE",
     "docs/readiness/OPERATIONAL_PROOF.md": "OPERATIONALLY PROVEN",
     "docs/readiness/KNOWN_LIMITATIONS.md": "next operational blocker",
