@@ -16,6 +16,7 @@ Two rules run through all of it:
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +26,26 @@ import pytest
 from dispatch_launcher import control, first_run
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+#: The PIN used by every "is it stored or printed in plaintext?" assertion.
+#:
+#: Those assertions are substring searches, and a short numeric PIN makes them a coin
+#: flip rather than a test. `generate_password_hash` renders a 128-character digest in
+#: hex -- an alphabet of `0-9a-f` that **contains every digit a numeric PIN is made
+#: of** -- so a 4-digit PIN appears inside an unrelated hash by pure chance about
+#: 0.19% of the time, or 0.57% across the three Python versions CI runs.
+#:
+#: That is not a hypothetical: `test_it_stores_a_hash_and_never_the_pin` failed exactly
+#: this way on py3.11 while 3.12 and 3.13 passed on the same commit, with `4417` found
+#: inside `...36a1beb2594417a13679761c...`. The code was correct; the assertion was
+#: unsound. A test that fails one run in 175 for a reason unrelated to the defect it
+#: guards teaches people to re-run CI, which is how a real failure gets waved through.
+#:
+#: This value contains characters that cannot occur in a hex digest at all, and is long
+#: enough that a chance match in the alphanumeric salt is not worth a number. A hit is
+#: therefore a real leak, which is the only thing the assertion should be able to mean.
+LEAK_PROBE_PIN = "leak-probe-pin-never-stored-in-plaintext"
 
 
 @pytest.fixture(autouse=True)
@@ -687,12 +708,16 @@ class TestSignInPin:
         self, _isolated_identity, monkeypatch
     ):
         monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
-        typed = iter(["8265", "8265"])
+        typed = iter([LEAK_PROBE_PIN, LEAK_PROBE_PIN])
         report = first_run.FirstRunReport()
         first_run.ensure_identity(report, getpass_fn=lambda _p: next(typed))
 
         blob = first_run.render(report) + repr(report)
-        assert "8265" not in blob, "the chosen PIN reached the report or the screen"
+        assert LEAK_PROBE_PIN not in blob, "the chosen PIN reached the report or the screen"
+        # The step must still be there and still say a PIN was set -- otherwise this
+        # test would pass just as well against code that silently did nothing.
+        assert report.steps[-1].changed
+        assert "Reset PIN" in report.steps[-1].detail
 
     def test_an_existing_pin_is_left_alone(self, _isolated_identity, monkeypatch):
         _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
@@ -837,13 +862,13 @@ class TestResetPin:
     def test_no_pin_value_ever_reaches_the_security_log(
         self, _isolated_identity, monkeypatch
     ):
-        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
+        _isolated_identity.bootstrap_authority("mike", "Mike Zachary", LEAK_PROBE_PIN)
         monkeypatch.setattr(first_run, "_interactive", lambda stream=None: True)
-        typed = iter(["4417", "4417"])
+        typed = iter([LEAK_PROBE_PIN + "-new", LEAK_PROBE_PIN + "-new"])
         first_run.reset_pin(input_fn=lambda _p: "RESET", getpass_fn=lambda _p: next(typed))
 
         log = _isolated_identity._security_log_path().read_text(encoding="utf-8")
-        assert "8265" not in log and "4417" not in log
+        assert LEAK_PROBE_PIN not in log, "a PIN value reached the security log"
         assert '"reason": "reset"' in log, "the reset was not recorded at all"
 
 
@@ -862,10 +887,19 @@ class TestSetPin:
 
     def test_it_stores_a_hash_and_never_the_pin(self, _isolated_identity):
         _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")
-        _isolated_identity.set_pin("mike", "4417")
+        _isolated_identity.set_pin("mike", LEAK_PROBE_PIN)
+
         raw = _isolated_identity._identity_path().read_text(encoding="utf-8")
-        assert "4417" not in raw
-        assert "pin_hash" in raw
+        assert LEAK_PROBE_PIN not in raw, "the PIN was written to disk in plaintext"
+        assert "8265" not in raw, "the previous PIN survived the reset"
+
+        # Structural, not just an absence: prove what *is* stored is a real hash that
+        # still authenticates. An absence assertion alone would also pass if set_pin
+        # had quietly stored nothing at all.
+        stored = json.loads(raw)["mike"]["pin_hash"]
+        assert stored.startswith("scrypt:")
+        assert stored != LEAK_PROBE_PIN
+        assert _isolated_identity.verify_pin("mike", LEAK_PROBE_PIN)
 
     def test_the_returned_record_carries_no_hash(self, _isolated_identity):
         _isolated_identity.bootstrap_authority("mike", "Mike Zachary", "8265")

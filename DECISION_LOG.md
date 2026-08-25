@@ -884,6 +884,39 @@ on that session. Then five failed attempts to force a lockout, a confirmed reset
 PIN authenticating while the old one no longer did. No PIN value appeared in the identity
 file, the report, the screen, or the security log.
 
+### A test of mine failed CI, and it was the test that was wrong
+
+`test_it_stores_a_hash_and_never_the_pin` failed on py3.11 while 3.12 and 3.13 passed on the
+same commit. Recorded because the diagnosis is the interesting part and the temptation was to
+call it a flake and re-run.
+
+The assertion was `assert "4417" not in <identity.json>`. `generate_password_hash` renders a
+128-character scrypt digest in **hex** — an alphabet of `0-9a-f` that contains every digit a
+numeric PIN is made of. So a 4-digit PIN appears inside an unrelated hash by pure chance about
+**0.19% of the time**, or 0.57% across the three Python versions CI runs. It did:
+
+```
+'4417' is contained here:
+    36a1beb2594417a13679761c6ed0d92c3335bc0e09e606a5115a936e8f78d263c00217d
+```
+
+The code was correct. The PIN was never stored in plaintext. The test could not tell the
+difference between "stored in plaintext" and "the hash happened to contain those four
+characters", because it asked the question in the same alphabet the answer is written in.
+
+**It was a flake, and that is exactly why it needed fixing rather than re-running.** A test
+that fails one run in 175 for a reason unrelated to the defect it guards is worse than no
+test: it teaches whoever sees it to re-run CI, which is how a genuine failure eventually gets
+waved through.
+
+Fixed by asking the question in an alphabet the answer cannot be written in. Every
+plaintext-leak assertion now uses `LEAK_PROBE_PIN`, a 40-character value containing `-` and
+letters outside `0-9a-f`, so a substring match in the digest is **impossible** rather than
+improbable, and it is longer than the 16-character salt so it cannot hide there either. The
+same test now also asserts structurally that what *is* stored starts with `scrypt:` and still
+authenticates — an absence assertion alone would pass equally well against code that stored
+nothing at all.
+
 **Reports:** `docs/readiness/LAUNCH_PATH.md` §5.1 · `docs/readiness/CONTROL_CENTER.md`
 
 
