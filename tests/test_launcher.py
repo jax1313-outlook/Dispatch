@@ -1230,6 +1230,49 @@ class TestWindowsEntryPoints:
             text = (REPO_ROOT / name).read_text(encoding="utf-8")
             assert "L2-COS" not in text
 
+    def test_a_double_clicked_window_always_waits_before_closing(self):
+        """Success included. This is the fix for a real report.
+
+        `dispatch.bat` used to pause only on a non-zero exit. `run_menu` returns 0 when it
+        reads EOF on stdin, so a window without usable keyboard input printed the entire
+        status block, quit cleanly, and vanished before any of it could be read -- reported
+        as *"a black screen that flashed and I almost could read"*, and the block it threw
+        away was the exact diagnostic that had been asked for.
+
+        A window that closes on its own has decided the operator did not need to see what
+        it said. That decision is not a wrapper's to make.
+        """
+        text = (REPO_ROOT / "dispatch.bat").read_text(encoding="utf-8")
+        held = text.split(":held_open", 1)[1]
+        # The pause must sit outside the non-zero branch, so it runs either way.
+        conditional = held.split("(", 1)[1].split(")", 1)[0] if "(" in held else ""
+        assert "pause" in held, "the double-click path no longer waits at all"
+        assert "pause" not in conditional, (
+            "pause is inside the error-only branch again -- a clean exit will close the "
+            "window and take the status block with it"
+        )
+
+    def test_the_powershell_wrapper_waits_too(self):
+        text = (REPO_ROOT / "Dispatch.ps1").read_text(encoding="utf-8")
+        assert "ReadLine()" in text
+        assert "if (-not $Action)" in text, (
+            "the wait must apply when no action was given -- that is the double-click case"
+        )
+
+    def test_the_menu_returning_zero_on_eof_is_why_this_matters(self):
+        """Pins the behaviour the wrapper fix compensates for.
+
+        If `run_menu` ever starts returning non-zero on EOF this test should be revisited
+        -- but the wrapper must keep waiting regardless, because a clean quit is also
+        something the operator may need to read.
+        """
+        from dispatch_launcher import cli
+
+        def _eof(_prompt):
+            raise EOFError
+
+        assert cli.run_menu(input_fn=_eof) == 0
+
     def test_the_wrappers_use_crlf_so_windows_can_run_them(self):
         for name in ("dispatch.bat", "Dispatch.ps1", "DISPATCH_START_HERE.cmd"):
             raw = (REPO_ROOT / name).read_bytes()

@@ -29,13 +29,22 @@ set "DISPATCH_EXIT=%ERRORLEVEL%"
 if "%~1"=="" goto :held_open
 exit /b %DISPATCH_EXIT%
 
-REM Double-clicked with no arguments: the console window closes the instant
-REM this file ends, so hold it open long enough to read the last message.
+REM Double-clicked with no arguments: the console window closes the instant this
+REM file ends, so it is held open UNCONDITIONALLY -- success included.
+REM
+REM It used to pause only on a non-zero exit, and that threw away the one thing
+REM the operator needed. `run_menu` returns 0 when it reads EOF on stdin, so a
+REM window without usable keyboard input printed the whole status block, quit
+REM cleanly, and disappeared before any of it could be read. Reported exactly
+REM that way: "a black screen that flashed and I almost could read".
+REM
+REM A window that closes on its own is a window that decided the operator did
+REM not need to see what it said. That decision is not this file's to make.
 :held_open
+echo.
 if not "%DISPATCH_EXIT%"=="0" (
-  echo.
   echo   Dispatch Launcher exited with code %DISPATCH_EXIT%.
   echo.
-  pause
 )
+pause
 exit /b %DISPATCH_EXIT%
