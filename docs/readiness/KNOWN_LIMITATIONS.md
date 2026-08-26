@@ -9,7 +9,34 @@ Companion documents: `docs/readiness/OPERATIONAL_PROOF.md` (what is proven) and
 
 ---
 
-## 0. Dispatch has now run on Windows — 2026-08-25
+## 0. Dispatch is operating on Mike's Windows laptop — 2026-08-25
+
+Sections 1 and 7 below were written when nothing had ever run on his machine. They are left
+in place rather than rewritten, so the change is visible.
+
+**It launches, signs in, and renders.** Double-click, first-run setup (idempotent on a
+second run), server started with a real process ID, browser opened, PIN accepted, `/home`
+rendering with the sidebar reading "Dispatch — Operations Cockpit". Every Control Center
+control reported working.
+
+**The cause of the earlier 500s is known and was never what I claimed.** Not a damaged
+database — his `dispatch.db` passes `integrity_check` — and nothing to do with the D: drive.
+He had **three copies of Dispatch**, and the one holding port 8080 all day was
+`C:\Dispatch\Dispatch\Dispatch-main`, whose extraction was incomplete: `dispatch\connectors`
+was missing entirely. `ModuleNotFoundError: No module named 'dispatch.connectors'`, on every
+page that opens the database. `/login` worked because it opens none.
+
+Deleting the broken copies and starting from the complete one fixed it.
+
+**Two lessons worth keeping.** A launcher that correctly refuses to start a second server
+will happily leave a *broken* first server running — the refusal is about the port, not about
+whether the running code is sound. And three rounds were spent on a corrupt-database theory
+that reproduced the symptom exactly; a truncated database and a missing module produce an
+identical page, and only the log distinguished them. The log existed from the first attempt.
+
+Detail: `docs/readiness/OPERATIONAL_PROOF.md`.
+
+## 1. What used to govern all the others
 
 Section 1 below was written when nothing had ever run on Mike's machine. That changed today
 and the sections are left in place rather than rewritten, so the change is visible.
@@ -31,7 +58,7 @@ an external drive. Not confirmed.
 
 Detail: `docs/readiness/OPERATIONAL_PROOF.md`.
 
-## 1. The one that governs all the others
+## 1. What used to govern all the others
 
 **Nothing in Dispatch has been run on Mike's machine.** Not one step. Every build session so
 far has executed in an isolated Linux container with no reachable Windows filesystem, so:
@@ -146,22 +173,24 @@ decided.
 
 ## 7. The exact next operational blocker
 
-> **Recover the traceback from Mike's machine, and find out why every page behind the login
-> gate returns 500 there and 200 here.**
+> **Record the fifteen first-start acceptance items in the form
+> `docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` asks for — the named command run, and its real
+> output written beside the item.**
 
-Updated 2026-08-25. The previous blocker — *"nobody has ever double-clicked
-`DISPATCH_START_HERE`"* — is **cleared**. He did. It worked. The launch path, Python
-resolution, Flask, the PIN prompt, the server and sign-in are all now backed by observation
-rather than by a test on Linux.
+Updated 2026-08-25. Everything that came before this is cleared. Dispatch launches, signs in
+and renders on the target machine.
 
-What replaced it is a real defect on real hardware, which is a much better problem to have.
+What remains is the gap between *"it worked"* and *a record that proves it worked*. Roughly
+half the fifteen items have no observation at all behind them yet — the full status block
+cross-checked against the portal, Stop confirming the process is gone, Restart proving the
+old one died, an orphan being reported rather than duplicated, a failed start explained in
+one sentence with secrets redacted, backup status, and **Reset Session refusing while
+Dispatch is running**, which is the one that matters most and is untouched.
 
-**The one action that unblocks the most:** `dispatch.bat` → `[3] Refresh Status`. It prints
-the database path, the operations root, the log directory, the mode, the secret status and
-the last start failure in one block. That names both the log's real location and, if the
-hypothesis in §0 is right, the cause.
+After that, and only after that, the twenty-step load proof
+(`docs/readiness/OPERATIONAL_PROOF_PROCEDURE.md`) — run as a **rehearsal** first, on records
+that can never pass for a live mission.
 
-Once the fix in §6 reaches his machine, the failing page will carry its own traceback and
-this round-trip stops being necessary at all.
+**Do not enter a real revenue load before the rehearsal passes.**
 
-It still cannot be done from a build container. It has to be done there.
+Still cannot be done from a build container. It has to be done there.

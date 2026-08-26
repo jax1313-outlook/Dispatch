@@ -6,6 +6,92 @@
 
 ---
 
+## 2026-08-25 — Dispatch is operating on Mike's Windows laptop
+
+**Recorded from output Mike pasted, verbatim.** This is the first evidence in this
+repository's history that is not a test result.
+
+```
+  DISPATCH
+
+    [OK  ] Dispatch folder
+           C:\Dispatch\Dispatch2\Dispatch-main
+    [OK  ] Security settings
+           This machine already has its own settings. Nothing was changed.
+    [OK  ] Flask
+           Already installed.
+    [OK  ] Sign-in PIN
+           Already set on this machine. Nothing was changed.
+    [OK  ] Start
+           Dispatch is running (process ID 14688) at http://127.0.0.1:8080
+    [OK  ] Desktop shortcut
+           The Dispatch icon is already on your Desktop.
+    [OK  ] Open in browser
+           Opened http://127.0.0.1:8080 in your browser.
+
+    Dispatch is RUNNING at http://127.0.0.1:8080
+```
+
+The portal then rendered `/home` in his browser, with the sidebar reading
+**"Dispatch — Operations Cockpit"**. He reports exercising the Control Center menu and
+that every control functioned.
+
+### What this establishes
+
+| | |
+|---|---|
+| The launch file runs when double-clicked, with no command typed | **observed** |
+| Windows resolves a Python interpreter (3.14, via `py -3`) | **observed** |
+| Flask is found | **observed** |
+| First-run setup is **idempotent** — it recognised existing settings, PIN and shortcut and changed nothing | **observed** |
+| Start reports a real process ID and a real address | **observed** |
+| The Desktop shortcut created on a previous run persisted | **observed** |
+| The browser opens on the portal | **observed** |
+| The window stays open rather than closing | **observed** |
+| A second Start refuses **by identity** rather than starting a duplicate | **observed** (earlier run: *"already running (process ID 126112). Nothing was started."*) |
+| The portal renders `/home` and the operator can sign in with his PIN | **observed** |
+
+Every value on that screen was read from his machine. None was hard-coded.
+
+### What it does **not** establish, and why the fifteen stay UNVERIFIED
+
+`docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` asks for something specific: for each numbered
+item, the named command run and **its real output pasted into the Observed column by the
+person who ran it**. That has not been done, so no item is marked `LIVE` here.
+
+This is not pedantry about paperwork. The items not yet covered by any observation are:
+
+- **Item 2** — the full status block (`Refresh Status`), cross-checked against what the
+  portal itself prints. The database path and storage roots have never been read off that
+  screen.
+- **Items 4, 5, 6** — Stop confirming the process is gone; Restart proving the old process
+  died first; an orphan being reported rather than duplicated.
+- **Item 7** — a failed start explained in one sentence, with the trace in the log and
+  secrets redacted.
+- **Item 8** — backup status reported honestly.
+- **Items 10, 12, 13** — glyph rendering on his code page, `settings` exiting non-zero while
+  blocking, and `version` reporting the running commit.
+- **Items 14, 15** — Reset Session refusing while Dispatch is running. **The most important
+  one**, and untouched.
+
+"He said the controls all worked" is a good sign. It is not a record of what each one
+printed, and the difference is the entire point of this document.
+
+### The defect this run also found
+
+`/home` displays two freight Opportunity Cards — *Dry Van, Jacksonville FL → Savannah GA,
+$625, Southeast Freight Partners* — while the `ACTIVE LOADS` counter above reads **0**.
+
+Both are correct: the cards are possibilities from `sandbox.json`, the counter is committed
+reality, and the separation is working as `DISPATCH_PURPOSE_STATEMENT.md` requires. But
+`sandbox.json` holds **four bundled sample entries**, and a card carrying a lane, a rate and
+a broker reads as a real load with nothing on screen saying otherwise.
+
+`CLAUDE.md` §6: *never represent sample data as live data.* This is judged to fail that, and
+is awaiting Mike's decision — label the samples, or clear them.
+
+---
+
 ## 2026-08-25 — Dispatch ran on Windows for the first time
 
 **The one-line answer below is no longer the whole truth, and this section is why.**
