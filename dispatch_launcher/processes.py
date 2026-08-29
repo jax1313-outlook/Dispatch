@@ -348,6 +348,18 @@ def find_portal_processes(*, exclude: tuple[int, ...] = ()) -> list[ProcessFacts
     Returns None -- meaning UNAVAILABLE, not "none found" -- when the platform
     will not enumerate processes. The difference matters: "there is no orphan"
     and "I could not look" must never render as the same sentence.
+
+    **That distinction leaked once, and this is the repair.** A query can succeed,
+    return a full list of processes, and still carry no command line for any of
+    them -- Windows omits `CommandLine` for processes the caller may not inspect,
+    and matching needs the command line. Every row then fails `looks_like_portal`
+    and the scan returns `[]`, which renders as "nothing is running" when the
+    truth is "I could not read enough to tell".
+
+    Reported by an operator whose Dispatch page was loading in a browser while
+    both Start and Stop insisted no Dispatch-looking process existed. So a scan
+    that reads not one command line now reports UNAVAILABLE, the same as a scan
+    that could not run at all -- because that is what it is.
     """
     if IS_WINDOWS:  # pragma: no cover - Windows-only branch
         return _windows_portal_processes(exclude)
@@ -359,6 +371,9 @@ def _posix_portal_processes(exclude: tuple[int, ...]) -> list[ProcessFacts] | No
     if not proc_root.is_dir():
         return None
     found: list[ProcessFacts] = []
+    #: How many processes we could actually read a command line for. Zero means
+    #: the scan learned nothing, which is UNAVAILABLE rather than "none found".
+    readable = 0
     for entry in proc_root.iterdir():
         if not entry.name.isdigit():
             continue
@@ -370,9 +385,13 @@ def _posix_portal_processes(exclude: tuple[int, ...]) -> list[ProcessFacts] | No
         except OSError:
             continue  # the process exited between listdir and read
         command_line = raw.replace(b"\x00", b" ").decode("utf-8", "replace").strip()
+        if command_line:
+            readable += 1
         facts = ProcessFacts(pid=pid, alive=True, command_line=command_line, source="proc")
         if facts.looks_like_portal:
             found.append(facts)
+    if not readable:
+        return None
     return found
 
 
@@ -391,6 +410,7 @@ def _windows_portal_processes(  # pragma: no cover - Windows-only branch
     if completed is None or completed.returncode != 0:
         return None
     found: list[ProcessFacts] = []
+    readable = 0
     for line in completed.stdout.splitlines():
         pid_text, _, _rest = line.partition("|")
         if not pid_text.strip().isdigit():
@@ -399,10 +419,14 @@ def _windows_portal_processes(  # pragma: no cover - Windows-only branch
         if pid in exclude or pid == os.getpid():
             continue
         created, command_line = parse_cim_line(line)
+        if command_line:
+            readable += 1
         facts = ProcessFacts(
             pid=pid, alive=True, command_line=command_line,
             created_token=created, source="cim",
         )
         if facts.looks_like_portal:
             found.append(facts)
+    if not readable:
+        return None
     return found

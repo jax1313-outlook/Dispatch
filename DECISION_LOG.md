@@ -1099,3 +1099,58 @@ orphaned server — has still never been exercised.
 **Note:** JOE is unaffected. It cannot send at all — Article II of the Assistant Plugin Constitution has eight permitted functions and transmission is not one of them.
 
 ---
+
+## 2026-08-29 — Three defects found by an operator who went looking for a file to double-click
+
+**PR:** (this change)
+**Capability:** `dispatch_launcher` — orphan detection, Stop, and the second front door.
+**Reported by:** Mike, from his own screen output, on 2026-08-29.
+
+**What happened.** Mike could not start Dispatch: *"port 8080 is already in use"*. He had
+gone looking through folders for a `.bat` or run file and double-clicked one. The Control
+Center then showed, on one screen:
+
+- `Dispatch  STOPPED — Something is already answering on port 8080, but this launcher did
+  not start it.`
+- and, from `[8] Stop Dispatch` seconds later: `Dispatch is not running. Nothing to stop.`
+
+Meanwhile the portal page loaded correctly in his browser.
+
+**Three defects, each with a mechanism rather than a theory.**
+
+1. **`run_portal.bat` was a second front door on the same port.** It ran
+   `python portal\app.py` directly — a real Dispatch server on 8080 with no PID record, no
+   Stop and no owning window. A launcher that refuses to start a second server is defeated
+   by a file beside it that starts one without asking, and its own comment saying
+   "superseded" is not a guard. It now hands over to `DISPATCH_START_HERE.cmd`. The
+   unmanaged path remains available to a developer as `python portal/app.py`, which is a
+   deliberate act rather than a double-click.
+
+2. **Stop claimed success for doing nothing.** In the `NO_RECORD` branch it reported
+   *"Dispatch is not running. Nothing to stop"* whenever the process scan came back empty,
+   without ever consulting the port — the same port the status block two inches above had
+   just reported as occupied. Two sources, never reconciled, and the reassuring one
+   answered the question the operator actually asked. Stop now says "nothing to stop" only
+   when nothing is listening, and otherwise reports that it stopped nothing and why.
+
+3. **The process scan could not tell "none found" from "I could not look".** The module
+   docstring already drew that distinction and returns `None` for UNAVAILABLE — but a scan
+   that *succeeds* while returning no readable command line for any process produces `[]`,
+   which renders as "nothing is running". Windows omits `CommandLine` for processes the
+   caller may not inspect. Both scanners now return `None` when they read not one command
+   line, because that is what UNAVAILABLE means.
+
+**Standing lesson, and it is the second time this shape has appeared.** The first was the
+seven-hour HTTP 500 on 2026-08-25, where the log named the fault and went unread. This one
+is its inverse: the launcher held two facts that contradicted each other and rendered the
+comfortable one. **A control that reports success for doing nothing is the 70 MPH failure
+in `CLAUDE.md` §3, and it is not made acceptable by being technically true of the one
+source it happened to consult.**
+
+**Not changed, and open:** the portal displays no build identity — `portal.__version__` is
+`0.1.0` regardless of commit, and Mike's folder is an extracted ZIP rather than a git
+checkout, so `Commit` reads `UNVERIFIED` by construction. *Which copy is this?* remains
+unanswerable from any screen. That is the same question behind the seven-hour failure and
+behind this one, and it is recorded here as still open rather than fixed.
+
+---

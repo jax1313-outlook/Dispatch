@@ -326,7 +326,9 @@ def _spawn_command() -> list[str]:
     """The exact command that starts a Dispatch server.
 
     `portal/app.py` run as a script, which is the way the repository has always
-    documented and the way `run_portal.bat` already does it. The launcher does
+    documented. (`run_portal.bat` used to do the same thing directly and no
+    longer does: an unmanaged second front door on the same port produced a real
+    orphan, so it hands over to the launcher instead.) The launcher does
     not import `portal.app` and does not construct the Flask app itself: a
     control that builds the application inside its own process is no longer a
     control, and would put the whole service layer one import away.
@@ -537,6 +539,62 @@ def _last_lines(text: str, count: int = 5) -> str:
     return "\n".join(lines[-count:])
 
 
+def _stop_with_no_record_of_ours(*, found_none: bool) -> ControlResult:
+    """Stop, when the launcher owns nothing -- reconciled against the port.
+
+    **This is the repair for a contradiction an operator read on one screen.** The
+    status block said *"Something is already answering on port 8080, but this
+    launcher did not start it"*, and `[8] Stop Dispatch`, chosen seconds later,
+    said *"Dispatch is not running. Nothing to stop."* Both sentences came from
+    this program. The first is a port probe; the second was a process scan; nothing
+    reconciled them, and the reassuring one is the one that answered the question
+    he actually asked.
+
+    "Nothing to stop" is now said only when nothing is listening. When something
+    holds the address, Stop reports that it did not stop it -- and says whether the
+    process scan came back empty or came back blind, because those call for
+    different next steps.
+    """
+    facts = probe.probe_runtime()
+    listening = (
+        facts.port is not None
+        and facts.host != probe.UNVERIFIED
+        and processes.port_in_use(facts.host, facts.port)
+    )
+    if not listening:
+        return ControlResult(
+            action="stop", ok=True,
+            message="Dispatch is not running. Nothing to stop.",
+        )
+
+    details = [
+        f"Something is listening on {facts.host}:{facts.port}, and this launcher "
+        "has no record of starting it.",
+    ]
+    if found_none:
+        details.append(
+            "No process on this machine looks like a Dispatch server, so the "
+            "address is most likely held by another program."
+        )
+    else:
+        details.append(
+            "The launcher could not read this machine's process list, so it cannot "
+            "say which program holds the address."
+        )
+    details.append(
+        "Nothing was stopped. Find the program holding the address and close it, "
+        "or restart the computer."
+    )
+    return ControlResult(
+        action="stop", ok=False,
+        message=(
+            "Dispatch was not stopped: something is answering on its address that "
+            "this launcher did not start."
+        ),
+        details=details,
+    )
+
+
 def stop(
     *,
     timeout: float = STOP_TIMEOUT_SECONDS,
@@ -560,10 +618,7 @@ def stop(
                     "Stop it in Task Manager if it should not be running."
                 ],
             )
-        return ControlResult(
-            action="stop", ok=True,
-            message="Dispatch is not running. Nothing to stop.",
-        )
+        return _stop_with_no_record_of_ours(found_none=orphans is not None)
 
     if ownership.state == STALE_DEAD:
         pidfile.clear_record()

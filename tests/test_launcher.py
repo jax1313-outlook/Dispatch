@@ -1209,6 +1209,104 @@ class TestCommandLine:
         assert any("does not appear to be running" in detail for detail in result.details)
 
 
+# ── the scan says "I could not look", not "nothing is there" ───────────
+
+
+class TestAScanThatReadsNothingIsUnavailable:
+    """`None` means UNAVAILABLE and `[]` means none found -- and that leaked.
+
+    A scan can succeed, return every process on the machine, and still carry no
+    command line for any of them. Matching needs the command line, so every row
+    fails and the scan returns `[]` -- which renders as "nothing is running" when
+    the truth is "I could not read enough to tell". Reported by an operator whose
+    Dispatch page was loading in a browser while Start and Stop both insisted no
+    Dispatch-looking process existed.
+    """
+
+    def test_a_scan_that_reads_no_command_line_reports_unavailable(self, tmp_path, monkeypatch):
+        proc_root = tmp_path / "proc"
+        (proc_root / "4242").mkdir(parents=True)
+        (proc_root / "4242" / "cmdline").write_bytes(b"")
+
+        monkeypatch.setattr(processes, "Path", lambda p: proc_root if p == "/proc" else Path(p))
+
+        assert processes._posix_portal_processes(()) is None, (
+            "no readable command line means the scan learned nothing, which is "
+            "UNAVAILABLE -- not an empty result"
+        )
+
+    def test_a_scan_that_reads_command_lines_and_finds_none_returns_empty(
+        self, tmp_path, monkeypatch
+    ):
+        proc_root = tmp_path / "proc"
+        (proc_root / "4242").mkdir(parents=True)
+        (proc_root / "4242" / "cmdline").write_bytes(b"/usr/bin/some-editor\x00notes.txt")
+
+        monkeypatch.setattr(processes, "Path", lambda p: proc_root if p == "/proc" else Path(p))
+
+        assert processes._posix_portal_processes(()) == [], (
+            "a command line was read and did not match, which is a real 'none found'"
+        )
+
+    def test_a_readable_portal_process_is_still_found(self, tmp_path, monkeypatch):
+        proc_root = tmp_path / "proc"
+        (proc_root / "4242").mkdir(parents=True)
+        (proc_root / "4242" / "cmdline").write_bytes(b"python\x00/opt/dispatch/portal/app.py")
+        (proc_root / "4242" / "stat").write_text("4242 (python) S " + " ".join("0" * 1 for _ in range(30)))
+
+        monkeypatch.setattr(processes, "Path", lambda p: proc_root if p == "/proc" else Path(p))
+
+        found = processes._posix_portal_processes(())
+        assert found is not None and [f.pid for f in found] == [4242]
+
+
+# ── Stop tells the truth about the port ────────────────────────────────
+
+
+class TestStopReconcilesWithThePort:
+    """One screen said two things. This is the repair.
+
+    The status block said *"Something is already answering on port 8080, but this
+    launcher did not start it"*. `[8] Stop Dispatch`, seconds later, said
+    *"Dispatch is not running. Nothing to stop."* Both came from this program.
+    """
+
+    def test_nothing_to_stop_only_when_nothing_is_listening(self, monkeypatch):
+        monkeypatch.setattr(control.processes, "find_portal_processes", lambda: [])
+        monkeypatch.setattr(control.processes, "port_in_use", lambda host, port: False)
+
+        result = control.stop()
+
+        assert result.ok is True
+        assert result.message == "Dispatch is not running. Nothing to stop."
+
+    def test_it_refuses_to_claim_success_while_something_answers(self, monkeypatch):
+        monkeypatch.setattr(control.processes, "find_portal_processes", lambda: [])
+        monkeypatch.setattr(control.processes, "port_in_use", lambda host, port: True)
+
+        result = control.stop()
+
+        assert result.ok is False, "nothing was stopped, so this may not report success"
+        assert "not stopped" in result.message
+        assert "Nothing to stop" not in result.message
+
+    def test_it_says_whether_the_scan_was_empty_or_blind(self, monkeypatch):
+        monkeypatch.setattr(control.processes, "port_in_use", lambda host, port: True)
+
+        monkeypatch.setattr(control.processes, "find_portal_processes", lambda: [])
+        empty = control.stop()
+
+        monkeypatch.setattr(control.processes, "find_portal_processes", lambda: None)
+        blind = control.stop()
+
+        assert any("another program" in d for d in empty.details)
+        assert any("could not read" in d for d in blind.details)
+        assert empty.details != blind.details, (
+            "'nothing looks like Dispatch' and 'I could not look' need different "
+            "next steps and must never render as the same sentence"
+        )
+
+
 # ── the Windows entry points exist and stay thin ───────────────────────
 
 class TestWindowsEntryPoints:
@@ -1231,6 +1329,7 @@ class TestWindowsEntryPoints:
             "Dispatch.ps1",
             "DISPATCH_START_HERE.cmd",
             "DISPATCH_OPEN_PORTAL.cmd",
+            "run_portal.bat",
         ):
             text = (REPO_ROOT / name).read_text(encoding="utf-8")
             assert "L2-COS" not in text
@@ -1294,6 +1393,24 @@ class TestWindowsEntryPoints:
             if line.strip() and not line.strip().upper().startswith("REM")
         )
 
+    def test_run_portal_no_longer_starts_a_server_of_its_own(self):
+        """The second front door, closed.
+
+        `run_portal.bat` ran `python portal\\app.py` directly: a real Dispatch server
+        on port 8080 that the launcher had no record of. An operator hunting for a
+        "run" file to double-click found it, and the result was a server holding the
+        port with no window to stop it, a Start that refused forever, and a Stop that
+        said there was nothing to stop.
+
+        A launcher that refuses to start a second server is defeated by a file beside
+        it that starts one without asking.
+        """
+        commands = self._executable_lines("run_portal.bat")
+
+        assert "portal\\app.py" not in commands
+        assert "app.py" not in commands
+        assert "DISPATCH_START_HERE.cmd" in commands
+
     def test_the_open_file_exists_and_holds_no_logic(self):
         """It is a double-clickable file, so it is untestable and must stay trivial."""
         text = (REPO_ROOT / "DISPATCH_OPEN_PORTAL.cmd").read_text(encoding="utf-8")
@@ -1331,6 +1448,7 @@ class TestWindowsEntryPoints:
             "Dispatch.ps1",
             "DISPATCH_START_HERE.cmd",
             "DISPATCH_OPEN_PORTAL.cmd",
+            "run_portal.bat",
         ):
             raw = (REPO_ROOT / name).read_bytes()
             assert b"\r\n" in raw
