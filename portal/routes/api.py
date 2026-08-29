@@ -50,23 +50,44 @@ def card_action():
 
         booking_conflicts = conflict.check_booking_conflicts(entry["card_data"], sandbox_id)
 
+        # ACCEPT LOAD - the human commitment event.
+        #
+        # This used to call create_load(), which minted a NEW load_id and
+        # copied the card's broker, origin, destination, windows and equipment
+        # into it. From that moment two records existed, joined one-way by
+        # engine_load_id, and the opportunity's research, scoring, negotiation
+        # history and Route Risk stopped travelling with the mission they had
+        # produced.
+        #
+        # The operational row is now opened under the RECORD'S OWN ID. Nothing
+        # is minted, so no second record can exist. The same record simply
+        # acquires operational state and an internal Mission Number.
         from dispatch import services as dispatch_svc
+        from dispatch import mission as mission_svc
+
         cd = entry["card_data"]
-        engine_load = dispatch_svc.create_load(
-            customer=cd.get("broker", cd.get("broker_shipper", entry.get("title", ""))),
-            broker_shipper=cd.get("broker", ""),
-            pickup_location=cd.get("origin", ""),
-            delivery_location=cd.get("destination", ""),
+        try:
+            updated = mission_svc.accept_load(
+                sandbox_id, sandbox, dispatch_svc, None)
+        except mission_svc.MissionError as error:
+            return jsonify({"error": str(error)}), 409
+
+        # Operational detail the driver needs, written onto the same row.
+        dispatch_svc.update_load(
+            sandbox_id,
             pickup_datetime=_extract_window_start(cd.get("pickup_window", "")),
             delivery_datetime=_extract_window_start(cd.get("delivery_window", "")),
-            equipment=cd.get("equipment_required", ""),
             notes=_build_booking_notes(cd, entry),
         )
-        _auto_rate_confirm(dispatch_svc, engine_load["load_id"], cd)
-        sandbox.link_engine_load(sandbox_id, engine_load["load_id"])
-        updated = sandbox.update_status(sandbox_id, "BOOKED",
-                                        note=f"Booked as engine load {engine_load['load_id']}")
-        resp = {"status": "ok", "entry": updated, "engine_load": engine_load}
+        _auto_rate_confirm(dispatch_svc, sandbox_id, cd)
+        engine_load = dispatch_svc.get_load(sandbox_id)
+        resp = {
+            "status": "ok",
+            "entry": updated,
+            "engine_load": engine_load,
+            "mission_number": updated.get("mission_number"),
+            "load_number": mission_svc.external_load_number(updated),
+        }
         if booking_conflicts:
             resp["warnings"] = [c["explanation"] for c in booking_conflicts]
         return jsonify(resp)

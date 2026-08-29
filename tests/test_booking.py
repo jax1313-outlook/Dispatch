@@ -98,16 +98,50 @@ def sam_entry():
 
 
 class TestBookAction:
-    def test_book_creates_engine_load(self, client, dispatch_entry):
+    def test_accept_load_does_not_create_a_second_record(self, client, dispatch_entry):
+        """ACCEPT LOAD commits the SAME record. It mints nothing.
+
+        This test previously asserted the opposite - that booking produced a
+        new id beginning "LOAD-". That was the two-record behaviour: a fresh
+        load was minted, the card's fields were copied into it, and the two
+        were joined by a one-way pointer. Mission Record doctrine forbids it:
+
+            Do not create a second operational record.
+            Do not copy the Opportunity Record into a new Mission Record.
+
+        So the assertion is inverted rather than removed. The operational row
+        must carry the record's OWN id, which is the property that makes a
+        second record impossible.
+        """
+        record_id = dispatch_entry["id"]
         resp = client.post("/api/action", json={
-            "sandbox_id": dispatch_entry["id"],
+            "sandbox_id": record_id,
             "action": "book",
         })
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["status"] == "ok"
         assert "engine_load" in data
-        assert data["engine_load"]["load_id"].startswith("LOAD-")
+
+        # One identity, before and after commitment.
+        assert data["engine_load"]["load_id"] == record_id
+        assert not data["engine_load"]["load_id"].startswith("LOAD-")
+        assert data["entry"]["engine_load_id"] == record_id
+
+    def test_accept_load_assigns_an_internal_mission_number(self, client, dispatch_entry):
+        """Numeric, four digits at most, and distinct from the broker's own
+        reference. Mission 1847 is ours; Load 847261 is theirs."""
+        resp = client.post("/api/action", json={
+            "sandbox_id": dispatch_entry["id"],
+            "action": "book",
+        })
+        data = resp.get_json()
+        number = data["mission_number"]
+        assert isinstance(number, int)
+        assert 1 <= number <= 9999
+        assert str(number).isdigit()
+        # The external reference is preserved separately and never overwritten.
+        assert data["load_number"] != str(number)
 
     def test_book_updates_sandbox_status(self, client, dispatch_entry):
         resp = client.post("/api/action", json={

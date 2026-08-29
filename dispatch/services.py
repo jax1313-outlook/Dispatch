@@ -1295,6 +1295,26 @@ def get_fleet_summary() -> dict:
     }
 
 
+
+def create_load_with_id(load_id: str, customer: str = "", **fields) -> dict:
+    """Open an operational row under an identity that already exists.
+
+    This is the whole of the "same record" doctrine, in one argument.
+
+    create_load() mints a new load_id, and the booking path used to call it -
+    producing a second record that had to be pointed back at the first. Here
+    the caller supplies the identity of the record being committed, so the
+    Opportunity Record simply acquires operational state. Nothing is minted and
+    nothing is joined.
+
+    Load.load_id is only auto-generated when it is empty, so passing it through
+    is enough to keep one key for the life of the mission.
+    """
+    if not str(load_id or "").strip():
+        raise ValueError("create_load_with_id requires the record's own id")
+    load = Load(load_id=str(load_id), customer=customer, **fields)
+    return store.create_load(load)
+
 def get_load_bundle(load_id: str) -> dict | None:
     load = store.get_load(load_id)
     if not load:

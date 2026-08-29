@@ -167,6 +167,51 @@ def set_inquiry_draft(sandbox_id: str, draft: dict) -> dict:
     return data[sandbox_id]
 
 
+
+def mark_accepted(sandbox_id: str, mission_number: int) -> dict:
+    """ACCEPT LOAD, recorded on the record itself.
+
+    The record does not move, and it is not copied. It gains an internal
+    Mission Number and a commitment timestamp, and its purpose becomes
+    MISSION. Everything already attached to it - research, negotiation
+    history, scoring, intelligence, documents - stays attached, because it
+    never went anywhere.
+    """
+    data = _load()
+    entry = data.get(sandbox_id)
+    if not entry:
+        raise KeyError(sandbox_id)
+    if entry.get("accepted_at"):
+        return entry
+
+    now = _utc_now()
+    entry["mission_number"] = int(mission_number)
+    entry["accepted_at"] = now
+    # The record's operational identity is itself. Kept as a field because
+    # _sync_booked_entries() and the brief view read it, and because it makes
+    # the doctrine visible in the data: a record whose engine_load_id equals
+    # its own id has not been copied anywhere.
+    entry["engine_load_id"] = sandbox_id
+    entry["status"] = "BOOKED"
+    entry["updated_at"] = now
+    entry.setdefault("events", []).append({
+        "action": "accepted",
+        "status": "BOOKED",
+        "timestamp": now,
+        "note": "ACCEPT LOAD - this record is now Mission %d" % int(mission_number),
+    })
+    # Kept under its original name so existing readers of the booking history
+    # still find it. The note says what actually happened.
+    entry["events"].append({
+        "action": "engine_linked",
+        "status": "BOOKED",
+        "timestamp": now,
+        "note": "Operational state opened on this same record (%s). No second "
+                "record was created." % sandbox_id,
+    })
+    _save(data)
+    return entry
+
 def link_engine_load(sandbox_id: str, engine_load_id: str) -> dict:
     """Store an engine load_id on a sandbox entry after booking."""
     data = _load()

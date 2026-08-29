@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark" />
+<title>Level 1 Transport — Planning Mode v1.0 Intelligence Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        navy: { 900: '#0a0f1a', 800: '#0f1624', 700: '#151d30', 600: '#1a2540', 500: '#1f2d4d' },
+        electric: { DEFAULT: '#1e90ff', dim: '#1e90ff99', glow: '#1e90ff33' },
+        go: { DEFAULT: '#00e676', dim: '#00e67699' },
+        caution: { DEFAULT: '#ffab40', dim: '#ffab4099' },
+        alert: { DEFAULT: '#ff3d3d', dim: '#ff3d3d99' },
+        muted: { DEFAULT: '#8899aa', light: '#aabbcc', dark: '#667788' },
+      },
+      fontFamily: {
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --navy-900: #0a0f1a;
+    --navy-800: #0f1624;
+    --navy-700: #151d30;
+    --navy-600: #1a2540;
+    --electric: #1e90ff;
+    --go: #00e676;
+    --caution: #ffab40;
+    --alert: #ff3d3d;
+    --muted: #8899aa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--navy-800);
+    color: #c8d6e5;
+    font-family: 'Inter', system-ui, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+  }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .blink { animation: blink 1.5s ease-in-out infinite; }
+  @keyframes pulse-glow { 0%,100%{box-shadow:0 0 4px #00e676} 50%{box-shadow:0 0 16px #00e676, 0 0 32px #00e67644} }
+  .pulse-go { animation: pulse-glow 2s ease-in-out infinite; }
+  @keyframes radar-sweep {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .radar-sweep { animation: radar-sweep 6s linear infinite; }
+  @keyframes refresh-spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+  .refresh-spinning i { animation: refresh-spin 1s linear infinite; }
+  .card {
+    background: var(--navy-700);
+    border: 1px solid #1e2d44;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #1e2d44;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--electric);
+  }
+  .card-body { padding: 16px; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-go { background: #00e67622; color: var(--go); border: 1px solid #00e67644; }
+  .badge-caution { background: #ffab4022; color: var(--caution); border: 1px solid #ffab4044; }
+  .badge-alert { background: #ff3d3d22; color: var(--alert); border: 1px solid #ff3d3d44; }
+  .badge-blue { background: #1e90ff22; color: var(--electric); border: 1px solid #1e90ff44; }
+  table.intel-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.intel-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #1e2d44;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  table.intel-table th:hover { color: var(--electric); }
+  table.intel-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #111a2e;
+    font-variant-numeric: tabular-nums;
+  }
+  table.intel-table tr:hover td { background: #1a253899; }
+  .tab-btn-nav {
+    padding: 8px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab-btn-nav:hover { color: #c8d6e5; background: #1a254066; }
+  .tab-btn-nav.active {
+    color: var(--electric);
+    background: #1e90ff15;
+    border-color: #1e90ff44;
+  }
+  .timeline-item {
+    position: relative;
+    padding-left: 36px;
+    padding-bottom: 20px;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 24px;
+    bottom: 0;
+    width: 1px;
+    background: #1e2d44;
+  }
+  .timeline-item:last-child::before { display: none; }
+  .timeline-dot {
+    position: absolute;
+    left: 4px;
+    top: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--electric);
+    background: var(--navy-700);
+  }
+  .expand-card { cursor: pointer; transition: all 0.2s; }
+  .expand-card:hover { border-color: #1e90ff66; }
+  .expand-detail { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+  .expand-detail.open { max-height: 200px; }
+  .sort-arrow { display: inline-block; margin-left: 4px; font-size: 9px; color: var(--electric); }
+  @media (max-width: 767px) {
+    .header-bar { flex-direction: column; gap: 8px; text-align: center; }
+    .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
+</style>
+</head>
+<body data-id="0" class="flex flex-col min-h-screen">
+<app-icon data-id="1" hidden data-icon="layout-dashboard" data-palette="Dark"></app-icon>
+
+<!-- HEADER BAR -->
+<header data-id="2" id="header-bar-j4k2" class="header-bar sticky top-0 z-50 flex items-center justify-between px-4 md:px-6 py-3 border-b border-[#1e2d44]" style="background:linear-gradient(180deg,#0d1320,#0f1624);">
+  <div data-id="3" id="header-left-a1b2" class="flex items-center gap-2">
+    <i data-id="4" data-lucide="truck" class="w-5 h-5 text-electric"></i>
+    <span data-id="5" class="font-mono text-[11px] tracking-[0.12em] text-electric uppercase font-semibold">L1T Planning Agent v1.0</span>
+  </div>
+  <div data-id="6" id="header-center-c3d4" class="hidden md:flex items-center gap-2">
+    <span data-id="7" class="w-2 h-2 rounded-full bg-caution blink inline-block"></span>
+    <span data-id="8" class="font-mono text-[11px] tracking-[0.06em] text-caution uppercase">Planning Mode — Intelligence Cycle Active</span>
+  </div>
+  <div data-id="9" id="header-right-e5f6" class="hidden md:flex flex-col items-end gap-0.5">
+    <span data-id="10" class="font-mono text-[10px] text-muted tracking-wider">CYCLE DATE: TUE 12 MAY 2026 | <span data-id="11" id="clock-display-x1y2" class="text-[#c8d6e5]">23:23 EDT</span></span>
+    <span data-id="12" class="font-mono text-[10px] text-muted tracking-wider">NEXT PRIMARY: <span data-id="13" class="text-go">THU 14 MAY 09:00</span></span>
+  </div>
+  <button data-id="14" id="mobile-menu-btn-g7h8" class="md:hidden p-2 text-muted">
+    <i data-id="15" data-lucide="menu" class="w-6 h-6"></i>
+  </button>
+</header>
+
+<!-- MOBILE MENU -->
+<nav data-id="16" id="mobile-menu-i9j0" class="hidden fixed inset-0 z-[60] flex flex-col p-5" style="background:#0a0f1aee;">
+  <div data-id="17" class="flex justify-between items-center mb-6">
+    <span data-id="18" class="font-mono text-xs text-electric uppercase tracking-wider">L1T Navigation</span>
+    <button data-id="19" id="mobile-menu-close-k1l2" class="p-2 text-muted"><i data-id="20" data-lucide="x" class="w-6 h-6"></i></button>
+  </div>
+  <div data-id="21" class="flex flex-col gap-1" id="mobile-nav-links-m3n4">
+    <button data-id="22" class="mobile-tab-btn tab-btn-nav active text-left" data-tab="overview">Overview</button>
+    <button data-id="23" class="mobile-tab-btn tab-btn-nav text-left" data-tab="lanes">Lanes</button>
+    <button data-id="24" class="mobile-tab-btn tab-btn-nav text-left" data-tab="port-intel">Port Intel</button>
+    <button data-id="25" class="mobile-tab-btn tab-btn-nav text-left" data-tab="clusters">Clusters</button>
+    <button data-id="26" class="mobile-tab-btn tab-btn-nav text-left" data-tab="planning">Planning Brief</button>
+  </div>
+  <div data-id="27" class="mt-6 pt-4 border-t border-[#1e2d44]">
+    <div data-id="28" class="flex items-center gap-2 mb-2"><span data-id="29" class="w-2 h-2 rounded-full bg-caution blink inline-block"></span><span data-id="30" class="font-mono text-[10px] text-caution uppercase">Intelligence Cycle Active</span></div>
+    <p data-id="31" class="font-mono text-[10px] text-muted">TUE 12 MAY 2026 | 23:23 EDT</p>
+    <p data-id="32" class="font-mono text-[10px] text-muted">NEXT PRIMARY: THU 14 MAY 09:00</p>
+  </div>
+</nav>
+
+<!-- TAB BAR + REFRESH -->
+<div data-id="33" id="tab-bar-o5p6" class="tab-bar flex items-center gap-1 px-4 md:px-6 py-2 border-b border-[#1e2d44] overflow-x-auto" style="background:#0c1220;">
+  <button data-id="34" class="tab-btn-nav active" data-tab="overview">
+    <i data-id="35" data-lucide="layout-dashboard" class="w-3 h-3 inline -mt-0.5 mr-1"></i>Overview
+  </button>
+  <button data-id="36" class="tab-btn-nav" data-tab="lanes">
+    <i data-id="37" data-lucide="route" class="w-3 h-3 inline -mt-0.5 mr-1"></i>Lanes
+  </button>
+  <button data-id="38" class="tab-btn-nav" data-tab="port-intel">
+    <i data-id="39" data-lucide="anchor" class="w-3 h-3 inline -mt-0.5 mr-1"></i>Port Intel
+  </button>
+  <button data-id="40" class="tab-btn-nav" data-tab="clusters">
+    <i data-id="41" data-lucide="radar" class="w-3 h-3 inline -mt-0.5 mr-1"></i>Clusters
+  </button>
+  <button data-id="42" class="tab-btn-nav" data-tab="planning">
+    <i data-id="43" data-lucide="clipboard-list" class="w-3 h-3 inline -mt-0.5 mr-1"></i>Planning Brief
+  </button>
+  <div data-id="44" class="flex-1"></div>
+  <div data-id="45" class="flex items-center gap-3">
+    <span data-id="46" id="last-refresh-q7r8" class="font-mono text-[9px] text-muted hidden md:inline">LAST REFRESH: <span data-id="47" id="refresh-ts-s9t0">23:23:00 EDT</span></span>
+    <button data-id="48" id="refresh-btn-u1v2" class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-electric/10 border border-electric/30 text-electric font-mono text-[10px] uppercase tracking-wider hover:bg-electric/20 transition-colors">
+      <i data-id="49" data-lucide="refresh-cw" class="w-3 h-3"></i>
+      <span data-id="50" id="refresh-text-w3x4">Refresh Intel</span>
+    </button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<main data-id="51" class="flex-1 px-4 md:px-6 py-4 md:py-6 overflow-y-auto">
+
+<!-- ===== TAB: OVERVIEW ===== -->
+<div data-id="52" id="tab-overview-y5z6" class="tab-content space-y-4 md:space-y-6">
+
+<!-- SECTION 1: SYSTEM STATUS ROW -->
+<section data-id="53" id="status-row-a2b3" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  <!-- Card 1: Cycle Status -->
+  <div data-id="54" class="card" id="card-cycle-c4d5">
+    <div data-id="55" class="card-header"><i data-id="56" data-lucide="activity" class="w-4 h-4"></i> Cycle Status</div>
+    <div data-id="57" class="card-body space-y-2">
+      <span data-id="58" class="badge badge-go">7-Day Cycle Active</span>
+      <p data-id="59" class="font-mono text-xs text-muted-light mt-2">Planning: <span data-id="60" class="text-go">THU</span> | Contracting: <span data-id="61" class="text-electric">FRI</span></p>
+      <div data-id="62" class="flex items-center gap-1.5 mt-1">
+        <span data-id="63" class="w-1.5 h-1.5 rounded-full bg-go blink"></span>
+        <span data-id="64" class="font-mono text-[10px] text-go">Background Intel: RUNNING</span>
+      </div>
+    </div>
+  </div>
+  <!-- Card 2: Weather Window -->
+  <div data-id="65" class="card" id="card-weather-e6f7">
+    <div data-id="66" class="card-header"><i data-id="67" data-lucide="cloud-sun" class="w-4 h-4"></i> Weather Window</div>
+    <div data-id="68" class="card-body space-y-2">
+      <span data-id="69" class="badge badge-go">THU–SAT: Clear Ops</span>
+      <div data-id="70" class="space-y-1 mt-2">
+        <p data-id="71" class="font-mono text-[11px] text-[#c8d6e5]">Thu 85°F Sunny <span data-id="72" class="text-go">✅</span></p>
+        <p data-id="73" class="font-mono text-[11px] text-[#c8d6e5]">Fri 82°F Sunny <span data-id="74" class="text-go">✅</span></p>
+        <p data-id="75" class="font-mono text-[11px] text-[#c8d6e5]">Sat 86°F Sunny <span data-id="76" class="text-go">✅</span></p>
+      </div>
+      <span data-id="77" class="badge badge-caution mt-1">TUE–WED: Rain Avoidance</span>
+    </div>
+  </div>
+  <!-- Card 3: Market Signal -->
+  <div data-id="78" class="card" id="card-market-g8h9">
+    <div data-id="79" class="card-header"><i data-id="80" data-lucide="trending-up" class="w-4 h-4"></i> Market Signal</div>
+    <div data-id="81" class="card-body space-y-2">
+      <span data-id="82" class="badge badge-caution">Capacity Tightening</span>
+      <div data-id="83" class="space-y-1 mt-2">
+        <p data-id="84" class="font-mono text-[11px] text-[#c8d6e5]">Van L/T Ratio: <span data-id="85" class="text-caution">+4.6% WoW</span></p>
+        <p data-id="86" class="font-mono text-[11px] text-[#c8d6e5]">Load Posts: <span data-id="87" class="text-go">+42.4% YoY</span></p>
+        <p data-id="88" class="font-mono text-[11px] text-[#c8d6e5]">Truck Posts: <span data-id="89" class="text-alert">-7.4% YoY</span></p>
+      </div>
+    </div>
+  </div>
+  <!-- Card 4: Fuel Status -->
+  <div data-id="90" class="card" id="card-fuel-i0j1">
+    <div data-id="91" class="card-header"><i data-id="92" data-lucide="fuel" class="w-4 h-4"></i> Fuel Status</div>
+    <div data-id="93" class="card-body space-y-2">
+      <span data-id="94" class="badge badge-alert">Diesel: $5.64/gal</span>
+      <div data-id="95" class="space-y-1 mt-2">
+        <p data-id="96" class="font-mono text-[11px] text-[#c8d6e5]">FSC: <span data-id="97" class="text-alert">$0.75/mi</span></p>
+        <p data-id="98" class="font-mono text-[11px] text-[#c8d6e5]">WoW: <span data-id="99" class="text-muted">FLAT ↔</span></p>
+        <p data-id="100" class="font-mono text-[11px] text-[#c8d6e5]">Q2 Forecast: <span data-id="101" class="text-caution">ELEVATED</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 2: LANE INTELLIGENCE -->
+<section data-id="102" id="lane-intel-k2l3" class="card">
+  <div data-id="103" class="card-header justify-between flex-wrap gap-2">
+    <div data-id="104" class="flex items-center gap-2">
+      <i data-id="105" data-lucide="bar-chart-3" class="w-4 h-4"></i>
+      <span data-id="106">Lane Trend Monitor — DAT Market Intelligence</span>
+    </div>
+    <span data-id="107" class="font-mono text-[9px] text-muted">Updated: 12 MAY 2026 21:00 EDT</span>
+  </div>
+  <div data-id="108" class="card-body grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Rate Table -->
+    <div data-id="109" class="overflow-x-auto">
+      <table data-id="110" class="intel-table" id="rate-table-m4n5">
+        <thead data-id="111">
+          <tr data-id="112">
+            <th data-id="113" data-sort="segment">Segment <span data-id="114" class="sort-arrow"></span></th>
+            <th data-id="115" data-sort="rate">Rate/Mi <span data-id="116" class="sort-arrow"></span></th>
+            <th data-id="117" data-sort="signal">Signal <span data-id="118" class="sort-arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody data-id="119" id="rate-tbody-o6p7">
+          <tr data-id="120"><td data-id="121" class="font-mono text-xs">Van — SE Regional</td><td data-id="122" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.18</td><td data-id="123"><span data-id="124" class="badge badge-caution text-[9px]">↓ vs National</span></td></tr>
+          <tr data-id="125"><td data-id="126" class="font-mono text-xs">Van — National Avg</td><td data-id="127" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.37</td><td data-id="128"><span data-id="129" class="badge badge-go text-[9px]">↑ +$0.01 WoW</span></td></tr>
+          <tr data-id="130"><td data-id="131" class="font-mono text-xs">Flatbed — SE</td><td data-id="132" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.73</td><td data-id="133"><span data-id="134" class="badge badge-go text-[9px]">↑ Strong</span></td></tr>
+          <tr data-id="135"><td data-id="136" class="font-mono text-xs">Reefer — SE</td><td data-id="137" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.45</td><td data-id="138"><span data-id="139" class="badge badge-caution text-[9px]">Produce Surge</span></td></tr>
+          <tr data-id="140"><td data-id="141" class="font-mono text-xs">Diesel FSC</td><td data-id="142" class="font-mono text-sm font-semibold text-alert">$0.75</td><td data-id="143"><span data-id="144" class="badge badge-alert text-[9px]">↑ Reset $0.70</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- Market Context -->
+    <div data-id="145" class="space-y-3" id="market-context-q8r9">
+      <h4 data-id="146" class="font-mono text-[10px] text-electric uppercase tracking-widest mb-2">Market Context — Intel Entries</h4>
+      <div data-id="147" class="border-l-2 border-caution pl-3">
+        <p data-id="148" class="text-xs leading-relaxed"><span data-id="149" class="font-mono text-caution font-semibold text-[10px]">ROADCHECK WEEK (May 12-14):</span> ELD enforcement + cargo securement inspections → capacity contraction → rate floor support. <span data-id="150" class="text-caution font-semibold">OPERATIONAL WINDOW: AVOID Tue-Wed heavy runs.</span></p>
+      </div>
+      <div data-id="151" class="border-l-2 border-alert pl-3">
+        <p data-id="152" class="text-xs leading-relaxed"><span data-id="153" class="font-mono text-alert font-semibold text-[10px]">PRODUCE SURGE:</span> FL + TX corridors ramping. Reefer L/T ratio +12.3% WoW — spillover tightening van capacity in SE.</p>
+      </div>
+      <div data-id="154" class="border-l-2 border-go pl-3">
+        <p data-id="155" class="text-xs leading-relaxed"><span data-id="156" class="font-mono text-go font-semibold text-[10px]">ISM PMI 52.7%:</span> 4th consecutive expansion month. Freight demand signal STRONG. Input costs (84.6% Prices Index) adding cost pressure across the chain.</p>
+      </div>
+      <div data-id="157" class="border-l-2 border-caution pl-3">
+        <p data-id="158" class="text-xs leading-relaxed"><span data-id="159" class="font-mono text-caution font-semibold text-[10px]">MOTHER'S DAY RIPPLE:</span> SE outbound flower crush (South FL) created residual capacity deficit. Still resolving.</p>
+      </div>
+      <div data-id="160" class="border-l-2 border-electric pl-3">
+        <p data-id="161" class="text-xs leading-relaxed"><span data-id="162" class="font-mono text-electric font-semibold text-[10px]">SPOT TREND:</span> Van national rate trending UP — Feb $2.72 → Mar $3.07 → Apr $3.44 → May $3.56 (incl. FSC). YoY van: <span data-id="163" class="text-go font-semibold">+29.6% L/T ratio</span>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 3 & 4: JAXPORT + WEATHER side by side -->
+<section data-id="164" id="port-weather-row-s0t1" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <!-- JAXPORT -->
+  <div data-id="165" class="card" id="card-jaxport-u2v3">
+    <div data-id="166" class="card-header"><i data-id="167" data-lucide="anchor" class="w-4 h-4"></i> JAXPORT Vessel Intel — Blount Island / Dames Point</div>
+    <div data-id="168" class="card-body space-y-3">
+      <div data-id="169" class="flex flex-wrap items-center gap-3">
+        <span data-id="170" class="badge badge-go">62 Vessels in Port</span>
+        <span data-id="171" class="badge badge-blue">12 Arrivals Next 30 Days</span>
+      </div>
+      <div data-id="172" class="overflow-x-auto mt-3">
+        <table data-id="173" class="intel-table" id="vessel-table-w4x5">
+          <thead data-id="174">
+            <tr data-id="175">
+              <th data-id="176" data-sort="vessel">Vessel</th>
+              <th data-id="177" data-sort="type">Type</th>
+              <th data-id="178" data-sort="eta">ETA</th>
+              <th data-id="179" data-sort="status">Status</th>
+            </tr>
+          </thead>
+          <tbody data-id="180">
+            <tr data-id="181"><td data-id="182" class="font-mono text-xs font-semibold text-[#c8d6e5]">TAINO</td><td data-id="183" class="text-xs text-muted-light">Container</td><td data-id="184" class="font-mono text-xs">May 11</td><td data-id="185"><span data-id="186" class="text-go font-mono text-[10px]">ARRIVED ✅</span></td></tr>
+            <tr data-id="187"><td data-id="188" class="font-mono text-xs font-semibold text-[#c8d6e5]">PERLA DEL CARIBE</td><td data-id="189" class="text-xs text-muted-light">Container</td><td data-id="190" class="font-mono text-xs">May 11</td><td data-id="191"><span data-id="192" class="text-go font-mono text-[10px]">ARRIVED ✅</span></td></tr>
+            <tr data-id="193"><td data-id="194" class="font-mono text-xs font-semibold text-[#c8d6e5]">HEROIC LEADER</td><td data-id="195" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="196" class="font-mono text-xs">May 9</td><td data-id="197"><span data-id="198" class="text-electric font-mono text-[10px]">IN PORT</span></td></tr>
+            <tr data-id="199"><td data-id="200" class="font-mono text-xs font-semibold text-[#c8d6e5]">GRAND ORION</td><td data-id="201" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="202" class="font-mono text-xs">May 9</td><td data-id="203"><span data-id="204" class="text-electric font-mono text-[10px]">IN PORT</span></td></tr>
+            <tr data-id="205"><td data-id="206" class="font-mono text-xs font-semibold text-[#c8d6e5]">HOEGH JEDDAH</td><td data-id="207" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="208" class="font-mono text-xs">May 10</td><td data-id="209"><span data-id="210" class="text-electric font-mono text-[10px]">IN PORT</span></td></tr>
+            <tr data-id="211"><td data-id="212" class="font-mono text-xs font-semibold text-[#c8d6e5]">SIEM ARISTOTLE</td><td data-id="213" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="214" class="font-mono text-xs">May 12</td><td data-id="215"><span data-id="216" class="text-caution font-mono text-[10px]">ARRIVING</span></td></tr>
+            <tr data-id="217"><td data-id="218" class="font-mono text-xs font-semibold text-[#c8d6e5]">INDIGO GARLAND</td><td data-id="219" class="text-xs text-muted-light">Bulk Carrier</td><td data-id="220" class="font-mono text-xs">May 13</td><td data-id="221"><span data-id="222" class="text-caution font-mono text-[10px]">INBOUND</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div data-id="223" class="mt-3 p-3 rounded border border-electric/20 bg-electric/5">
+        <p data-id="224" class="text-[11px] leading-relaxed text-muted-light"><i data-id="225" data-lucide="info" class="w-3 h-3 inline text-electric -mt-0.5 mr-1"></i>2x Container ships arrived May 11 → drayage demand spike expected <span data-id="226" class="text-electric font-semibold">Wed-Thu at Dames Point ICTF</span>. 3x Vehicle Carriers in port → breakbulk/auto transport activity elevated at Blount Island terminal. <span data-id="227" class="text-go font-semibold">Potential drayage opportunity window: THU-FRI.</span></p>
+      </div>
+    </div>
+  </div>
+  <!-- WEATHER -->
+  <div data-id="228" class="card" id="card-wx-y6z7">
+    <div data-id="229" class="card-header"><i data-id="230" data-lucide="thermometer-sun" class="w-4 h-4"></i> 7-Day Weather Overlay — Jacksonville Ops Zone</div>
+    <div data-id="231" class="card-body">
+      <div data-id="232" class="overflow-x-auto">
+        <table data-id="233" class="intel-table" id="weather-table-a8b9">
+          <thead data-id="234">
+            <tr data-id="235">
+              <th data-id="236" data-sort="date">Date</th>
+              <th data-id="237" data-sort="day">Day</th>
+              <th data-id="238">Cond</th>
+              <th data-id="239" data-sort="high">High</th>
+              <th data-id="240" data-sort="low">Low</th>
+              <th data-id="241" data-sort="ops">Ops</th>
+            </tr>
+          </thead>
+          <tbody data-id="242">
+            <tr data-id="243" class="bg-alert/5"><td data-id="244" class="font-mono text-xs">May 12</td><td data-id="245" class="font-mono text-xs text-caution">TUE (NOW)</td><td data-id="246" class="text-xs">🌧 Rain/Storm</td><td data-id="247" class="font-mono text-xs">73°F</td><td data-id="248" class="font-mono text-xs">69°F</td><td data-id="249"><span data-id="250" class="badge badge-alert text-[9px]">AVOID</span></td></tr>
+            <tr data-id="251" class="bg-alert/5"><td data-id="252" class="font-mono text-xs">May 13</td><td data-id="253" class="font-mono text-xs text-caution">WED</td><td data-id="254" class="text-xs">⛈ Showers/T-storm</td><td data-id="255" class="font-mono text-xs">77°F</td><td data-id="256" class="font-mono text-xs">66°F</td><td data-id="257"><span data-id="258" class="badge badge-alert text-[9px]">AVOID</span></td></tr>
+            <tr data-id="259" class="bg-go/5"><td data-id="260" class="font-mono text-xs">May 14</td><td data-id="261" class="font-mono text-xs text-go">THU</td><td data-id="262" class="text-xs">☀️ Sunny</td><td data-id="263" class="font-mono text-xs">85°F</td><td data-id="264" class="font-mono text-xs">63°F</td><td data-id="265"><span data-id="266" class="badge badge-go text-[9px]">PRIMARY ✅</span></td></tr>
+            <tr data-id="267" class="bg-go/5"><td data-id="268" class="font-mono text-xs">May 15</td><td data-id="269" class="font-mono text-xs text-go">FRI</td><td data-id="270" class="text-xs">☀️ Sunny</td><td data-id="271" class="font-mono text-xs">82°F</td><td data-id="272" class="font-mono text-xs">68°F</td><td data-id="273"><span data-id="274" class="badge badge-go text-[9px]">CONTRACT ✅</span></td></tr>
+            <tr data-id="275" class="bg-go/5"><td data-id="276" class="font-mono text-xs">May 16</td><td data-id="277" class="font-mono text-xs text-go">SAT</td><td data-id="278" class="text-xs">☀️ Sunny</td><td data-id="279" class="font-mono text-xs">86°F</td><td data-id="280" class="font-mono text-xs">70°F</td><td data-id="281"><span data-id="282" class="badge badge-go text-[9px]">OPS ✅</span></td></tr>
+            <tr data-id="283"><td data-id="284" class="font-mono text-xs">May 17</td><td data-id="285" class="font-mono text-xs text-muted-light">SUN</td><td data-id="286" class="text-xs">🌤 Mostly Sunny</td><td data-id="287" class="font-mono text-xs">87°F</td><td data-id="288" class="font-mono text-xs">71°F</td><td data-id="289"><span data-id="290" class="badge badge-blue text-[9px]">STANDBY</span></td></tr>
+            <tr data-id="291" class="bg-go/5"><td data-id="292" class="font-mono text-xs">May 18</td><td data-id="293" class="font-mono text-xs text-go">MON</td><td data-id="294" class="text-xs">🌤 Mostly Sunny</td><td data-id="295" class="font-mono text-xs">85°F</td><td data-id="296" class="font-mono text-xs">72°F</td><td data-id="297"><span data-id="298" class="badge badge-go text-[9px]">OPS ✅</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div data-id="299" class="mt-3 p-3 rounded border border-caution/30 bg-caution/5 flex items-start gap-2">
+        <i data-id="300" data-lucide="alert-triangle" class="w-4 h-4 text-caution flex-shrink-0 mt-0.5"></i>
+        <p data-id="301" class="font-mono text-[10px] text-caution leading-relaxed">RIP CURRENT STATEMENT active through May 13 — coastal route awareness for A1A/US-1 corridor operations.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</div><!-- end tab-overview -->
+
+<!-- ===== TAB: LANES ===== -->
+<div data-id="302" id="tab-lanes-c0d1" class="tab-content hidden space-y-4 md:space-y-6">
+
+<!-- Core Radius + Opportunity side by side -->
+<section data-id="303" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <!-- SECTION 6: CORE RADIUS -->
+  <div data-id="304" class="card" id="card-core-e2f3">
+    <div data-id="305" class="card-header"><i data-id="306" data-lucide="target" class="w-4 h-4"></i> Core Radius Lanes — ≤150 MI Detected</div>
+    <div data-id="307" class="card-body space-y-2" id="core-lanes-g4h5">
+      <!-- Lane cards generated by JS -->
+    </div>
+  </div>
+  <!-- SECTION 7: OPPORTUNITY RADIUS -->
+  <div data-id="308" class="card" id="card-opp-i6j7">
+    <div data-id="309" class="card-header"><i data-id="310" data-lucide="radio-tower" class="w-4 h-4"></i> Opportunity Radius Alerts — 150-250 MI Zone</div>
+    <div data-id="311" class="card-body space-y-2" id="opp-lanes-k8l9">
+      <!-- Alert cards generated by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- Repeat Lane Intelligence on Lanes tab -->
+<section data-id="312" class="card" id="lane-intel-dup-m0n1">
+  <div data-id="313" class="card-header justify-between flex-wrap gap-2">
+    <div data-id="314" class="flex items-center gap-2"><i data-id="315" data-lucide="bar-chart-3" class="w-4 h-4"></i><span data-id="316">Lane Trend Monitor — DAT Market Intelligence</span></div>
+    <span data-id="317" class="font-mono text-[9px] text-muted">Updated: 12 MAY 2026 21:00 EDT</span>
+  </div>
+  <div data-id="318" class="card-body grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div data-id="319" class="overflow-x-auto">
+      <table data-id="320" class="intel-table">
+        <thead data-id="321"><tr data-id="322"><th data-id="323">Segment</th><th data-id="324">Rate/Mi</th><th data-id="325">Signal</th></tr></thead>
+        <tbody data-id="326">
+          <tr data-id="327"><td data-id="328" class="font-mono text-xs">Van — SE Regional</td><td data-id="329" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.18</td><td data-id="330"><span data-id="331" class="badge badge-caution text-[9px]">↓ vs National</span></td></tr>
+          <tr data-id="332"><td data-id="333" class="font-mono text-xs">Van — National Avg</td><td data-id="334" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.37</td><td data-id="335"><span data-id="336" class="badge badge-go text-[9px]">↑ +$0.01 WoW</span></td></tr>
+          <tr data-id="337"><td data-id="338" class="font-mono text-xs">Flatbed — SE</td><td data-id="339" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.73</td><td data-id="340"><span data-id="341" class="badge badge-go text-[9px]">↑ Strong</span></td></tr>
+          <tr data-id="342"><td data-id="343" class="font-mono text-xs">Reefer — SE</td><td data-id="344" class="font-mono text-sm font-semibold text-[#c8d6e5]">$2.45</td><td data-id="345"><span data-id="346" class="badge badge-caution text-[9px]">Produce Surge</span></td></tr>
+          <tr data-id="347"><td data-id="348" class="font-mono text-xs">Diesel FSC</td><td data-id="349" class="font-mono text-sm font-semibold text-alert">$0.75</td><td data-id="350"><span data-id="351" class="badge badge-alert text-[9px]">↑ Reset $0.70</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div data-id="352" class="space-y-3">
+      <h4 data-id="353" class="font-mono text-[10px] text-electric uppercase tracking-widest mb-2">Rate Floor Guidance</h4>
+      <table data-id="354" class="intel-table">
+        <thead data-id="355"><tr data-id="356"><th data-id="357">Lane Type</th><th data-id="358">Floor RPM</th><th data-id="359">Target RPM</th></tr></thead>
+        <tbody data-id="360">
+          <tr data-id="361"><td data-id="362" class="font-mono text-xs">Micro-Grid (&lt;50 mi)</td><td data-id="363" class="font-mono text-xs text-alert">$2.50</td><td data-id="364" class="font-mono text-xs text-go">$3.00+</td></tr>
+          <tr data-id="365"><td data-id="366" class="font-mono text-xs">Core Radius (50-150 mi)</td><td data-id="367" class="font-mono text-xs text-alert">$2.20</td><td data-id="368" class="font-mono text-xs text-go">$2.60</td></tr>
+          <tr data-id="369"><td data-id="370" class="font-mono text-xs">Opportunity (150-250 mi)</td><td data-id="371" class="font-mono text-xs text-alert">$2.00</td><td data-id="372" class="font-mono text-xs text-go">$2.35</td></tr>
+          <tr data-id="373"><td data-id="374" class="font-mono text-xs">Port Drayage (JAX)</td><td data-id="375" class="font-mono text-xs text-alert">Flat rate</td><td data-id="376" class="font-mono text-xs text-go">$250-$400/move</td></tr>
+        </tbody>
+      </table>
+      <div data-id="377" class="mt-3 p-3 rounded border border-alert/20 bg-alert/5">
+        <p data-id="378" class="font-mono text-[10px] text-alert leading-relaxed"><i data-id="379" data-lucide="shield-alert" class="w-3 h-3 inline -mt-0.5 mr-1"></i>DECISION RULE: Never run below floor. Sit before losing money. Backhaul must pencil before committing outbound.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</div><!-- end tab-lanes -->
+
+<!-- ===== TAB: PORT INTEL ===== -->
+<div data-id="380" id="tab-port-intel-o2p3" class="tab-content hidden space-y-4 md:space-y-6">
+  <!-- JAXPORT clone -->
+  <section data-id="381" class="card" id="card-jaxport-full-q4r5">
+    <div data-id="382" class="card-header"><i data-id="383" data-lucide="anchor" class="w-4 h-4"></i> JAXPORT Vessel Intel — Blount Island / Dames Point</div>
+    <div data-id="384" class="card-body space-y-3">
+      <div data-id="385" class="flex flex-wrap items-center gap-3">
+        <span data-id="386" class="badge badge-go">62 Vessels in Port</span>
+        <span data-id="387" class="badge badge-blue">12 Arrivals Next 30 Days</span>
+      </div>
+      <div data-id="388" class="overflow-x-auto mt-3">
+        <table data-id="389" class="intel-table">
+          <thead data-id="390"><tr data-id="391"><th data-id="392" data-sort="vessel">Vessel</th><th data-id="393" data-sort="type">Type</th><th data-id="394" data-sort="eta">ETA</th><th data-id="395" data-sort="status">Status</th></tr></thead>
+          <tbody data-id="396">
+            <tr data-id="397"><td data-id="398" class="font-mono text-xs font-semibold text-[#c8d6e5]">TAINO</td><td data-id="399" class="text-xs text-muted-light">Container</td><td data-id="400" class="font-mono text-xs">May 11</td><td data-id="401"><span data-id="402" class="text-go font-mono text-[10px]">ARRIVED ✅</span></td></tr>
+            <tr data-id="403"><td data-id="404" class="font-mono text-xs font-semibold text-[#c8d6e5]">PERLA DEL CARIBE</td><td data-id="405" class="text-xs text-muted-light">Container</td><td data-id="406" class="font-mono text-xs">May 11</td><td data-id="407"><span data-id="408" class="text-go font-mono text-[10px]">ARRIVED ✅</span></td></tr>
+            <tr data-id="409"><td data-id="410" class="font-mono text-xs font-semibold text-[#c8d6e5]">HEROIC LEADER</td><td data-id="411" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="412" class="font-mono text-xs">May 9</td><td data-id="413"><span data-id="414" class="text-electric font-mono text-[10px]">IN PORT</span></td></tr>
+            <tr data-id="415"><td data-id="416" class="font-mono text-xs font-semibold text-[#c8d6e5]">GRAND ORION</td><td data-id="417" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="418" class="font-mono text-xs">May 9</td><td data-id="419"><span data-id="420" class="text-electric font-mono text-[10px]">IN PORT</span></td></tr>
+            <tr data-id="421"><td data-id="422" class="font-mono text-xs font-semibold text-[#c8d6e5]">HOEGH JEDDAH</td><td data-id="423" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="424" class="font-mono text-xs">May 10</td><td data-id="425"><span data-id="426" class="text-electric font-mono text-[10px]">IN PORT</span></td></tr>
+            <tr data-id="427"><td data-id="428" class="font-mono text-xs font-semibold text-[#c8d6e5]">SIEM ARISTOTLE</td><td data-id="429" class="text-xs text-muted-light">Vehicle Carrier</td><td data-id="430" class="font-mono text-xs">May 12</td><td data-id="431"><span data-id="432" class="text-caution font-mono text-[10px]">ARRIVING</span></td></tr>
+            <tr data-id="433"><td data-id="434" class="font-mono text-xs font-semibold text-[#c8d6e5]">INDIGO GARLAND</td><td data-id="435" class="text-xs text-muted-light">Bulk Carrier</td><td data-id="436" class="font-mono text-xs">May 13</td><td data-id="437"><span data-id="438" class="text-caution font-mono text-[10px]">INBOUND</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div data-id="439" class="mt-3 p-3 rounded border border-electric/20 bg-electric/5">
+        <p data-id="440" class="text-[11px] leading-relaxed text-muted-light"><i data-id="441" data-lucide="info" class="w-3 h-3 inline text-electric -mt-0.5 mr-1"></i>2x Container ships arrived May 11 → drayage demand spike expected <span data-id="442" class="text-electric font-semibold">Wed-Thu at Dames Point ICTF</span>. 3x Vehicle Carriers in port → breakbulk/auto transport activity elevated at Blount Island terminal. <span data-id="443" class="text-go font-semibold">Potential drayage opportunity window: THU-FRI.</span></p>
+      </div>
+    </div>
+  </section>
+  <!-- Weather on Port Intel tab -->
+  <section data-id="444" class="card" id="card-wx-full-s6t7">
+    <div data-id="445" class="card-header"><i data-id="446" data-lucide="thermometer-sun" class="w-4 h-4"></i> 7-Day Weather Overlay — Jacksonville Ops Zone</div>
+    <div data-id="447" class="card-body">
+      <div data-id="448" class="overflow-x-auto">
+        <table data-id="449" class="intel-table">
+          <thead data-id="450"><tr data-id="451"><th data-id="452">Date</th><th data-id="453">Day</th><th data-id="454">Cond</th><th data-id="455">High</th><th data-id="456">Low</th><th data-id="457">Ops</th></tr></thead>
+          <tbody data-id="458">
+            <tr data-id="459" class="bg-alert/5"><td data-id="460" class="font-mono text-xs">May 12</td><td data-id="461" class="font-mono text-xs text-caution">TUE (NOW)</td><td data-id="462" class="text-xs">🌧 Rain/Storm</td><td data-id="463" class="font-mono text-xs">73°F</td><td data-id="464" class="font-mono text-xs">69°F</td><td data-id="465"><span data-id="466" class="badge badge-alert text-[9px]">AVOID</span></td></tr>
+            <tr data-id="467" class="bg-alert/5"><td data-id="468" class="font-mono text-xs">May 13</td><td data-id="469" class="font-mono text-xs text-caution">WED</td><td data-id="470" class="text-xs">⛈ Showers/T-storm</td><td data-id="471" class="font-mono text-xs">77°F</td><td data-id="472" class="font-mono text-xs">66°F</td><td data-id="473"><span data-id="474" class="badge badge-alert text-[9px]">AVOID</span></td></tr>
+            <tr data-id="475" class="bg-go/5"><td data-id="476" class="font-mono text-xs">May 14</td><td data-id="477" class="font-mono text-xs text-go">THU</td><td data-id="478" class="text-xs">☀️ Sunny</td><td data-id="479" class="font-mono text-xs">85°F</td><td data-id="480" class="font-mono text-xs">63°F</td><td data-id="481"><span data-id="482" class="badge badge-go text-[9px]">PRIMARY ✅</span></td></tr>
+            <tr data-id="483" class="bg-go/5"><td data-id="484" class="font-mono text-xs">May 15</td><td data-id="485" class="font-mono text-xs text-go">FRI</td><td data-id="486" class="text-xs">☀️ Sunny</td><td data-id="487" class="font-mono text-xs">82°F</td><td data-id="488" class="font-mono text-xs">68°F</td><td data-id="489"><span data-id="490" class="badge badge-go text-[9px]">CONTRACT ✅</span></td></tr>
+            <tr data-id="491" class="bg-go/5"><td data-id="492" class="font-mono text-xs">May 16</td><td data-id="493" class="font-mono text-xs text-go">SAT</td><td data-id="494" class="text-xs">☀️ Sunny</td><td data-id="495" class="font-mono text-xs">86°F</td><td data-id="496" class="font-mono text-xs">70°F</td><td data-id="497"><span data-id="498" class="badge badge-go text-[9px]">OPS ✅</span></td></tr>
+            <tr data-id="499"><td data-id="500" class="font-mono text-xs">May 17</td><td data-id="501" class="font-mono text-xs text-muted-light">SUN</td><td data-id="502" class="text-xs">🌤 Mostly Sunny</td><td data-id="503" class="font-mono text-xs">87°F</td><td data-id="504" class="font-mono text-xs">71°F</td><td data-id="505"><span data-id="506" class="badge badge-blue text-[9px]">STANDBY</span></td></tr>
+            <tr data-id="507" class="bg-go/5"><td data-id="508" class="font-mono text-xs">May 18</td><td data-id="509" class="font-mono text-xs text-go">MON</td><td data-id="510" class="text-xs">🌤 Mostly Sunny</td><td data-id="511" class="font-mono text-xs">85°F</td><td data-id="512" class="font-mono text-xs">72°F</td><td data-id="513"><span data-id="514" class="badge badge-go text-[9px]">OPS ✅</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div data-id="515" class="mt-3 p-3 rounded border border-caution/30 bg-caution/5 flex items-start gap-2">
+        <i data-id="516" data-lucide="alert-triangle" class="w-4 h-4 text-caution flex-shrink-0 mt-0.5"></i>
+        <p data-id="517" class="font-mono text-[10px] text-caution leading-relaxed">RIP CURRENT STATEMENT active through May 13 — coastal route awareness for A1A/US-1 corridor operations.</p>
+      </div>
+    </div>
+  </section>
+</div><!-- end tab-port-intel -->
+
+<!-- ===== TAB: CLUSTERS ===== -->
+<div data-id="518" id="tab-clusters-u8v9" class="tab-content hidden space-y-4 md:space-y-6">
+
+<!-- SECTION 5: MICRO-GRID CLUSTER MAP -->
+<section data-id="519" class="card" id="card-clusters-w0x1">
+  <div data-id="520" class="card-header"><i data-id="521" data-lucide="radar" class="w-4 h-4"></i> Micro-Grid Cluster Formation — JAX Metro Zones</div>
+  <div data-id="522" class="card-body">
+    <div data-id="523" class="relative w-full overflow-hidden rounded-lg" style="background:#0a0f1a; min-height:420px;" id="cluster-map-container-y2z3">
+      <svg data-id="524" id="cluster-svg-a4b5" viewBox="0 0 800 500" class="w-full h-auto" style="min-height:420px;">
+        <!-- Grid Background -->
+        <defs data-id="525">
+          <pattern data-id="526" id="grid-pat" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path data-id="527" d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e2d44" stroke-width="0.5" opacity="0.4"/>
+          </pattern>
+          <radialGradient data-id="528" id="radar-grad" cx="50%" cy="50%" r="50%">
+            <stop data-id="529" offset="0%" stop-color="#1e90ff" stop-opacity="0.15"/>
+            <stop data-id="530" offset="100%" stop-color="#1e90ff" stop-opacity="0"/>
+          </radialGradient>
+          <filter data-id="531" id="glow-filter">
+            <feGaussianBlur data-id="532" stdDeviation="3" result="blur"/>
+            <feMerge data-id="533"><feMergeNode data-id="534" in="blur"/><feMergeNode data-id="535" in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <rect data-id="536" width="800" height="500" fill="url(#grid-pat)"/>
+        <!-- Radar sweep -->
+        <g data-id="537" transform="translate(400,340)">
+          <circle data-id="538" cx="0" cy="0" r="180" fill="none" stroke="#1e90ff" stroke-width="0.5" opacity="0.2"/>
+          <circle data-id="539" cx="0" cy="0" r="120" fill="none" stroke="#1e90ff" stroke-width="0.5" opacity="0.15"/>
+          <circle data-id="540" cx="0" cy="0" r="60" fill="none" stroke="#1e90ff" stroke-width="0.5" opacity="0.1"/>
+          <g data-id="541" class="radar-sweep" style="transform-origin:0 0;">
+            <line data-id="542" x1="0" y1="0" x2="180" y2="0" stroke="url(#radar-grad)" stroke-width="2">
+              <animateTransform data-id="543" attributeName="transform" type="rotate" from="0" to="360" dur="6s" repeatCount="indefinite"/>
+            </line>
+            <path data-id="544" d="M0,0 L180,0 A180,180 0 0,1 170,47 Z" fill="#1e90ff" opacity="0.04">
+              <animateTransform data-id="545" attributeName="transform" type="rotate" from="0" to="360" dur="6s" repeatCount="indefinite"/>
+            </path>
+          </g>
+        </g>
+        <!-- Dashed lines from Home Base to zones -->
+        <!-- Home Base at (400, 430) -->
+        <!-- Zone 1: Port (600, 100) -->
+        <line data-id="546" x1="400" y1="430" x2="600" y2="100" stroke="#1e90ff" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+        <text data-id="547" x="520" y="270" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="9" text-anchor="middle">~32 mi</text>
+        <!-- Zone 2: Airport (350, 110) -->
+        <line data-id="548" x1="400" y1="430" x2="350" y2="110" stroke="#00e676" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+        <text data-id="549" x="360" y="280" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="9" text-anchor="middle">~28 mi</text>
+        <!-- Zone 3: Regency (620, 260) -->
+        <line data-id="550" x1="400" y1="430" x2="620" y2="260" stroke="#ffab40" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+        <text data-id="551" x="530" y="360" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="9" text-anchor="middle">~22 mi</text>
+        <!-- Zone 4: Orange Park (180, 350) -->
+        <line data-id="552" x1="400" y1="430" x2="180" y2="350" stroke="#00e676" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+        <text data-id="553" x="280" y="405" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="9" text-anchor="middle">~30 mi</text>
+        <!-- Zone 5: St. Augustine (580, 420) -->
+        <line data-id="554" x1="400" y1="430" x2="580" y2="420" stroke="#ffab40" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+        <text data-id="555" x="490" y="440" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="9" text-anchor="middle">~40 mi</text>
+
+        <!-- Zone 1: Port Cluster -->
+        <circle data-id="556" cx="600" cy="100" r="42" fill="#1e90ff" opacity="0.12" stroke="#1e90ff" stroke-width="1.5" filter="url(#glow-filter)"/>
+        <circle data-id="557" cx="600" cy="100" r="6" fill="#1e90ff"/>
+        <text data-id="558" x="600" y="62" fill="#1e90ff" font-family="JetBrains Mono, monospace" font-size="10" font-weight="700" text-anchor="middle">ZONE 1: PORT CLUSTER</text>
+        <text data-id="559" x="600" y="75" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="8" text-anchor="middle">Blount Island / Dames Point / Talleyrand</text>
+
+        <!-- Zone 2: Airport / Northside -->
+        <circle data-id="560" cx="350" cy="110" r="38" fill="#00e676" opacity="0.10" stroke="#00e676" stroke-width="1.5" filter="url(#glow-filter)"/>
+        <circle data-id="561" cx="350" cy="110" r="6" fill="#00e676"/>
+        <text data-id="562" x="350" y="75" fill="#00e676" font-family="JetBrains Mono, monospace" font-size="10" font-weight="700" text-anchor="middle">ZONE 2: AIRPORT / NORTHSIDE</text>
+        <text data-id="563" x="350" y="88" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="8" text-anchor="middle">JAX Airport, Imeson Industrial, New Berlin Rd</text>
+
+        <!-- Zone 3: Regency / Southside -->
+        <circle data-id="564" cx="620" cy="260" r="36" fill="#ffab40" opacity="0.10" stroke="#ffab40" stroke-width="1.5" filter="url(#glow-filter)"/>
+        <circle data-id="565" cx="620" cy="260" r="6" fill="#ffab40"/>
+        <text data-id="566" x="620" y="228" fill="#ffab40" font-family="JetBrains Mono, monospace" font-size="10" font-weight="700" text-anchor="middle">ZONE 3: REGENCY / SOUTHSIDE</text>
+        <text data-id="567" x="620" y="241" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="8" text-anchor="middle">Regency Sq, Philips Hwy, Baymeadows</text>
+
+        <!-- Zone 4: Orange Park -->
+        <circle data-id="568" cx="180" cy="350" r="34" fill="#00e676" opacity="0.10" stroke="#00e676" stroke-width="1.5" filter="url(#glow-filter)"/>
+        <circle data-id="569" cx="180" cy="350" r="6" fill="#00e676"/>
+        <text data-id="570" x="180" y="318" fill="#00e676" font-family="JetBrains Mono, monospace" font-size="10" font-weight="700" text-anchor="middle">ZONE 4: ORANGE PARK</text>
+        <text data-id="571" x="180" y="331" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="8" text-anchor="middle">Clay County Industrial Corridor</text>
+
+        <!-- Zone 5: St. Augustine Arc -->
+        <circle data-id="572" cx="580" cy="420" r="32" fill="#ffab40" opacity="0.10" stroke="#ffab40" stroke-width="1.5" filter="url(#glow-filter)"/>
+        <circle data-id="573" cx="580" cy="420" r="6" fill="#ffab40"/>
+        <text data-id="574" x="690" y="410" fill="#ffab40" font-family="JetBrains Mono, monospace" font-size="10" font-weight="700" text-anchor="middle">ZONE 5: ST. AUGUSTINE ARC</text>
+        <text data-id="575" x="690" y="423" fill="#8899aa" font-family="JetBrains Mono, monospace" font-size="8" text-anchor="middle">SR-16, SR-207, US-1 Corridor</text>
+
+        <!-- HOME BASE -->
+        <polygon data-id="576" points="400,415 407,435 425,435 411,447 416,467 400,455 384,467 389,447 375,435 393,435" fill="#1e90ff" stroke="#fff" stroke-width="1" filter="url(#glow-filter)"/>
+        <text data-id="577" x="400" y="485" fill="#ffffff" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" text-anchor="middle">HOME BASE — NOCATEE</text>
+      </svg>
+    </div>
+    <!-- Legend -->
+    <div data-id="578" class="flex flex-wrap items-center gap-4 mt-4 px-2">
+      <div data-id="579" class="flex items-center gap-2"><span data-id="580" class="w-3 h-3 rounded-full bg-electric inline-block"></span><span data-id="581" class="font-mono text-[10px] text-muted">Port Zone</span></div>
+      <div data-id="582" class="flex items-center gap-2"><span data-id="583" class="w-3 h-3 rounded-full bg-go inline-block"></span><span data-id="584" class="font-mono text-[10px] text-muted">Core Cluster</span></div>
+      <div data-id="585" class="flex items-center gap-2"><span data-id="586" class="w-3 h-3 rounded-full bg-caution inline-block"></span><span data-id="587" class="font-mono text-[10px] text-muted">Active Cluster</span></div>
+      <div data-id="588" class="flex items-center gap-2">
+        <svg data-id="589" width="12" height="12" viewBox="0 0 12 12"><polygon data-id="590" points="6,1 7.5,5 12,5 8.5,7.5 9.5,12 6,9 2.5,12 3.5,7.5 0,5 4.5,5" fill="#1e90ff"/></svg>
+        <span data-id="591" class="font-mono text-[10px] text-muted">Home Base</span>
+      </div>
+    </div>
+  </div>
+</section>
+</div><!-- end tab-clusters -->
+
+<!-- ===== TAB: PLANNING BRIEF ===== -->
+<div data-id="592" id="tab-planning-c6d7" class="tab-content hidden space-y-4 md:space-y-6">
+
+<!-- SECTION 8: THURSDAY PLANNING BRIEF -->
+<section data-id="593" class="card" id="card-thu-e8f9">
+  <div data-id="594" class="card-header justify-between flex-wrap gap-2">
+    <div data-id="595" class="flex items-center gap-2">
+      <i data-id="596" data-lucide="clipboard-list" class="w-4 h-4"></i>
+      <span data-id="597">Thursday Primary Planning Cycle — 14 MAY 2026</span>
+    </div>
+    <span data-id="598" class="badge badge-go">ACTIVE</span>
+  </div>
+  <div data-id="599" class="card-body space-y-5">
+    <!-- SITUATION -->
+    <div data-id="600">
+      <h4 data-id="601" class="font-mono text-[10px] text-alert uppercase tracking-widest mb-2 flex items-center gap-2">
+        <i data-id="602" data-lucide="crosshair" class="w-3 h-3"></i> Situation
+      </h4>
+      <p data-id="603" class="text-xs leading-relaxed text-muted-light pl-4 border-l-2 border-alert/40">
+        Clear weather (85°F, sunny). Capacity tightening post-Roadcheck. Drayage demand elevated from JAXPORT container arrivals (<span data-id="604" class="text-[#c8d6e5] font-semibold">TAINO + PERLA DEL CARIBE May 11</span>). Market L/T ratios trending up. ISM PMI expansion confirmed.
+      </p>
+    </div>
+    <!-- MISSION -->
+    <div data-id="605">
+      <h4 data-id="606" class="font-mono text-[10px] text-go uppercase tracking-widest mb-2 flex items-center gap-2">
+        <i data-id="607" data-lucide="target" class="w-3 h-3"></i> Mission
+      </h4>
+      <p data-id="608" class="text-xs leading-relaxed text-muted-light pl-4 border-l-2 border-go/40">
+        Execute 7-day load board sweep. Identify Micro-Grid cluster opportunities for Thu-Fri execution. Lock 2-3 Core radius lanes. Evaluate SAV Opportunity lane for Friday or Saturday.
+      </p>
+    </div>
+    <!-- TIMELINE -->
+    <div data-id="609">
+      <h4 data-id="610" class="font-mono text-[10px] text-electric uppercase tracking-widest mb-4 flex items-center gap-2">
+        <i data-id="611" data-lucide="clock" class="w-3 h-3"></i> Execution Timeline
+      </h4>
+      <div data-id="612" id="timeline-items-g0h1">
+        <div data-id="613" class="timeline-item">
+          <div data-id="614" class="timeline-dot" style="border-color:#ff3d3d;"></div>
+          <div data-id="615">
+            <span data-id="616" class="font-mono text-xs font-bold text-alert">05:00</span>
+            <span data-id="617" class="font-mono text-[10px] text-muted ml-2 uppercase">5AM SWEEP</span>
+            <p data-id="618" class="text-xs text-muted-light mt-1">Load board scan (DAT + Truckstop). Flag all LTL/partial loads within 150-mi Core radius. Screenshot rate snapshots.</p>
+          </div>
+        </div>
+        <div data-id="619" class="timeline-item">
+          <div data-id="620" class="timeline-dot" style="border-color:#ffab40;"></div>
+          <div data-id="621">
+            <span data-id="622" class="font-mono text-xs font-bold text-caution">07:00</span>
+            <span data-id="623" class="font-mono text-[10px] text-muted ml-2 uppercase">Broker Outreach Window</span>
+            <p data-id="624" class="text-xs text-muted-light mt-1">Contact target brokers. Use Standard service framing. Reference market tightening for rate support.</p>
+          </div>
+        </div>
+        <div data-id="625" class="timeline-item">
+          <div data-id="626" class="timeline-dot" style="border-color:#00e676;"></div>
+          <div data-id="627">
+            <span data-id="628" class="font-mono text-xs font-bold text-go">09:00</span>
+            <span data-id="629" class="font-mono text-[10px] text-muted ml-2 uppercase">Primary Planning Session</span>
+            <p data-id="630" class="text-xs text-muted-light mt-1">Finalize weekly route map. Set Micro-Grid clusters. Evaluate drayage opportunities at Dames Point ICTF.</p>
+          </div>
+        </div>
+        <div data-id="631" class="timeline-item">
+          <div data-id="632" class="timeline-dot" style="border-color:#1e90ff;"></div>
+          <div data-id="633">
+            <span data-id="634" class="font-mono text-xs font-bold text-electric">11:00</span>
+            <span data-id="635" class="font-mono text-[10px] text-muted ml-2 uppercase">Route Validation</span>
+            <p data-id="636" class="text-xs text-muted-light mt-1">Run PC*Miler/TruckMap checks on confirmed lanes. Confirm truck-legal routing for all industrial cluster zones.</p>
+          </div>
+        </div>
+        <div data-id="637" class="timeline-item">
+          <div data-id="638" class="timeline-dot" style="border-color:#ffab40;"></div>
+          <div data-id="639">
+            <span data-id="640" class="font-mono text-xs font-bold text-caution">13:00</span>
+            <span data-id="641" class="font-mono text-[10px] text-muted ml-2 uppercase">Decision Gate</span>
+            <p data-id="642" class="text-xs text-muted-light mt-1">Go/No-Go on Opportunity lanes (SAV / MCO). Commit to Thursday execution if load available.</p>
+          </div>
+        </div>
+        <div data-id="643" class="timeline-item">
+          <div data-id="644" class="timeline-dot" style="border-color:#1e90ff;"></div>
+          <div data-id="645">
+            <span data-id="646" class="font-mono text-xs font-bold text-electric">15:00</span>
+            <span data-id="647" class="font-mono text-[10px] text-muted ml-2 uppercase">Contracting Prep</span>
+            <p data-id="648" class="text-xs text-muted-light mt-1">Prepare rate confirmations for Friday window. Draft broker responses if needed.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 9: FRIDAY CONTRACTING -->
+<section data-id="649" class="card" id="card-fri-i2j3">
+  <div data-id="650" class="card-header justify-between flex-wrap gap-2">
+    <div data-id="651" class="flex items-center gap-2">
+      <i data-id="652" data-lucide="file-signature" class="w-4 h-4"></i>
+      <span data-id="653">Friday Contracting Window — 15 MAY 2026</span>
+    </div>
+    <span data-id="654" class="badge badge-blue">PREP</span>
+  </div>
+  <div data-id="655" class="card-body grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div data-id="656" class="space-y-4">
+      <h4 data-id="657" class="font-mono text-[10px] text-electric uppercase tracking-widest">Contracting Targets</h4>
+      <div data-id="658" class="space-y-2">
+        <div data-id="659" class="flex items-start gap-2 p-2 rounded bg-navy-600/50">
+          <i data-id="660" data-lucide="check-circle" class="w-4 h-4 text-go flex-shrink-0 mt-0.5"></i>
+          <p data-id="661" class="text-xs text-muted-light">2-3 confirmed Core radius LTL loads (backhaul pairs preferred)</p>
+        </div>
+        <div data-id="662" class="flex items-start gap-2 p-2 rounded bg-navy-600/50">
+          <i data-id="663" data-lucide="check-circle" class="w-4 h-4 text-caution flex-shrink-0 mt-0.5"></i>
+          <p data-id="664" class="text-xs text-muted-light">1 Opportunity lane evaluation (SAV or MCO)</p>
+        </div>
+        <div data-id="665" class="flex items-start gap-2 p-2 rounded bg-navy-600/50">
+          <i data-id="666" data-lucide="check-circle" class="w-4 h-4 text-electric flex-shrink-0 mt-0.5"></i>
+          <p data-id="667" class="text-xs text-muted-light">Micro-Grid cluster: minimum 2 stops daisy-chained</p>
+        </div>
+      </div>
+    </div>
+    <div data-id="668" class="space-y-4">
+      <h4 data-id="669" class="font-mono text-[10px] text-electric uppercase tracking-widest">Rate Floor Guidance</h4>
+      <div data-id="670" class="overflow-x-auto">
+        <table data-id="671" class="intel-table">
+          <thead data-id="672"><tr data-id="673"><th data-id="674">Lane Type</th><th data-id="675">Floor RPM</th><th data-id="676">Target RPM</th></tr></thead>
+          <tbody data-id="677">
+            <tr data-id="678"><td data-id="679" class="font-mono text-xs">Micro-Grid (&lt;50 mi)</td><td data-id="680" class="font-mono text-xs text-alert">$2.50</td><td data-id="681" class="font-mono text-xs text-go">$3.00+</td></tr>
+            <tr data-id="682"><td data-id="683" class="font-mono text-xs">Core Radius (50-150 mi)</td><td data-id="684" class="font-mono text-xs text-alert">$2.20</td><td data-id="685" class="font-mono text-xs text-go">$2.60</td></tr>
+            <tr data-id="686"><td data-id="687" class="font-mono text-xs">Opportunity (150-250 mi)</td><td data-id="688" class="font-mono text-xs text-alert">$2.00</td><td data-id="689" class="font-mono text-xs text-go">$2.35</td></tr>
+            <tr data-id="690"><td data-id="691" class="font-mono text-xs">Port Drayage (JAX)</td><td data-id="692" class="font-mono text-xs text-alert">Flat rate</td><td data-id="693" class="font-mono text-xs text-go">$250-$400/move</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div data-id="694" class="p-3 rounded border border-alert/20 bg-alert/5">
+        <p data-id="695" class="font-mono text-[10px] text-alert leading-relaxed"><i data-id="696" data-lucide="shield-alert" class="w-3 h-3 inline -mt-0.5 mr-1"></i>Never run below floor. Sit before losing money. Backhaul must pencil before committing outbound.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</div><!-- end tab-planning -->
+
+</main>
+
+<!-- SECTION 10: BACKGROUND INTELLIGENCE STATUS (always visible) -->
+<section data-id="697" id="bg-intel-footer-k4l5" class="border-t border-[#1e2d44] px-4 md:px-6 py-4" style="background:#0a0f1a;">
+  <div data-id="698" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <!-- Card 1: Continuous Monitoring -->
+    <div data-id="699" class="card">
+      <div data-id="700" class="card-header text-[10px]"><i data-id="701" data-lucide="scan-eye" class="w-3.5 h-3.5"></i> Continuous Monitoring</div>
+      <div data-id="702" class="card-body space-y-1.5 py-3">
+        <div data-id="703" class="flex items-center gap-2"><span data-id="704" class="w-1.5 h-1.5 rounded-full bg-go"></span><span data-id="705" class="font-mono text-[10px] text-muted-light">DAT Lane Alerts: <span data-id="706" class="text-go">ACTIVE</span></span></div>
+        <div data-id="707" class="flex items-center gap-2"><span data-id="708" class="w-1.5 h-1.5 rounded-full bg-go"></span><span data-id="709" class="font-mono text-[10px] text-muted-light">JAXPORT Vessel Feed: <span data-id="710" class="text-electric">MONITORING</span></span></div>
+        <div data-id="711" class="flex items-center gap-2"><span data-id="712" class="w-1.5 h-1.5 rounded-full bg-go"></span><span data-id="713" class="font-mono text-[10px] text-muted-light">Weather Updates: <span data-id="714" class="text-go">7-DAY LOADED</span></span></div>
+      </div>
+    </div>
+    <!-- Card 2: Next Cycle Triggers -->
+    <div data-id="715" class="card">
+      <div data-id="716" class="card-header text-[10px]"><i data-id="717" data-lucide="alarm-clock" class="w-3.5 h-3.5"></i> Next Cycle Triggers</div>
+      <div data-id="718" class="card-body space-y-1.5 py-3">
+        <div data-id="719" class="flex items-center gap-2"><i data-id="720" data-lucide="chevron-right" class="w-3 h-3 text-alert"></i><span data-id="721" class="font-mono text-[10px] text-muted-light">Thursday 05:00 — <span data-id="722" class="text-alert">5AM Load Board Sweep</span></span></div>
+        <div data-id="723" class="flex items-center gap-2"><i data-id="724" data-lucide="chevron-right" class="w-3 h-3 text-go"></i><span data-id="725" class="font-mono text-[10px] text-muted-light">Thursday 09:00 — <span data-id="726" class="text-go">Primary Planning Session</span></span></div>
+        <div data-id="727" class="flex items-center gap-2"><i data-id="728" data-lucide="chevron-right" class="w-3 h-3 text-electric"></i><span data-id="729" class="font-mono text-[10px] text-muted-light">Friday 08:00 — <span data-id="730" class="text-electric">Contracting Window Open</span></span></div>
+      </div>
+    </div>
+    <!-- Card 3: Agent Status -->
+    <div data-id="731" class="card">
+      <div data-id="732" class="card-header text-[10px]"><i data-id="733" data-lucide="cpu" class="w-3.5 h-3.5"></i> Agent Status</div>
+      <div data-id="734" class="card-body space-y-1.5 py-3">
+        <div data-id="735" class="flex items-center gap-2"><span data-id="736" class="w-2 h-2 rounded-full bg-go pulse-go"></span><span data-id="737" class="font-mono text-[10px] text-muted-light">Planning Task Agent v1.0: <span data-id="738" class="text-go">RUNNING</span></span></div>
+        <div data-id="739" class="flex items-center gap-2"><span data-id="740" class="w-1.5 h-1.5 rounded-full bg-go"></span><span data-id="741" class="font-mono text-[10px] text-muted-light">Intelligence Cycle: <span data-id="742" class="text-go">ACTIVE</span></span></div>
+        <div data-id="743" class="flex items-center gap-2"><span data-id="744" class="w-1.5 h-1.5 rounded-full bg-go"></span><span data-id="745" class="font-mono text-[10px] text-muted-light">Cycle Health: <span data-id="746" class="text-go">ALL SYSTEMS GO</span></span></div>
+        <div data-id="747" class="flex items-center gap-2"><i data-id="748" data-lucide="mail" class="w-3 h-3 text-muted"></i><span data-id="749" class="font-mono text-[10px] text-muted">dispatch@level1trans.com</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer data-id="750" class="text-center py-3 border-t border-[#1e2d44]" style="background:#080d16;">
+  <p data-id="751" class="font-mono text-[9px] text-muted/60 tracking-wider">LEVEL 1 TRANSPORT — PLANNING TASK AGENT v1.0 — CLASSIFIED: OPERATIONAL USE ONLY — Made by Copilot</p>
+</footer>
+
+<script>
+  lucide.createIcons();
+
+  // ===== CORE LANE DATA =====
+  const coreLanes = [
+    { origin: 'JAX', dest: 'St. Augustine, FL', dist: 40, priority: 'MICRO-GRID', badge: 'badge-go', icon: '✅', rpm: '$2.60–$3.00', deadhead: 'LOW', backhaul: 'HIGH' },
+    { origin: 'JAX', dest: 'Fernandina Beach, FL', dist: 30, priority: 'MICRO-GRID', badge: 'badge-go', icon: '✅', rpm: '$2.70–$3.20', deadhead: 'LOW', backhaul: 'MED' },
+    { origin: 'JAX', dest: 'Palatka, FL', dist: 55, priority: 'CORE', badge: 'badge-go', icon: '✅', rpm: '$2.30–$2.70', deadhead: 'LOW', backhaul: 'MED' },
+    { origin: 'JAX', dest: 'Lake City, FL', dist: 60, priority: 'CORE', badge: 'badge-go', icon: '✅', rpm: '$2.20–$2.60', deadhead: 'MED', backhaul: 'MED' },
+    { origin: 'JAX', dest: 'Brunswick, GA', dist: 70, priority: 'CORE', badge: 'badge-go', icon: '✅', rpm: '$2.20–$2.55', deadhead: 'MED', backhaul: 'LOW' },
+    { origin: 'JAX', dest: 'Gainesville, FL', dist: 72, priority: 'CORE', badge: 'badge-go', icon: '✅', rpm: '$2.20–$2.50', deadhead: 'MED', backhaul: 'MED' },
+    { origin: 'Nocatee', dest: 'JAX Port', dist: 25, priority: 'PRIORITY DRAYAGE', badge: 'badge-blue', icon: '🔵', rpm: '$250–$400/move', deadhead: 'LOW', backhaul: 'HIGH' },
+  ];
+
+  const coreContainer = document.getElementById('core-lanes-g4h5');
+  coreLanes.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'p-3 rounded border border-[#1e2d44] bg-navy-600/30 hover:border-electric/30 transition-colors';
+    div.innerHTML = `
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <span class="font-mono text-xs font-bold text-[#c8d6e5]">${l.origin} → ${l.dest}</span>
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-[10px] text-muted">${l.dist} mi</span>
+          <span class="badge ${l.badge} text-[9px]">${l.priority} ${l.icon}</span>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-3 text-[10px] font-mono text-muted">
+        <span>RPM: <span class="text-go">${l.rpm}</span></span>
+        <span>Deadhead: <span class="${l.deadhead==='LOW'?'text-go':'text-caution'}">${l.deadhead}</span></span>
+        <span>Backhaul: <span class="${l.backhaul==='HIGH'?'text-go':l.backhaul==='MED'?'text-caution':'text-alert'}">${l.backhaul}</span></span>
+      </div>`;
+    coreContainer.appendChild(div);
+  });
+
+  // ===== OPPORTUNITY LANE DATA =====
+  const oppLanes = [
+    { code: 'SAV', city: 'Savannah, GA', dist: '~140 mi', priority: 'HIGH', color: 'alert', brief: 'Port activity + SE capacity tightening → elevated demand. Strong backhaul via I-95.', detail: 'Savannah port complex seeing +8% container throughput YoY. I-95 corridor backhaul density strong. Flatbed + van demand up. Recommend THU-FRI window for max rate capture.' },
+    { code: 'MCO', city: 'Orlando, FL', dist: '~140 mi', priority: 'MED-HIGH', color: 'caution', brief: 'Distribution hub. Produce + consumer goods surge. Multi-broker lane.', detail: 'Central FL distribution corridor active with seasonal produce + retail replenishment. Multiple broker relationships available. I-95 to I-4 routing optimal. Monitor for Thursday loads.' },
+    { code: 'DAB', city: 'Daytona Beach, FL', dist: '~90 mi', priority: 'MED', color: 'caution', brief: 'Coastal corridor. Light manufacturing + retail distribution.', detail: 'US-1 / I-95 access. Light manufacturing and retail distribution activity. Moderate load density. Good for daisy-chain with St. Augustine stops.' },
+    { code: 'OCA', city: 'Ocala, FL', dist: '~115 mi', priority: 'MED', color: 'caution', brief: 'Agricultural + distribution. Growing freight density.', detail: 'Ocala corridor seeing growth in distribution center development. Agricultural exports + building materials. I-75 access for northbound continuation.' },
+    { code: 'VLD', city: 'Valdosta, GA', dist: '~115 mi', priority: 'MED', color: 'caution', brief: 'I-75 corridor. Southbound produce, northbound industrial.', detail: 'I-75 / US-41 crossroads. Southbound produce from GA/FL agriculture, northbound industrial and consumer goods. Moderate backhaul availability.' },
+  ];
+
+  const oppContainer = document.getElementById('opp-lanes-k8l9');
+  oppLanes.forEach((l, idx) => {
+    const card = document.createElement('div');
+    card.className = 'expand-card p-3 rounded border border-[#1e2d44] bg-navy-600/30 cursor-pointer';
+    card.style.borderLeftWidth = '3px';
+    card.style.borderLeftColor = l.color === 'alert' ? '#ff3d3d' : '#ffab40';
+    card.innerHTML = `
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+        <div class="flex items-center gap-2">
+          <span class="badge badge-${l.color} text-[9px]">${l.priority}</span>
+          <span class="font-mono text-xs font-bold text-[#c8d6e5]">${l.city} (${l.code})</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-[10px] text-muted">${l.dist}</span>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-muted expand-icon transition-transform"></i>
+        </div>
+      </div>
+      <p class="text-[11px] text-muted-light">${l.brief}</p>
+      <div class="expand-detail mt-2" data-expand="opp-${idx}">
+        <div class="pt-2 border-t border-[#1e2d44]">
+          <p class="text-[11px] text-muted-light leading-relaxed">${l.detail}</p>
+        </div>
+      </div>`;
+    card.addEventListener('click', () => {
+      const detail = card.querySelector('.expand-detail');
+      const icon = card.querySelector('.expand-icon');
+      detail.classList.toggle('open');
+      icon.style.transform = detail.classList.contains('open') ? 'rotate(180deg)' : '';
+    });
+    oppContainer.appendChild(card);
+  });
+  lucide.createIcons();
+
+  // ===== TAB SWITCHING =====
+  const tabs = {
+    'overview': document.getElementById('tab-overview-y5z6'),
+    'lanes': document.getElementById('tab-lanes-c0d1'),
+    'port-intel': document.getElementById('tab-port-intel-o2p3'),
+    'clusters': document.getElementById('tab-clusters-u8v9'),
+    'planning': document.getElementById('tab-planning-c6d7'),
+  };
+
+  function switchTab(name) {
+    Object.values(tabs).forEach(t => t.classList.add('hidden'));
+    if (tabs[name]) tabs[name].classList.remove('hidden');
+    document.querySelectorAll('.tab-btn-nav[data-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === name);
+    });
+    document.querySelectorAll('.mobile-tab-btn[data-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === name);
+    });
+    // Close mobile menu
+    document.getElementById('mobile-menu-i9j0').classList.add('hidden');
+  }
+
+  document.querySelectorAll('.tab-btn-nav[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+  document.querySelectorAll('.mobile-tab-btn[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // ===== MOBILE MENU =====
+  document.getElementById('mobile-menu-btn-g7h8').addEventListener('click', () => {
+    document.getElementById('mobile-menu-i9j0').classList.remove('hidden');
+  });
+  document.getElementById('mobile-menu-close-k1l2').addEventListener('click', () => {
+    document.getElementById('mobile-menu-i9j0').classList.add('hidden');
+  });
+
+  // ===== REFRESH BUTTON =====
+  document.getElementById('refresh-btn-u1v2').addEventListener('click', function() {
+    const btn = this;
+    const text = document.getElementById('refresh-text-w3x4');
+    btn.classList.add('refresh-spinning');
+    text.textContent = 'Refreshing...';
+    btn.disabled = true;
+    setTimeout(() => {
+      const now = new Date();
+      const ts = now.toLocaleTimeString('en-US', { hour12: false, timeZone: 'America/New_York' }) + ' EDT';
+      document.getElementById('refresh-ts-s9t0').textContent = ts;
+      btn.classList.remove('refresh-spinning');
+      text.textContent = 'Refresh Intel';
+      btn.disabled = false;
+    }, 2000);
+  });
+
+  // ===== LIVE CLOCK =====
+  function updateClock() {
+    const now = new Date();
+    const ts = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York', hour12: false });
+    const el = document.getElementById('clock-display-x1y2');
+    if (el) el.textContent = ts + ' EDT';
+  }
+  setInterval(updateClock, 30000);
+
+  // ===== SORTABLE TABLES =====
+  document.querySelectorAll('table.intel-table th[data-sort]').forEach(th => {
+    th.addEventListener('click', function() {
+      const table = th.closest('table');
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const idx = Array.from(th.parentNode.children).indexOf(th);
+      const currentDir = th.getAttribute('data-dir') || 'asc';
+      const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+
+      // Clear all arrows in this table
+      table.querySelectorAll('th[data-sort] .sort-arrow').forEach(s => s.textContent = '');
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = newDir === 'asc' ? ' ▲' : ' ▼';
+      th.setAttribute('data-dir', newDir);
+
+      rows.sort((a, b) => {
+        const aText = a.children[idx] ? a.children[idx].textContent.trim() : '';
+        const bText = b.children[idx] ? b.children[idx].textContent.trim() : '';
+        const aNum = parseFloat(aText.replace(/[^0-9.-]/g, ''));
+        const bNum = parseFloat(bText.replace(/[^0-9.-]/g, ''));
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return newDir === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+        return newDir === 'asc' ? aText.localeCompare(bText) : bText.localeCompare(aText);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    });
+  });
+</script>
+</body>
+</html>
