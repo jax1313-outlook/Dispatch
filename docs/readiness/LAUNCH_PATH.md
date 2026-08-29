@@ -253,6 +253,31 @@ success.
 **Double-click the Dispatch icon on the Desktop.** The repository folder never has to be
 opened again — which is the point, since not being able to find it was the whole defect.
 
+### Getting the browser back
+
+**Double-click `Open Dispatch Portal` on the Desktop.** This is the second icon, and it
+exists because of a gap in the first one.
+
+Dispatch refuses a second start by process identity — the refusal is a feature, it is what
+stops two servers fighting over port 8080. But `first_run()` returns the moment
+`control.start()` fails, so double-clicking the **Dispatch** icon while Dispatch is
+*already running* reports a refusal and never reaches the browser. Close the tab and there
+was no way back to the page except typing the address by hand.
+
+`Open Dispatch Portal` opens the browser at whatever address Dispatch is actually serving.
+**It does not start Dispatch**, deliberately: an icon that started a server and then closed
+its own window would leave that server running with nothing on screen to stop it, which is
+the orphaned-server hazard the launcher exists to prevent. When Dispatch is not running it
+says so and says to use the other icon.
+
+| Icon | What it does |
+|---|---|
+| `Dispatch` | Starts Dispatch and opens it. Its window is the on/off switch. |
+| `Open Dispatch Portal` | Opens the page when Dispatch is already running. Never starts. |
+
+Both icons are created on a first run. Either can be deleted; neither is required, and
+`DISPATCH_LAUNCHER_NO_SHORTCUT=1` suppresses both.
+
 ### How he knows it is running
 
 - The black window says `Dispatch is RUNNING at http://127.0.0.1:8080`.

@@ -1226,7 +1226,12 @@ class TestWindowsEntryPoints:
             assert "taskkill" not in text.lower()
 
     def test_new_launchers_do_not_carry_the_superseded_program_name(self):
-        for name in ("dispatch.bat", "Dispatch.ps1", "DISPATCH_START_HERE.cmd"):
+        for name in (
+            "dispatch.bat",
+            "Dispatch.ps1",
+            "DISPATCH_START_HERE.cmd",
+            "DISPATCH_OPEN_PORTAL.cmd",
+        ):
             text = (REPO_ROOT / name).read_text(encoding="utf-8")
             assert "L2-COS" not in text
 
@@ -1273,8 +1278,60 @@ class TestWindowsEntryPoints:
 
         assert cli.run_menu(input_fn=_eof) == 0
 
+    @staticmethod
+    def _executable_lines(name: str) -> str:
+        """The executable lines of a .cmd file, comments stripped, joined.
+
+        Local by intent rather than imported from `test_first_run`: a test module that
+        can be run on its own is worth more than one shared helper. Parsing a batch
+        file must read what it *does* -- a REM line explaining why a construct was
+        abandoned still contains that construct.
+        """
+        text = (REPO_ROOT / name).read_text(encoding="utf-8")
+        return "\n".join(
+            line
+            for line in text.splitlines()
+            if line.strip() and not line.strip().upper().startswith("REM")
+        )
+
+    def test_the_open_file_exists_and_holds_no_logic(self):
+        """It is a double-clickable file, so it is untestable and must stay trivial."""
+        text = (REPO_ROOT / "DISPATCH_OPEN_PORTAL.cmd").read_text(encoding="utf-8")
+
+        assert "dispatch_launcher" in text
+        assert "portal/app.py" not in text
+        assert "taskkill" not in text.lower()
+
+    def test_the_open_file_opens_and_never_starts(self):
+        """Two icons, two jobs, and this one must not blur them.
+
+        An icon that started Dispatch and then closed its own window would leave a
+        server running with nothing on screen to stop it. The window opened by
+        DISPATCH_START_HERE is the on/off switch; this file must not create a second
+        way in that has no way out.
+        """
+        commands = self._executable_lines("DISPATCH_OPEN_PORTAL.cmd")
+
+        assert "dispatch_launcher open" in commands
+        assert "dispatch_launcher start-here" not in commands
+        assert "dispatch_launcher start" not in commands.replace(
+            "dispatch_launcher start-here", ""
+        )
+
+    def test_the_open_window_always_waits_before_closing(self):
+        """Success included. When Dispatch is not running the message is the whole
+        deliverable, and a window that closed on its own would throw it away."""
+        commands = self._executable_lines("DISPATCH_OPEN_PORTAL.cmd")
+
+        assert "pause" in commands
+
     def test_the_wrappers_use_crlf_so_windows_can_run_them(self):
-        for name in ("dispatch.bat", "Dispatch.ps1", "DISPATCH_START_HERE.cmd"):
+        for name in (
+            "dispatch.bat",
+            "Dispatch.ps1",
+            "DISPATCH_START_HERE.cmd",
+            "DISPATCH_OPEN_PORTAL.cmd",
+        ):
             raw = (REPO_ROOT / name).read_bytes()
             assert b"\r\n" in raw
             assert raw.replace(b"\r\n", b"") .count(b"\n") == 0

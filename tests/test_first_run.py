@@ -417,6 +417,7 @@ class TestFirstRun:
             "Sign-in PIN",
             "Start",
             "Desktop shortcut",
+            "Portal shortcut",
         ]
         rendered = first_run.render(report)
         assert "Dispatch is RUNNING" in rendered
@@ -630,12 +631,14 @@ class TestDesktopShortcut:
         saying what the icon is for fixes every launch after it.
         """
         monkeypatch.setattr(
-            first_run, "create_desktop_shortcut", lambda target: (True, r"C:\Users\m\Desktop\Dispatch.lnk")
+            first_run,
+            "create_desktop_shortcut",
+            lambda target, **kwargs: (True, r"C:\Users\m\Desktop\Dispatch.lnk"),
         )
         report = first_run.FirstRunReport()
         first_run.ensure_desktop_shortcut(report)
 
-        step = report.steps[-1]
+        step = report.steps[0]
         assert step.ok and step.changed and step.fatal is False
         assert "never open this folder again" in step.detail
         assert "Delete the icon if you do not want it" in step.detail
@@ -644,12 +647,14 @@ class TestDesktopShortcut:
         self, monkeypatch
     ):
         monkeypatch.setattr(
-            first_run, "create_desktop_shortcut", lambda target: (False, "already there")
+            first_run,
+            "create_desktop_shortcut",
+            lambda target, **kwargs: (False, "already there"),
         )
         report = first_run.FirstRunReport()
         first_run.ensure_desktop_shortcut(report)
 
-        step = report.steps[-1]
+        step = report.steps[0]
         assert step.ok is True
         assert step.changed is False, "nothing was changed, so nothing may claim it was"
         assert "already on your Desktop" in step.detail
@@ -677,6 +682,100 @@ class TestDesktopShortcut:
         created, detail = first_run.create_desktop_shortcut(Path("x.cmd"))
         assert created is False
         assert detail == "skipped"
+
+
+# ── the second icon: the way back to an open page ────────────────────────────
+
+
+class TestPortalShortcut:
+    """Dispatch refuses a second start, so the first icon cannot reopen the browser.
+
+    `first_run` returns the moment `control.start()` fails, and a start while Dispatch
+    is already running *is* a failure by design -- the refusal is the feature. So
+    double-clicking `Dispatch` on a machine where Dispatch is already up reports a
+    refusal and never reaches the browser. Close the tab and there is no way back to
+    the page except typing the address. That is what this icon is for.
+    """
+
+    def test_the_two_icons_have_different_names(self):
+        assert first_run.PORTAL_SHORTCUT_NAME != first_run.SHORTCUT_NAME
+
+    def test_it_points_at_the_open_file_not_the_start_file(self, monkeypatch):
+        seen = {}
+
+        def _record(target, **kwargs):
+            seen["target"] = Path(target).name
+            seen["name"] = kwargs.get("name")
+            return True, r"C:\Users\m\Desktop\Open Dispatch Portal.lnk"
+
+        monkeypatch.setattr(first_run, "create_desktop_shortcut", _record)
+        first_run.ensure_portal_shortcut(first_run.FirstRunReport())
+
+        assert seen["target"] == "DISPATCH_OPEN_PORTAL.cmd"
+        assert seen["name"] == first_run.PORTAL_SHORTCUT_NAME
+
+    def test_the_step_says_it_opens_rather_than_starts(self, monkeypatch):
+        """The distinction is the whole point of a second icon.
+
+        An operator who believes this one starts Dispatch will double-click it on a
+        stopped machine, get a page that will not load, and reasonably conclude the
+        program is broken.
+        """
+        monkeypatch.setattr(
+            first_run,
+            "create_desktop_shortcut",
+            lambda target, **kwargs: (True, r"C:\Users\m\Desktop\Open Dispatch Portal.lnk"),
+        )
+        report = first_run.FirstRunReport()
+        first_run.ensure_portal_shortcut(report)
+
+        step = report.steps[-1]
+        assert step.ok and step.changed and step.fatal is False
+        assert "does not start it" in step.detail
+
+    def test_an_icon_already_there_does_not_claim_a_change(self, monkeypatch):
+        monkeypatch.setattr(
+            first_run,
+            "create_desktop_shortcut",
+            lambda target, **kwargs: (False, "already there"),
+        )
+        report = first_run.FirstRunReport()
+        first_run.ensure_portal_shortcut(report)
+
+        step = report.steps[-1]
+        assert step.ok is True
+        assert step.changed is False
+        assert "already on your Desktop" in step.detail
+
+    def test_a_failure_to_create_it_never_blocks_a_launch(self, monkeypatch):
+        monkeypatch.setattr(
+            first_run,
+            "create_desktop_shortcut",
+            lambda target, **kwargs: (False, "could not be created"),
+        )
+        report = first_run.FirstRunReport()
+        first_run.ensure_portal_shortcut(report)
+
+        assert not report.blocker
+        assert report.steps[-1].fatal is False
+
+    def test_both_icons_are_offered_on_a_first_run(self, monkeypatch):
+        names = []
+        monkeypatch.setattr(
+            first_run,
+            "create_desktop_shortcut",
+            lambda target, **kwargs: names.append(Path(target).name) or (True, "x"),
+        )
+        first_run.ensure_desktop_shortcut(first_run.FirstRunReport())
+
+        assert names == ["DISPATCH_START_HERE.cmd", "DISPATCH_OPEN_PORTAL.cmd"]
+
+    def test_the_opt_out_env_var_covers_both_icons(self, monkeypatch):
+        monkeypatch.setenv(first_run.NO_SHORTCUT_ENV, "1")
+        created, _ = first_run.create_desktop_shortcut(
+            Path("x.cmd"), name=first_run.PORTAL_SHORTCUT_NAME
+        )
+        assert created is False
 
 
 # ── the sign-in PIN ──────────────────────────────────────────────────────────

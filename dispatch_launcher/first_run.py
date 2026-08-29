@@ -529,6 +529,13 @@ NO_SHORTCUT_ENV = "DISPATCH_LAUNCHER_NO_SHORTCUT"
 
 SHORTCUT_NAME = "Dispatch.lnk"
 
+#: The second icon. Dispatch refuses a second start by process identity, so
+#: double-clicking the first icon while Dispatch is already running reports a
+#: refusal and never reaches the browser. Closing the tab then strands the
+#: operator with a running server and no way back to the page. This is the way
+#: back. It opens; it deliberately does not start.
+PORTAL_SHORTCUT_NAME = "Open Dispatch Portal.lnk"
+
 
 def desktop_dir() -> "os.PathLike[str] | None":
     """This user's Desktop, or None if it cannot be located."""
@@ -538,8 +545,13 @@ def desktop_dir() -> "os.PathLike[str] | None":
     return candidate if candidate.is_dir() else None
 
 
-def create_desktop_shortcut(target: "os.PathLike[str]") -> tuple[bool, str]:
-    """Put a `Dispatch` icon on the Desktop pointing at `target`.
+def create_desktop_shortcut(
+    target: "os.PathLike[str]",
+    *,
+    name: str = SHORTCUT_NAME,
+    description: str = "Start Dispatch",
+) -> tuple[bool, str]:
+    """Put an icon named `name` on the Desktop pointing at `target`.
 
     **This is the fix for the defect, not a convenience.** The reported problem was not
     "Dispatch will not start" -- it was *"I cannot find it."* And that is accurate rather
@@ -568,7 +580,7 @@ def create_desktop_shortcut(target: "os.PathLike[str]") -> tuple[bool, str]:
     if desktop is None:
         return False, "this user's Desktop folder could not be found"
 
-    link = Path(desktop) / SHORTCUT_NAME
+    link = Path(desktop) / name
     if link.exists():
         return False, "already there"
 
@@ -578,9 +590,9 @@ def create_desktop_shortcut(target: "os.PathLike[str]") -> tuple[bool, str]:
         "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{link}');"
         "$s.TargetPath = '{target}';"
         "$s.WorkingDirectory = '{working}';"
-        "$s.Description = 'Start Dispatch';"
+        "$s.Description = '{description}';"
         "$s.Save()"
-    ).format(link=link, target=target, working=target.parent)
+    ).format(link=link, target=target, working=target.parent, description=description)
     try:
         completed = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
@@ -608,16 +620,59 @@ def ensure_desktop_shortcut(report: FirstRunReport) -> None:
             changed=True,
             fatal=False,
         )
-        return
-    if detail == "already there":
+    elif detail == "already there":
         report.add(
             "Desktop shortcut",
             True,
             "The Dispatch icon is already on your Desktop.",
             fatal=False,
         )
+    else:
+        report.add("Desktop shortcut", True, f"Not created: {detail}.", fatal=False)
+
+    ensure_portal_shortcut(report)
+
+
+def ensure_portal_shortcut(report: FirstRunReport) -> None:
+    """Put the second icon beside the first: the way back to an open page.
+
+    The two icons answer two different questions and are deliberately not one icon.
+    `Dispatch` starts the program, and the window it opens is the on/off switch --
+    closing that window is how Dispatch stops. `Open Dispatch Portal` only opens the
+    browser at whatever address Dispatch is actually serving.
+
+    Merging them was considered and rejected. An icon that started Dispatch and then
+    closed its own window would leave a server running with nothing left on screen to
+    stop it, which is precisely the orphaned-server hazard the launcher exists to
+    prevent. So this one opens and never starts, and says so when there is nothing to
+    open.
+    """
+    target = locations.repo_root() / "DISPATCH_OPEN_PORTAL.cmd"
+    created, detail = create_desktop_shortcut(
+        target,
+        name=PORTAL_SHORTCUT_NAME,
+        description="Open Dispatch in your browser (Dispatch must already be running)",
+    )
+    if created:
+        report.add(
+            "Portal shortcut",
+            True,
+            f"Put an Open Dispatch Portal icon on your Desktop: {detail}. Use it to get "
+            "the browser back when you have closed the tab. It opens Dispatch; it does "
+            "not start it.",
+            changed=True,
+            fatal=False,
+        )
         return
-    report.add("Desktop shortcut", True, f"Not created: {detail}.", fatal=False)
+    if detail == "already there":
+        report.add(
+            "Portal shortcut",
+            True,
+            "The Open Dispatch Portal icon is already on your Desktop.",
+            fatal=False,
+        )
+        return
+    report.add("Portal shortcut", True, f"Not created: {detail}.", fatal=False)
 
 
 # ── the whole path ───────────────────────────────────────────────────────────
