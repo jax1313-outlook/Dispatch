@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>{{ record.numbers.mission_label or 'JOE Portal' }} — Level 1 Transport</title>
+
+{# Vendored, not fetched. The prototype pulled Tailwind, Lucide and Google
+   Fonts from three CDNs; in a truck with no signal that renders unstyled.
+   These are served from this machine. #}
+<script src="{{ url_for('static', filename='vendor/tailwind.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='joe_portal.css') }}">
+</head>
+
+<body class="flex flex-col min-h-screen">
+
+{# ============================================================= HEADER #}
+<header class="px-4 pt-4 pb-2">
+  <div class="flex justify-between items-center flex-wrap gap-3">
+    <div>
+      <div class="fact-label">Level 1 Transport</div>
+      <div class="flex items-center gap-3 mt-1">
+        <span class="big-fact">{{ record.title or 'Untitled mission' }}</span>
+        {% if record.purpose == 'MISSION' %}
+          <span class="badge badge-go">Mission</span>
+        {% else %}
+          <span class="badge badge-blue">Opportunity</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# The two numbers, side by side and labelled, so they can never be
+       confused. Ours is short and dim. Theirs is the one on the invoice. #}
+    <div class="flex items-center gap-6">
+      <div>
+        <div class="fact-label">Mission (ours)</div>
+        <div class="num-mission text-lg">
+          {{ record.numbers.mission_number or '—' }}</div>
+      </div>
+      <div>
+        <div class="fact-label">Load (broker's)</div>
+        <div class="num-load text-lg">
+          {{ record.numbers.load_number or '—' }}</div>
+      </div>
+      <div>
+        <div class="fact-label">Clock</div>
+        <div class="font-mono text-lg tabular-nums" id="clock">--:--:--</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+{# =========================================================== MODE BAR #}
+{# CURRENT / PICKUP / DELIVERY. Deterministic views over ONE record - the
+   same switchTab mechanism the prototype already used, widened from
+   overview/lanes/clusters to mission phase. CURRENT is not a third data
+   set: it resolves to whichever phase the record's own status is in. #}
+<nav class="mode-bar px-4" role="tablist" aria-label="Mission view">
+  {% for mode in ['CURRENT', 'PICKUP', 'DELIVERY'] %}
+    <button class="mode-btn {% if mode == requested_view %}active{% endif %}"
+            data-mode="{{ mode }}" role="tab"
+            aria-selected="{{ 'true' if mode == requested_view else 'false' }}">
+      {{ mode }}
+    </button>
+  {% endfor %}
+  <button class="mode-btn" data-mode="SWEEP">Sweep</button>
+  <span class="ml-auto flex items-center gap-2 pr-2">
+    <span class="fact-label">Showing</span>
+    <span class="badge badge-blue" id="resolved-phase">{{ view.phase }}</span>
+  </span>
+</nav>
+
+<main class="flex-1 px-4 py-4 space-y-4">
+
+{# ============================================================= CURRENT #}
+<section data-panel="CURRENT" class="space-y-4 {% if requested_view != 'CURRENT' %}hidden{% endif %}">
+
+  <div class="card">
+    <div class="card-header">What matters now</div>
+    <div class="card-body space-y-3">
+      <div class="flex flex-wrap gap-6">
+        <div>
+          <div class="fact-label">Next required action</div>
+          <div class="big-fact">{{ next_action }}</div>
+        </div>
+        <div>
+          <div class="fact-label">Status</div>
+          <div class="big-fact">{{ (record.status or 'created')|replace('_',' ')|title }}</div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-6 pt-2">
+        <div>
+          <div class="fact-label">Going to</div>
+          <div class="text-base">
+            {% if view.phase == 'PICKUP' %}{{ record.pickup_location or '—' }}
+            {% else %}{{ record.delivery_location or '—' }}{% endif %}
+          </div>
+        </div>
+        <div>
+          <div class="fact-label">Time that matters</div>
+          <div class="text-base font-mono">
+            {% if view.phase == 'PICKUP' %}{{ record.pickup_window or '—' }}
+            {% else %}{{ record.delivery_window or '—' }}{% endif %}
+          </div>
+        </div>
+        <div>
+          <div class="fact-label">Contact</div>
+          <div class="text-base">
+            {{ record.broker or '—' }}
+            {% if record.broker_phone %}
+              <a class="num-load ml-2" href="tel:{{ record.broker_phone }}">
+                {{ record.broker_phone }}</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Anything unresolved. Open exceptions appear in every phase, because a
+     problem is never irrelevant just because you moved down the road. #}
+  <div class="card">
+    <div class="card-header">Unresolved</div>
+    <div class="card-body space-y-2">
+      {% if view.exceptions %}
+        {% for x in view.exceptions %}
+          <div class="border-l-2 border-alert pl-3">
+            <span class="badge badge-alert">{{ x.exception_type }}</span>
+            <span class="ml-2">{{ x.description or x.notes or '' }}</span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-muted font-mono text-xs">Nothing unresolved.</div>
+      {% endif %}
+
+      {% if view.detentions %}
+        {% for d in view.detentions %}
+          <div class="border-l-2 border-caution pl-3">
+            <span class="badge badge-caution">Detention</span>
+            <span class="ml-2 font-mono text-xs">
+              {{ d.location_type }} — since {{ d.started_at or '—' }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {% if route_risk %}
+        <div class="border-l-2 border-caution pl-3">
+          <span class="badge badge-caution">Route risk</span>
+          <span class="ml-2">{{ route_risk }}</span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Money, read-only here. Dispatch owns the workflow that changes it. #}
+  <div class="card">
+    <div class="card-header">The run</div>
+    <div class="card-body flex flex-wrap gap-8">
+      <div><div class="fact-label">Rate</div>
+        <div class="big-fact">{% if record.rate %}${{ record.rate }}{% else %}—{% endif %}</div></div>
+      <div><div class="fact-label">Per mile</div>
+        <div class="big-fact">{% if record.rpm %}{{ record.rpm }}{% else %}—{% endif %}</div></div>
+      <div><div class="fact-label">Miles</div>
+        <div class="big-fact">{{ record.distance_miles or '—' }}</div></div>
+      <div><div class="fact-label">Equipment</div>
+        <div class="text-base">{{ record.equipment or '—' }}</div></div>
+    </div>
+  </div>
+</section>
+
+{# ====================================================== PICKUP / DELIVERY #}
+{% for mode in ['PICKUP', 'DELIVERY'] %}
+<section data-panel="{{ mode }}" class="space-y-4 {% if requested_view != mode %}hidden{% endif %}">
+  <div class="card">
+    <div class="card-header">{{ mode }} — where and when</div>
+    <div class="card-body space-y-3">
+      <div class="flex flex-wrap gap-6">
+        <div><div class="fact-label">Location</div>
+          <div class="big-fact">
+            {% if mode == 'PICKUP' %}{{ record.pickup_location or '—' }}
+            {% else %}{{ record.delivery_location or '—' }}{% endif %}</div></div>
+        <div><div class="fact-label">Window</div>
+          <div class="text-base font-mono">
+            {% if mode == 'PICKUP' %}{{ record.pickup_window or '—' }}
+            {% else %}{{ record.delivery_window or '—' }}{% endif %}</div></div>
+      </div>
+      <div class="flex flex-wrap gap-6">
+        <div><div class="fact-label">Contact</div>
+          <div class="text-base">{{ record.broker or '—' }}</div></div>
+        <div><div class="fact-label">Reference to quote</div>
+          <div class="num-load">{{ record.numbers.load_number or '—' }}</div></div>
+      </div>
+      {% if facility_intel %}
+        <div class="border-l-2 border-electric pl-3">
+          <div class="fact-label">Facility intelligence</div>
+          <div class="text-sm">{{ facility_intel }}</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Arrival, waiting, detention, loaded/delivered. These POST to Dispatch,
+     which owns the workflow. The portal collects the press; it decides
+     nothing. #}
+  <div class="card">
+    <div class="card-header">{{ mode }} — record what happened</div>
+    <div class="card-body flex flex-wrap gap-3">
+      {% for label, milestone in actions_for(mode) %}
+        <button class="act-btn act-btn-go" data-milestone="{{ milestone }}"
+                data-record="{{ record.id }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">{{ mode }} — timeline</div>
+    <div class="card-body space-y-2">
+      {% set shown = views[mode].milestones %}
+      {% if shown %}
+        {% for m in shown %}
+          <div class="border-l-2 border-go pl-3 font-mono text-xs">
+            {{ m.event_time or m.created_at or '' }} —
+            {{ (m.event_type or m.milestone_type or '')|replace('_',' ') }}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-muted font-mono text-xs">
+          Nothing recorded for this phase yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">{{ mode }} — documents and photos</div>
+    <div class="card-body space-y-2">
+      {% set docs = views[mode].evidence %}
+      {% if docs %}
+        {% for e in docs %}
+          <div class="font-mono text-xs">
+            <span class="badge badge-blue">{{ e.evidence_type }}</span>
+            <span class="ml-2">{{ e.original_filename or e.description or '' }}</span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-muted font-mono text-xs">
+          {% if mode == 'PICKUP' %}No BOL or pickup photos filed.
+          {% else %}No POD or delivery photos filed.{% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endfor %}
+
+{# =============================================================== SWEEP #}
+{# Activation event 1. The timer lives here, in the portal, not in a config
+   file and not on the public website. #}
+<section data-panel="SWEEP" class="space-y-4 hidden">
+  <div class="card">
+    <div class="card-header">
+      <span class="radar-sweep inline-block">◐</span> Intelligence sweep
+    </div>
+    <div class="card-body space-y-4">
+      <div class="flex flex-wrap gap-8">
+        <div><div class="fact-label">Status</div>
+          <div class="big-fact" id="sweep-state">{{ sweep.state }}</div></div>
+        <div><div class="fact-label">Last run</div>
+          <div class="text-base font-mono" id="sweep-last">{{ sweep.last_run or 'never' }}</div></div>
+        <div><div class="fact-label">Next run</div>
+          <div class="text-base font-mono" id="sweep-next">{{ sweep.next_run or 'not scheduled' }}</div></div>
+      </div>
+
+      {% if sweep.message %}
+        <div class="border-l-2 border-caution pl-3 text-sm">{{ sweep.message }}</div>
+      {% endif %}
+
+      <div class="flex flex-wrap gap-3 items-center">
+        <button class="sweep-btn act-btn-go" id="sweep-start">Start sweep now</button>
+        <button class="sweep-btn act-btn-alert" id="sweep-stop">Stop scheduled sweeping</button>
+      </div>
+
+      <div class="flex flex-wrap gap-3 items-center">
+        <label class="fact-label" for="sweep-time">Run daily at</label>
+        <input class="sweep-btn" id="sweep-time" type="time"
+               value="{{ sweep.daily_at or '05:30' }}" style="padding:0 12px;">
+        <label class="fact-label flex items-center gap-2" style="min-height:44px;">
+          <input type="checkbox" id="sweep-enabled"
+                 style="width:22px;height:22px;"
+                 {% if sweep.timer_enabled %}checked{% endif %}>
+          Timer enabled
+        </label>
+        <button class="sweep-btn" id="sweep-save">Save schedule</button>
+      </div>
+
+      <div class="font-mono text-xs text-muted-light">
+        A sweep creates or enriches Opportunity Records. It never creates a
+        Mission. Only ACCEPT LOAD does that, and only you can press it.
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+{# ========================================================= JOE FOOTER #}
+{# JOE sits inside the Presentation Layer as a communication mechanism. The
+   panel is a window onto JOE, never a copy of it: it holds no mission data
+   and reads nothing it is not handed. #}
+<footer class="px-4 py-3" style="border-top:1px solid #1e2d44;">
+  <div class="flex items-center gap-3 flex-wrap">
+    <span class="badge badge-blue">JOE</span>
+    <span class="font-mono text-xs text-muted-light" id="joe-line">
+      {{ joe.status }}
+    </span>
+    <span class="ml-auto num-mission text-xs">
+      {{ record.numbers.mission_label }} · {{ record.numbers.load_label }}
+    </span>
+  </div>
+</footer>
+
+<script>
+// The prototype's switchTab, widened to mission phase. Hides every panel,
+// reveals one, and marks the pressed control. No fetch, no second query, no
+// second record - the same bundle is already on the page.
+function switchMode(mode) {
+  document.querySelectorAll('[data-panel]').forEach(function (p) {
+    p.classList.toggle('hidden', p.dataset.panel !== mode);
+  });
+  document.querySelectorAll('.mode-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.mode === mode);
+    b.setAttribute('aria-selected', b.dataset.mode === mode ? 'true' : 'false');
+  });
+  if (mode === 'CURRENT' || mode === 'PICKUP' || mode === 'DELIVERY') {
+    var url = new URL(window.location);
+    url.searchParams.set('view', mode);
+    history.replaceState({}, '', url);
+  }
+}
+document.querySelectorAll('.mode-btn').forEach(function (b) {
+  b.addEventListener('click', function () { switchMode(b.dataset.mode); });
+});
+
+function updateClock() {
+  var d = new Date();
+  var el = document.getElementById('clock');
+  if (el) el.textContent = d.toTimeString().slice(0, 8);
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// Milestones POST to Dispatch, which owns the workflow.
+document.querySelectorAll('[data-milestone]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    fetch('/api/dispatch/loads/' + btn.dataset.record + '/milestones', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      // The endpoint's field is event_type, not milestone_type. Sending
+      // the wrong name returned 400 and the press did nothing.
+      body: JSON.stringify({event_type: btn.dataset.milestone, source: 'driver'})
+    }).then(function (r) {
+      if (r.ok) { window.location.reload(); return; }
+      return r.json().then(function (d) {
+        btn.disabled = false;
+        var line = document.getElementById('joe-line');
+        if (line) line.textContent =
+          'That did not record: ' + (d.error || 'Dispatch refused it') + '.';
+      });
+    }).catch(function () {
+      btn.disabled = false;
+      var line = document.getElementById('joe-line');
+      if (line) line.textContent =
+        'That did not record. Dispatch did not answer.';
+    });
+  });
+});
+
+// Sweep controls.
+function sweepPost(path, body) {
+  return fetch('/api/sweep/' + path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {})
+  }).then(function (r) { return r.json(); });
+}
+var startBtn = document.getElementById('sweep-start');
+if (startBtn) startBtn.addEventListener('click', function () {
+  document.getElementById('sweep-state').textContent = 'starting…';
+  sweepPost('start').then(function (d) {
+    document.getElementById('sweep-state').textContent = d.state || 'unknown';
+    document.getElementById('sweep-last').textContent = d.last_run || 'never';
+  });
+});
+var stopBtn = document.getElementById('sweep-stop');
+if (stopBtn) stopBtn.addEventListener('click', function () {
+  sweepPost('schedule', {timer_enabled: false}).then(function (d) {
+    document.getElementById('sweep-next').textContent = d.next_run || 'not scheduled';
+    document.getElementById('sweep-enabled').checked = false;
+  });
+});
+var saveBtn = document.getElementById('sweep-save');
+if (saveBtn) saveBtn.addEventListener('click', function () {
+  sweepPost('schedule', {
+    timer_enabled: document.getElementById('sweep-enabled').checked,
+    daily_at: document.getElementById('sweep-time').value
+  }).then(function (d) {
+    document.getElementById('sweep-next').textContent = d.next_run || 'not scheduled';
+  });
+});
+</script>
+</body>
+</html>

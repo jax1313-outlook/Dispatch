@@ -225,9 +225,15 @@ def filter_bundle(bundle: dict, phase: str) -> dict:
 
     view = dict(bundle or {})
     view["phase"] = wanted
+    # The stored column is `event_type`. Filtering on `milestone_type` matched
+    # nothing and the timeline read "nothing recorded for this phase yet"
+    # while the record held the milestone - a silent empty state, which is the
+    # worst kind. `milestone_type` is accepted too, for any caller that hands
+    # the facet over under that name.
     view["milestones"] = [
         m for m in (bundle.get("milestones") or [])
-        if str(m.get("milestone_type", "")).lower() in milestones
+        if str(m.get("event_type") or m.get("milestone_type") or "").lower()
+        in milestones
     ]
     view["evidence"] = [
         e for e in (bundle.get("evidence") or [])

@@ -13,6 +13,9 @@
             <span class="sidebar-subtitle">Operations Cockpit</span>
         </div>
         <ul class="nav-links">
+            {# The driver-facing view. First in the list because it is the
+               one used from a cab, and the rest of this cockpit is desk work. #}
+            <li><a href="{{ url_for('joe_portal.portal_home') }}" class="{% if request.blueprint == 'joe_portal' %}active{% endif %}">JOE Portal</a></li>
             <li><a href="{{ url_for('pages.home') }}" class="{% if request.endpoint == 'pages.home' %}active{% endif %}">Home</a></li>
             <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Search</a></li>
             <li><a href="{{ url_for('pages.sam') }}" class="{% if request.endpoint == 'pages.sam' %}active{% endif %}">SAM</a></li>
