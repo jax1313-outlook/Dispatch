@@ -40,13 +40,30 @@ set "DISPATCH_EXIT=%ERRORLEVEL%"
 if not "%DISPATCH_EXIT%"=="0" goto :did_not_start
 
 REM Running. The window is now the on/off switch: open means Dispatch is up.
+REM
+REM The prompt below is deliberately NOT hidden with `pause >nul`. It used to be,
+REM and that produced a real failure: pressing Return gave no visible response --
+REM stopping takes a second or two while Python starts -- so the natural thing is
+REM to press Return again. The second keystroke sat in the keyboard buffer and
+REM instantly satisfied the final pause, closing the window before "Dispatch has
+REM stopped" could be read. Reported exactly that way.
+REM
+REM Two things fix it: say that the key was received, immediately; and drain the
+REM buffer before asking for another one.
+echo   Press any key here to stop Dispatch.
 pause >nul
 echo.
-echo   Stopping Dispatch...
+echo   Stopping Dispatch, one moment...
 %DISPATCH_PY% -m dispatch_launcher stop
 echo.
 echo   Dispatch has stopped. You can close this window.
 echo.
+
+REM Swallow keystrokes typed while Dispatch was stopping. `timeout` without
+REM /nobreak returns the moment a key is available, so each call eats one
+REM buffered key or waits a second. Two covers an impatient double-press.
+timeout /t 1 >nul 2>&1
+timeout /t 1 >nul 2>&1
 pause
 exit /b 0
 

@@ -49,4 +49,16 @@ if (Get-Command py -ErrorAction SilentlyContinue) {
 }
 
 & $python @arguments
-exit $LASTEXITCODE
+$code = $LASTEXITCODE
+
+# Held open unconditionally when no action was given -- i.e. when this was
+# double-clicked or run to read the menu. Same reason as dispatch.bat: a window
+# that closes on its own has decided the operator did not need to see what it
+# said, and that decision is not this file's to make.
+if (-not $Action) {
+    Write-Host ""
+    if ($code -ne 0) { Write-Host "  Dispatch Launcher exited with code $code."; Write-Host "" }
+    Write-Host "  Press Enter to close this window."
+    [void][System.Console]::ReadLine()
+}
+exit $code

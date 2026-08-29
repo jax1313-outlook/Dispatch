@@ -1002,6 +1002,88 @@ proves it, and collapsing the two is precisely what the truth vocabulary exists 
 
 **Reports:** `docs/readiness/OPERATIONAL_PROOF.md` · `docs/readiness/KNOWN_LIMITATIONS.md` §0
 
+---
+
+## 2026-08-25 — Dispatch operates. And the diagnosis that took four wrong turns to reach
+
+Mike double-clicked `DISPATCH_START_HERE` on his Windows laptop, signed in with his PIN, and
+`/home` rendered. Every Control Center control functioned. Recorded in full in
+`docs/readiness/OPERATIONAL_PROOF.md`, verbatim.
+
+**The completion gate in `CLAUDE.md` §2 is not yet met** — that gate is *"he uses it to run a
+load and get paid"*, and no load exists. But the program he could not find this morning is
+running on his machine tonight.
+
+### The actual cause of the 500s
+
+Not a damaged database. Not the D: drive. Not `DISPATCH_OPERATIONS_ROOT`.
+
+He had **three copies of Dispatch**. The one holding port 8080 all day —
+`C:\Dispatch\Dispatch\Dispatch-main` — had an incomplete extraction: `dispatch\connectors`
+was missing entirely. Every 500 across seven hours was the same line:
+
+```
+ModuleNotFoundError: No module named 'dispatch.connectors'
+```
+
+`/login` worked throughout because it opens no database. Every freight page failed because
+`db._init_db` imports the connector registry. Reproduced by deleting `connectors` from a
+healthy tree: `/login` 302, `/home` 500, identical error.
+
+### Four wrong turns, recorded because the pattern is the lesson
+
+1. **`DISPATCH_OPERATIONS_ROOT` is set and points at a dead drive.** Inferred from a missing
+   `logs` folder — in a copy that was not the one running. Tested and disproved: an
+   unwritable location breaks the *PIN* with a 400, and his PIN had saved.
+2. **The database is corrupt.** A truncated `dispatch.db` reproduces his symptom *exactly*,
+   including `/login` working. I treated the match as evidence. His database passes
+   `integrity_check`; he was nearly told to rename a healthy file.
+3. **The database is on D: and the drive dropped out.** Built on turn 1 after it had already
+   been withdrawn once.
+4. **Three separate wrong file locations**, each given as an instruction, each sending him
+   hunting.
+
+The common thread: **inferring from partial evidence instead of asking for the one artifact
+that would settle it.** `dispatch-portal.log` had contained the answer since 11:20 that
+morning. It named the module, the file and the line. Every theory above was constructed
+while that file sat unread on the machine of the person I was asking to test my theories.
+
+Reproducing a symptom is not diagnosing a cause. A truncated database and a missing module
+render the identical page.
+
+### Defects this day found, all fixed
+
+Four, none of which any amount of testing here would have surfaced, because a Linux container
+cannot tell you what Windows does:
+
+- **A crashed page said nothing.** No error handler existed at all; every exception fell
+  through to Flask's bare page, which does not even mention that a log exists.
+- **A double-clicked window flashed and closed.** `dispatch.bat` paused only on a non-zero
+  exit, and `run_menu` returns 0 on EOF — so it printed the whole status block and vanished.
+- **The window vanished after Stop.** `pause >nul` prints nothing, so a Return that looked
+  ignored got pressed twice, and the spare keystroke dismissed the final message.
+- **A corrupt database is now recognised by name** with a non-destructive remedy — which,
+  ironically, was not his problem.
+
+### A defect the first working screen revealed immediately
+
+`/home` shows two freight Opportunity Cards with lanes, rates and brokers while `ACTIVE
+LOADS` reads **0**. Both correct — cards are possibilities, the counter is committed reality
+— but the four entries in `sandbox.json` are **bundled samples**, and nothing on screen says
+so. `CLAUDE.md` §6: *never represent sample data as live data.* **Open, awaiting Mike:** label
+them, or clear them.
+
+### Standing note for the next builder
+
+**The fifteen acceptance items remain `UNVERIFIED`, deliberately.** Roughly half now have real
+observations behind them, and none has been recorded in the form
+`LAUNCHER_PROOF_TEMPLATE.md` requires: the named command run, its real output written beside
+the item, by the person who ran it. *"He said the controls all worked"* is a good sign and is
+not a record. Reset Session refusing while Dispatch is running — the one that prevents an
+orphaned server — has still never been exercised.
+
+**Reports:** `docs/readiness/OPERATIONAL_PROOF.md` · `docs/readiness/KNOWN_LIMITATIONS.md` §0
+
 
 ---
 

@@ -9,7 +9,34 @@ Companion documents: `docs/readiness/OPERATIONAL_PROOF.md` (what is proven) and
 
 ---
 
-## 0. Dispatch has now run on Windows — 2026-08-25
+## 0. Dispatch is operating on Mike's Windows laptop — 2026-08-25
+
+Sections 1 and 7 below were written when nothing had ever run on his machine. They are left
+in place rather than rewritten, so the change is visible.
+
+**It launches, signs in, and renders.** Double-click, first-run setup (idempotent on a
+second run), server started with a real process ID, browser opened, PIN accepted, `/home`
+rendering with the sidebar reading "Dispatch — Operations Cockpit". Every Control Center
+control reported working.
+
+**The cause of the earlier 500s is known and was never what I claimed.** Not a damaged
+database — his `dispatch.db` passes `integrity_check` — and nothing to do with the D: drive.
+He had **three copies of Dispatch**, and the one holding port 8080 all day was
+`C:\Dispatch\Dispatch\Dispatch-main`, whose extraction was incomplete: `dispatch\connectors`
+was missing entirely. `ModuleNotFoundError: No module named 'dispatch.connectors'`, on every
+page that opens the database. `/login` worked because it opens none.
+
+Deleting the broken copies and starting from the complete one fixed it.
+
+**Two lessons worth keeping.** A launcher that correctly refuses to start a second server
+will happily leave a *broken* first server running — the refusal is about the port, not about
+whether the running code is sound. And three rounds were spent on a corrupt-database theory
+that reproduced the symptom exactly; a truncated database and a missing module produce an
+identical page, and only the log distinguished them. The log existed from the first attempt.
+
+Detail: `docs/readiness/OPERATIONAL_PROOF.md`.
+
+## 1. What used to govern all the others
 
 Section 1 below was written when nothing had ever run on Mike's machine. That changed today
 and the sections are left in place rather than rewritten, so the change is visible.
@@ -31,7 +58,7 @@ an external drive. Not confirmed.
 
 Detail: `docs/readiness/OPERATIONAL_PROOF.md`.
 
-## 1. The one that governs all the others
+## 1. What used to govern all the others
 
 **Nothing in Dispatch has been run on Mike's machine.** Not one step. Every build session so
 far has executed in an isolated Linux container with no reachable Windows filesystem, so:
@@ -128,6 +155,9 @@ decided.
 
 | Date | Was |
 |---|---|
+| 2026-08-25 | **The launcher window vanished after Stop, taking the confirmation with it.** `pause >nul` prints nothing, so pressing Return produced no visible response while Python started up — and the natural second press sat in the keyboard buffer and instantly satisfied the *final* pause. The stop prompt is now visible, the keypress is acknowledged immediately, and the buffer is drained before the window asks again |
+| 2026-08-25 | **A double-clicked launcher window closed before it could be read.** `dispatch.bat` paused only on a non-zero exit, and `run_menu` returns 0 on EOF — so a window without usable keyboard input printed the whole status block, quit cleanly, and vanished. Reported as *"a black screen that flashed and I almost could read"*, and what it threw away was the exact diagnostic that had been asked for. Both wrappers now wait unconditionally on the double-click path, success included |
+| 2026-08-25 | **A crashed page told the operator nothing.** No error handler existed at all, so every unhandled exception fell through to Flask's bare *"Internal Server Error"* — no error name, no statement that the rest of Dispatch was still running, no mention that a log exists. Found on the first Windows run: two rounds went by hunting for a log file the failing page could have named. `portal/errors.py` now names the failure, prints the exact log path, and carries a redacted traceback in a one-click-selectable block; it recognises a damaged database by name and gives the remedy |
 | 2026-08-25 | **A fresh install had no sign-in PIN, and no way for a non-developer to create one.** Dispatch started, the browser opened, and every PIN was rejected with *"No identity configured yet. Run cin-portal-init-admin on the server first"* — a console script that only exists after `pip install -e .`, which the launcher does not do. A running server behind a door nobody can open, which is worse than not starting because it looks like success. First run now asks for a PIN in the launcher window and creates the identity through the existing one-time `bootstrap_authority()`. No default PIN was introduced |
 | 2026-08-25 | **A forgotten PIN had no recovery path.** `bootstrap_authority()` refuses once an identity exists, so the only way back in was deleting `identity.json` by hand. Added `identity.set_pin()` and `[P] Reset PIN` in the Control Center, gated on physical access and a typed `RESET` confirmation |
 | 2026-08-25 | **Dispatch had no launch path a non-developer could find.** `dispatch.bat` existed, was current and worked — but with Windows' default hidden extensions it displayed under the same name as the `dispatch` folder, which Explorer lists first, among 82 root entries. Reported as *"I cannot find it"* and treated as a defect. `DISPATCH_START_HERE.cmd` added: one double-click, generates this machine's security settings, installs Flask if missing, starts, opens the browser, and puts a Desktop icon so the folder is never needed again. Evidence: `docs/readiness/LAUNCH_PATH.md` |
@@ -143,22 +173,24 @@ decided.
 
 ## 7. The exact next operational blocker
 
-> **Recover the traceback from Mike's machine, and find out why every page behind the login
-> gate returns 500 there and 200 here.**
+> **Record the fifteen first-start acceptance items in the form
+> `docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` asks for — the named command run, and its real
+> output written beside the item.**
 
-Updated 2026-08-25. The previous blocker — *"nobody has ever double-clicked
-`DISPATCH_START_HERE`"* — is **cleared**. He did. It worked. The launch path, Python
-resolution, Flask, the PIN prompt, the server and sign-in are all now backed by observation
-rather than by a test on Linux.
+Updated 2026-08-25. Everything that came before this is cleared. Dispatch launches, signs in
+and renders on the target machine.
 
-What replaced it is a real defect on real hardware, which is a much better problem to have.
+What remains is the gap between *"it worked"* and *a record that proves it worked*. Roughly
+half the fifteen items have no observation at all behind them yet — the full status block
+cross-checked against the portal, Stop confirming the process is gone, Restart proving the
+old one died, an orphan being reported rather than duplicated, a failed start explained in
+one sentence with secrets redacted, backup status, and **Reset Session refusing while
+Dispatch is running**, which is the one that matters most and is untouched.
 
-**The one action that unblocks the most:** `dispatch.bat` → `[3] Refresh Status`. It prints
-the database path, the operations root, the log directory, the mode, the secret status and
-the last start failure in one block. That names both the log's real location and, if the
-hypothesis in §0 is right, the cause.
+After that, and only after that, the twenty-step load proof
+(`docs/readiness/OPERATIONAL_PROOF_PROCEDURE.md`) — run as a **rehearsal** first, on records
+that can never pass for a live mission.
 
-Once the fix in §6 reaches his machine, the failing page will carry its own traceback and
-this round-trip stops being necessary at all.
+**Do not enter a real revenue load before the rehearsal passes.**
 
-It still cannot be done from a build container. It has to be done there.
+Still cannot be done from a build container. It has to be done there.

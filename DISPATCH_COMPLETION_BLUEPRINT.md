@@ -1,5 +1,16 @@
 # DISPATCH_COMPLETION_BLUEPRINT
 
+> **SUPERSEDED 2026-08-26 by `docs/readiness/COMPLETION_BLUEPRINT_v2.md`.**
+>
+> Kept in full. It is not wrong — it is a plan written before anything had run on Mike's
+> machine, and its stage order survived contact. What it could not anticipate is that every
+> defect which actually blocked use on 2026-08-25 fell outside it: a launcher nobody could
+> find, no way to create a sign-in, an error page that explained nothing. v2 adds the stage
+> this document had nowhere to put.
+>
+> Per `DECISION_LOG.md`: superseded decisions are marked, not edited away.
+
+
 **Phase 13 deliverable — sequenced, narrow, verifiable build missions**
 **Audit commit:** `37f4fd033e57c55f46dfd0568d3371e8473d683f`
 **Status:** Proposed. **No mission here is authorized.** Mike approves missions individually, never

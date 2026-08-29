@@ -28,6 +28,22 @@ from dispatch_launcher import control, first_run
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _commands_of(name: str) -> list[str]:
+    """The executable lines of a .cmd file, with comments stripped.
+
+    Tests that parse a batch file must read what it *does*, not what it says about
+    itself. This helper exists because the first version of the stop-prompt test split
+    on the literal `pause >nul` and matched a REM line explaining why that form is no
+    longer used -- the comment describing the fix broke the test guarding the fix.
+    """
+    text = (REPO_ROOT / name).read_text(encoding="utf-8")
+    return [
+        line
+        for line in text.splitlines()
+        if line.strip() and not line.strip().upper().startswith("REM")
+    ]
+
+
 #: The PIN used by every "is it stored or printed in plaintext?" assertion.
 #:
 #: Those assertions are substring searches, and a short numeric PIN makes them a coin
@@ -89,6 +105,36 @@ class TestTheLaunchFileExists:
         assert labels <= {":no_python", ":did_not_start"}, (
             f"New control flow appeared in the launch file: {labels}. Logic belongs in "
             "dispatch_launcher/first_run.py where it can be tested."
+        )
+
+    def test_the_stop_prompt_is_visible_so_a_keypress_is_not_repeated(self):
+        """`pause >nul` prints nothing, and that closed the window on a real machine.
+
+        Pressing Return gave no visible response -- stopping takes a second or two while
+        Python starts -- so it was pressed again. The second keystroke sat in the keyboard
+        buffer and instantly satisfied the *final* pause, closing the window before
+        "Dispatch has stopped" could be read.
+        """
+        commands = _commands_of("DISPATCH_START_HERE.cmd")
+        first_silent_pause = next(
+            i for i, line in enumerate(commands) if line.strip() == "pause >nul"
+        )
+        before = " ".join(commands[:first_silent_pause])
+        assert "echo" in before and "stop Dispatch" in before, (
+            "the stop prompt is hidden again -- a keypress with no visible response gets "
+            "repeated, and the repeat closes the window"
+        )
+
+    def test_the_buffer_is_drained_before_the_window_asks_again(self):
+        """A key typed while Dispatch was stopping must not dismiss the final message."""
+        commands = _commands_of("DISPATCH_START_HERE.cmd")
+        stopped = next(i for i, l in enumerate(commands) if "has stopped" in l)
+        final_pause = next(
+            i for i, l in enumerate(commands) if i > stopped and l.strip() == "pause"
+        )
+        between = commands[stopped:final_pause]
+        assert sum("timeout" in line for line in between) >= 2, (
+            "the keyboard buffer is no longer drained before the last pause"
         )
 
     def test_the_no_python_message_names_the_download_and_the_checkbox(self):

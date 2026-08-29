@@ -41,6 +41,8 @@ replaces those documents; §1 tells you which one to open.
 
 | Document | What it is for |
 |---|---|
+| `docs/readiness/STATUS_2026-08-26.md` | **Where the program stands today**, in plain language. |
+| `docs/readiness/COMPLETION_BLUEPRINT_v2.md` | **What remains, in order.** Supersedes `DISPATCH_COMPLETION_BLUEPRINT.md`. |
 | `docs/readiness/OPERATIONAL_PROOF.md` | The single current readiness answer. Start here. |
 | `docs/readiness/KNOWN_LIMITATIONS.md` | What is broken, missing, assumed, or unproven — and the next blocker. |
 | `docs/readiness/OPERATIONAL_PROOF_PROCEDURE.md` | How to actually run the twenty-step load proof. |
