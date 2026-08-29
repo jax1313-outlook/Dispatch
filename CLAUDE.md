@@ -325,6 +325,8 @@ that implies otherwise is a defect.
 | Authority and boundaries | `docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md` |
 | Day-to-day operation | `docs/operations/DISPATCH_OPERATOR_GUIDE.md` |
 | Backups, upgrades, recovery | `docs/maintenance/DISPATCH_MAINTENANCE_GUIDE.md` |
+| Where things stand today | `docs/readiness/STATUS_2026-08-26.md` |
+| What remains, in order | `docs/readiness/COMPLETION_BLUEPRINT_v2.md` |
 | What is proven, and what is not | `docs/readiness/OPERATIONAL_PROOF.md` |
 | What is broken or missing | `docs/readiness/KNOWN_LIMITATIONS.md` |
 | Every decision, in order | `DECISION_LOG.md` |
