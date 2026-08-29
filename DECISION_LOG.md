@@ -1088,3 +1088,14 @@ orphaned server — has still never been exercised.
 ---
 
 *Format note: new entries are appended below the most recent one, most-recent-last, matching normal changelog convention. Do not edit or remove past entries — this file is a record, not a status board.*
+
+## 2026-08-27 — Auto-interest email recorded as an exception to "score does not decide"
+
+**PR:** (this change)
+**Capability:** Process/governance itself — `docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md` section 1.4. No code changes.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** "This is a template email that declairs interest in a specific load annoucemnet. the idea is to get my name company and contact information to the top of the pile. it is nothing more than hey, hello call me. add that to the Dispatch doctrine as an exception"
+**Context:** Raised while building JOE's alert boundary. A high-scoring load causes Dispatch to send a fixed template email to the poster, and the card then carries an Email Sent banner. That is a score causing an outbound action, which is the shape section 1.2 rules out ("it may never commit anything"), so it needed writing down as an exception with limits rather than living as an implementation detail. Section 1.4 records six conditions that hold it to an expression of interest: fixed template, no figures, no acceptance language, the card still asks for a decision, the send is visible after the fact, and the score sets only the trigger.
+**Note:** JOE is unaffected. It cannot send at all — Article II of the Assistant Plugin Constitution has eight permitted functions and transmission is not one of them.
+
+---

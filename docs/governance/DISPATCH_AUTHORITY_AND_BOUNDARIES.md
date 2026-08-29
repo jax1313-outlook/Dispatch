@@ -52,6 +52,55 @@ cluttered.
 
 ---
 
+### 1.4 The one thing a score is allowed to send
+
+**This is an exception to 1.2, and it is the only one.** It is written down
+because an undocumented exception becomes a precedent, and the next one gets
+added by analogy to this one rather than by decision.
+
+When a load scores highly enough, Dispatch sends a fixed template email to the
+broker or shipper who posted it. Owner's description of what that email is:
+
+> "it is nothing more than hey, hello call me"
+
+Its whole purpose is to put Level 1 Transport's name, company and contact
+details at the top of a pile that is worked in the order it arrives. Freight
+goes to whoever answers first, and by the time a human has read the card the
+pile has moved.
+
+**Why it does not break 1.2.** The email approves nothing, rejects nothing, and
+chooses nothing. It commits Level 1 Transport to no rate, no lane, no date and
+no equipment. It removes no option from Mike's view and changes none of them.
+It says the carrier is interested and here is how to reach him — the same thing
+a phone call would say, sent faster.
+
+**What holds it to that.** All of these, or it is no longer this exception:
+
+1. **Fixed template.** The wording is not generated per load. Anything that
+   composes a fresh message per opportunity is a different capability and needs
+   its own decision.
+2. **No number in it.** No rate, no rate per mile, no commitment to a window.
+   A template that acquires a figure stops being an expression of interest and
+   becomes an offer.
+3. **No acceptance language.** Not "we'll take it", not "booked", not
+   "confirmed". 1.3 and the attribution rule in section 2 apply in full.
+4. **The card still asks.** The load is presented to Mike as a card requiring a
+   decision, exactly as it would have been if nothing had been sent. The email
+   does not advance the load through workflow.
+5. **Visible after the fact.** The card carries an Email Sent banner. Mike can
+   always see that Dispatch spoke on his behalf, and what it said.
+6. **Score sets the trigger, and nothing else.** The score decides *whether the
+   template goes*, and has no influence on its content. It is still not
+   deciding the load.
+
+**What this exception is not.** It is not a general licence for Dispatch to
+send. It covers one fixed template, to the poster of a specific load
+announcement, saying only that the carrier is interested. Every other outbound
+communication remains Mike's, and JOE — which cannot send at all under Article
+II of its own constitution — is unaffected by this entirely.
+
+---
+
 ## 2. The attribution rule
 
 > **Never manufacture, infer, default, auto-populate, seed, or test-fixture any of the
