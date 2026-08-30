@@ -121,7 +121,16 @@ The sequence is proposed **when the day closes on capacity**, not before — rou
 half-full day wastes attention on a plan the next load will change.
 
 **The engine reasons the sequence. The human locks it.** The calendar is an artifact of the
-human's lock, never of the engine's proposal. See `DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §7b.
+human's lock, never of the engine's proposal.
+
+**The day is usually closed by powering down** at final arrival — the driver's physical act,
+not a button to remember. JOE serves as dialog assistant until then and **may propose** a
+close; it may never perform one.
+
+**Reopening a locked day returns it to PROPOSED.** What changes between a lock and a reopen
+is unknowable, so the sequence is re-reasoned from current facts rather than carried
+forward. The previous sequence is kept as history, never as a default. See
+`DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §7b.
 
 ### Multi-stop breaks the two-phase assumption — RECOMMENDATION
 

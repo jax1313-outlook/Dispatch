@@ -283,6 +283,29 @@ next accepted load.
 boundary doing exactly what it exists for — the engine may produce an order; it may not
 commit one. The calendar is an artifact of the human's lock, not of the engine's proposal.
 
+### Closing the day — CONFIRMED, 30 August 2026
+
+**The normal close is physical.** Most days the driver closes the day when the truck is
+parked: **the day closes by power down.** There is no button to remember, because the act
+of arriving and shutting off already means the day is over.
+
+**JOE is the dialog assistant until final arrival**, and **JOE may propose closing the
+day.** Proposing is within its authority; it does not close anything.
+
+| Who | May |
+|---|---|
+| **Capacity** | Close the day automatically when the van is full |
+| **The driver** | Close it deliberately, or by powering down at final arrival |
+| **JOE** | **Propose** a close. Never perform one. |
+
+**One edge case this must handle.** A power-down is not always the end of a day — a driver
+shuts off for fuel, for a break, for a dock. The close must distinguish *parked for the
+day* from *stopped for twenty minutes*, and when it cannot tell, it asks rather than
+assumes. A day closed by mistake at 11am is worse than a question.
+
+**UNKNOWN applies here as everywhere:** if the system cannot tell why the truck stopped, it
+does not guess.
+
 ### Resequencing is an exception, and it has an owner
 
 **CONFIRMED:** the **driver initiates** a resequencing event. **JOE arranges the exception
@@ -294,6 +317,29 @@ driver hits a closed dock  ─►  JOE proposes alternatives  ─►  human choo
 
 JOE proposing routes is within its authority — it recommends and it may not decide,
 approve or send. Nothing here extends what JOE is permitted to do.
+
+### Reopening a locked day — CONFIRMED, 30 August 2026
+
+**The operator's ruling: this is volatile and unknowable.** The variety of things that can
+happen between a lock and a reopen cannot be enumerated in advance.
+
+**So the design does not try.** When the unknowable is the input, guessing is the failure
+mode, not the solution.
+
+```
+LOCKED  ──reopen──►  PROPOSED  ──human locks──►  LOCKED
+```
+
+1. **Reopening invalidates the lock.** The day returns to `PROPOSED`.
+2. **The sequence is re-reasoned from current facts**, not carried forward. The engine knows
+   what is true now; it does not know what changed while the day was locked.
+3. **The previous locked sequence is preserved as history, never as a default.** It shows
+   what was planned and what the human approved — it does not pre-fill the next plan.
+4. **A human locks again.** No reopened day proceeds on an engine proposal alone.
+
+Carrying the old sequence forward would be the system asserting that nothing important
+changed — a claim it has no basis for. Re-proposing costs the operator one review. Assuming
+costs them a wasted day.
 
 ### Capacity returned mid-run
 
@@ -372,14 +418,34 @@ preferences.brokers.avoid   ──►   a BLOCKING condition
 A load from an avoided broker is **disqualified**, whatever it pays and however well it
 fits. A high rate from someone who does not pay is not a high rate.
 
-**RECOMMENDATION — overridable, with the strongest friction.** Unlike an endorsement not
-held, this is a business judgement rather than a legal or physical impossibility: a broker
-can settle up, and the operator may decide they have. So it is `BLOCKING` and overridable
-with a recorded reason, not `NOT PERMITTED`.
+**CONFIRMED, 30 August 2026: `BLOCKING` and overridable, not `NOT PERMITTED`.** This is a
+business judgement rather than a legal or physical impossibility.
 
-**This one needs your confirmation.** "Regardless" can be read as absolute, in which case it
-belongs in `not_permitted` and no reason string can clear it. The difference matters the
-day a broker pays their arrears.
+### But the override is not the remedy — the list is
+
+**CONFIRMED: arrears paid moves the broker back to the USE list.**
+
+Brokers therefore hold a **state**, not a score:
+
+| State | Effect |
+|---|---|
+| **USE** | Normal. Eligible for capacity. |
+| **AVOID** | `BLOCKING`. Nonpayment. |
+
+```
+AVOID  ──arrears paid──►  USE
+```
+
+The correct action when a broker settles up is to **move them to USE** — once, in the
+profile, where it is visible and durable. The per-load override exists for the single
+awkward case, not as the working method.
+
+This is what `warn_on_repeat_override` in `DISPATCH_OVERRIDE_RULES_SPEC.md` is for: three
+overrides against the same broker means the list is stale, and the system should say so
+rather than let the operator keep paying the friction.
+
+**Moving a broker between states is a human act, recorded with who and when.** The engine
+may observe that payment arrived. It may not move anyone.
 
 ## 8. The three open questions — now answerable
 
@@ -448,15 +514,14 @@ unchanged — only the input to `phase_for()` changes, from run status to stop t
 With the day's stop sequence in place, `phase_for()` reads the **current stop**. The
 three commitment questions this section previously left open are answered in §8 above.
 
-**What genuinely remains open**, and belongs to the operator rather than to this document:
+**What genuinely remains open:**
 
-- **Is the durable `allocation_id` the right fix** for a commitment that moves to another
-  day? It is the one part of §7a that is a proposal rather than a ruling.
-- **Who may close a day early?** Capacity closes it automatically; the operator can close
-  it deliberately. Whether JOE may propose closing it is unsettled.
-- **What happens to a locked calendar when a day is reopened** — does the sequence survive,
-  or is it reproposed from scratch?
-- **Is the avoid list absolute, or overridable with a recorded reason?** See §7c.
+- **How does the close distinguish parked-for-the-day from stopped-for-fuel?** The ruling is
+  that power down closes the day; the edge case is not yet specified. See §7b.
+- **Does an allocation rescheduled twice need a limit?** Freight that keeps missing its day
+  is a signal, not a routine.
+- **HOS:** is 10,000 lb payload or gross vehicle weight rating? Still unanswered, and it
+  decides whether FMCSA hours-of-service applies at all.
 
 ### Answered by the operator on 30 August 2026
 
@@ -468,6 +533,10 @@ three commitment questions this section previously left open are answered in §8
 | Who initiates resequencing? | **The driver.** JOE arranges the exception and presents alternatives; the human decides. |
 | Do planned empty days exist? | **Yes, and frequently.** Seasonal — harvest can mean daily runs for weeks, then scheduled days for recovery and maintenance. |
 | Who proposes the daily sequence? | **The engine**, reasoning from all available real-time knowledge — at the point the day closes on capacity. The human reviews and locks; the calendar follows. |
+| Is the durable `allocation_id` right? | **Yes.** Confirmed. |
+| Who may close a day early? | **JOE may propose it; the driver closes it** — usually by powering down at final arrival. JOE is dialog assistant until then. |
+| Does a sequence survive a reopen? | **No.** Volatile and unknowable, so the day returns to PROPOSED and is re-reasoned. The old sequence is history, never a default. |
+| Is the avoid list overridable? | **Yes, blocking-but-overridable** — but the remedy is the USE list. Arrears paid moves the broker back to USE. |
 
 ## 9. Evaluation fields this adds
 

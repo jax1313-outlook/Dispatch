@@ -124,11 +124,13 @@ text editor. A settings screen comes later and edits this same file.
     "customers": { "preferred": [], "avoid": [] }
   },
 
-  "_comment_avoid": "Broker avoid is NOT a preference - see blocking_conditions.",
-  "broker_avoid_list": {
-    "brokers": [],
-    "severity": "BLOCKING",
-    "reason": "Nonpayment. Hauling for a non-payer is working for free."
+  "_comment_brokers": "A broker holds a STATE, not a score. AVOID is BLOCKING.",
+  "broker_states": {
+    "use": [],
+    "avoid": [],
+    "avoid_severity": "BLOCKING",
+    "avoid_reason": "Nonpayment. Hauling for a non-payer is working for free.",
+    "avoid_overridable": true
   },
 
   "blocking_conditions": [],
