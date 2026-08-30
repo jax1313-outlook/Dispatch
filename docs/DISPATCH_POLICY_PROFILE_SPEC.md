@@ -120,8 +120,15 @@ text editor. A settings screen comes later and edits this same file.
   },
 
   "preferences": {
-    "brokers":   { "preferred": [], "avoid": [] },
+    "brokers":   { "preferred": [] },
     "customers": { "preferred": [], "avoid": [] }
+  },
+
+  "_comment_avoid": "Broker avoid is NOT a preference - see blocking_conditions.",
+  "broker_avoid_list": {
+    "brokers": [],
+    "severity": "BLOCKING",
+    "reason": "Nonpayment. Hauling for a non-payer is working for free."
   },
 
   "blocking_conditions": [],

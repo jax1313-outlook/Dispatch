@@ -146,74 +146,240 @@ current Dispatch money figure is linehaul-only.
 measure; it cannot see dwell. Two loads at $3.50/mile are not comparable when one has two
 stops and the other has seven.
 
-## 7a. Two levels: the Run and the Mission
+## 7a. One truck, one route, one driver, one Mission Record
 
-**CONFIRMED by the operator, 30 August 2026:** the van's capacity may be filled by one
-broker for the whole vehicle, or shared across several brokers going to several stops.
-This is the LTL and courier model, and it is the normal case, not an edge case.
-
-That single fact requires a level Dispatch does not have.
-
-### The conflict it exposes
-
-The Mission Record carries **dual numbering** — our mission number and *the broker's* load
-number, preserved exactly. With three brokers on one van, there is no single broker load
-number. Either the record stops being one broker's commitment, or something above it
-holds the vehicle.
-
-### The resolution — two records, two different jobs
+**CONFIRMED by the operator, 30 August 2026.** The van's capacity may be filled by one
+broker or split six ways. Ownership of the freight fragments. **Execution does not.**
 
 ```
-Run  (the plan for the vehicle)          Tuesday, van-1, stops 1..7
- ├── Mission A   broker X, load 847261    pallets 2, stops 1 and 4
- ├── Mission B   broker Y, load 55120     pallets 3, stops 2 and 6
- └── Mission C   broker Z, load A-9931    pallets 1, stops 3 and 7
+Pallet 1  Broker A        One Truck
+Pallet 2  Broker B        One Route
+Pallet 3  Broker C   ►    One Driver
+Pallet 4  Broker D        One Mission Record
+Pallet 5  Broker E
+Pallet 6  Broker F
 ```
 
-| | **Mission** | **Run** |
+### The structure
+
+```
+Mission Record
+├── Stop Sequence          ordered stops, windows, dwell, priority
+├── Capacity Allocation    who owns which pallets, and their commitment
+├── Stakeholders           brokers, customers, facilities, contacts
+├── Documents              BOL, POD, rate confirmations, photos
+├── Communications         what was said, to whom, when
+└── Archive                the closed record
+```
+
+This is the operator's model, adopted. It replaces an earlier draft in which the per-broker
+commitment was the top-level record and the day was a container above it. **That was
+backwards.** The driver has one day, one route, one vehicle; a model that makes them
+assemble six records to see it is a model that fails the Driver First test.
+
+**The Mission Record doctrine holds literally.** One record, one identity, progressively
+enriched, never copied. Six brokers do not make six records.
+
+### Capacity Allocation is where the commitment lives
+
+Fragmented ownership has to live somewhere, and it lives here — not as a sibling record,
+but as a first-class component of this one.
+
+```
+allocation
+  allocation_id       durable, ours
+  broker              stakeholder reference
+  load_number         THEIR number, preserved exactly
+  pallets, weight, cube
+  stops               which stops in the sequence serve this allocation
+  rate, accessorials
+  status              committed / delivered / rescheduled / failed
+  accepted_at, accepted_by
+```
+
+**This resolves the dual-numbering problem.** The Mission Record carries our mission
+number. Each allocation carries its broker's load number. With one broker aboard it reads
+exactly like a single load; with six, nothing is lost and nothing is invented.
+
+### The one thing this model must handle — RECOMMENDATION
+
+The operator confirmed that **capacity can be returned the next day or rescheduled** when a
+business is closed. If the Mission Record is the day, then Broker C moving to Thursday
+means their commitment leaves Tuesday's record and appears in Thursday's — and the history
+of that commitment fragments across two records. Asking *"what happened with Broker C's
+load?"* would mean searching both.
+
+**Proposed fix: the allocation identity is durable and moves as itself.**
+
+```
+allocation_id A-4471   Tuesday   status: rescheduled -> moved to Thursday
+allocation_id A-4471   Thursday  status: delivered
+```
+
+Same `allocation_id`, same broker, same load number, appearing on the second day's Mission
+Record with its history intact. The allocation is re-pointed, not re-created.
+
+This gives commitment durability **without** a second top-level record type. The driver
+still sees one record per day; the broker's commitment still has one continuous history.
+
+**Flagging it as a proposal rather than a decision** — it is the only part of this
+structure that is mine rather than the operator's, and it exists to solve a problem the
+operator's own rescheduling ruling creates.
+
+### What binds where
+
+| Belongs to the Mission Record | Belongs to an Allocation |
+|---|---|
+| The vehicle, the driver, the day | The broker and their load number |
+| The stop sequence and its order | Which stops serve this freight |
+| Total weight / cube / pallet utilization | This freight's share of it |
+| Return to home base | — |
+| The locked calendar | Invoicing and payment |
+
+**Capacity binds at the Mission Record**, because the van is one van. An allocation of two
+pallets is never over capacity by itself — only against what the day already holds. The
+real question remains *"does this still fit Tuesday?"*
+## 7a-i. Superseded
+
+An earlier draft of this document made the per-broker commitment the top-level record and
+the day a container above it, called a Run. **The operator's model replaces it.** Execution
+is not fragmented, so the record is not either: one truck, one route, one driver, one
+Mission Record, with ownership held in Capacity Allocation.
+
+The word *Run* does not appear below. The day **is** the Mission Record.
+
+## 7b. The lifecycle of a day — CONFIRMED by the operator, 30 August 2026
+
+```
+OPEN  ──►  CLOSED  ──►  PROPOSED  ──►  LOCKED  ──►  IN PROGRESS  ──►  COMPLETE
+                            ▲                             │
+                            └──── exception: resequence ───┘
+```
+
+| State | Meaning | Who moves it |
 |---|---|---|
-| What it is | A **commitment to a broker** | A **plan for the vehicle** |
-| Identity | Mission number + their load number | Run id + date + vehicle |
-| Created by | ACCEPT LOAD | Assigning a Mission to a day |
-| Changeable | No — a promise was made | **Yes — freely, until executed** |
-| Owns | The freight, the rate, the customer | The stop order, the vehicle, the day |
-| Completes | When *its* stops are done | When *all* its stops are done |
+| **OPEN** | Accepting allocations; capacity remains | ACCEPT LOAD adds to it |
+| **CLOSED** | Capacity reached, or the operator closed the day | Capacity, or the operator |
+| **PROPOSED** | The engine has reasoned a stop sequence | **The engine** |
+| **LOCKED** | The human approved it. **The calendar is produced here.** | **The human** |
+| **IN PROGRESS** | The driver is running it | The driver |
+| **COMPLETE** | Every stop done | The driver |
 
-**Everything already specified about the Mission Record stands unchanged.** Dual numbering,
-one record one identity, progressive enrichment, ACCEPT LOAD as the irreversible gate — all
-of it holds. The Run does not replace the Mission; it **schedules** it.
+### LOCK DAY is a third activation event
 
-### Capacity binds at the Run, not the Mission
+Dispatch has had two events that bring something into existence. There is now a third.
 
-This is the consequence that changes evaluation most.
+| Event | Creates | Reversible |
+|---|---|---|
+| START SWEEP | Opportunities | Yes |
+| ACCEPT LOAD | An allocation — a commitment to a broker | **No** |
+| **LOCK DAY** | **The locked sequence, and the calendar** | **Yes, by exception** |
+
+**The sequence is proposed when the day closes on capacity, not before.** Proposing a route
+for a half-full day wastes the operator's attention on a plan that will change with the
+next accepted load.
+
+**The engine reasons the sequence. The human locks it.** This is the recommendation
+boundary doing exactly what it exists for — the engine may produce an order; it may not
+commit one. The calendar is an artifact of the human's lock, not of the engine's proposal.
+
+### Resequencing is an exception, and it has an owner
+
+**CONFIRMED:** the **driver initiates** a resequencing event. **JOE arranges the exception
+and presents alternative proposals or rerouting.** The human decides.
 
 ```
-run.weight_utilization = Σ(mission weights on this run) ÷ vehicle.weight_limit_lbs
-run.pallet_utilization = Σ(mission pallets on this run) ÷ vehicle.pallet_positions
-run.cube_utilization   = Σ(mission cube    on this run) ÷ vehicle.cube_capacity_ft3
+driver hits a closed dock  ─►  JOE proposes alternatives  ─►  human chooses  ─►  re-lock
 ```
 
-A Mission of two pallets is never "over capacity" by itself. It is over capacity **on a
-particular run**, and only when added to what is already there.
+JOE proposing routes is within its authority — it recommends and it may not decide,
+approve or send. Nothing here extends what JOE is permitted to do.
 
-**So the real evaluation question is not "does this load fit the van?" — it is "does this
-load still fit Tuesday?"** Capacity is contextual. An opportunity must be evaluated against
-**remaining** capacity on a candidate run, and the same opportunity can be a comfortable
-fit on Wednesday and blocked on Tuesday.
+### Capacity returned mid-run
 
-`DISPATCH_EVALUATION_ENGINE_SPEC.md` gains a `candidate_run` input for this reason. With no
-run in view it falls back to the empty vehicle, which is the single-broker FTL case — the
-model degrades correctly to the simple shape.
+**CONFIRMED:** a business may be closed, and that capacity returns the next day or is
+rescheduled.
 
-### Stop numbering and the calendar
+When a stop cannot be served:
 
-Both belong to the Run, and both are now explained:
+1. The stop fails with a reason. It is not silently dropped.
+2. That capacity is **freed on today** — the remaining stops may be resequenced.
+3. The **allocation is not cancelled.** It moves to another day, keeping its
+   `allocation_id`. The commitment to the broker stands; only the day changes.
+4. The allocation carries the failed attempt in its history.
 
-- **Stop #** is a position in the Run's sequence — not a property of any one Mission. This
-  is why the portal showed it: with three brokers aboard, stop order is the only thing that
-  describes the driver's actual day.
-- **The calendar shows Runs**, and within a day, its stops in order. A Mission appears on
-  the calendar *through* the Run that carries it.
+**An allocation may therefore span two days.** Freight collected today and delivered
+tomorrow is one commitment appearing on two Mission Records — which is why the allocation
+identity has to be durable. See §7a.
+
+### Home every day, by business model
+
+**CONFIRMED:** overnight stays are avoided. There is more value in repositioning to
+Jacksonville each day than in staying out.
+
+This is not a scoring preference. It is a **constraint on the day**:
+
+```
+every day starts and ends at home base
+```
+
+Consequences:
+
+- Freight that cannot be delivered and the van returned within the day's hours does not
+  fit the day — regardless of how well it scores.
+- `reserve_capacity.protect_return_home` is not a tuning knob. It is the business model.
+- The existing `return_home_required` and `tomorrow_position_risk` dimensions in
+  `dispatch/scoring.py` are more important than they look, because the operation depends
+  on them being true.
+
+A multi-day allocation is therefore a **recovery from an exception**, never a plan.
+
+### Planned empty days are legitimate
+
+**CONFIRMED:** empty days will be frequent and seasonal. Florida fruit harvest can mean
+daily runs for two or three weeks; empty days are then scheduled deliberately for recovery
+and maintenance.
+
+Rules that follow:
+
+1. **A Mission Record may exist with zero allocations.** An empty Tuesday is a record,
+   not an absence.
+2. **An empty day carries a reason** — `recovery`, `maintenance`, `seasonal`, `personal`.
+3. **The system never treats a planned empty day as a problem to solve.** It does not
+   surface loads for it, does not warn, and does not ask the operator to justify it.
+4. **Capacity on a planned empty day is zero**, so it is blocked to acceptance rather than
+   merely unattractive.
+
+Rule 3 matters more than it sounds. A system that nags on a rest day is a system the
+operator learns to ignore, and reduced cognitive load is the founding premise.
+
+Seasonality is handled by the profile, not by new code — swapping the profile is how the
+operator says *this is harvest season*. See `DISPATCH_POLICY_PROFILE_EXAMPLES.md`.
+
+## 7c. The avoid list is a veto, not a preference
+
+**CONFIRMED, and this corrects the specification.** The operator does not take capacity
+from brokers on the avoid list **regardless** — the list exists because of **nonpayment**,
+and hauling for a non-payer is working for free.
+
+`DISPATCH_POLICY_PROFILE_SPEC.md` placed brokers under `preferences`, which made this a
+soft scoring input. That is wrong. It moves:
+
+```
+preferences.brokers.avoid   ──►   a BLOCKING condition
+```
+
+A load from an avoided broker is **disqualified**, whatever it pays and however well it
+fits. A high rate from someone who does not pay is not a high rate.
+
+**RECOMMENDATION — overridable, with the strongest friction.** Unlike an endorsement not
+held, this is a business judgement rather than a legal or physical impossibility: a broker
+can settle up, and the operator may decide they have. So it is `BLOCKING` and overridable
+with a recorded reason, not `NOT PERMITTED`.
+
+**This one needs your confirmation.** "Regardless" can be read as absolute, in which case it
+belongs in `not_permitted` and no reason string can clear it. The difference matters the
+day a broker pays their arrears.
 
 ## 8. The three open questions — now answerable
 
@@ -221,20 +387,20 @@ The operator's clarification settles what the earlier draft left open.
 
 ### Does a multi-stop load complete per stop or at the last stop?
 
-**Both, at different levels.** A **Mission** completes when its own stops are done — broker
-X is served at stops 1 and 4 and is finished, whatever remains on the van. The **Run**
-completes when every stop is done.
+**Both, at different levels.** An **allocation** completes when its own stops are done — broker
+X is served at stops 1 and 4 and is finished, whatever remains on the van. The **Mission
+Record** completes when every stop is done.
 
 This matters for money: broker X can be invoiced when their freight is delivered, not when
 the driver finishes their day.
 
 ### Can stops be resequenced after ACCEPT LOAD?
 
-**Yes — resequencing changes the Run, which is a plan, not the Mission, which is a
-commitment.** The order of stops was never promised to anyone. What was promised is each
-Mission's time window.
+**Yes — resequencing changes the stop sequence, which is a plan, not an allocation, which
+is a commitment.** The order of stops was never promised to anyone. What was promised is
+each allocation's time window.
 
-The constraint is therefore: **any sequence is permitted that honours every Mission's
+The constraint is therefore: **any sequence is permitted that honours every allocation's
 window and the vehicle's capacity.** No override is required, because nothing is being
 overridden.
 
@@ -242,13 +408,13 @@ overridden.
 
 **It depends on whether the stop belongs to a Mission or is spare capacity.**
 
-- Dropping a stop that belongs to an **accepted Mission** breaks that Mission's commitment
-  to that broker. It requires a recorded decision and it affects one broker, not the run.
+- Dropping a stop that belongs to an **accepted allocation** breaks that commitment to
+  that broker. It requires a recorded decision and it affects one broker, not the run.
 - Dropping a stop not yet accepted — a `filler` still being considered — costs nothing.
   Nothing was promised.
 
 **`priority` is therefore the operator's classification of a *candidate*, and loses its
-force the moment a Mission is accepted.** After acceptance, `filler` and `critical` freight
+force the moment an allocation is accepted.** After acceptance, `filler` and `critical` freight
 carry the same commitment; only the operator's willingness to disappoint differs, and that
 is a human judgement the system records rather than makes.
 
@@ -279,20 +445,29 @@ CURRENT still resolves; it never becomes a stored third state. `filter_bundle()`
 reveals rather than deletes. The doctrine in `DISPATCH_STATE_TRANSITION_RULES.md` §6 holds
 unchanged — only the input to `phase_for()` changes, from run status to stop type.
 
-With the Run in place, `phase_for()` reads the **current stop of the current Run**. The
+With the day's stop sequence in place, `phase_for()` reads the **current stop**. The
 three commitment questions this section previously left open are answered in §8 above.
 
 **What genuinely remains open**, and belongs to the operator rather than to this document:
 
-- **Can a Mission span two Runs?** Freight picked up Tuesday and delivered Thursday sits on
-  the van overnight. The model permits it; whether the operation does is a business
-  question.
-- **Can a Run carry Missions for a broker on the avoid list**, if another broker's freight
-  is already aboard and the stop is on the way?
-- **Who resequences — the operator, or the engine proposing an order for approval?** The
-  engine may recommend a sequence. It may not commit one.
-- **Does a Run need its own record before any Mission is accepted?** A planned empty
-  Tuesday is either a real object or nothing at all.
+- **Is the durable `allocation_id` the right fix** for a commitment that moves to another
+  day? It is the one part of §7a that is a proposal rather than a ruling.
+- **Who may close a day early?** Capacity closes it automatically; the operator can close
+  it deliberately. Whether JOE may propose closing it is unsettled.
+- **What happens to a locked calendar when a day is reopened** — does the sequence survive,
+  or is it reproposed from scratch?
+- **Is the avoid list absolute, or overridable with a recorded reason?** See §7c.
+
+### Answered by the operator on 30 August 2026
+
+| Question | Ruling |
+|---|---|
+| Can a commitment span two days? | **Yes** — a business may be closed; capacity returns the next day or is rescheduled. |
+| Are overnight stays acceptable? | **No.** More value in repositioning to Jacksonville daily. Multi-day is recovery from an exception, never a plan. |
+| Can an avoided broker be carried if convenient? | **No, regardless.** The list exists because of nonpayment; hauling for a non-payer is working for free. |
+| Who initiates resequencing? | **The driver.** JOE arranges the exception and presents alternatives; the human decides. |
+| Do planned empty days exist? | **Yes, and frequently.** Seasonal — harvest can mean daily runs for weeks, then scheduled days for recovery and maintenance. |
+| Who proposes the daily sequence? | **The engine**, reasoning from all available real-time knowledge — at the point the day closes on capacity. The human reviews and locks; the calendar follows. |
 
 ## 9. Evaluation fields this adds
 

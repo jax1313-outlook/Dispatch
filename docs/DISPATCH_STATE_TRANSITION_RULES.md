@@ -30,15 +30,16 @@ PURPOSE_OPPORTUNITY  ->  PURPOSE_MISSION
 The transition is one-way and happens exactly once, at ACCEPT LOAD. Nothing else in the
 record's identity changes at that moment.
 
-## 3. Two activation events
+## 3. Three activation events
 
 | Event | Creates | Reversible |
 |---|---|---|
 | **START SWEEP** | Opportunities | Yes — an opportunity may be discarded |
-| **ACCEPT LOAD** | The Mission | No — a commitment was made to a broker |
+| **ACCEPT LOAD** | An allocation — a commitment to a broker | No — a promise was made |
+| **LOCK DAY** | The locked sequence, and the calendar | Yes, by exception |
 
-These are the only two events that bring something into existence. Everything else is
-enrichment of what already exists.
+These are the only three events that bring something into existence. Everything else is
+enrichment of what already exists. LOCK DAY is detailed in §5.
 
 ## 4. Atomic human gates
 
@@ -73,35 +74,54 @@ DELIVERY  picked_up, in_transit, at_delivery, delivered, completed, archived
 `in_transit` is the hinge and belongs to DELIVERY: once loaded, the only question that
 matters is where it has to be.
 
-### The Run carries the Mission — CONFIRMED requirement
+### One truck, one route, one driver, one record — CONFIRMED requirement
 
 **The van's capacity may be shared across several brokers.** Six pallets can be one
-broker's whole vehicle, or three brokers at two pallets each — the LTL and courier model,
-and the normal case.
+broker's whole vehicle, or six brokers at one pallet each — the LTL and courier model, and
+the normal case.
 
-This requires a level above the Mission Record, because dual numbering has no answer when
-three brokers are aboard:
+Ownership of the freight fragments. **Execution does not.** The record follows execution:
 
-| | **Mission** | **Run** |
+```
+Mission Record
+├── Stop Sequence        ordered stops, windows, dwell
+├── Capacity Allocation  who owns which pallets, and their commitment
+├── Stakeholders         brokers, customers, facilities
+├── Documents            BOL, POD, rate confirmations
+├── Communications       what was said, to whom, when
+└── Archive
+```
+
+**Everything in this document holds literally.** One record, one identity, progressively
+enriched, never copied. Six brokers do not make six records.
+
+Dual numbering moves down a level rather than breaking: the Mission Record carries our
+mission number, and **each allocation carries its broker's load number**, preserved
+exactly. With one broker aboard it reads exactly as before.
+
+Three consequences:
+
+- **Capacity binds at the record**, because the van is one van. Two pallets are never over
+  capacity alone — only against what the day already holds. The question is not "does this
+  fit the van" but **"does this still fit Tuesday"**.
+- **Resequencing is not an override.** Stop order was never promised; time windows were.
+  Any sequence honouring every allocation's window and the vehicle's capacity is permitted.
+- **Every day starts and ends at home base.** Overnight stays are avoided as a matter of
+  business model — repositioning to Jacksonville is worth more than staying out.
+
+### LOCK DAY — a third activation event
+
+| Event | Creates | Reversible |
 |---|---|---|
-| Is | a commitment to a broker | a plan for the vehicle |
-| Identity | mission number + their load number | run id + date + vehicle |
-| Changeable | no — a promise was made | **yes, freely, until executed** |
-| Completes | when *its* stops are done | when *all* stops are done |
+| START SWEEP | Opportunities | Yes |
+| ACCEPT LOAD | An allocation — a commitment to a broker | **No** |
+| **LOCK DAY** | **The locked sequence, and the calendar** | Yes, by exception |
 
-**Nothing in this document changes.** One record, one identity, dual numbering, progressive
-enrichment and ACCEPT LOAD as the irreversible gate all hold exactly as written. The Run
-does not replace the Mission — it **schedules** it, and it owns the stop order, the
-vehicle and the day.
+The sequence is proposed **when the day closes on capacity**, not before — routing a
+half-full day wastes attention on a plan the next load will change.
 
-Two consequences worth stating here:
-
-- **Capacity binds at the Run.** A two-pallet Mission is never over capacity by itself. It
-  is over capacity *on a particular run*. The real question is not "does this fit the van"
-  but **"does this still fit Tuesday"**.
-- **Resequencing is not an override.** Stop order was never promised to anyone; time
-  windows were. Any sequence honouring every Mission's window and the vehicle's capacity is
-  permitted, and needs no override because nothing is being overridden.
+**The engine reasons the sequence. The human locks it.** The calendar is an artifact of the
+human's lock, never of the engine's proposal. See `DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §7b.
 
 ### Multi-stop breaks the two-phase assumption — RECOMMENDATION
 
@@ -120,10 +140,11 @@ CURRENT still resolves and never becomes a stored third state. `filter_bundle()`
 reveals rather than deletes. Only the input to `phase_for()` changes — from run status to
 stop type.
 
-Not settled here, because they are commitment questions rather than data questions: whether
-a multi-stop load completes per stop or at the last stop, whether stops may be resequenced
-or dropped after ACCEPT LOAD, and whether dropping a `filler` stop breaks the commitment to
-the broker. See `DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §8.
+**Settled by the operator, 30 August 2026.** An allocation completes when its own stops are
+done — so a broker may be invoiced before the driver's day ends; the record completes when
+every stop is done. Resequencing is initiated by the driver, arranged by JOE presenting
+alternatives, and decided by the human. Dropping a stop breaks a commitment only if that
+allocation was accepted. See `DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §8.
 
 ## 6. CURRENT is resolved, never stored
 
