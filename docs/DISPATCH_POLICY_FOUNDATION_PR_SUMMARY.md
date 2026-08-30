@@ -74,7 +74,16 @@ fit, three risks* rather than a 70 that could mean anything.
 
 ## 6. The regression this closes
 
-**CONFIRMED.** `dispatch/scoring.py` treats a hard stop as a 5-point deduction out of 100:
+**SCOPE CORRECTION, 30 August 2026.** `dispatch/capacity.py` already implements
+`SEVERITY_BLOCKING`, physical dimensions including volume and pallets, a versioned asset
+profile defaulting to `UNCONFIGURED`, and provenance on every specification. It is used by
+`dispatch/opportunities.py`.
+
+**The defect is that `dispatch/scoring.py` does not use any of it** — zero references. Two
+capacity models exist and only one blocks. What follows is scoped to the scorer, and the
+work is largely integration rather than construction.
+
+`dispatch/scoring.py` treats a hard stop as a 5-point deduction out of 100:
 
 ```python
 op_risk = 10.0
@@ -105,20 +114,21 @@ Implementation should not start on items 1–3 without answers.
 
 ### Question 8 is answered, and it changed the specification
 
-**CONFIRMED by the operator:** a **cargo van with trailer — 6 pallets, 10,000 lb
-capacity.**
+**CONFIRMED by the operator:** a **cargo van with trailer**, running courier and expedite
+freight — and **it has not been purchased yet.** Payload, cube, pallet positions and
+dimensions are all `UNCONFIGURED`. The operator's stated targets are 10,000 lb payload and
+6 pallet positions; those are intent, never calculation inputs.
 
-This is the first record of the fleet anywhere in the lineage or in Dispatch, and it
-exposed a fourth regression:
+This exposed a fourth regression:
 
-**`dispatch/scoring.py` is calibrated for a Class 8 tractor-trailer the operation does not
-own.** The overweight guard tests `weight > 45000` against a 10,000 lb vehicle — it is not
-weak, it is **unreachable**. No load this van can legally carry will ever trip it, and a
-12,000 lb load, genuinely over capacity, scores clean.
+**`dispatch/scoring.py` is calibrated for a Class 8 tractor-trailer, which is not the
+intended vehicle.** Its overweight guard tests `weight > 45000` — for a cargo van
+operation, no load it could legally carry approaches that figure, so the guard cannot fire
+on any realistic load.
 
-**Pallet capacity does not exist anywhere.** Six pallets is a hard physical limit; a
-12-pallet load cannot be taken at any weight, and nothing in Dispatch would say so. It is
-added to the blocking catalogue as a new condition, not a recovered one.
+**`dispatch/scoring.py` has no pallet or cube constraint.** `dispatch/capacity.py` does —
+`PHYSICAL_DIMENSIONS = ["weight", "linear_feet", "volume", "pallets"]` — but the scorer
+does not use it, which is the integration gap this package exists to close.
 
 The July judgement was right and the later calibration was wrong: v1.3.3 targeted NAICS
 492110 / 492210 and PSC R602 — couriers and local messengers — which is exactly a
@@ -128,14 +138,15 @@ cargo-van business.
 
 | # | Question | Why it matters |
 |---|---|---|
-| 9 | **Is 10,000 lb payload, or gross vehicle weight rating?** | Determines whether FMCSA hours-of-service applies at all. Changes the HOS model. |
+| ~~9~~ | ~~Payload or GVWR?~~ | **ANSWERED: payload.** Combined GVWR is materially higher, so the profile defaults to hours-of-service applying. Regulatory confirmation remains the operator's. |
 | 10 | **What does fuel actually cost per mile?** | $0.62 implies ~6 mpg. Every margin figure is currently pessimistic. |
 | 11 | **What are the real rate bands for this work?** | $2.50 / $4.00 / $5.50 are truckload numbers. Expedite and courier rates differ. |
 | 12 | **Cube capacity of van and trailer?** | Two of three utilization ratios work without it; the third is guesswork. |
 | 13 | **Accessorial rates** — detention/hour, layover, TONU, lumper, liftgate. | Every profitability figure. Detention on a multi-stop run can exceed the linehaul. |
 | 14 | **Target margin** for the profit score. | Profit scoring has no reference point without it. |
 | 15 | **Complexity tolerance** — how many stops before a load stops being worth it? | Complexity scoring bands. |
-| 16 | **May stops be resequenced or dropped after acceptance?** | The commitment model for multi-stop loads. |
+| ~~16~~ | ~~Resequenced after acceptance?~~ | **ANSWERED: yes** — stop order was never promised, time windows were. Not an override. |
+| 17 | **What counts as "near" home base** for the end-of-day check? | The only parameter the close detection needs. |
 
 ### The Load Arrangement model changed the scope
 

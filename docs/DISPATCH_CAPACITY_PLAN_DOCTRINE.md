@@ -217,10 +217,10 @@ specification is therefore unknown, and none may be invented.
 | | Specification | Operator target |
 |---|---|---|
 | Vehicle | Cargo van with trailer | — |
-| Payload | **NOT CONFIGURED** | 10,000 lb (payload, not GVWR) |
-| Pallet positions | **NOT CONFIGURED** | 6 |
-| Cube capacity | **NOT CONFIGURED** | none stated |
-| Length / width / height | **NOT CONFIGURED** | none stated |
+| Payload | **UNCONFIGURED** | 10,000 lb (payload, not GVWR) |
+| Pallet positions | **UNCONFIGURED** | 6 |
+| Cube capacity | **UNCONFIGURED** | none stated |
+| Length / width / height | **UNCONFIGURED** | none stated |
 
 Targets inform planning. **They are never inputs to a calculation.**
 

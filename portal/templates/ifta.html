@@ -1,7 +1,8 @@
 {% extends "base.html" %}
-{% block title %}IFTA — L2-COS Portal{% endblock %}
-{% block page_title %}IFTA Mileage & Fuel Report — {{ report.quarter_label or report.month_label }}{% endblock %}
+{% block title %}IFTA — Dispatch{% endblock %}
+{% block page_title %}IFTA Mileage & Fuel Report{% if report %} — {{ report.quarter_label or report.month_label }}{% endif %}{% endblock %}
 {% block page_actions %}
+<a class="btn btn-sm" href="{{ url_for('pages.ifta_review', year=sel_year, quarter=sel_quarter, vehicle_id=sel_vehicle) }}">Review Dashboard</a>
 <button class="btn btn-sm btn-success" onclick="toggleForm('add-trip-form')">+ Trip Leg</button>
 <button class="btn btn-sm btn-success" onclick="toggleForm('add-fuel-form')">+ Fuel Purchase</button>
 {% endblock %}
@@ -94,6 +95,12 @@
   <button type="submit" class="btn btn-sm btn-primary" name="view" value="{{ view_mode }}">View Report</button>
 </form>
 
+{% if error %}
+<div class="ifta-error-banner" style="background:#fdecea;border:1px solid #f5c2c0;color:#b71c1c;padding:12px 16px;border-radius:4px;margin-bottom:16px;">
+  <strong>Unable to generate this report:</strong> {{ error }}
+</div>
+{% else %}
+
 {# ── Summary Cards ───────────────────────────────────────────────── #}
 <div class="ifta-summary">
   <div class="summary-card">
@@ -121,6 +128,7 @@
     <span class="summary-label">Trip Legs</span>
   </div>
 </div>
+{% endif %}
 
 {# ── Add Trip Leg Form ───────────────────────────────────────────── #}
 <div id="add-trip-form" class="hidden-form no-print">
@@ -171,6 +179,13 @@
 <div id="add-fuel-form" class="hidden-form no-print">
   <h3>Add Fuel Purchase</h3>
   <div class="form-row">
+    <div class="field" style="flex:2;">
+      <label>Scan Receipt (optional — pre-fills the fields below)</label>
+      <input type="file" id="fuel-scan-input" accept="image/*" onchange="scanReceipt(this)">
+      <div id="fuel-scan-status" style="font-size:12px;margin-top:4px;color:#777;"></div>
+    </div>
+  </div>
+  <div class="form-row">
     <div class="field">
       <label>Jurisdiction</label>
       <select id="fuel-jurisdiction">
@@ -216,6 +231,7 @@
   <button class="btn btn-sm" onclick="toggleForm('add-fuel-form')">Cancel</button>
 </div>
 
+{% if report %}
 {# ── Report Table ──────────────────────────────────────────────── #}
 <div class="print-section">
   <h3>IFTA {{ 'Monthly' if view_mode == 'month' else 'Quarterly' }} Report — {{ report.month_label or report.quarter_label }}
@@ -227,6 +243,29 @@
     Period: {{ report.date_from }} to {{ report.date_to }} &nbsp;|&nbsp;
     Fleet MPG: {{ report.fleet_mpg|round(4) }}
   </p>
+
+  {% if view_mode != 'month' %}
+  <div class="no-print" style="background:#f5f5f5;border-left:4px solid #2c3e50;padding:10px 16px;border-radius:4px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    {% if approval %}
+      {% if approval.status == 'sealed' %}
+        <span style="background:#e8f5e9;color:#2e7d32;padding:3px 10px;border-radius:3px;font-size:12px;font-weight:600;">SEALED</span>
+        <span style="font-size:13px;color:#555;">Approved by {{ approval.approved_by }} on {{ approval.sealed_at }}</span>
+        {% if approval.recommendation_json %}
+        <span style="font-size:13px;color:#555;">
+          Recommendation: <strong>{{ approval.recommendation_json.recommendation }}</strong>
+          (${{ "%.2f"|format(approval.recommendation_json.amount) }})
+        </span>
+        {% endif %}
+      {% else %}
+        <span style="background:#fff3e0;color:#e65100;padding:3px 10px;border-radius:3px;font-size:12px;font-weight:600;">SUBMITTED — AWAITING APPROVAL</span>
+        <span style="font-size:13px;color:#555;">Submitted {{ approval.submitted_at }}</span>
+      {% endif %}
+    {% else %}
+      <span style="background:#eceff1;color:#455a64;padding:3px 10px;border-radius:3px;font-size:12px;font-weight:600;">DRAFT</span>
+      <button class="btn btn-sm btn-primary" onclick="submitForApproval()">Submit for Approval</button>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {% if report.jurisdictions %}
   <div style="overflow-x:auto;">
@@ -301,6 +340,7 @@
   <h3>Fuel Purchases ({{ report.month_label or report.quarter_label }})</h3>
   <div id="fuel-purchases-list">Loading...</div>
 </div>
+{% endif %}
 
 <script>
 const API = '/api/dispatch/ifta';
@@ -309,6 +349,17 @@ const PERIOD_TO = '{{ report.date_to }}';
 
 function toggleForm(id) {
   document.getElementById(id).classList.toggle('visible');
+}
+
+function submitForApproval() {
+  if (!confirm('Submit this quarter for approval? This freezes the current numbers and cannot be undone.')) return;
+  fetch(API + '/report-approvals', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({year: {{ sel_year }}, quarter: {{ sel_quarter }}, vehicle_id: '{{ sel_vehicle }}'}),
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => location.reload())
+    .catch(e => alert('Error: ' + e.message));
 }
 
 function addTripLeg() {
@@ -328,6 +379,43 @@ function addTripLeg() {
     .catch(e => alert('Error: ' + e.message));
 }
 
+let scannedReceiptFile = null;
+let scannedConfidence = null;
+
+function scanReceipt(inputEl) {
+  const file = inputEl.files[0];
+  const statusEl = document.getElementById('fuel-scan-status');
+  if (!file) { scannedReceiptFile = null; scannedConfidence = null; statusEl.textContent = ''; return; }
+  scannedReceiptFile = file;
+  scannedConfidence = null;
+  statusEl.style.color = '#777';
+  statusEl.textContent = 'Scanning...';
+  const formData = new FormData();
+  formData.append('file', file);
+  fetch(API + '/fuel-purchases/extract-receipt', {method: 'POST', body: formData})
+    .then(r => r.json())
+    .then(result => {
+      if (!result.available) {
+        statusEl.style.color = '#e65100';
+        statusEl.textContent = 'Scan unavailable (' + (result.reason || 'unknown') + ') — fill in manually.';
+        return;
+      }
+      if (result.jurisdiction) document.getElementById('fuel-jurisdiction').value = result.jurisdiction;
+      if (result.gallons != null) document.getElementById('fuel-gallons').value = result.gallons;
+      if (result.amount != null) document.getElementById('fuel-amount').value = result.amount;
+      if (result.purchase_date) document.getElementById('fuel-date').value = result.purchase_date;
+      if (result.vendor_name) document.getElementById('fuel-vendor').value = result.vendor_name;
+      scannedConfidence = result.extraction_confidence != null ? result.extraction_confidence : null;
+      const confStr = (scannedConfidence != null) ? scannedConfidence.toFixed(2) : '?';
+      statusEl.style.color = (scannedConfidence != null && scannedConfidence < 0.75) ? '#e65100' : '#2e7d32';
+      statusEl.textContent = 'Scanned (confidence ' + confStr + ') — review before saving.';
+    })
+    .catch(() => {
+      statusEl.style.color = '#e65100';
+      statusEl.textContent = 'Scan failed — fill in manually.';
+    });
+}
+
 function addFuelPurchase() {
   const payload = {
     jurisdiction: document.getElementById('fuel-jurisdiction').value,
@@ -337,11 +425,19 @@ function addFuelPurchase() {
     vehicle_id: document.getElementById('fuel-vehicle').value,
     vendor: document.getElementById('fuel-vendor').value,
     notes: document.getElementById('fuel-notes').value,
+    extraction_confidence: scannedConfidence,
   };
   if (!payload.jurisdiction) { alert('Select a jurisdiction'); return; }
   if (!payload.gallons) { alert('Enter gallons'); return; }
   fetch(API + '/fuel-purchases', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
     .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(purchase => {
+      if (scannedReceiptFile) {
+        const formData = new FormData();
+        formData.append('file', scannedReceiptFile);
+        return fetch(API + '/fuel-purchases/' + purchase.purchase_id + '/evidence', {method: 'POST', body: formData});
+      }
+    })
     .then(() => location.reload())
     .catch(e => alert('Error: ' + e.message));
 }
@@ -396,17 +492,35 @@ function loadFuelPurchases() {
             <span style="color:#888">${p.date}</span>
             ${p.vehicle_id ? '<span style="color:#888">'+p.vehicle_id+'</span>' : ''}
             ${p.vendor ? '<span style="color:#aaa">'+p.vendor+'</span>' : ''}
+            ${p.evidence_id ? '<span style="color:#2e7d32;font-size:12px;">📎 receipt attached</span>' : '<span style="color:#e65100;font-size:12px;">no receipt</span>'}
           </div>
           <div class="ifta-entry-actions">
+            <label class="btn btn-sm" style="cursor:pointer;margin:0;">
+              Attach Receipt
+              <input type="file" style="display:none" onchange="attachFuelEvidence('${p.purchase_id}', this)">
+            </label>
             <button class="btn btn-sm btn-danger" onclick="deleteFuelPurchase('${p.purchase_id}')">Delete</button>
           </div>
         </div>`).join('');
     });
 }
 
+function attachFuelEvidence(purchaseId, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  fetch(API + '/fuel-purchases/' + purchaseId + '/evidence', {method: 'POST', body: formData})
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => location.reload())
+    .catch(e => alert('Error: ' + e.message));
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  loadTripLegs();
-  loadFuelPurchases();
+  if (PERIOD_FROM && PERIOD_TO) {
+    loadTripLegs();
+    loadFuelPurchases();
+  }
 });
 </script>
 {% endblock %}

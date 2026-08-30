@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Intelligence — L2-COS Portal{% endblock %}
+{% block title %}Intelligence — Dispatch{% endblock %}
 {% block page_title %}Operational Intelligence{% endblock %}
 
 {% block body %}
@@ -16,6 +16,7 @@
             <div class="intel-header">
                 <strong>{{ record.subject }}</strong>
                 <span class="intel-id">{{ record.id }}</span>
+                <span class="status-tag status-{{ record.verification_status|lower }}">{{ record.verification_status|replace('_', ' ') }}</span>
             </div>
             {% if record.content %}
             <div class="intel-content">{{ record.content }}</div>
@@ -24,6 +25,11 @@
                 {% if record.source %}<span>Source: {{ record.source }}</span>{% endif %}
                 <span>{{ record.updated_at }}</span>
             </div>
+            {% if section.key == 'broker' %}
+            <div class="section-actions">
+                <button class="btn btn-sm" onclick="promoteToLibrary('{{ record.id }}')">Promote to Library</button>
+            </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

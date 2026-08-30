@@ -80,7 +80,7 @@ is not 80% understood, whatever the other fields say.
 
 | Cause | Effect |
 |---|---|
-| **An equipment specification is NOT CONFIGURED** | **caps the dimensions that need it at `UNKNOWN`** |
+| **An equipment specification is UNCONFIGURED** | **caps the dimensions that need it at `UNKNOWN`** |
 | A required field is `UNKNOWN` | reduces completeness by its weight |
 | A critical field is missing | caps at `LOW` |
 | A field is stale beyond its freshness window | treated as unknown |
@@ -107,7 +107,7 @@ engine is very sure this one is a no.
 ## 5a. Missing equipment specifications
 
 **CONFIRMED, 30 August 2026: the vehicle has not been purchased**, so payload, cube, pallet
-positions and dimensions are `NOT CONFIGURED`.
+positions and dimensions are `UNCONFIGURED`.
 
 A dimension that needs a missing specification **does not compute a number**. It reports
 `UNKNOWN`, names the missing specification, and lowers confidence:

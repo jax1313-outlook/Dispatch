@@ -99,3 +99,51 @@ def format_score(score: int | None) -> str:
     if score is None:
         return "Unknown"
     return str(score)
+
+
+def attention_needed(limit: int = 5) -> list[dict]:
+    """Compose a small cross-department preview of items awaiting action.
+
+    Portal Presentation-Layer Consolidation (Claude-3 repo,
+    PRESENTATION_LAYER_CONSOLIDATION_SCOPE_v1.md): a strictly read-only composition over three
+    existing queues -- portal/models/publisher.py's action queue, cin_lite's pending decisions,
+    and cin_lite's HUMAN_REVIEW routing queue -- so /home can show a user real cross-department
+    work without visiting /publisher, /pipeline, and /queues separately. Reads only; does not
+    modify any of the three sources, and is not orchestration, routing, or decision logic --
+    explicitly not Manager (see MANAGER_ORCHESTRATION_REVIEW_v1.md; that capability stays
+    dormant and this function has no relationship to it).
+    """
+    from cin_lite.pipeline import routing_history
+    from cin_lite import pending as cin_pending
+    from portal.models import publisher as pub_model
+
+    items: list[dict] = []
+
+    for action in pub_model.get_queue():
+        if action["status"] in ("PENDING", "DRAFT", "READY"):
+            items.append({
+                "source": "Publisher",
+                "title": action["action_type"],
+                "detail": action.get("trigger_reason", ""),
+                "url": "/publisher",
+            })
+
+    for record in cin_pending.list_pending():
+        contract = record.get("contract", {})
+        items.append({
+            "source": "Pipeline",
+            "title": contract.get("title") or record.get("contract_id", ""),
+            "detail": record.get("summary", ""),
+            "url": "/pipeline",
+        })
+
+    for entry in routing_history(route_filter="HUMAN_REVIEW"):
+        metadata = entry.get("metadata") or {}
+        items.append({
+            "source": "Review Queue",
+            "title": metadata.get("title") or entry.get("contract_id", ""),
+            "detail": entry.get("action_label", ""),
+            "url": "/queues",
+        })
+
+    return items[:limit]

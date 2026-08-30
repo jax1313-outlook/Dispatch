@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if error %}Shipment Link{% else %}Shipment {{ load.load_id }}{% endif %} — Level 1 Transport</title>
+<style>
+    body { font-family: Arial, Helvetica, sans-serif; background: #f4f4f4; color: #333; margin: 0; padding: 0; }
+    .wrap { max-width: 780px; margin: 0 auto; padding: 24px 16px 64px; }
+    .header { background: #1a237e; color: #fff; padding: 20px 24px; border-radius: 6px 6px 0 0; }
+    .header h1 { margin: 0; font-size: 20px; }
+    .header .sub { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+    .card { background: #fff; border: 1px solid #ddd; border-top: none; padding: 20px 24px; margin-bottom: 16px; }
+    .card:last-of-type { border-radius: 0 0 6px 6px; }
+    .card h2 { font-size: 15px; margin: 0 0 12px; border-bottom: 2px solid #1a237e; padding-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 6px 0; vertical-align: top; }
+    td.label { color: #666; width: 160px; }
+    .status-tag { display: inline-block; background: #e8eaf6; color: #1a237e; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+    .empty { color: #999; font-size: 13px; font-style: italic; }
+    .error-card { background: #fff; border-left: 4px solid #c62828; padding: 24px; border-radius: 6px; }
+    .error-card h2 { color: #c62828; margin-top: 0; }
+    .milestone { padding: 8px 0; border-bottom: 1px solid #eee; }
+    .milestone:last-child { border-bottom: none; }
+    .footer-note { font-size: 11px; color: #999; text-align: center; margin-top: 16px; }
+</style>
+</head>
+<body>
+{% if rehearsal_active %}<div class="rehearsal-banner" role="status" style="background:#b91c1c;color:#fff;padding:10px 16px;font-weight:900;letter-spacing:1px;text-align:center;font-size:15px;border-bottom:3px solid #fca5a5;">
+  {{ rehearsal_label }} MODE — THIS IS NOT A LIVE MISSION.
+  <span style="font-weight:600;letter-spacing:0;">Session {{ rehearsal_session_id }}{% if rehearsal_session_label %} &middot; {{ rehearsal_session_label }}{% endif %}. Every record created now is tagged {{ rehearsal_label }}.</span>
+</div>{% endif %}
+<div class="wrap">
+
+{% if error %}
+    <div class="error-card">
+        <h2>Unable to Show This Shipment</h2>
+        <p>{{ error }}</p>
+        <p style="color:#666;font-size:13px;">If you believe this is a mistake, contact Level 1 Transport directly for an updated link.</p>
+    </div>
+{% else %}
+    <div class="header">
+        <h1>Level 1 Transport — Shipment Status</h1>
+        <div class="sub">Load {{ load.load_id }}{{ rehearsal_badge(load) }}</div>
+    </div>
+
+    <div class="card">
+        <h2>Shipment Information</h2>
+        <table>
+            <tr><td class="label">Status</td><td><span class="status-tag">{{ load.status.replace('_', ' ').title() }}</span></td></tr>
+            <tr><td class="label">Customer</td><td>{{ load.customer or '—' }}</td></tr>
+            <tr><td class="label">Broker / Shipper</td><td>{{ load.broker_shipper or '—' }}</td></tr>
+            <tr><td class="label">Pickup</td><td>{{ load.pickup_location or '—' }}{% if load.pickup_datetime %} &middot; {{ load.pickup_datetime }}{% endif %}</td></tr>
+            <tr><td class="label">Delivery</td><td>{{ load.delivery_location or '—' }}{% if load.delivery_datetime %} &middot; {{ load.delivery_datetime }}{% endif %}</td></tr>
+            <tr><td class="label">Equipment</td><td>{% if assigned_equipment %}{{ assigned_equipment.unit_number }} ({{ assigned_equipment.equipment_type.replace('_', ' ').title() }}){% else %}—{% endif %}</td></tr>
+            <tr><td class="label">Driver</td><td>{% if assigned_driver %}{{ assigned_driver.name }}{% else %}Not yet assigned{% endif %}</td></tr>
+            <tr><td class="label">Next Expected</td><td>{{ next_expected_milestone or '—' }}</td></tr>
+            {% if comi_status and comi_status.exists %}
+            <tr><td class="label">Communications</td><td>{% if comi_status.status == "SUBMITTED" %}Closeout communications sent{% else %}Closeout communications in progress{% endif %}</td></tr>
+            {% endif %}
+        </table>
+        {% if customer_note %}
+        <p style="margin-top:12px;padding:10px 12px;background:#f5f5f5;border-radius:4px;font-size:13px;">{{ customer_note }}</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>Tracking</h2>
+        {% if milestones %}
+            {% for m in milestones %}
+            <div class="milestone">
+                <strong>{{ m.event_type.replace('_', ' ').title() }}</strong>
+                {% if m.event_time %}<span style="color:#666;font-size:12px;"> &middot; {{ m.event_time }}</span>{% endif %}
+                {% if m.location %}<br><span style="font-size:13px;color:#555;">{{ m.location }}</span>{% endif %}
+                {% if m.note %}<br><span style="font-size:13px;color:#777;">{{ m.note }}</span>{% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty">No tracking events yet.</p>
+        {% endif %}
+    </div>
+
+    {% if exceptions %}
+    <div class="card">
+        <h2>Exceptions</h2>
+        {% for x in exceptions %}
+        <div class="milestone">
+            <strong>{{ x.exception_type.replace('_', ' ').title() }}</strong>
+            <span class="status-tag">{{ x.severity }}</span>
+            <span class="status-tag">{{ x.status }}</span>
+            <br><span style="font-size:13px;color:#555;">{{ x.description }}</span>
+            {% if x.resolution_note %}<br><span style="font-size:13px;color:#2e7d32;">Resolved: {{ x.resolution_note }}</span>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2>Documentation</h2>
+        <table>
+            <tr><td class="label">Evidence on file</td><td>{{ evidence|length }} item{{ 's' if evidence|length != 1 else '' }}</td></tr>
+            <tr><td class="label">POD packages</td><td>{{ pods|length }} generated</td></tr>
+        </table>
+    </div>
+
+    {% if rate_confirmation or settlement %}
+    <div class="card">
+        <h2>Rate &amp; Billing</h2>
+        <table>
+            {% if rate_confirmation %}
+            <tr><td class="label">Confirmed Rate</td><td>${{ "%.2f"|format(rate_confirmation.rate_amount) }}</td></tr>
+            <tr><td class="label">Distance</td><td>{{ rate_confirmation.distance_miles }} mi</td></tr>
+            {% endif %}
+            {% if settlement %}
+            <tr><td class="label">Invoice #</td><td>{{ settlement.invoice_number }}</td></tr>
+            <tr><td class="label">Invoice Amount</td><td>${{ "%.2f"|format(settlement.invoice_amount) }}</td></tr>
+            <tr><td class="label">Payment Status</td><td><span class="status-tag">{{ settlement.payment_status.replace('_', ' ').title() }}</span></td></tr>
+            {% endif %}
+        </table>
+    </div>
+    {% endif %}
+
+    {% if publisher_status.has_packet %}
+    <div class="card">
+        <h2>Documentation Package</h2>
+        <p>
+        {% if publisher_status.status in ('PENDING', 'DRAFT') %}
+            Your documentation package is being prepared.
+        {% elif publisher_status.status == 'READY' %}
+            Your documentation package is ready.
+        {% elif publisher_status.status in ('APPROVED', 'ARCHIVED') %}
+            Your documentation package has been finalized.
+        {% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+    {% if retention %}
+    <div class="card">
+        <h2>Archive</h2>
+        <table>
+            <tr><td class="label">Final Status</td><td>{{ retention.final_status }}</td></tr>
+            <tr><td class="label">Archived</td><td>{{ retention.archived_at }}</td></tr>
+        </table>
+        <p style="margin-top:10px;font-size:13px;color:#555;">
+            This shipment is complete and has been placed in Level 1 Transport's permanent record system.
+            The information on this page reflects that final, closed-out record and will not change further.
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2>Contact</h2>
+        <table>
+            <tr><td class="label">Level 1 Transport Dispatch</td><td>{{ contacts.dispatch_email }}</td></tr>
+            {% if contacts.broker_contact %}
+            <tr><td class="label">Broker Contact</td>
+                <td>{{ contacts.broker_contact.contact_name or contacts.broker_contact.company_name }}
+                    {% if contacts.broker_contact.phone %} &middot; {{ contacts.broker_contact.phone }}{% endif %}
+                    {% if contacts.broker_contact.email %} &middot; {{ contacts.broker_contact.email }}{% endif %}
+                </td></tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <p class="footer-note">This is a read-only shipment summary shared by Level 1 Transport. This link is unique to this shipment.</p>
+{% endif %}
+
+</div>
+</body>
+</html>

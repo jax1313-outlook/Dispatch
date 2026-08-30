@@ -48,6 +48,12 @@ def dispatched_load(sample_load):
 @pytest.fixture
 def delivered_load(dispatched_load):
     load_id = dispatched_load["load_id"]
+    # Walks the full ladder. "en_route_pickup" used to be skipped here: the
+    # status cascade wrote straight through store.update_load(), which does no
+    # validation, so dispatched -> at_pickup silently succeeded. add_milestone()
+    # now gates the cascade on the same transition table archive_load() uses,
+    # so the intervening step has to be real. See DISPATCH_BUILD_MATRIX_v1 / M1.
+    services.add_milestone(load_id, "en_route_pickup")
     services.add_milestone(load_id, "arrived_pickup")
     services.add_milestone(load_id, "loaded")
     services.add_milestone(load_id, "departed_pickup")
@@ -486,10 +492,13 @@ class TestServices:
         with pytest.raises(ValueError, match="Load not found"):
             services.archive_load("NONEXISTENT")
 
-    def test_archive_load_already_archived(self, sample_load):
-        services.archive_load(sample_load["load_id"])
+    def test_archive_load_already_archived(self, delivered_load):
+        # D1: archiving now validates the status transition, so this must
+        # start from a status that is actually allowed to reach "archived"
+        # (sample_load sits at "created", which is not).
+        services.archive_load(delivered_load["load_id"])
         with pytest.raises(ValueError, match="already archived"):
-            services.archive_load(sample_load["load_id"])
+            services.archive_load(delivered_load["load_id"])
 
     def test_get_load_bundle(self, sample_load):
         load_id = sample_load["load_id"]
@@ -506,16 +515,18 @@ class TestServices:
     def test_get_load_bundle_not_found(self):
         assert services.get_load_bundle("NONEXISTENT") is None
 
-    def test_retention_list(self, sample_load):
-        services.archive_load(sample_load["load_id"])
+    def test_retention_list(self, delivered_load):
+        # D1: same reason as test_archive_load_already_archived above --
+        # needs a status archive_load is actually allowed to reach "archived" from.
+        services.archive_load(delivered_load["load_id"])
         retentions = services.list_retentions()
         assert len(retentions) == 1
 
-    def test_get_retention(self, sample_load):
-        services.archive_load(sample_load["load_id"])
-        ret = services.get_retention(sample_load["load_id"])
+    def test_get_retention(self, delivered_load):
+        services.archive_load(delivered_load["load_id"])
+        ret = services.get_retention(delivered_load["load_id"])
         assert ret is not None
-        assert ret["load_id"] == sample_load["load_id"]
+        assert ret["load_id"] == delivered_load["load_id"]
 
 
 # ── Full workflow test ────────────────────────────────────────────────
@@ -598,7 +609,9 @@ class TestDispatchAPI:
         return client.post("/api/dispatch/loads", json=data)
 
     def _deliver_load(self, client, load_id):
-        for evt in ("dispatched", "arrived_pickup", "loaded",
+        # Full ladder -- "en_route_pickup" is no longer skippable; the milestone
+        # route now returns 409 when a milestone would jump the transition table.
+        for evt in ("dispatched", "en_route_pickup", "arrived_pickup", "loaded",
                      "departed_pickup", "arrived_delivery", "delivered"):
             client.post(f"/api/dispatch/loads/{load_id}/milestones",
                         json={"event_type": evt})
@@ -844,6 +857,10 @@ class TestDispatchAPI:
 
     def test_archive_load(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        # D1: archive_load now validates the status transition, so the load
+        # must reach a status that is actually allowed to reach "archived"
+        # ("created" is not) before archiving.
+        self._deliver_load(client, load_id)
         resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
         assert resp.status_code == 201
         load = client.get(f"/api/dispatch/loads/{load_id}").get_json()["load"]
@@ -855,12 +872,14 @@ class TestDispatchAPI:
 
     def test_archive_load_already_archived(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
         assert resp.status_code == 409
 
     def test_list_retentions(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.get("/api/dispatch/retention")
         assert resp.status_code == 200
@@ -868,6 +887,7 @@ class TestDispatchAPI:
 
     def test_get_retention(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
+        self._deliver_load(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.get(f"/api/dispatch/retention/{load_id}")
         assert resp.status_code == 200
@@ -1088,6 +1108,7 @@ class TestNotificationIntegration:
 
     def test_delivery_milestone_triggers_notification(self, dispatched_load):
         with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
+            services.add_milestone(dispatched_load["load_id"], "en_route_pickup")
             services.add_milestone(dispatched_load["load_id"], "arrived_pickup")
             services.add_milestone(dispatched_load["load_id"], "loaded")
             services.add_milestone(dispatched_load["load_id"], "departed_pickup")

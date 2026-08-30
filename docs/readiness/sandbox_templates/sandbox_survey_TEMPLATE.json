@@ -1,0 +1,109 @@
+{
+  "tool": "dispatch.sandbox_survey",
+  "tool_version": "1.0.0",
+  "generated_by": "Claude Code",
+  "generated_at": "2026-08-24T00:00:00+00:00",
+  "run_id": "20260824T000000Z",
+  "survey_performed": false,
+  "status": "ABSENT",
+  "absent_reason": "The survey was not performed. It was authored in an isolated Linux container that has no D: drive, no mount, no network path and no credential reaching the Windows machine that holds D:\\Sandbox\\Play Pen — that folder is ABSENT from the environment these templates were generated in. Nothing under it has been read, listed, hashed, sampled or classified. The tool's behaviour against the real Sandbox is UNVERIFIED until Mike runs it himself; see docs/readiness/SANDBOX_SURVEY_PROCEDURE.md.",
+  "sandbox_root": "D:\\Sandbox\\Play Pen",
+  "output_root": "D:\\Sandbox\\Play Pen\\Dispatch",
+  "dry_run": false,
+  "max_bytes": 65536,
+  "read_only_declaration": "READ-ONLY PASS — NO FILES WERE MODIFIED",
+  "authority_declaration": "Nothing in this report is accepted doctrine or a Mike decision.",
+  "interpretation_rules": [
+    "Architecture research is not accepted architecture.",
+    "Notes are not doctrine.",
+    "AI-generated reports are not human decisions.",
+    "A file is Decision only if it records an explicit human decision with an identifiable actor; otherwise it is at most a Decision candidate.",
+    "Doctrine is assigned only to material that matches doctrine already locked in this mission or in the repository; everything else that looks like doctrine is a Doctrine candidate.",
+    "When in doubt, Unknown. Never upgrade confidence to make the map look complete."
+  ],
+  "classes": [
+    "Knowledge",
+    "Evidence",
+    "Research",
+    "Decision",
+    "Doctrine",
+    "Draft",
+    "Duplicate",
+    "Historical",
+    "Personal",
+    "Sensitive",
+    "Unknown"
+  ],
+  "locked_doctrine": [
+    {
+      "anchor_id": "TRUTH_VOCABULARY",
+      "title": "Truth vocabulary: LIVE, CONFIGURED, UNCONFIGURED, SIMULATED, UNAVAILABLE, MANUAL, ABSENT, UNVERIFIED — these words, no synonyms."
+    },
+    {
+      "anchor_id": "NO_MANUFACTURED_ATTESTATION",
+      "title": "An attestation of verification, approval, acceptance, authorisation or confirmation by the programme's principal is never manufactured, inferred, defaulted, auto-populated, seeded or fixtured."
+    },
+    {
+      "anchor_id": "READ_ONLY_FIRST_PASS",
+      "title": "The first pass over the Sandbox is read-only; no file is moved, renamed, deleted, converted or overwritten."
+    },
+    {
+      "anchor_id": "TESTS_ARE_NOT_OPERATIONAL_PROOF",
+      "title": "Repository tests are evidence of software behaviour only, never operational proof."
+    },
+    {
+      "anchor_id": "NO_SECRETS_IN_GIT",
+      "title": "Runtime secrets, logs containing secrets, evidence files and backups are never committed to Git."
+    },
+    {
+      "anchor_id": "SOURCES_OF_TRUTH",
+      "title": "Repositories contain implementation truth; folders contain research and knowledge evidence; Mike supplies operational truth and authority."
+    }
+  ],
+  "sensitive_categories": [
+    "credentials",
+    "personal_data",
+    "financial_data",
+    "third_party_confidential"
+  ],
+  "counts": {
+    "files": 0,
+    "directories": 0,
+    "total_bytes": 0,
+    "unreadable": 0,
+    "dispatch_related": 0,
+    "decision_candidates": 0,
+    "decisions": 0,
+    "doctrine_candidates": 0,
+    "doctrine": 0,
+    "prompt_assets": 0,
+    "library_candidates": 0,
+    "sensitive_files": 0,
+    "prior_output_files": 0,
+    "exact_duplicate_groups": 0,
+    "near_duplicate_groups": 0,
+    "by_primary_class": {
+      "Knowledge": 0,
+      "Evidence": 0,
+      "Research": 0,
+      "Decision": 0,
+      "Doctrine": 0,
+      "Draft": 0,
+      "Duplicate": 0,
+      "Historical": 0,
+      "Personal": 0,
+      "Sensitive": 0,
+      "Unknown": 0
+    }
+  },
+  "files": [],
+  "directories": [],
+  "prior_output_files": [],
+  "duplicates": {
+    "exact": [],
+    "near": [],
+    "notes": []
+  },
+  "sensitive": [],
+  "notes": []
+}

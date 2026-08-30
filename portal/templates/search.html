@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Search — L2-COS Portal{% endblock %}
-{% block page_title %}Search{% endblock %}
+{% block title %}Load Search — Dispatch{% endblock %}
+{% block page_title %}Load Search{% endblock %}
 
 {% block body %}
 
@@ -9,8 +9,8 @@
 <div class="brief-section">
     <form method="get" action="{{ url_for('pages.search') }}" style="display:flex;gap:8px;align-items:flex-end;">
         <div style="flex:1;">
-            <label><strong>Search across loads, drivers, equipment, and settlements</strong><br>
-            <input type="text" name="q" value="{{ query }}" placeholder="Enter search term (min 2 characters)..."
+            <label><strong>Find the answer now — loads, brokers, drivers, equipment, invoices</strong><br>
+            <input type="text" name="q" value="{{ query }}" placeholder="Load #, customer, broker, city, driver, invoice #..."
                    style="width:100%;padding:8px 12px;font-size:1em;" autofocus></label>
         </div>
         <button type="submit" class="btn btn-primary">Search</button>
@@ -18,6 +18,9 @@
         <a href="{{ url_for('pages.search') }}" class="btn">Clear</a>
         {% endif %}
     </form>
+    <p style="margin-top:8px;color:#666;font-size:0.9em;">
+        Read-only lookup — view, print, or reference. Nothing here creates, changes, or sends anything.
+    </p>
 </div>
 
 {% if query and results %}
@@ -44,7 +47,7 @@
         <tbody>
         {% for ld in results.loads %}
             <tr>
-                <td><a href="{{ url_for('pages.dispatch_detail', load_id=ld.load_id) }}">{{ ld.load_id[:12] }}</a></td>
+                <td><a href="{{ url_for('pages.search_load_detail', load_id=ld.load_id) }}">{{ ld.load_id[:12] }}</a></td>
                 <td>{{ ld.customer }}</td>
                 <td>{{ ld.broker_shipper or '—' }}</td>
                 <td>{{ ld.pickup_location or '—' }}</td>
@@ -143,6 +146,37 @@
                 <td>${{ '%.2f'|format(stl.total_amount) }}</td>
                 <td><span class="status-tag billing-{{ stl.payment_status }}">{{ stl.payment_status }}</span></td>
                 <td>{{ stl.invoice_date[:10] if stl.invoice_date else '—' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Broker Contacts ──────────────────────────────────────────────── #}
+{% if results.brokers %}
+<div class="card-section">
+    <h2>Broker Contacts ({{ results.brokers|length }})</h2>
+    <div style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Company</th>
+                <th>Contact</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>MC #</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for brk in results.brokers %}
+            <tr>
+                <td>{{ brk.company_name }}</td>
+                <td>{{ brk.contact_name or '—' }}</td>
+                <td>{{ brk.phone or '—' }}</td>
+                <td>{{ brk.email or '—' }}</td>
+                <td>{{ brk.mc_number or '—' }}</td>
             </tr>
         {% endfor %}
         </tbody>

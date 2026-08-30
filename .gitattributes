@@ -1,0 +1,20 @@
+# ORDER MATTERS HERE, and it is the opposite of what reads naturally: in
+# gitattributes the LAST matching pattern wins, so the catch-all must come
+# first and the specific overrides after it. Written the other way round -- the
+# specific rules on top, the `*` line at the bottom -- the catch-all silently
+# wins and every override below is dead. That is not hypothetical: it is the
+# bug this file shipped with, and CI caught it on a fresh clone while the
+# authoring machine kept the right bytes on disk and saw nothing wrong.
+
+# Default: normalize to LF in the repository and check out LF. Git's usual
+# behaviour, stated explicitly so a contributor's core.autocrlf cannot change it.
+* text=auto eol=lf
+
+# Windows entry points must be checked out CRLF on every platform, including the
+# Linux runner that CI uses. cmd.exe does not reliably tolerate a bare LF before
+# a `goto :label`, and PowerShell's param() block and here-strings are likewise
+# sensitive. tests/test_launcher.py asserts CRLF on these three, so this rule is
+# load-bearing rather than cosmetic.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

@@ -35,8 +35,8 @@ Labels: **CONFIRMED** — verified in source. **INFERRED** — reasoned from evi
 
 | ID | Component | Source | Status | Action |
 |---|---|---|---|---|
-| R-08 | Blocking-condition veto | v1.0.1 `app.py:197`, v1.3.1 `app.py:87` | **LOST** | **Recover first.** See §Priority. |
-| R-09 | Severity ladder (BLOCKING / WARNING / INFORMATIONAL / UNKNOWN) | Partial in v1.0.1 (BLOCKING only) | NEW | Build; mechanism recovered, catalogue new |
+| R-08 | Blocking-condition veto | v1.0.1 `app.py:197`, v1.3.1 `app.py:87` | **PARTIAL** | `capacity.py` has `SEVERITY_BLOCKING`; `scoring.py` does not use it. **Integrate.** |
+| R-09 | Severity ladder | v1.0.1 (BLOCKING only); `capacity.py` has INFO/ADVISORY/BLOCKING | PARTIAL | Align vocabulary; write the catalogue |
 | R-10 | Externalised weights | v1.0.1 `config/scoring_rules.json` | LOST | Recover into policy profile |
 | R-11 | Classification bands | v1.0.1 `classify()` | PARTIAL | Dispatch has a score, no bands |
 | R-12 | Reasons as stored output | v1.0.1, v1.3.3 | LOST | Recover |
@@ -113,7 +113,7 @@ Labels: **CONFIRMED** — verified in source. **INFERRED** — reasoned from evi
 
 | Rank | Item | Why first |
 |---|---|---|
-| 1 | **R-08 blocking veto** | Today a load that cannot be run can score 95 and sort to the top |
+| 1 | **R-08 blocking veto** | `capacity.py` can block; `scoring.py` cannot, and a load that cannot be run still scores 95 there |
 | 2 | **R-10 externalised policy** | Every other recovery needs somewhere to put its thresholds |
 | 3 | **R-21 / R-22 filter and sort** | Cannot separate the stages without them existing |
 | 4 | **R-15..R-19 territory, growth, recommendation, confidence** | The dimensions the brief requires |

@@ -8,8 +8,10 @@
 
 ## Blockers to Resolve Before Network Deployment
 
-1. **No authentication** — the portal is open to anyone with the URL.
-   Add Flask-Login or a reverse proxy auth layer before exposing.
+1. **Authority identity must be bootstrapped.** The portal has a fail-closed PIN login
+   (every route redirects to `/login` until an identity exists) — but that identity
+   doesn't exist until you run `cin-portal-init-admin` once. Skipping this doesn't
+   leave the portal open; it leaves it unusable. See Step 2.
 2. **Flask debug server** — `app.run(debug=True)` must not face the
    network. Use gunicorn behind nginx.
 
@@ -25,14 +27,21 @@ sudo apt update && sudo apt install -y python3.11 python3.11-venv python3-pip ng
 
 ```bash
 cd /opt
-sudo git clone https://github.com/jax1313-outlook/cin-hybrid.git dispatch
+sudo git clone https://github.com/jax1313-outlook/Dispatch.git dispatch
 sudo chown -R $USER:$USER /opt/dispatch
 cd /opt/dispatch
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 pip install gunicorn
+cin-portal-init-admin
 ```
+
+`cin-portal-init-admin` is one-time and interactive — it prompts for a user id, a
+display name, and a PIN at the terminal (never pipe or script this; PINs aren't
+echoed), and refuses to run again once an identity exists. Run it here, before the
+service starts in Step 5 — there's no way to reach this prompt once the portal is only
+reachable over the network.
 
 ## Step 3: Configure Environment
 
@@ -214,23 +223,26 @@ export $(grep -v '^#' .env | xargs)
 python -m cin_lite.run
 ```
 
-## Authentication (Required Before Exposing)
+## Authentication
 
-The portal currently has no login system. Before making it
-network-accessible, add one of:
+The portal already has a fail-closed PIN login (bootstrapped in Step 2 via
+`cin-portal-init-admin`, enforced on every route except `static`, the token-authenticated
+decision-email links, and `/login` itself) — no additional code is required before
+exposing it to the network.
 
-- **Flask-Login** with a single admin user (bcrypt hash stored in
-  SQLite or env var). Wrap routes with `@login_required`.
-- **Nginx basic auth** as a quick stopgap:
-  ```bash
-  sudo apt install -y apache2-utils
-  sudo htpasswd -c /etc/nginx/.htpasswd admin
-  ```
-  Then add to the nginx location block:
-  ```nginx
-  auth_basic "DISPATCH";
-  auth_basic_user_file /etc/nginx/.htpasswd;
-  ```
+Optionally, for defense in depth on top of the app-level login (not a replacement for
+it), you can add nginx basic auth as a second layer in front of everything:
 
-Nginx basic auth is the fastest path to network-safe deployment without
-any code changes. It protects every route including the API.
+```bash
+sudo apt install -y apache2-utils
+sudo htpasswd -c /etc/nginx/.htpasswd admin
+```
+
+Then add to the nginx location block:
+```nginx
+auth_basic "DISPATCH";
+auth_basic_user_file /etc/nginx/.htpasswd;
+```
+
+This is optional. Whether it's worth the extra login prompt for your setup is your
+call, not something this doc should decide for you.

@@ -9,13 +9,20 @@
 ## Quick Start
 
 ```
-git clone https://github.com/jax1313-outlook/cin-hybrid.git
-cd cin-hybrid
+git clone https://github.com/jax1313-outlook/Dispatch.git
+cd Dispatch
 pip install -e .
+cin-portal-init-admin
 python portal/app.py
 ```
 
-Open http://127.0.0.1:8080 in your browser.
+Open http://127.0.0.1:8080 in your browser and log in with the PIN you just set.
+
+**`cin-portal-init-admin` is a one-time, interactive step** — it prompts for a user id,
+a display name, and a PIN at the terminal (never pipe or script this; PINs aren't
+echoed). The portal has a fail-closed login and every route redirects to `/login` until
+an identity exists — skipping this step means the app runs but nothing past the login
+page is reachable. It refuses to run a second time once an identity exists.
 
 ## Storage Layout
 
@@ -101,8 +108,10 @@ production operations you should set:
 
 ## First Operational Load — Step by Step
 
+0. If you haven't already, run `cin-portal-init-admin` once (see Quick Start above) —
+   this cannot be skipped; every step below is behind the login screen.
 1. Start the portal: `python portal/app.py`
-2. Open http://127.0.0.1:8080
+2. Open http://127.0.0.1:8080 and log in with your PIN
 3. Go to **Fleet** → create a driver and a truck
 4. Go to **Dispatch** → click **New Load** → fill the form
 5. Open the load detail → **Assign Driver** + **Assign Equipment**
@@ -121,6 +130,14 @@ production operations you should set:
 | `python -m cin_lite.run`    | Run the CIN-Lite contract pipeline             |
 | `python run_sync.py`        | Run the sync utility (VPS ↔ local)             |
 | `.\run_sync.bat`            | Same, via the Windows batch launcher           |
+| `python bootstrap_d_drive.py` | Migrate workspace & data into D:\ structure    |
+| `.\run_bootstrap_d_drive.bat` | Same, via the Windows batch launcher           |
+
+`run_sync.py` requires `sync/sync_config.json` (copy `sync/sync_config.example.json`
+and fill in `vps.hostname`, `vps.username`, `vps.ssh_key_path` — must point to an
+existing key file on disk — and `local.primary_path`/`local.backup_path`). It's optional
+and only needed if you're syncing between a VPS and a local machine; skip it entirely
+for a single-machine local deployment.
 
 ## Data Backup
 

@@ -37,7 +37,7 @@ Nothing on this list may be a code constant.
 
 **CONFIRMED by the operator, 30 August 2026:** the intended vehicle is a **cargo van with
 trailer**, and **it has not been purchased**. Payload, cube, pallet positions and dimensions
-are all **NOT CONFIGURED**, and must not be invented — see
+are all **UNCONFIGURED**, and must not be invented — see
 `DISPATCH_POLICY_PROFILE_SPEC.md` §4.8a.
 
 The operator's stated targets are 10,000 lb payload and 6 pallet positions. Those are

@@ -52,12 +52,12 @@ weekends.
       "status": "PLANNED", "active": false,
       "equipment": ["cargo_van","trailer"], "endorsements": [],
       "specifications": {
-        "payload_capacity_lbs": { "value": null, "status": "NOT CONFIGURED" },
-        "cube_capacity_ft3":    { "value": null, "status": "NOT CONFIGURED" },
-        "pallet_positions":     { "value": null, "status": "NOT CONFIGURED" },
-        "length_ft":            { "value": null, "status": "NOT CONFIGURED" },
-        "width_ft":             { "value": null, "status": "NOT CONFIGURED" },
-        "height_ft":            { "value": null, "status": "NOT CONFIGURED" }
+        "payload_capacity_lbs": { "value": null, "status": "UNCONFIGURED" },
+        "cube_capacity_ft3":    { "value": null, "status": "UNCONFIGURED" },
+        "pallet_positions":     { "value": null, "status": "UNCONFIGURED" },
+        "length_ft":            { "value": null, "status": "UNCONFIGURED" },
+        "width_ft":             { "value": null, "status": "UNCONFIGURED" },
+        "height_ft":            { "value": null, "status": "UNCONFIGURED" }
       },
       "operator_target": { "payload_capacity_lbs": 10000, "pallet_positions": 6 },
       "operating_radius_miles": null, "hos_applies": true,
@@ -79,7 +79,7 @@ weekends.
 ```
 
 Territory and schedule values are recovered from v1.3.3's config; money values from current
-`dispatch/scoring.py`. **Equipment specifications are `NOT CONFIGURED` because the vehicle
+`dispatch/scoring.py`. **Equipment specifications are `UNCONFIGURED` because the vehicle
 has not been purchased.** Nothing is invented.
 
 `operator_target` records stated intent for planning conversations. **The engine never reads
@@ -256,9 +256,9 @@ has been confirmed as still correct.
 | Value | Source | Still right? |
 |---|---|---|
 | Vehicle: cargo van + trailer | operator, 30 Aug 2026 | **intended — not yet purchased** |
-| Pallet positions | — | **NOT CONFIGURED** (target 6) |
-| Payload capacity | — | **NOT CONFIGURED** (target 10,000 lb) |
-| Cube capacity | — | **NOT CONFIGURED**, no target stated |
+| Pallet positions | — | **UNCONFIGURED** (target 6) |
+| Payload capacity | — | **UNCONFIGURED** (target 10,000 lb) |
+| Cube capacity | — | **UNCONFIGURED**, no target stated |
 | Territory tiers | v1.3.3, 13 Jul 2026 | ? |
 | Radius 500 mi | `dispatch/scoring.py` | ? |
 | Sweep times 06:00/12:00/18:00 | v1.1, v1.3.3 | ? |

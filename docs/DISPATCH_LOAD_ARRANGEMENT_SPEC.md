@@ -113,10 +113,10 @@ deck positions.
 specifications. They are not. **The cargo van and trailer have not been purchased**, so:
 
 ```
-payload_capacity_lbs   NOT CONFIGURED     operator target 10,000
-pallet_positions       NOT CONFIGURED     operator target 6
-cube_capacity_ft3      NOT CONFIGURED     no target stated
-length / width / height NOT CONFIGURED
+payload_capacity_lbs   UNCONFIGURED     operator target 10,000
+pallet_positions       UNCONFIGURED     operator target 6
+cube_capacity_ft3      UNCONFIGURED     no target stated
+length / width / height UNCONFIGURED
 ```
 
 The figures above are the **operator's stated intent for a vehicle not yet owned**. They

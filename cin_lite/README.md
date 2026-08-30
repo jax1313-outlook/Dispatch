@@ -187,7 +187,7 @@ continues. This keeps the offline, zero-setup path intact.
 
 ## Portal API reference
 
-The L2-COS Portal exposes a JSON API under `/api/pipeline/` for external
+The Dispatch portal exposes a JSON API under `/api/pipeline/` for external
 automation (n8n, cron, webhooks, scripts). All endpoints return
 `{"status": "ok", ...}` on success.
 

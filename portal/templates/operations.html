@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Operations — Dispatch{% endblock %}
+{% block page_title %}Operations{% endblock %}
+
+{% block body %}
+<style>
+.op-level-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+.op-level-chip { padding:6px 14px; border-radius:16px; font-size:13px; font-weight:600; color:#fff; }
+.op-level-5 { background:#6a1b9a; }
+.op-level-4 { background:#c62828; }
+.op-level-3 { background:#e65100; }
+.op-level-2 { background:#1565c0; }
+.op-level-1 { background:#2e7d32; }
+.op-level-0 { background:#707b7c; }
+.op-card { border:1px solid #ddd; border-left-width:5px; border-radius:4px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+.op-card-5 { border-left-color:#6a1b9a; }
+.op-card-4 { border-left-color:#c62828; }
+.op-card-3 { border-left-color:#e65100; }
+.op-card-2 { border-left-color:#1565c0; }
+.op-card-1 { border-left-color:#2e7d32; }
+.op-card-0 { border-left-color:#707b7c; }
+.op-card-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:4px; }
+.op-card-title { font-weight:600; }
+.op-card-summary { color:#555; font-size:13px; margin-bottom:6px; }
+.op-card-footer { display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#888; }
+.op-card-closing { font-size:12px; color:#6a1b9a; font-style:italic; margin-top:6px; }
+.op-source-tag { font-size:11px; color:#999; text-transform:uppercase; letter-spacing:0.03em; }
+</style>
+
+<p class="section-note">
+    Every open decision-worthy item across Publisher, Conflicts, Pipeline, Exceptions, Settlements,
+    Stalled Loads, Queues, and Library gaps, in one feed, highest-consequence first. Resolving or
+    acting on an item still happens on its own page (linked below) -- this view is read-only.
+</p>
+
+<div class="op-level-bar">
+    {% for level in [5, 4, 3, 2, 1, 0] %}
+    <span class="op-level-chip op-level-{{ level }}">{{ levels[level] }}: {{ counts_by_level[level] }}</span>
+    {% endfor %}
+</div>
+
+{% if cards %}
+    {% for card in cards %}
+    <div class="op-card op-card-{{ card.card_level }}">
+        <div class="op-card-header">
+            <span class="op-card-title">{{ card.title }}</span>
+            <span class="op-level-chip op-level-{{ card.card_level }}">{{ card.level_label }}</span>
+        </div>
+        {% if card.summary %}<div class="op-card-summary">{{ card.summary }}</div>{% endif %}
+        <div class="op-card-footer">
+            <span class="op-source-tag">{{ card.source|replace('_', ' ') }}{% if card.created_at %} &middot; {{ card.created_at[:16] }}{% endif %}</span>
+            <a href="{{ card.url }}" class="btn btn-sm">Open</a>
+        </div>
+        {% if card.closing %}<div class="op-card-closing">{{ card.closing }}</div>{% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+<div class="empty-state">
+    <p>Nothing open right now. Every Publisher action, conflict notice, pending decision, exception, disputed/overdue settlement, stalled load, queue item, and library gap is clear.</p>
+</div>
+{% endif %}
+{% endblock %}

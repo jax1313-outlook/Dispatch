@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Home — L2-COS Portal{% endblock %}
+{% block title %}Home — Dispatch{% endblock %}
 {% block page_title %}Home{% endblock %}
 
 {% block body %}
@@ -43,6 +43,21 @@
     </a>
     {% endif %}
 </div>
+
+{% if attention_needed %}
+<div class="card-section" id="attention-needed">
+    <h2>Attention Needed Across Departments</h2>
+    <div class="activity-feed">
+        {% for item in attention_needed %}
+        <div class="activity-item">
+            <span class="activity-type">{{ item.source }}</span>
+            <a href="{{ item.url }}">{{ item.title }}</a>
+            {% if item.detail %}<span class="activity-note">{{ item.detail }}</span>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 {% if fin_dashboard and fin_dashboard.loads_with_rate > 0 %}
 <div class="card-section">

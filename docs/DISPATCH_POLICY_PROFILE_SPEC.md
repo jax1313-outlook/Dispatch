@@ -74,12 +74,12 @@ text editor. A settings screen comes later and edits this same file.
       "endorsements": [],
 
       "specifications": {
-        "payload_capacity_lbs": { "value": null, "status": "NOT CONFIGURED" },
-        "cube_capacity_ft3":    { "value": null, "status": "NOT CONFIGURED" },
-        "pallet_positions":     { "value": null, "status": "NOT CONFIGURED" },
-        "length_ft":            { "value": null, "status": "NOT CONFIGURED" },
-        "width_ft":             { "value": null, "status": "NOT CONFIGURED" },
-        "height_ft":            { "value": null, "status": "NOT CONFIGURED" }
+        "payload_capacity_lbs": { "value": null, "status": "UNCONFIGURED" },
+        "cube_capacity_ft3":    { "value": null, "status": "UNCONFIGURED" },
+        "pallet_positions":     { "value": null, "status": "UNCONFIGURED" },
+        "length_ft":            { "value": null, "status": "UNCONFIGURED" },
+        "width_ft":             { "value": null, "status": "UNCONFIGURED" },
+        "height_ft":            { "value": null, "status": "UNCONFIGURED" }
       },
 
       "operator_target": {
@@ -209,8 +209,19 @@ becomes `0` or `no risk`.
 **CONFIRMED, 30 August 2026: the cargo van and trailer have not been purchased.** True
 payload, cube, pallet capacity and cargo dimensions are therefore **UNKNOWN**.
 
+**Align with `dispatch/capacity.py`, which already implements this.** That module carries
+`asset_profile_id`, `asset_profile_version` and `configuration_status`, defaults to
+`UNCONFIGURED`, and validates against
+`CONFIG_STATUSES = ["UNCONFIGURED", "PARTIAL", "UNVERIFIED", "VERIFIED", "STALE", "INVALID"]`
+— an invalid value raises. Its `apply_asset_profile()` additionally **requires an explicit
+`source`**, refusing to record a specification without saying where it came from. That is
+stricter than this specification originally was, and it is the better rule.
+
+Status words are fixed repository-wide: `LIVE`, `CONFIGURED`, `UNCONFIGURED`, `SIMULATED`,
+`UNAVAILABLE`, `MANUAL`, `ABSENT`, `UNVERIFIED`. No synonyms, no invented variants.
+
 Every specification carries a `value` and a `status`. A value of `null` with status
-`NOT CONFIGURED` is a legitimate, complete, valid profile — not an error, and not a gap to
+`UNCONFIGURED` is a legitimate, complete, valid profile — not an error, and not a gap to
 be filled with a plausible number.
 
 1. **The system must not fabricate a specification.** No defaults, no industry averages, no

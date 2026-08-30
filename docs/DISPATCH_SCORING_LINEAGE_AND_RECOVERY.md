@@ -86,8 +86,30 @@ did not restore the veto, the vocabulary or the external config.
 
 ## 3. Where current Dispatch stands
 
-`dispatch/scoring.py` is a well-built module with three structural defects inherited from
-nowhere — they are new.
+**IMPORTANT CORRECTION, 30 August 2026.** An earlier draft of this document said Dispatch
+has no blocking condition and no pallet or cube constraint. **That is true of
+`dispatch/scoring.py` and false of Dispatch.**
+
+`dispatch/capacity.py` — 1,861 lines, used by `dispatch/opportunities.py` — already
+implements a great deal of what this document was about to recommend:
+
+| Already implemented in `capacity.py` | |
+|---|---|
+| `SEVERITY_BLOCKING` | alongside `INFO` and `ADVISORY` |
+| `PHYSICAL_DIMENSIONS` | `weight`, `linear_feet`, `volume`, `pallets` |
+| Asset profile | `asset_profile_id`, `asset_profile_version`, `configuration_status` |
+| Validated status vocabulary | raises on an invalid value |
+| Provenance on specifications | `apply_asset_profile()` requires an explicit `source` |
+| Reserve capacity | evaluated per dimension |
+| Structured findings | machine-readable, with severity and dimension |
+
+**The real defect is not absence — it is that there are two models and only one of them
+blocks.** `dispatch/scoring.py` contains **zero** references to `capacity.py`. It still
+tests `weight > 45000` against its own hard-coded constant while a validated,
+provenance-carrying capacity model sits beside it, unused by the scorer.
+
+The defects below are therefore scoped to `dispatch/scoring.py`, and the recovery work is
+substantially **integration** rather than construction.
 
 ### Defect A — no blocking condition exists
 

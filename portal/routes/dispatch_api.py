@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import csv
 import io
+from datetime import datetime
 
-from flask import Blueprint, Response, jsonify, render_template, request, send_file
+from flask import Blueprint, Response, jsonify, render_template, request, send_file, url_for
 
 from dispatch import notifications, services
 from dispatch.models import (
@@ -39,6 +40,23 @@ from dispatch.models import (
 )
 
 dispatch_bp = Blueprint("dispatch_api", __name__)
+
+
+def _json_body(force: bool = False) -> dict:
+    """Safely read a JSON request body as a dict.
+
+    ``request.get_json(silent=True) or {}`` (and the ``force=True`` variant
+    used elsewhere in this file) only substitutes {} when parsing *fails* --
+    a syntactically valid but non-object body (a list, string, or number) is
+    truthy/non-None and passes through unchanged, and the first
+    ``data.get(...)`` call on it raises an unhandled AttributeError -> 500.
+    This normalizes any non-dict result (including None) to {} the same way
+    a missing/invalid body already is. ``force=True`` preserves the original
+    call sites' behavior of parsing the body as JSON regardless of the
+    request's Content-Type header.
+    """
+    data = request.get_json(force=force, silent=True)
+    return data if isinstance(data, dict) else {}
 
 
 def _get_page_params():
@@ -93,7 +111,7 @@ def list_loads():
 
 @dispatch_bp.route("/loads", methods=["POST"])
 def create_load():
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     customer = data.get("customer", "")
     if not customer:
         return jsonify({"error": "customer is required"}), 400
@@ -127,7 +145,8 @@ def get_load(load_id):
 
 @dispatch_bp.route("/loads/<load_id>", methods=["PATCH"])
 def update_load(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("load_id", None)
     if "status" in data and data["status"] not in LOAD_STATUSES:
         return jsonify({"error": f"Invalid status: {data['status']}"}), 400
     try:
@@ -213,7 +232,7 @@ def get_visibility(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/visibility", methods=["PATCH"])
 def update_visibility(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     customer_note = data.get("customer_note")
     internal_note = data.get("internal_note")
     try:
@@ -242,7 +261,7 @@ def list_milestones(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/milestones", methods=["POST"])
 def add_milestone(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     event_type = data.get("event_type", "")
     if not event_type:
         return jsonify({"error": "event_type is required"}), 400
@@ -263,13 +282,31 @@ def add_milestone(load_id):
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+
+    # The milestone was recorded, but the status change it implied was refused
+    # by the transition gate (dispatch/services.py::add_milestone). Report that
+    # in the response rather than letting the caller read "201 ok" and assume
+    # the load advanced -- the Conflict Notice alone is too slow a signal for
+    # someone standing at a dock.
+    refusal = ms.get("status_transition_refused")
+    if refusal:
+        return jsonify({
+            "status": "refused",
+            "milestone": ms,
+            "error": (
+                f"Milestone recorded, but the load stays in "
+                f"'{refusal['from_status']}': {refusal['reason']}"
+            ),
+            "status_transition_refused": refusal,
+        }), 409
+
     return jsonify({"status": "ok", "milestone": ms}), 201
 
 
 @dispatch_bp.route("/milestones/<milestone_id>", methods=["PATCH"])
 def update_milestone(milestone_id):
     from dispatch.models import VALIDATION_STATUSES
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     validation_status = data.get("validation_status")
     if validation_status and validation_status not in VALIDATION_STATUSES:
         return jsonify({
@@ -323,7 +360,7 @@ def attach_evidence(load_id):
             return jsonify({"error": str(e)}), 404
         return jsonify({"status": "ok", "evidence": ev}), 201
 
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     ev_type = data.get("evidence_type", "document")
     if ev_type not in EVIDENCE_TYPES:
         return jsonify({"error": f"Invalid evidence_type: {ev_type}"}), 400
@@ -352,7 +389,8 @@ def download_evidence(evidence_id):
 
 @dispatch_bp.route("/evidence/<evidence_id>", methods=["PATCH"])
 def update_evidence(evidence_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("evidence_id", None)
     if "evidence_type" in data and data["evidence_type"] not in EVIDENCE_TYPES:
         return jsonify({"error": f"Invalid evidence_type: {data['evidence_type']}"}), 400
     result = services.update_evidence(evidence_id, **data)
@@ -384,7 +422,7 @@ def list_exceptions(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/exceptions", methods=["POST"])
 def open_exception(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     exc_type = data.get("exception_type", "other")
     if exc_type not in EXCEPTION_TYPES:
         return jsonify({"error": f"Invalid exception_type: {exc_type}"}), 400
@@ -406,7 +444,7 @@ def open_exception(load_id):
 
 @dispatch_bp.route("/exceptions/<exception_id>/resolve", methods=["POST"])
 def resolve_exception(exception_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     result = services.resolve_exception(
         exception_id=exception_id,
         resolution_note=data.get("resolution_note", ""),
@@ -418,7 +456,8 @@ def resolve_exception(exception_id):
 
 @dispatch_bp.route("/exceptions/<exception_id>", methods=["PATCH"])
 def update_exception(exception_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("exception_id", None)
     if "exception_type" in data and data["exception_type"] not in EXCEPTION_TYPES:
         return jsonify({"error": f"Invalid exception_type: {data['exception_type']}"}), 400
     if "severity" in data and data["severity"] not in SEVERITY_LEVELS:
@@ -471,7 +510,7 @@ def list_pods(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/pod", methods=["POST"])
 def generate_pod(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     try:
         pod = services.generate_pod(
             load_id=load_id,
@@ -495,6 +534,16 @@ def archive_load(load_id):
     except ValueError as e:
         status = 404 if "not found" in str(e).lower() else 409
         return jsonify({"error": str(e)}), status
+
+    # D10: "Archive Takes Custody" -- if this load has a Completion Packet with an Email
+    # Cluster already stored on it (see submit_email_package below), record that this
+    # (existing, human-triggered) archive action took custody of it. Does not change
+    # when/whether archiving happens -- purely a cross-reference on the packet.
+    from portal.models import completion_packet
+    packet = completion_packet.get_packet(load_id)
+    if packet and packet.get("status") == "CLUSTERED":
+        completion_packet.mark_archived(load_id, ret["archive_id"])
+
     return jsonify({"status": "ok", "retention": ret}), 201
 
 
@@ -502,6 +551,165 @@ def archive_load(load_id):
 def list_retentions():
     items = services.list_retentions()
     return jsonify({"status": "ok", "archives": items, "count": len(items)})
+
+
+# ── Completion Packet / End Load ───────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/completion-packet", methods=["GET"])
+def get_completion_packet(load_id):
+    from portal.models import completion_packet
+    packet = completion_packet.get_packet(load_id)
+    if not packet:
+        return jsonify({"error": "No completion packet for this load"}), 404
+    return jsonify({"status": "ok", "packet": packet})
+
+
+@dispatch_bp.route("/loads/<load_id>/end-load", methods=["POST"])
+def end_load(load_id):
+    """Deterministic End Load trigger: assemble the closeout packet from existing load
+    artifacts and route it to Publisher as a PENDING action awaiting human review. Never
+    sends anything -- Publisher's existing DRAFT/READY/APPROVED gate is the human review step.
+    """
+    from portal.models import completion_packet, publisher
+
+    existing = completion_packet.get_packet(load_id)
+    if existing:
+        return jsonify({"status": "ok", "packet": existing, "already_ended": True})
+
+    try:
+        packet_data = services.build_completion_packet(load_id)
+    except ValueError as e:
+        status = 404 if "not found" in str(e).lower() else 409
+        return jsonify({"error": str(e)}), status
+
+    packet = completion_packet.create_packet(
+        load_id=load_id,
+        closeout_data=packet_data,
+        available=packet_data["available"],
+        missing=packet_data["missing"],
+    )
+    action = publisher.create_action(
+        action_type="Completion Packet Ready",
+        sandbox_id=f"LOAD-{load_id}",
+        trigger_reason=f"End Load triggered for {load_id}",
+        available_data=packet_data["available"],
+        missing_data=packet_data["missing"],
+    )
+    packet = completion_packet.mark_routed(load_id, action["id"])
+
+    return jsonify({"status": "ok", "packet": packet, "publisher_action": action}), 201
+
+
+# ── Email Helper (review package) ──────────────────────────────────────
+
+@dispatch_bp.route("/loads/<load_id>/email-package", methods=["GET"])
+def get_email_package(load_id):
+    from portal.models import email_helper
+    package = email_helper.get_package(load_id)
+    if not package:
+        return jsonify({"error": "No email package for this load"}), 404
+    return jsonify({"status": "ok", "package": package})
+
+
+@dispatch_bp.route("/loads/<load_id>/email-package/draft", methods=["POST"])
+def draft_email_package(load_id):
+    """Draft the broker/customer completion emails from the load's Completion Packet.
+    Requires End Load to have already run -- there's nothing to draft from otherwise.
+    """
+    from portal.models import completion_packet, email_helper
+
+    packet = completion_packet.get_packet(load_id)
+    if not packet:
+        return jsonify({"error": "Run End Load before drafting the email package"}), 409
+
+    closeout = packet["closeout_data"]
+    package = email_helper.create_draft(
+        load_id=load_id,
+        load=closeout["load"],
+        broker_contact=closeout.get("broker_contact"),
+        pod_id=(closeout["pods"][0]["pod_id"] if closeout.get("pods") else None),
+        invoice_number=(closeout["settlement"]["invoice_number"] if closeout.get("settlement") else None),
+        closeout_data=closeout,
+    )
+    return jsonify({"status": "ok", "package": package}), 201
+
+
+@dispatch_bp.route("/loads/<load_id>/email-package", methods=["PATCH"])
+def update_email_package(load_id):
+    """Save edits to the drafted broker/customer bodies (still just DRAFT/REVIEWED --
+    see email_helper.update_draft(); nothing is sent from this endpoint).
+
+    Optional `include_stakeholder_link` (bool, default False): when true, appends the
+    same stakeholder portal link shown on this load's detail page (dispatch_detail.html's
+    "Stakeholder Link" control, built from notifications.make_stakeholder_token() the same
+    way pages.py::dispatch_detail() does) to whichever of broker_body/customer_body are
+    present in this request, before handing them to email_helper.update_draft(). This is
+    pre-filling text a human still reviews and explicitly submits -- same as every other
+    piece of drafted content in this module -- not a new send path. Idempotent: re-saving
+    with the flag still set does not duplicate the link if it's already present.
+    """
+    from portal.models import email_helper
+    data = request.get_json(silent=True) or {}
+    include_link = data.pop("include_stakeholder_link", False)
+    if include_link:
+        # Idempotency has to key on the token-free path, not the whole URL.
+        # Tokens carry a nonce and an expiry now (dispatch/tokens.py), so the
+        # same load produces a different URL on every call -- comparing full
+        # URLs would append a second link on every re-save, and each of those
+        # saves would also mint another live stakeholder token that then has to
+        # be revoked separately. Check first, mint only if a body actually
+        # needs one.
+        link_prefix = url_for(
+            "stakeholder.stakeholder_view", load_id=load_id, _external=True
+        )
+        needs_link = [
+            field
+            for field in ("broker_body", "customer_body")
+            if data.get(field) and link_prefix not in data[field]
+        ]
+        if needs_link:
+            stakeholder_url = url_for(
+                "stakeholder.stakeholder_view",
+                load_id=load_id,
+                token=notifications.make_stakeholder_token(
+                    load_id, issued_by="email_package_draft"
+                ),
+                _external=True,
+            )
+            for field in needs_link:
+                data[field] = (
+                    f"{data[field].rstrip()}\n\nStakeholder Portal Link: {stakeholder_url}"
+                )
+    try:
+        package = email_helper.update_draft(load_id, **data)
+    except KeyError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"status": "ok", "package": package})
+
+
+@dispatch_bp.route("/loads/<load_id>/email-package/submit", methods=["POST"])
+def submit_email_package(load_id):
+    from portal.models import completion_packet, email_helper
+    data = request.get_json(silent=True) or {}
+    submitted_by = data.get("submitted_by")
+    try:
+        package = email_helper.submit_package(load_id, submitted_by)
+    except email_helper.EmailHelperSubmitError as e:
+        return jsonify({"error": str(e)}), 403
+    except KeyError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+
+    # D10: "Email Sent -> Render Email to Business Document -> ... -> Store With
+    # Completion Package." Only clusters a real, already-submitted package -- never
+    # renders a package that's still in DRAFT/REVIEWED.
+    if package["status"] == "SUBMITTED" and completion_packet.get_packet(load_id):
+        completion_packet.create_email_cluster(load_id, package)
+
+    return jsonify({"status": "ok", "package": package})
 
 
 @dispatch_bp.route("/retention/<load_id>", methods=["GET"])
@@ -524,7 +732,7 @@ def get_rate(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/rate", methods=["POST"])
 def confirm_rate(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     rate_amount = data.get("rate_amount")
     if rate_amount is None:
         return jsonify({"error": "rate_amount is required"}), 400
@@ -568,7 +776,7 @@ def list_expenses(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/expenses", methods=["POST"])
 def add_expense(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     amount = data.get("amount")
     if amount is None:
         return jsonify({"error": "amount is required"}), 400
@@ -595,7 +803,8 @@ def add_expense(load_id):
 
 @dispatch_bp.route("/expenses/<expense_id>", methods=["PATCH"])
 def update_expense(expense_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("expense_id", None)
     if "category" in data and data["category"] not in EXPENSE_CATEGORIES:
         return jsonify({"error": f"Invalid category: {data['category']}"}), 400
     if "amount" in data:
@@ -631,13 +840,16 @@ def get_financials(load_id):
 @dispatch_bp.route("/fuel-estimate", methods=["GET", "POST"])
 def fuel_estimate():
     if request.method == "POST":
-        data = request.get_json(silent=True) or {}
+        data = _json_body()
     else:
         data = {}
         for k in ("distance_miles", "mpg", "fuel_price"):
             v = request.args.get(k)
             if v:
-                data[k] = float(v)
+                try:
+                    data[k] = float(v)
+                except (ValueError, TypeError):
+                    return jsonify({"error": f"{k} must be a number"}), 400
         load_id = request.args.get("load_id", "")
         if load_id:
             data["load_id"] = load_id
@@ -672,7 +884,7 @@ def get_settlement(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/settlement", methods=["POST"])
 def create_settlement(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     try:
         stl = services.create_settlement(
             load_id=load_id,
@@ -688,7 +900,8 @@ def create_settlement(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/settlement", methods=["PATCH"])
 def update_settlement(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("load_id", None)
     if "payment_status" in data and data["payment_status"] not in SETTLEMENT_STATUSES:
         return jsonify({"error": f"Invalid payment_status: {data['payment_status']}"}), 400
     if "payment_method" in data and data["payment_method"] and data["payment_method"] not in PAYMENT_METHODS:
@@ -707,7 +920,7 @@ def update_settlement(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/payment", methods=["POST"])
 def record_payment(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     payment_amount = data.get("payment_amount")
     if payment_amount is None:
         return jsonify({"error": "payment_amount is required"}), 400
@@ -738,7 +951,7 @@ def record_payment(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/settlement/dispute", methods=["POST"])
 def dispute_settlement(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     try:
         result = services.dispute_settlement(
             load_id=load_id,
@@ -753,7 +966,7 @@ def dispute_settlement(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/settlement/write-off", methods=["POST"])
 def write_off_settlement(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     try:
         result = services.write_off_settlement(
             load_id=load_id,
@@ -818,7 +1031,7 @@ def list_drivers():
 
 @dispatch_bp.route("/drivers", methods=["POST"])
 def create_driver():
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     name = data.get("name", "")
     if not name:
         return jsonify({"error": "name is required"}), 400
@@ -847,7 +1060,8 @@ def get_driver(driver_id):
 
 @dispatch_bp.route("/drivers/<driver_id>", methods=["PATCH"])
 def update_driver(driver_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("driver_id", None)
     if "status" in data and data["status"] not in DRIVER_STATUSES:
         return jsonify({"error": f"Invalid status: {data['status']}"}), 400
     if "license_class" in data and data["license_class"] and data["license_class"] not in LICENSE_CLASSES:
@@ -886,7 +1100,7 @@ def list_equipment():
 
 @dispatch_bp.route("/equipment", methods=["POST"])
 def create_equipment():
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     unit_number = data.get("unit_number", "")
     if not unit_number:
         return jsonify({"error": "unit_number is required"}), 400
@@ -916,7 +1130,8 @@ def get_equipment(equipment_id):
 
 @dispatch_bp.route("/equipment/<equipment_id>", methods=["PATCH"])
 def update_equipment(equipment_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("equipment_id", None)
     if "status" in data and data["status"] not in EQUIPMENT_STATUSES:
         return jsonify({"error": f"Invalid status: {data['status']}"}), 400
     if "equipment_type" in data and data["equipment_type"] not in EQUIPMENT_TYPES:
@@ -938,7 +1153,7 @@ def delete_equipment_route(equipment_id):
 
 @dispatch_bp.route("/loads/<load_id>/assign-driver", methods=["POST"])
 def assign_driver(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     driver_id = data.get("driver_id", "")
     if not driver_id:
         return jsonify({"error": "driver_id is required"}), 400
@@ -962,7 +1177,7 @@ def unassign_driver(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/assign-equipment", methods=["POST"])
 def assign_equipment(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     equipment_id = data.get("equipment_id", "")
     if not equipment_id:
         return jsonify({"error": "equipment_id is required"}), 400
@@ -1062,7 +1277,7 @@ def dispatch_decision(load_id, action):
 
 @dispatch_bp.route("/loads/batch-status", methods=["POST"])
 def batch_status_update():
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     load_ids = data.get("load_ids", [])
     status = data.get("status", "")
     if not load_ids or not isinstance(load_ids, list):
@@ -1088,7 +1303,7 @@ def batch_status_update():
 
 @dispatch_bp.route("/settlements/batch-create", methods=["POST"])
 def batch_create_settlements():
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     load_ids = data.get("load_ids", [])
     due_date = data.get("due_date", "")
     if not load_ids or not isinstance(load_ids, list):
@@ -1182,7 +1397,7 @@ def list_activities(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/activities", methods=["POST"])
 def add_activity(load_id):
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     message = data.get("message", "").strip()
     if not message:
         return jsonify({"error": "message is required"}), 400
@@ -1279,7 +1494,7 @@ def list_lane_templates():
 
 @dispatch_bp.route("/lane-templates", methods=["POST"])
 def create_lane_template():
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"error": "name is required"}), 400
@@ -1308,7 +1523,8 @@ def get_lane_template(template_id):
 
 @dispatch_bp.route("/lane-templates/<template_id>", methods=["PATCH"])
 def update_lane_template(template_id):
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
+    data.pop("template_id", None)
     tpl = services.update_lane_template(template_id, **data)
     if not tpl:
         return jsonify({"error": "not found"}), 404
@@ -1374,7 +1590,7 @@ def list_detentions(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/detentions", methods=["POST"])
 def start_detention(load_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
     location_type = data.get("location_type", "pickup")
     if location_type not in DETENTION_LOCATIONS:
         return jsonify({"error": f"Invalid location_type: {location_type}"}), 400
@@ -1394,7 +1610,8 @@ def start_detention(load_id):
 
 @dispatch_bp.route("/detentions/<detention_id>", methods=["PATCH"])
 def update_detention(detention_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    data.pop("detention_id", None)
     result = services.update_detention(detention_id, **data)
     if not result:
         return jsonify({"error": "detention not found"}), 404
@@ -1403,11 +1620,21 @@ def update_detention(detention_id):
 
 @dispatch_bp.route("/detentions/<detention_id>/stop", methods=["POST"])
 def stop_detention(detention_id):
-    data = request.get_json(silent=True) or {}
+    data = _json_body()
+    ended_at = data.get("ended_at", "")
+    if ended_at:
+        # A malformed (but non-empty) ended_at would otherwise be silently
+        # swallowed by DetentionEvent.total_hours() -> 0.0 hours -> no
+        # expense created at all, with no error surfaced anywhere. Reject
+        # it here instead of losing real detention revenue silently.
+        try:
+            datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return jsonify({"error": f"ended_at is not a valid ISO timestamp: {ended_at!r}"}), 400
     try:
         result = services.stop_detention(
             detention_id,
-            ended_at=data.get("ended_at", ""),
+            ended_at=ended_at,
             create_expense=data.get("create_expense", True),
         )
     except ValueError as exc:
@@ -1445,7 +1672,7 @@ def list_ifta_trip_legs():
 
 @dispatch_bp.route("/ifta/trip-legs", methods=["POST"])
 def add_ifta_trip_leg():
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     try:
         result = services.add_ifta_trip_leg(
             jurisdiction=data.get("jurisdiction", ""),
@@ -1462,7 +1689,8 @@ def add_ifta_trip_leg():
 
 @dispatch_bp.route("/ifta/trip-legs/<leg_id>", methods=["PATCH"])
 def update_ifta_trip_leg(leg_id):
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
+    data.pop("leg_id", None)
     try:
         result = services.update_ifta_trip_leg(leg_id, **data)
     except ValueError as exc:
@@ -1493,7 +1721,8 @@ def list_ifta_fuel_purchases():
 
 @dispatch_bp.route("/ifta/fuel-purchases", methods=["POST"])
 def add_ifta_fuel_purchase():
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
+    raw_confidence = data.get("extraction_confidence")
     try:
         result = services.add_ifta_fuel_purchase(
             jurisdiction=data.get("jurisdiction", ""),
@@ -1503,15 +1732,38 @@ def add_ifta_fuel_purchase():
             vehicle_id=data.get("vehicle_id", ""),
             vendor=data.get("vendor", ""),
             notes=data.get("notes", ""),
+            extraction_confidence=float(raw_confidence) if raw_confidence is not None else None,
         )
     except (ValueError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify(result), 201
 
 
+@dispatch_bp.route("/ifta/fuel-purchases/extract-receipt", methods=["POST"])
+def extract_ifta_fuel_receipt():
+    """Pre-fill lookup only -- creates no fuel purchase, no evidence row.
+    Always returns 200 with either extracted fields or an
+    available:false reason; the one genuine client error is no file at
+    all."""
+    from cin_lite.agents import receipt_vision
+
+    uploaded_file = request.files.get("file")
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({"error": "No file provided"}), 400
+    file_data = uploaded_file.read()
+    if len(file_data) > MAX_FILE_SIZE:
+        return jsonify({"error": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"}), 400
+
+    result = receipt_vision.extract_fuel_receipt(file_data, uploaded_file.filename)
+    if result.get("available") and result.get("vendor_address"):
+        result["jurisdiction"] = receipt_vision.derive_jurisdiction(result["vendor_address"])
+    return jsonify(result)
+
+
 @dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>", methods=["PATCH"])
 def update_ifta_fuel_purchase(purchase_id):
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
+    data.pop("purchase_id", None)
     try:
         result = services.update_ifta_fuel_purchase(purchase_id, **data)
     except ValueError as exc:
@@ -1525,6 +1777,51 @@ def delete_ifta_fuel_purchase(purchase_id):
     if not ok:
         return jsonify({"error": "fuel purchase not found"}), 404
     return jsonify({"status": "ok"})
+
+
+# ── IFTA Fuel Purchase Evidence (Phase 5) ──────────────────────────
+# Two-step, mirroring /loads/<load_id>/evidence: the purchase must
+# already exist before a receipt can be attached to it.
+
+
+@dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>/evidence", methods=["GET"])
+def list_ifta_fuel_evidence(purchase_id):
+    items = services.list_ifta_fuel_evidence(purchase_id)
+    return jsonify({"status": "ok", "purchase_id": purchase_id, "evidence": items, "count": len(items)})
+
+
+@dispatch_bp.route("/ifta/fuel-purchases/<purchase_id>/evidence", methods=["POST"])
+def attach_ifta_fuel_evidence(purchase_id):
+    uploaded_file = request.files.get("file")
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({"error": "No file provided"}), 400
+    filename = uploaded_file.filename
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({"error": f"File type not allowed: .{ext}"}), 400
+    file_data = uploaded_file.read()
+    if len(file_data) > MAX_FILE_SIZE:
+        return jsonify({"error": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"}), 400
+    try:
+        ev = services.attach_ifta_fuel_evidence(
+            purchase_id=purchase_id,
+            file_data=file_data,
+            original_filename=filename,
+            description=request.form.get("description", ""),
+            uploaded_by=request.form.get("uploaded_by", ""),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"status": "ok", "evidence": ev}), 201
+
+
+@dispatch_bp.route("/ifta/fuel-evidence/<evidence_id>/download", methods=["GET"])
+def download_ifta_fuel_evidence(evidence_id):
+    result = services.get_ifta_fuel_evidence_file(evidence_id)
+    if not result:
+        return jsonify({"error": "File not found"}), 404
+    file_path, download_name = result
+    return send_file(file_path, download_name=download_name, as_attachment=True)
 
 
 # ── IFTA Quarterly Report ─────────────────────────────────────────
@@ -1600,6 +1897,70 @@ def ifta_export_csv():
     )
 
 
+# ── IFTA Report Approvals (Phase 4 finalization gate) ────────────────
+
+
+@dispatch_bp.route("/ifta/report-approvals", methods=["GET", "POST"])
+def ifta_report_approvals():
+    if request.method == "GET":
+        return jsonify({"status": "ok", "approvals": services.list_ifta_report_approvals()})
+
+    data = _json_body()
+    try:
+        year = int(data.get("year", 0))
+        quarter = int(data.get("quarter", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "year and quarter must be integers"}), 400
+    if not year or not quarter:
+        return jsonify({"error": "year and quarter are required"}), 400
+    vehicle_id = data.get("vehicle_id", "")
+
+    try:
+        approval = services.submit_ifta_quarter_for_approval(year, quarter, vehicle_id)
+    except services.AlreadySubmittedError as exc:
+        return jsonify({"error": str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(approval), 201
+
+
+@dispatch_bp.route("/ifta/report-approvals/<approval_id>", methods=["GET"])
+def ifta_report_approval_detail(approval_id):
+    approval = services.get_ifta_report_approval(approval_id)
+    if approval is None:
+        return jsonify({"error": f"No such IFTA report approval: {approval_id}"}), 404
+    return jsonify(approval)
+
+
+@dispatch_bp.route("/ifta/report-approvals/<approval_id>/exceptions", methods=["GET"])
+def ifta_report_approval_exceptions(approval_id):
+    approval = services.get_ifta_report_approval(approval_id)
+    if approval is None:
+        return jsonify({"error": f"No such IFTA report approval: {approval_id}"}), 404
+    exceptions = services.list_ifta_exceptions(approval_id)
+    return jsonify({"status": "ok", "approval_id": approval_id, "exceptions": exceptions, "count": len(exceptions)})
+
+
+@dispatch_bp.route("/ifta/report-approvals/<approval_id>/approve", methods=["GET"])
+def ifta_report_approval_approve(approval_id):
+    token = request.args.get("token", "")
+    try:
+        approval = services.approve_ifta_quarter(approval_id, token)
+    except services.InvalidApprovalTokenError as exc:
+        return render_template(
+            "ifta_approval_decision.html", success=False, error=str(exc),
+            approval_id=approval_id,
+        ), 403
+    except ValueError as exc:
+        return render_template(
+            "ifta_approval_decision.html", success=False, error=str(exc),
+            approval_id=approval_id,
+        ), 404
+    return render_template(
+        "ifta_approval_decision.html", success=True, approval=approval,
+    )
+
+
 # ── Broker Contact Directory ─────────────────────────────────────────
 
 
@@ -1617,7 +1978,7 @@ def list_broker_contacts():
 
 @dispatch_bp.route("/broker-contacts", methods=["POST"])
 def add_broker_contact():
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     try:
         result = services.add_broker_contact(
             company_name=data.get("company_name", ""),
@@ -1646,7 +2007,7 @@ def get_broker_contact(broker_id):
 
 @dispatch_bp.route("/broker-contacts/<broker_id>", methods=["PUT"])
 def update_broker_contact(broker_id):
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     try:
         result = services.update_broker_contact(broker_id, data)
     except (ValueError, TypeError) as exc:
@@ -1702,7 +2063,7 @@ def list_driver_pay():
 @dispatch_bp.route("/driver-pay", methods=["POST"])
 def create_driver_pay():
     from dispatch import services as svc
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     driver_id = data.get("driver_id", "")
     pay_type = data.get("pay_type", "per_mile")
     if not driver_id:
@@ -1738,7 +2099,8 @@ def get_driver_pay(pay_id):
 @dispatch_bp.route("/driver-pay/<pay_id>", methods=["PATCH"])
 def update_driver_pay(pay_id):
     from dispatch import services as svc
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
+    data.pop("pay_id", None)
     try:
         result = svc.update_driver_pay(pay_id, **data)
     except ValueError as exc:
@@ -1769,7 +2131,7 @@ def driver_pay_summary(driver_id):
 @dispatch_bp.route("/driver-pay/approve", methods=["POST"])
 def approve_driver_pay():
     from dispatch import services as svc
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     pay_ids = data.get("pay_ids", [])
     if not pay_ids:
         return jsonify({"error": "pay_ids required"}), 400
@@ -1780,7 +2142,7 @@ def approve_driver_pay():
 @dispatch_bp.route("/driver-pay/mark-paid", methods=["POST"])
 def mark_driver_pay_paid():
     from dispatch import services as svc
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     pay_ids = data.get("pay_ids", [])
     if not pay_ids:
         return jsonify({"error": "pay_ids required"}), 400
@@ -1806,7 +2168,7 @@ def list_maintenance():
 @dispatch_bp.route("/maintenance", methods=["POST"])
 def create_maintenance():
     from dispatch import services as svc
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     equipment_id = data.get("equipment_id", "")
     if not equipment_id:
         return jsonify({"error": "equipment_id is required"}), 400
@@ -1840,7 +2202,7 @@ def get_maintenance(schedule_id):
 @dispatch_bp.route("/maintenance/<schedule_id>", methods=["PATCH"])
 def update_maintenance(schedule_id):
     from dispatch import services as svc
-    data = request.get_json(force=True)
+    data = _json_body(force=True)
     try:
         result = svc.update_maintenance_schedule(schedule_id, **data)
     except ValueError as exc:
@@ -1861,7 +2223,7 @@ def delete_maintenance(schedule_id):
 @dispatch_bp.route("/maintenance/<schedule_id>/complete", methods=["POST"])
 def complete_maintenance(schedule_id):
     from dispatch import services as svc
-    data = request.get_json(force=True) if request.is_json else {}
+    data = _json_body(force=True)
     result = svc.complete_maintenance(
         schedule_id,
         service_date=data.get("service_date", ""),

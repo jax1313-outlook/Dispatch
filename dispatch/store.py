@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 
+from dispatch import rehearsal
 from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
 from dispatch.models import (
     DetentionEvent,
@@ -14,7 +15,10 @@ from dispatch.models import (
     ExceptionNotice,
     Expense,
     BrokerContact,
+    IFTAException,
+    IFTAFuelEvidence,
     IFTAFuelPurchase,
+    IFTAReportApproval,
     IFTATripLeg,
     Load,
     LoadActivity,
@@ -80,6 +84,7 @@ def create_load(load: Load) -> dict:
              load.equipment_id, load.status, load.source,
              load.notes, load.created_at, load.updated_at),
         )
+        rehearsal.tag_in(conn, "loads", load.load_id)
     return load.to_dict()
 
 
@@ -94,18 +99,33 @@ def list_loads(
     customer: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    driver_id: str | None = None,
     *,
     page: int | None = None,
     per_page: int | None = None,
+    include_rehearsal: bool = True,
 ) -> list[dict] | dict:
+    """``include_rehearsal=False`` restricts the result to operational loads.
+
+    The default is True so every existing caller keeps its current behaviour --
+    a rehearsal record must be *excludable*, not invisible, since a reviewer
+    looking at the Operations page during a rehearsal needs to see the rehearsal
+    load, clearly labeled, rather than wonder where it went. Reports that state
+    operational truth pass False.
+    """
     clauses: list[str] = []
     params: list = []
+    if not include_rehearsal:
+        clauses.append(rehearsal.operational_only())
     if status:
         clauses.append("status=?")
         params.append(status)
     if customer:
         clauses.append("customer LIKE ?")
         params.append(f"%{customer}%")
+    if driver_id:
+        clauses.append("driver_id=?")
+        params.append(driver_id)
     if date_from:
         clauses.append("created_at >= ?")
         params.append(date_from)
@@ -243,6 +263,7 @@ def create_milestone(ms: MilestoneEvent) -> dict:
              ms.location, ms.source, ms.note, ms.entered_by,
              ms.validation_status),
         )
+        rehearsal.tag_in(conn, "milestones", ms.milestone_id)
     return ms.to_dict()
 
 
@@ -308,6 +329,7 @@ def create_evidence(ev: EvidenceItem) -> dict:
              ev.file_size, ev.mime_type, ev.capture_time,
              ev.description, ev.uploaded_by, ev.checksum),
         )
+        rehearsal.tag_in(conn, "evidence", ev.evidence_id)
     return ev.to_dict()
 
 
@@ -371,6 +393,7 @@ def create_exception(exc: ExceptionNotice) -> dict:
              exc.first_reported, exc.status, exc.resolution_note,
              exc.resolved_at),
         )
+        rehearsal.tag_in(conn, "exceptions", exc.exception_id)
     return exc.to_dict()
 
 
@@ -435,6 +458,7 @@ def create_pod(pod: PODPackage) -> dict:
              pod.generated_at, pod.status, pod.recipient,
              pod.file_path, pod.notes),
         )
+        rehearsal.tag_in(conn, "pod_packages", pod.pod_id)
     return pod.to_dict()
 
 
@@ -754,6 +778,7 @@ def create_driver(drv: Driver) -> dict:
              drv.status, drv.hire_date, drv.notes,
              drv.created_at, drv.updated_at),
         )
+        rehearsal.tag_in(conn, "drivers", drv.driver_id)
     return drv.to_dict()
 
 
@@ -761,6 +786,19 @@ def get_driver(driver_id: str) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM drivers WHERE driver_id=?", (driver_id,)
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def get_driver_by_phone(phone: str) -> dict | None:
+    """Exact-match lookup by phone -- Driver Portal login is Phone Number + PIN
+    (portal/models/driver_pin_registry.py). No phone normalization/E.164 parsing:
+    a small owner-operator fleet's phone numbers are entered once, by Mike, so an
+    exact string match on whatever format he used is the lightweight-appropriate
+    choice here, not a gap to fill."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM drivers WHERE phone=? AND phone != ''", (phone,)
         ).fetchone()
     return dict_from_row(row) if row else None
 
@@ -833,6 +871,7 @@ def create_equipment(eqp: Equipment) -> dict:
              eqp.license_plate, eqp.status, eqp.notes,
              eqp.created_at, eqp.updated_at),
         )
+        rehearsal.tag_in(conn, "equipment", eqp.equipment_id)
     return eqp.to_dict()
 
 
@@ -1220,17 +1259,28 @@ def get_broker_loads(broker_shipper: str) -> list[dict]:
 # ── Global Search ────────────────────────────────────────────────────
 
 def global_search(query: str, limit: int = 50) -> dict:
+    """Load Search / Operational Retrieval (Driver-First Doctrine D6/D9).
+
+    Strictly read-only -- every branch below is a SELECT, nothing here can
+    create, modify, or delete anything. Searches the identifiers a driver
+    or dispatcher actually has on hand: load number, customer, broker,
+    pickup/delivery location, driver name, notes (free-text -- the only
+    place a BOL/PO/reference number could currently be found, since none
+    of those has a dedicated field in this schema today), plus drivers,
+    equipment, settlements/invoices, and the broker contact directory.
+    """
     q = f"%{query}%"
     results: dict[str, list[dict]] = {
-        "loads": [], "drivers": [], "equipment": [], "settlements": [],
+        "loads": [], "drivers": [], "equipment": [], "settlements": [], "brokers": [],
     }
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM loads WHERE "
             "load_id LIKE ? OR customer LIKE ? OR broker_shipper LIKE ? "
             "OR pickup_location LIKE ? OR delivery_location LIKE ? OR driver LIKE ? "
+            "OR notes LIKE ? "
             "ORDER BY updated_at DESC LIMIT ?",
-            (q, q, q, q, q, q, limit),
+            (q, q, q, q, q, q, q, limit),
         ).fetchall()
         results["loads"] = [dict_from_row(r) for r in rows]
 
@@ -1262,6 +1312,8 @@ def global_search(query: str, limit: int = 50) -> dict:
             d = dict_from_row(r)
             stl_results.append(Settlement(**d).to_dict())
         results["settlements"] = stl_results
+
+    results["brokers"] = list_broker_contacts(search=query)[:limit]
 
     return results
 
@@ -1433,6 +1485,157 @@ def update_ifta_fuel_purchase(purchase_id: str, updates: dict) -> dict | None:
             f"UPDATE ifta_fuel_purchases SET {sets} WHERE purchase_id = ?", vals
         )
     return get_ifta_fuel_purchase(purchase_id)
+
+
+# ── IFTA Fuel Purchase Evidence ───────────────────────────────────────
+
+def create_ifta_fuel_evidence(ev: IFTAFuelEvidence) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO ifta_fuel_evidence
+               (evidence_id, purchase_id, original_filename, file_path,
+                file_size, mime_type, checksum, description, uploaded_by,
+                capture_time)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (ev.evidence_id, ev.purchase_id, ev.original_filename, ev.file_path,
+             ev.file_size, ev.mime_type, ev.checksum, ev.description,
+             ev.uploaded_by, ev.capture_time),
+        )
+    return ev.to_dict()
+
+
+def get_ifta_fuel_evidence(evidence_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ifta_fuel_evidence WHERE evidence_id = ?",
+            (evidence_id,),
+        ).fetchone()
+    return dict_from_row(row) if row else None
+
+
+def list_ifta_fuel_evidence(purchase_id: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ifta_fuel_evidence WHERE purchase_id = ? ORDER BY capture_time ASC",
+            (purchase_id,),
+        ).fetchall()
+    return [dict_from_row(r) for r in rows]
+
+
+# ── IFTA Report Approvals ────────────────────────────────────────────
+
+
+def _deserialize_approval(d: dict) -> dict:
+    return deserialize_json_fields(d, "snapshot_json", "recommendation_json")
+
+
+def create_ifta_report_approval(approval: IFTAReportApproval) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO ifta_report_approvals
+               (approval_id, year, quarter, vehicle_id, status, snapshot_json,
+                recommendation_json, submitted_at, sealed_at, approved_by, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (approval.approval_id, approval.year, approval.quarter, approval.vehicle_id,
+             approval.status, json.dumps(approval.snapshot),
+             json.dumps(approval.recommendation) if approval.recommendation else None,
+             approval.submitted_at, approval.sealed_at, approval.approved_by,
+             approval.created_at),
+        )
+    return get_ifta_report_approval(approval.approval_id)
+
+
+def get_ifta_report_approval(approval_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM ifta_report_approvals WHERE approval_id = ?", (approval_id,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    d["snapshot_json"] = json.loads(d["snapshot_json"])
+    d["recommendation_json"] = (
+        json.loads(d["recommendation_json"]) if d["recommendation_json"] else None
+    )
+    return d
+
+
+def get_latest_ifta_report_approval(year: int, quarter: int, vehicle_id: str = "") -> dict | None:
+    """Most recently submitted approval for this period, or None. Used to
+    refuse a second submission while one is already outstanding, and to
+    check whether a period has already been sealed."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT * FROM ifta_report_approvals
+               WHERE year = ? AND quarter = ? AND vehicle_id = ?
+               ORDER BY submitted_at DESC LIMIT 1""",
+            (year, quarter, vehicle_id),
+        ).fetchone()
+    if not row:
+        return None
+    d = dict_from_row(row)
+    d["snapshot_json"] = json.loads(d["snapshot_json"])
+    d["recommendation_json"] = (
+        json.loads(d["recommendation_json"]) if d["recommendation_json"] else None
+    )
+    return d
+
+
+def list_ifta_report_approvals() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ifta_report_approvals ORDER BY submitted_at DESC"
+        ).fetchall()
+    results = []
+    for row in rows:
+        d = dict_from_row(row)
+        d["snapshot_json"] = json.loads(d["snapshot_json"])
+        d["recommendation_json"] = (
+            json.loads(d["recommendation_json"]) if d["recommendation_json"] else None
+        )
+        results.append(d)
+    return results
+
+
+def update_ifta_report_approval(approval_id: str, updates: dict) -> dict | None:
+    existing = get_ifta_report_approval(approval_id)
+    if not existing:
+        return None
+    serialized = dict(updates)
+    if "snapshot_json" in serialized and not isinstance(serialized["snapshot_json"], str):
+        serialized["snapshot_json"] = json.dumps(serialized["snapshot_json"])
+    if "recommendation_json" in serialized and not isinstance(serialized["recommendation_json"], str):
+        serialized["recommendation_json"] = json.dumps(serialized["recommendation_json"])
+    sets = ", ".join(f"{k} = ?" for k in serialized)
+    vals = list(serialized.values()) + [approval_id]
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE ifta_report_approvals SET {sets} WHERE approval_id = ?", vals
+        )
+    return get_ifta_report_approval(approval_id)
+
+
+# ── IFTA Exceptions (Phase 6a detectors) ─────────────────────────────
+
+def create_ifta_exception(exc: IFTAException) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO ifta_exceptions
+               (exception_id, approval_id, exception_type, detail, related_record_ids, detected_at)
+               VALUES (?,?,?,?,?,?)""",
+            (exc.exception_id, exc.approval_id, exc.exception_type, exc.detail,
+             json.dumps(exc.related_record_ids), exc.detected_at),
+        )
+    return exc.to_dict()
+
+
+def list_ifta_exceptions(approval_id: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ifta_exceptions WHERE approval_id = ? ORDER BY detected_at ASC",
+            (approval_id,),
+        ).fetchall()
+    return [deserialize_json_fields(dict_from_row(r), "related_record_ids") for r in rows]
 
 
 # ── Broker Contacts ──────────────────────────────────────────────────
@@ -1949,3 +2152,108 @@ def get_expiring_compliance_documents(days_ahead: int = 30) -> list[dict]:
         _enrich_compliance_doc(d)
         results.append(d)
     return results
+
+
+# ── Route Risk Events ───────────────────────────────────────────────
+
+_ROUTE_RISK_COLUMNS = (
+    "route_risk_event_id", "load_id", "source_type", "source_label",
+    "affected_area", "affected_corridor", "condition_summary",
+    "estimated_delay_minutes", "delivery_commitment_status",
+    "route_risk_level", "consequence_level",
+    "driver_notification_required", "stakeholder_notification_required",
+    "mission_visibility_update_required", "comi_required",
+    "created_at", "status", "has_map_visual",
+)
+
+_ROUTE_RISK_BOOL_COLUMNS = (
+    "driver_notification_required", "stakeholder_notification_required",
+    "mission_visibility_update_required", "comi_required", "has_map_visual",
+)
+
+
+def _route_risk_row_to_event(row) -> dict:
+    """Rebuild the engine's event shape from a stored row.
+
+    Two fields are not stored because they are strictly derived, and storing a
+    derived value is how two sources of truth start:
+
+      * ``map_visual_placeholder`` -- reconstructed from ``has_map_visual`` plus
+        the corridor/area, exactly as route_risk.engine builds it.
+      * ``is_live_data`` -- always False. No live feed is connected; the engine
+        hardcodes it, and this must not become a stored value that could
+        disagree with reality.
+
+    ``has_map_visual`` itself *is* stored (rather than assumed True) so a
+    round-tripped event equals the event that was recorded. A durability fix
+    that quietly reconstructs a field is not a durability fix.
+    """
+    d = dict(row)
+    for col in _ROUTE_RISK_BOOL_COLUMNS:
+        d[col] = bool(d.get(col))
+    has_map_visual = d.pop("has_map_visual")
+    corridor = d.get("affected_corridor") or ""
+    area = d.get("affected_area") or ""
+    d["map_visual_placeholder"] = {
+        "available": has_map_visual,
+        "placeholder_type": "embedded_corridor_map_placeholder",
+        "label": f"Corridor Map Placeholder: {corridor or area or 'Route Segment'}",
+    }
+    d["is_live_data"] = False
+    return d
+
+
+def create_route_risk_event(event: dict) -> dict:
+    """Persist one Route Risk event.
+
+    Returns the event as it will be read back, so a caller cannot come to
+    depend on an in-memory shape the database would not reproduce.
+    """
+    placeholder = event.get("map_visual_placeholder") or {}
+    values = {
+        col: event.get(col) for col in _ROUTE_RISK_COLUMNS if col != "has_map_visual"
+    }
+    values["has_map_visual"] = 1 if placeholder.get("available") else 0
+    for col in _ROUTE_RISK_BOOL_COLUMNS:
+        if col in values and col != "has_map_visual":
+            values[col] = 1 if values[col] else 0
+
+    cols = ", ".join(_ROUTE_RISK_COLUMNS)
+    marks = ", ".join("?" for _ in _ROUTE_RISK_COLUMNS)
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO route_risk_events ({cols}) VALUES ({marks})",
+            [values[c] for c in _ROUTE_RISK_COLUMNS],
+        )
+    stored = get_route_risk_event(event["route_risk_event_id"])
+    return stored if stored is not None else event
+
+
+def get_route_risk_event(route_risk_event_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM route_risk_events WHERE route_risk_event_id=?",
+            (route_risk_event_id,),
+        ).fetchone()
+    return _route_risk_row_to_event(row) if row else None
+
+
+def list_route_risk_events(load_id: str | None = None) -> list[dict]:
+    """Newest first, matching the engine's in-memory ordering.
+
+    The `rowid DESC` tie-break is load-bearing. `created_at` is second
+    precision, so two conditions recorded in the same second have no defined
+    order without it -- and `get_route_risk()` takes the first row as "the
+    latest", which then flips between runs. Recovered from
+    jules-401783631158985267-177d2e11 @ 28b5e65, which found the same gap
+    against a different implementation of this module.
+    """
+    sql = "SELECT * FROM route_risk_events"
+    params: list = []
+    if load_id:
+        sql += " WHERE load_id=?"
+        params.append(load_id)
+    sql += " ORDER BY created_at DESC, rowid DESC"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_route_risk_row_to_event(r) for r in rows]
