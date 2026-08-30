@@ -120,24 +120,30 @@ all.
 
 ### Defect D — the engine is calibrated for a vehicle the operator does not own
 
-**CONFIRMED, 30 August 2026.** The operator runs a **cargo van with trailer: 6 pallets,
-10,000 lb capacity.** `dispatch/scoring.py` is calibrated for a Class 8 tractor-trailer.
+**CONFIRMED, 30 August 2026.** The operation is a **cargo van with trailer** running
+courier and expedite freight. `dispatch/scoring.py` is calibrated for a **Class 8
+tractor-trailer**, which is not the intended vehicle.
 
-| Constant | Assumes | Actual | Wrong by |
+| Constant | Assumes | Reality | |
 |---|---|---|---|
-| `_WEIGHT_LIMIT_LBS = 45000` | Class 8 dry van | 10,000 lb | **4.5×** |
-| `_FUEL_COST_PER_MILE = 0.62` | ~6 mpg diesel | a van's economy | large — figure needed |
-| `_RATE_PER_MILE_FLOOR/_GOOD/_EXCELLENT` | truckload market | expedite / courier market | unknown |
-| *(no pallet constraint exists)* | — | 6 pallets, hard limit | **missing entirely** |
+| `_WEIGHT_LIMIT_LBS = 45000` | Class 8 dry van | a cargo van's payload | **wrong class of vehicle** |
+| `_FUEL_COST_PER_MILE = 0.62` | ~6 mpg diesel | a van's economy | overstated |
+| `_RATE_PER_MILE_FLOOR/_GOOD/_EXCELLENT` | truckload market | expedite / courier market | wrong market |
+| *(no pallet constraint exists)* | — | deck positions bind | **missing entirely** |
+| *(no cube constraint exists)* | — | cube can bind first | **missing entirely** |
+
+**The actual specifications are UNKNOWN — the vehicle has not been purchased.** The operator
+has stated targets of 10,000 lb payload and 6 pallet positions; those are intent, not
+measurements, and must never feed a calculation.
 
 Consequences, in order of severity:
 
-1. **Overweight never fires.** The check is `weight > 45000`. No load this van can legally
-   carry will ever trip it, and loads at 12,000 lb — genuinely over capacity — score
-   clean. The guard is not merely weak; it is unreachable.
-2. **Pallet capacity does not exist.** Nothing in Dispatch or anywhere in the lineage
-   knows the van holds six pallets. A 12-pallet load cannot be taken at any weight, and
-   nothing would say so.
+1. **Overweight is effectively unreachable.** The check is `weight > 45000`. For a cargo
+   van operation, no load it could legally carry approaches that figure, so the guard
+   cannot fire on any realistic load. It is not merely weak.
+2. **Pallet and cube capacity do not exist.** Nothing in Dispatch or anywhere in the lineage
+   tracks deck positions or volume. A load can be pallet-out or cube-out at half its weight,
+   and nothing would say so.
 3. **Fuel cost is overstated**, so every net-revenue and margin figure is wrong in the
    pessimistic direction — loads are being made to look worse than they are.
 4. **Rate thresholds are from the wrong market.** Truckload rate-per-mile bands do not
@@ -149,9 +155,12 @@ That is a cargo-van business, targeted correctly in July 2026. `dispatch/scoring
 then written for a truck the operation does not have. The July judgement was sound; the
 later calibration was not.
 
-**Pallet capacity is a blocking condition, and a new one.** It is not in the recovered
-catalogue because no build in the lineage tracked pallets. Over pallet positions is a
-physical impossibility, not a preference — see `DISPATCH_OVERRIDE_RULES_SPEC.md` §5.
+**Pallet and cube capacity are blocking conditions, and new ones.** Neither is in the
+recovered catalogue because no build in the lineage tracked them. Both are physical
+impossibilities rather than preferences — see `DISPATCH_OVERRIDE_RULES_SPEC.md` §5.
+
+**Until the vehicle exists, these conditions cannot be evaluated.** They report `UNKNOWN`
+and reduce confidence. They do not silently pass.
 
 ### What current Dispatch does better than the lineage
 

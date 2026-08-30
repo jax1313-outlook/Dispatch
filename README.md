@@ -88,6 +88,9 @@ Governing principles. Binding on all code in this repository.
 - **[Capacity Plan Doctrine](docs/DISPATCH_CAPACITY_PLAN_DOCTRINE.md)** — day plans stay
   recommendations until a human approves; locking is not immutability; the BOOK IT DANO
   rule.
+- **[Accessorial Policy Doctrine](docs/DISPATCH_ACCESSORIAL_POLICY_DOCTRINE.md)** —
+  accessorials are versioned Company Library policies, not application settings; the
+  detention formula and its approval workflow.
 - **[External Adapter Boundaries](docs/DISPATCH_EXTERNAL_ADAPTER_BOUNDARIES.md)** — the
   UNAVAILABLE contract, and what an adapter may never do.
 

@@ -66,35 +66,37 @@ text editor. A settings screen comes later and edits this same file.
     {
       "id": "van-1",
       "name": "Cargo van + trailer",
-      "active": true,
-      "acquired": "2026-08-30",
+      "status": "PLANNED",
+      "active": false,
+      "acquired": null,
       "retired": null,
       "equipment": ["cargo_van", "trailer"],
       "endorsements": [],
-      "trailer_length_ft": null,
-      "pallet_positions": 6,
-      "weight_limit_lbs": 10000,
-      "weight_limit_basis": "payload",
-      "cube_capacity_ft3": null,
-      "temp_control": false,
-      "liftgate": false,
-      "operating_radius_miles": 500,
+
+      "specifications": {
+        "payload_capacity_lbs": { "value": null, "status": "NOT CONFIGURED" },
+        "cube_capacity_ft3":    { "value": null, "status": "NOT CONFIGURED" },
+        "pallet_positions":     { "value": null, "status": "NOT CONFIGURED" },
+        "length_ft":            { "value": null, "status": "NOT CONFIGURED" },
+        "width_ft":             { "value": null, "status": "NOT CONFIGURED" },
+        "height_ft":            { "value": null, "status": "NOT CONFIGURED" }
+      },
+
+      "operator_target": {
+        "payload_capacity_lbs": 10000,
+        "pallet_positions": 6,
+        "_note": "Stated intent for a vehicle not yet purchased. NEVER an input to a calculation."
+      },
+
+      "temp_control": null,
+      "liftgate": null,
+      "operating_radius_miles": null,
       "hos_applies": true,
-      "hours_available_default": 11.0,
-      "drive_speed_mph": 50,
-      "fuel_cost_per_mile": 0.62
+      "hours_available_default": null,
+      "drive_speed_mph": null,
+      "fuel_cost_per_mile": null
     }
   ],
-
-  "accessorials": {
-    "detention_per_hour": null,
-    "detention_free_minutes": 120,
-    "layover": null,
-    "tonu": null,
-    "lumper": null,
-    "liftgate": null,
-    "temp_control": null
-  },
 
   "utilization": {
     "target_weight": 0.85,
@@ -202,6 +204,37 @@ would make human final authority a setting, and a setting can be changed by acci
 Every dimension states explicitly what an unknown value scores. Nothing silently
 becomes `0` or `no risk`.
 
+### 4.8a Equipment specifications may be UNKNOWN, and are never invented
+
+**CONFIRMED, 30 August 2026: the cargo van and trailer have not been purchased.** True
+payload, cube, pallet capacity and cargo dimensions are therefore **UNKNOWN**.
+
+Every specification carries a `value` and a `status`. A value of `null` with status
+`NOT CONFIGURED` is a legitimate, complete, valid profile — not an error, and not a gap to
+be filled with a plausible number.
+
+1. **The system must not fabricate a specification.** No defaults, no industry averages, no
+   "typical cargo van" figures, and no example capacities promoted into defaults.
+2. **A calculation that needs a missing specification does not run.** It reports the
+   dimension as `UNKNOWN` and names which specification is missing.
+3. **Missing specifications reduce confidence**, exactly as any other missing fact does.
+
+```
+Operational Fit:  Strong
+Confidence:       Low
+Reason:           Cube capacity not configured.
+```
+
+4. **`operator_target` is not a specification.** It records what the operator intends to
+   buy — useful for planning conversations, and **never an input to a calculation**. The
+   engine reads `specifications` only. A target that leaked into arithmetic would be a
+   fabricated value wearing a different field name.
+5. **The owner enters real values when the vehicle exists**, and the same profile then works
+   unchanged.
+
+This is the Fact and Provenance doctrine applied to the vehicle itself: *unknown information
+is reported as UNKNOWN and never replaced with guessed values.*
+
 ### 4.8 The fleet is a list, and it changes
 
 **Required by the operator, 30 August 2026: equipment must be alterable as the operation
@@ -254,11 +287,12 @@ intended by the move itself — same values, new home.
 | `_HOME_BASE` | `identity.home_base` |
 | `_RATE_PER_MILE_FLOOR / _GOOD / _EXCELLENT` | `money.rate_per_mile.*` |
 | `_OPERATING_RADIUS_MILES` | `fleet[].operating_radius_miles` |
+| *(none — new)* | `fleet[].specifications.cube_capacity_ft3` |
 | `_FUEL_COST_PER_MILE` | `fleet[].fuel_cost_per_mile` |
-| `_WEIGHT_LIMIT_LBS` | `fleet[].weight_limit_lbs` |
+| `_WEIGHT_LIMIT_LBS` | `fleet[].specifications.payload_capacity_lbs` |
 | `_HOURS_AVAILABLE_DEFAULT` | `fleet[].hours_available_default` |
 | `_DRIVE_SPEED_MPH` | `fleet[].drive_speed_mph` |
-| *(none — new)* | `fleet[].pallet_positions` |
+| *(none — new)* | `fleet[].specifications.pallet_positions` |
 
 The bottom five belong to a **vehicle**, not to the business, so they move into `fleet`
 rather than into a flat `capability` block. `fuel_cost_per_mile` in particular is a

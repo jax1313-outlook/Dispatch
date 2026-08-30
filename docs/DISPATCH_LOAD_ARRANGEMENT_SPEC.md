@@ -105,17 +105,23 @@ This resolves the operator's Full / Heavy / Mixed figures:
 | Mixed | 5 | 2,000 lb | 10,000 lb |
 | Heavy | 4 | 2,500 lb | 10,000 lb |
 
-**CONFIRMED by arithmetic:** all three land on the same 10,000 lb ceiling. These are not
-three capacity rules — they are **one weight limit expressed at three pallet weights**,
-capped at 6 positions by deck space.
+**The arithmetic is consistent:** all three land on the same ceiling, so these are not three
+capacity rules — they are **one payload limit expressed at three pallet weights**, capped by
+deck positions.
 
-So the vehicle carries two hard limits and one unknown:
+**CORRECTION, 30 August 2026.** An earlier draft recorded these as `CONFIRMED`
+specifications. They are not. **The cargo van and trailer have not been purchased**, so:
 
 ```
-weight_limit_lbs   10000    CONFIRMED
-pallet_positions       6    CONFIRMED
-cube_capacity_ft3      ?    UNKNOWN - needed
+payload_capacity_lbs   NOT CONFIGURED     operator target 10,000
+pallet_positions       NOT CONFIGURED     operator target 6
+cube_capacity_ft3      NOT CONFIGURED     no target stated
+length / width / height NOT CONFIGURED
 ```
+
+The figures above are the **operator's stated intent for a vehicle not yet owned**. They
+inform planning conversations. They are **never inputs to a calculation** — see
+`DISPATCH_POLICY_PROFILE_SPEC.md` §4.8a.
 
 Full / Heavy / Mixed remain useful as **named presets** for fast entry — a way to classify
 a load without weighing every pallet. They are a convenience over the model, not the model.

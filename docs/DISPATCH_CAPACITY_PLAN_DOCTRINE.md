@@ -209,14 +209,20 @@ Examples: maintenance, recovery, personal time, Reserve Capacity, seasonal recov
 
 **The system shall not treat planned empty days as missing work requiring correction.**
 
-## 10. Vehicle capacity — CONFIRMED
+## 10. Vehicle capacity — NOT YET CONFIGURED
 
-| | |
-|---|---|
-| Vehicle | Cargo van with trailer |
-| Pallet positions | 6 |
-| **Payload** | **10,000 lb — payload, not GVWR** |
-| Cube capacity | **UNKNOWN — still needed** |
+**CONFIRMED, 30 August 2026: the cargo van and trailer have not been purchased.** Every
+specification is therefore unknown, and none may be invented.
+
+| | Specification | Operator target |
+|---|---|---|
+| Vehicle | Cargo van with trailer | — |
+| Payload | **NOT CONFIGURED** | 10,000 lb (payload, not GVWR) |
+| Pallet positions | **NOT CONFIGURED** | 6 |
+| Cube capacity | **NOT CONFIGURED** | none stated |
+| Length / width / height | **NOT CONFIGURED** | none stated |
+
+Targets inform planning. **They are never inputs to a calculation.**
 
 **INFERRED, and requiring the operator's confirmation, not this document's:** a payload of
 10,000 lb means combined gross vehicle weight rating is materially above 10,001 lb, which is

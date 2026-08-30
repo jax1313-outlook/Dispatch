@@ -80,6 +80,7 @@ is not 80% understood, whatever the other fields say.
 
 | Cause | Effect |
 |---|---|
+| **An equipment specification is NOT CONFIGURED** | **caps the dimensions that need it at `UNKNOWN`** |
 | A required field is `UNKNOWN` | reduces completeness by its weight |
 | A critical field is missing | caps at `LOW` |
 | A field is stale beyond its freshness window | treated as unknown |
@@ -102,6 +103,27 @@ missing fields are honestly marked unknown, and confidence falls accordingly.
 That last row is worth stating plainly: knowing a load is disqualified is *knowledge*. A
 California load with complete information is `DISQUALIFIED` with `HIGH` confidence. The
 engine is very sure this one is a no.
+
+## 5a. Missing equipment specifications
+
+**CONFIRMED, 30 August 2026: the vehicle has not been purchased**, so payload, cube, pallet
+positions and dimensions are `NOT CONFIGURED`.
+
+A dimension that needs a missing specification **does not compute a number**. It reports
+`UNKNOWN`, names the missing specification, and lowers confidence:
+
+```
+Operational Fit:  Strong
+Confidence:       Low
+Reason:           Cube capacity not configured.
+```
+
+This is the example the operator gave, and it is exactly the shape this model exists to
+produce: **a real assessment of what is known, beside an honest statement of what is not.**
+
+Note what it does *not* do — it does not refuse to evaluate, and it does not invent a
+capacity so the arithmetic can proceed. Operational fit is still `Strong` on the facts that
+are available. Confidence carries the gap.
 
 ## 6. Confidence never gates authority
 

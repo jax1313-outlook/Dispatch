@@ -48,13 +48,21 @@ weekends.
   },
 
   "fleet": [
-    { "id": "van-1", "name": "Cargo van + trailer", "active": true,
+    { "id": "van-1", "name": "Cargo van + trailer",
+      "status": "PLANNED", "active": false,
       "equipment": ["cargo_van","trailer"], "endorsements": [],
-      "pallet_positions": 6, "weight_limit_lbs": 10000,
-      "cube_capacity_ft3": null,
-      "operating_radius_miles": 500,
-      "hours_available_default": 11.0, "drive_speed_mph": 50,
-      "fuel_cost_per_mile": 0.62 }
+      "specifications": {
+        "payload_capacity_lbs": { "value": null, "status": "NOT CONFIGURED" },
+        "cube_capacity_ft3":    { "value": null, "status": "NOT CONFIGURED" },
+        "pallet_positions":     { "value": null, "status": "NOT CONFIGURED" },
+        "length_ft":            { "value": null, "status": "NOT CONFIGURED" },
+        "width_ft":             { "value": null, "status": "NOT CONFIGURED" },
+        "height_ft":            { "value": null, "status": "NOT CONFIGURED" }
+      },
+      "operator_target": { "payload_capacity_lbs": 10000, "pallet_positions": 6 },
+      "operating_radius_miles": null, "hos_applies": true,
+      "hours_available_default": null, "drive_speed_mph": null,
+      "fuel_cost_per_mile": null }
   ],
 
   "reserve_capacity": { "protect_return_home": true },
@@ -70,8 +78,12 @@ weekends.
 }
 ```
 
-Every value here is recovered from either v1.3.3's config or current
-`dispatch/scoring.py`. Nothing is invented.
+Territory and schedule values are recovered from v1.3.3's config; money values from current
+`dispatch/scoring.py`. **Equipment specifications are `NOT CONFIGURED` because the vehicle
+has not been purchased.** Nothing is invented.
+
+`operator_target` records stated intent for planning conversations. **The engine never reads
+it.** See `DISPATCH_POLICY_PROFILE_SPEC.md` §4.8a.
 
 ---
 
@@ -164,7 +176,11 @@ filter and leave the score alone — see the short list, but score honestly.
 Same operator, a year on. The van is still running; a box truck has been added, and the
 original trailer has been retired.
 
-**Changed from A** — only the `fleet` array:
+**Changed from A** — only the `fleet` array.
+
+> **The numbers below illustrate the mechanism, not defaults.** They show what a profile
+> looks like once real vehicles exist and have been measured. No value here ships as a
+> default, and none may be copied into a live profile.
 
 ```json
 "fleet": [
@@ -239,9 +255,10 @@ has been confirmed as still correct.
 
 | Value | Source | Still right? |
 |---|---|---|
-| **Vehicle: cargo van + trailer** | **operator, 30 Aug 2026** | **CONFIRMED** |
-| **Pallet capacity: 6** | **operator, 30 Aug 2026** | **CONFIRMED** |
-| **Weight limit: 10,000 lb** | **operator, 30 Aug 2026** | **CONFIRMED** |
+| Vehicle: cargo van + trailer | operator, 30 Aug 2026 | **intended — not yet purchased** |
+| Pallet positions | — | **NOT CONFIGURED** (target 6) |
+| Payload capacity | — | **NOT CONFIGURED** (target 10,000 lb) |
+| Cube capacity | — | **NOT CONFIGURED**, no target stated |
 | Territory tiers | v1.3.3, 13 Jul 2026 | ? |
 | Radius 500 mi | `dispatch/scoring.py` | ? |
 | Sweep times 06:00/12:00/18:00 | v1.1, v1.3.3 | ? |
