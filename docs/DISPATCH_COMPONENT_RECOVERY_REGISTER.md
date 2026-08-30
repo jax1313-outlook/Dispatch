@@ -122,6 +122,10 @@ Labels: **CONFIRMED** — verified in source. **INFERRED** — reasoned from evi
 
 ## Open items
 
+- **ANSWERED 30 Aug 2026:** the vehicle is a cargo van with trailer, 6 pallets, 10,000 lb
+  capacity. This adds **R-62 — pallet capacity as a blocking condition** (`NEW`; nothing in
+  the lineage tracked pallets) and invalidates three capability defaults calibrated for a
+  Class 8 truck. See `DISPATCH_SCORING_LINEAGE_AND_RECOVERY.md` §3, Defect D.
 - **UNKNOWN:** whether a v1.2 ever existed. No folder, no artifact, no reference found.
 - **UNKNOWN:** whether v1.0.1's `decision` column was ever set to a non-default value. Its
   database was read for counts only.

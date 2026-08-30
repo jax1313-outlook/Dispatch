@@ -29,6 +29,7 @@ Evaluation
   admitted                bool   - did it pass FILTER
   filter_reason           why not, if not
 
+  matched_vehicle         which vehicle in the fleet can take this, or none
   dimensions              the named dimensions, each with value + reason + origin
   conditions              blocking / warning / informational / unknown, each with reason
   disqualified            bool   - any BLOCKING condition fired
@@ -66,6 +67,27 @@ The order is load-bearing. Changing it changes meaning.
 8  CONFIDENCE    from information completeness, NOT from score
 9  SORT KEY      presentation order
 ```
+
+### Vehicle matching happens at step 3
+
+Capability conditions are evaluated against the **active fleet**, not against a single set
+of numbers. A load is blocked on capability only when **no active vehicle can take it**.
+
+```
+for each active vehicle in profile.fleet:
+    can it carry the pallets, the weight, the equipment, the endorsements?
+if none can  -> BLOCKING, capability
+if one can   -> matched_vehicle = that one
+if several   -> matched_vehicle = the cheapest to run for this load
+```
+
+`matched_vehicle` is recorded on the Evaluation. Downstream, fuel and margin are computed
+from **that vehicle's** cost per mile, so the same load can show a different margin
+depending on which vehicle takes it.
+
+With one vehicle this reads identically to a flat capability check. With three it is the
+only correct rule, and it costs nothing to build it this way now — see
+`DISPATCH_POLICY_PROFILE_SPEC.md` §4.8.
 
 ### Why conditions come before dimensions
 

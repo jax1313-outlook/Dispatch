@@ -58,20 +58,28 @@ text editor. A settings screen comes later and edits this same file.
 
   "money": {
     "rate_per_mile": { "floor": 2.50, "good": 4.00, "excellent": 5.50 },
-    "fuel_cost_per_mile": 0.62,
     "minimum_revenue": 0,
     "deadhead": { "acceptable_miles": 150, "maximum_miles": 300,
                   "charge_against_rate": true }
   },
 
-  "capability": {
-    "equipment": ["dry_van"],
-    "endorsements": [],
-    "weight_limit_lbs": 45000,
-    "operating_radius_miles": 500,
-    "hours_available_default": 11.0,
-    "drive_speed_mph": 50
-  },
+  "fleet": [
+    {
+      "id": "van-1",
+      "name": "Cargo van + trailer",
+      "active": true,
+      "acquired": "2026-08-30",
+      "retired": null,
+      "equipment": ["cargo_van", "trailer"],
+      "endorsements": [],
+      "pallet_capacity": 6,
+      "weight_limit_lbs": 10000,
+      "operating_radius_miles": 500,
+      "hours_available_default": 11.0,
+      "drive_speed_mph": 50,
+      "fuel_cost_per_mile": 0.62
+    }
+  ],
 
   "reserve_capacity": {
     "protect_return_home": true,
@@ -156,6 +164,35 @@ would make human final authority a setting, and a setting can be changed by acci
 Every dimension states explicitly what an unknown value scores. Nothing silently
 becomes `0` or `no risk`.
 
+### 4.8 The fleet is a list, and it changes
+
+**Required by the operator, 30 August 2026: equipment must be alterable as the operation
+expands and changes.**
+
+The fleet is an array, not a set of fixed keys. A single van today, a van and a box truck
+next year, a different trailer next month — all of it is editing the profile, and none of
+it is a code change.
+
+1. **Adding a vehicle is adding an object.** Nothing else in Dispatch changes.
+2. **Retiring is `"active": false`, never deletion.** A retired vehicle stays in the
+   profile so past evaluations still explain themselves. Delete it and every load it ever
+   carried becomes unexplainable.
+3. **Capacity is per vehicle.** Pallets, weight, radius, hours, drive speed and fuel cost
+   all belong to the vehicle, because a van and a box truck differ in every one of them.
+   Fuel in particular is a property of the vehicle, not of the business.
+4. **Capability is evaluated against the active fleet.** A load is blocked on capability
+   only when **no active vehicle can take it**. With one van that reads identically to
+   today; with three it is the only correct rule.
+5. **The evaluation records which vehicle it matched** (`matched_vehicle`). Without it, a
+   fleet of two makes every score ambiguous — the operator cannot tell which vehicle the
+   engine was reasoning about.
+6. **No vehicle, no fabrication.** An empty or fully-retired fleet does not fall back to a
+   default truck. Capability dimensions return `UNKNOWN` and confidence drops, exactly as
+   any other missing fact would.
+
+Rule 2 is the one that will feel wrong and is not. Retiring rather than deleting is what
+keeps a decision made in 2026 explicable in 2028.
+
 ## 5. Lineage
 
 **CONFIRMED.** This is a recovery, not an invention.
@@ -177,12 +214,23 @@ intended by the move itself — same values, new home.
 | Constant | Profile key |
 |---|---|
 | `_HOME_BASE` | `identity.home_base` |
-| `_OPERATING_RADIUS_MILES` | `capability.operating_radius_miles` |
-| `_FUEL_COST_PER_MILE` | `money.fuel_cost_per_mile` |
 | `_RATE_PER_MILE_FLOOR / _GOOD / _EXCELLENT` | `money.rate_per_mile.*` |
-| `_WEIGHT_LIMIT_LBS` | `capability.weight_limit_lbs` |
-| `_HOURS_AVAILABLE_DEFAULT` | `capability.hours_available_default` |
-| `_DRIVE_SPEED_MPH` | `capability.drive_speed_mph` |
+| `_OPERATING_RADIUS_MILES` | `fleet[].operating_radius_miles` |
+| `_FUEL_COST_PER_MILE` | `fleet[].fuel_cost_per_mile` |
+| `_WEIGHT_LIMIT_LBS` | `fleet[].weight_limit_lbs` |
+| `_HOURS_AVAILABLE_DEFAULT` | `fleet[].hours_available_default` |
+| `_DRIVE_SPEED_MPH` | `fleet[].drive_speed_mph` |
+| *(none — new)* | `fleet[].pallet_capacity` |
+
+The bottom five belong to a **vehicle**, not to the business, so they move into `fleet`
+rather than into a flat `capability` block. `fuel_cost_per_mile` in particular is a
+property of what you are driving.
+
+**Two of these values change as they move, and that is a behaviour change, not a
+migration.** `_WEIGHT_LIMIT_LBS` goes from 45,000 to 10,000, and `_FUEL_COST_PER_MILE`
+needs the operator's real figure. Land the move first with values byte-identical to today,
+then correct them in a separate, visible commit — so if scores shift, it is obvious which
+change did it.
 
 `_KNOWN_DISTANCES` stays in code. It is reference data, not policy — it describes
 geography, not Level 1 Transport.

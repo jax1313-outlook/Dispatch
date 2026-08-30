@@ -30,9 +30,15 @@ Nothing on this list may be a code constant.
 - Fuel cost per mile
 
 **Capability**
-- Equipment and endorsements held
+- Vehicle, equipment and endorsements held
+- Pallet capacity
 - Weight limits
 - Hours-of-service assumptions and the drive-speed planning figure
+
+**CONFIRMED by the operator, 30 August 2026:** the vehicle is a **cargo van with trailer,
+6 pallets, 10,000 lb capacity.** This is the first record of the fleet anywhere in the
+lineage or in Dispatch. Every capability default that predates it was guesswork, and two
+were wrong by a wide margin — see `DISPATCH_SCORING_LINEAGE_AND_RECOVERY.md` §3, Defect D.
 
 **Judgement**
 - Risk tolerances

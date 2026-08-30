@@ -101,10 +101,36 @@ Implementation should not start on items 1–3 without answers.
 | 5 | Rate floor $2.50, excellent $5.50 — still right? | Defaults |
 | 6 | Fuel — what is it actually costing per mile now? | Defaults; $0.62 has a short shelf life |
 | 7 | Reserve Capacity — what is the real rule, in your words? | Only you can state it; the keys are stubs |
-| 8 | What is the truck? Equipment and endorsements. | **No build in the lineage records this.** All equipment matching is guesswork until answered. |
+| ~~8~~ | ~~What is the truck?~~ | **ANSWERED 30 Aug 2026 — see below** |
 
-Question 8 is the one to answer first. It is the cheapest to answer and the most
-foundational — every capability rule depends on it.
+### Question 8 is answered, and it changed the specification
+
+**CONFIRMED by the operator:** a **cargo van with trailer — 6 pallets, 10,000 lb
+capacity.**
+
+This is the first record of the fleet anywhere in the lineage or in Dispatch, and it
+exposed a fourth regression:
+
+**`dispatch/scoring.py` is calibrated for a Class 8 tractor-trailer the operation does not
+own.** The overweight guard tests `weight > 45000` against a 10,000 lb vehicle — it is not
+weak, it is **unreachable**. No load this van can legally carry will ever trip it, and a
+12,000 lb load, genuinely over capacity, scores clean.
+
+**Pallet capacity does not exist anywhere.** Six pallets is a hard physical limit; a
+12-pallet load cannot be taken at any weight, and nothing in Dispatch would say so. It is
+added to the blocking catalogue as a new condition, not a recovered one.
+
+The July judgement was right and the later calibration was wrong: v1.3.3 targeted NAICS
+492110 / 492210 and PSC R602 — couriers and local messengers — which is exactly a
+cargo-van business.
+
+### Follow-on questions this raises
+
+| # | Question | Why it matters |
+|---|---|---|
+| 9 | **Is 10,000 lb payload, or gross vehicle weight rating?** | Determines whether FMCSA hours-of-service applies at all. Changes the HOS model. |
+| 10 | **What does fuel actually cost per mile?** | $0.62 implies ~6 mpg. Every margin figure is currently pessimistic. |
+| 11 | **What are the real rate bands for this work?** | $2.50 / $4.00 / $5.50 are truckload numbers. Expedite and courier rates differ. |
 
 ## 8. Not in this package, and why
 

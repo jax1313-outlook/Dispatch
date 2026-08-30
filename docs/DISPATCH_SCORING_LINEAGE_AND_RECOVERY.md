@@ -118,6 +118,41 @@ July.
 `Acceptable`, `Below floor`) from inside the scoring module. There is no filter stage at
 all.
 
+### Defect D — the engine is calibrated for a vehicle the operator does not own
+
+**CONFIRMED, 30 August 2026.** The operator runs a **cargo van with trailer: 6 pallets,
+10,000 lb capacity.** `dispatch/scoring.py` is calibrated for a Class 8 tractor-trailer.
+
+| Constant | Assumes | Actual | Wrong by |
+|---|---|---|---|
+| `_WEIGHT_LIMIT_LBS = 45000` | Class 8 dry van | 10,000 lb | **4.5×** |
+| `_FUEL_COST_PER_MILE = 0.62` | ~6 mpg diesel | a van's economy | large — figure needed |
+| `_RATE_PER_MILE_FLOOR/_GOOD/_EXCELLENT` | truckload market | expedite / courier market | unknown |
+| *(no pallet constraint exists)* | — | 6 pallets, hard limit | **missing entirely** |
+
+Consequences, in order of severity:
+
+1. **Overweight never fires.** The check is `weight > 45000`. No load this van can legally
+   carry will ever trip it, and loads at 12,000 lb — genuinely over capacity — score
+   clean. The guard is not merely weak; it is unreachable.
+2. **Pallet capacity does not exist.** Nothing in Dispatch or anywhere in the lineage
+   knows the van holds six pallets. A 12-pallet load cannot be taken at any weight, and
+   nothing would say so.
+3. **Fuel cost is overstated**, so every net-revenue and margin figure is wrong in the
+   pessimistic direction — loads are being made to look worse than they are.
+4. **Rate thresholds are from the wrong market.** Truckload rate-per-mile bands do not
+   describe expedite or courier work.
+
+**Where the lineage was right and the code was wrong.** v1.3.3 prioritised NAICS 492110
+and 492210 — couriers and local messengers — and PSC R602, courier and messenger services.
+That is a cargo-van business, targeted correctly in July 2026. `dispatch/scoring.py` was
+then written for a truck the operation does not have. The July judgement was sound; the
+later calibration was not.
+
+**Pallet capacity is a blocking condition, and a new one.** It is not in the recovered
+catalogue because no build in the lineage tracked pallets. Over pallet capacity is a
+physical impossibility, not a preference — see `DISPATCH_OVERRIDE_RULES_SPEC.md` §5.
+
 ### What current Dispatch does better than the lineage
 
 Credit where due. `dispatch/scoring.py` produces **named, explainable dimensions** that

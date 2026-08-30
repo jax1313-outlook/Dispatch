@@ -39,12 +39,17 @@ From the profile, not from code. Proposed starting set:
 | Territory tier `hard_no` | v1.3.3 tier, veto is new |
 | Equipment not held | new |
 | Endorsement not held (hazmat, tanker) | INFERRED from v1.0.1 risk string |
+| **Over pallet capacity** | **new — nothing in the lineage tracked pallets** |
 | Over weight limit | current Dispatch (today a 4-point deduction) |
 | Exceeds available hours | current Dispatch (today a score band) |
 | Operator hard stop | current Dispatch (today a 5-point deduction) |
 
-**Four of these seven are currently point deductions.** That is the regression this
-specification exists to close.
+**Four of these eight are currently point deductions, and two do not exist at all.**
+That is the regression this specification exists to close.
+
+The overweight check is worse than a deduction — it is **unreachable**. It tests
+`weight > 45000`, and the operator's vehicle carries 10,000 lb. No load it can legally
+haul will ever trip it. See `DISPATCH_SCORING_LINEAGE_AND_RECOVERY.md` §3, Defect D.
 
 ### The rule
 
