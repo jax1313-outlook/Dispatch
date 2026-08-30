@@ -133,8 +133,31 @@ recovery work that copies files from these builds will copy the key with them.
 ## Finding 9 — The lineage is preserved intact
 
 **CONFIRMED.** No file in any of the seven builds was created, modified, renamed or
-deleted during this analysis. GOLD's `app.py`, `publisher_mvp.py` and `.env` remain
-byte-identical to a pristine archive extract. The only files written are reports.
+deleted by this analysis. The only files written into the lineage are reports.
+
+Evidence, and the limits of it:
+
+- **Source, config and credentials unchanged.** GOLD's `app.py`, `publisher_mvp.py` and
+  `.env` are byte-identical to an archive extract.
+- **No write-time activity.** GOLD's database contains **zero** records or scan runs dated
+  later than 27 July 2026. Newest opportunity `2026-07-27T16:08:54Z`; newest scan run
+  `2026-07-27T16:00:24Z`. Nothing in August exists.
+- **All reads were read-only.** Databases were opened with SQLite `mode=ro`.
+
+**Method note — filesystem timestamps are not evidence here.** GOLD's `data/l1_cos.db` and
+one brief carry a modified time of 30 August 2026, which appears to be a change and is
+not. These builds live in a OneDrive-synchronised folder, and reading a cloud-backed file
+hydrates it locally, updating its local timestamp without altering content. The database
+timestamps above are the reliable evidence, because they record when the application
+actually wrote.
+
+**The archive extract is an older snapshot, not a mirror of the current folder.** It holds
+three briefs; the live folder holds four. The fourth belongs to an opportunity created
+`2026-07-27T16:08:54Z` with `interested=1` — a human marking interest in July, after the
+snapshot was taken. The extract is therefore sound evidence for **source files**, which did
+not change between snapshots, and is **not** a baseline for data files. Any future drift
+check on this lineage should use application-recorded timestamps, not file mtimes and not
+this extract.
 
 ---
 
