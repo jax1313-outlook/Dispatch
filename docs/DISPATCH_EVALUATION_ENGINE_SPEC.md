@@ -11,8 +11,17 @@ The evaluation engine takes a Mission Record and a Policy Profile and returns an
 given, and writes nothing.
 
 ```
-evaluate(record, profile, now) -> Evaluation
+evaluate(record, profile, now, candidate_run=None) -> Evaluation
 ```
+
+`candidate_run` is the run this opportunity would join. **Capacity is contextual:** a
+two-pallet load is never over capacity by itself, only when added to what is already on a
+particular day's run. The engine must therefore evaluate against **remaining** capacity,
+not against an empty vehicle.
+
+With `candidate_run=None` it falls back to the empty vehicle — the single-broker,
+whole-truck case — so the model degrades correctly to the simple shape. See
+`DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §7a.
 
 Deterministic and total: same three inputs, same output, always. `now` is passed in, never
 read from the system clock inside the engine — otherwise the same record evaluates
@@ -30,6 +39,8 @@ Evaluation
   filter_reason           why not, if not
 
   matched_vehicle         which vehicle in the fleet can take this, or none
+  candidate_run           which run this was evaluated against, if any
+  remaining_after         weight / cube / pallet left on that run if taken
   dimensions              the named dimensions, each with value + reason + origin
   conditions              blocking / warning / informational / unknown, each with reason
   disqualified            bool   - any BLOCKING condition fired

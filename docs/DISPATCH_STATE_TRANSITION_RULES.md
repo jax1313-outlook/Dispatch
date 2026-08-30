@@ -73,6 +73,36 @@ DELIVERY  picked_up, in_transit, at_delivery, delivered, completed, archived
 `in_transit` is the hinge and belongs to DELIVERY: once loaded, the only question that
 matters is where it has to be.
 
+### The Run carries the Mission — CONFIRMED requirement
+
+**The van's capacity may be shared across several brokers.** Six pallets can be one
+broker's whole vehicle, or three brokers at two pallets each — the LTL and courier model,
+and the normal case.
+
+This requires a level above the Mission Record, because dual numbering has no answer when
+three brokers are aboard:
+
+| | **Mission** | **Run** |
+|---|---|---|
+| Is | a commitment to a broker | a plan for the vehicle |
+| Identity | mission number + their load number | run id + date + vehicle |
+| Changeable | no — a promise was made | **yes, freely, until executed** |
+| Completes | when *its* stops are done | when *all* stops are done |
+
+**Nothing in this document changes.** One record, one identity, dual numbering, progressive
+enrichment and ACCEPT LOAD as the irreversible gate all hold exactly as written. The Run
+does not replace the Mission — it **schedules** it, and it owns the stop order, the
+vehicle and the day.
+
+Two consequences worth stating here:
+
+- **Capacity binds at the Run.** A two-pallet Mission is never over capacity by itself. It
+  is over capacity *on a particular run*. The real question is not "does this fit the van"
+  but **"does this still fit Tuesday"**.
+- **Resequencing is not an override.** Stop order was never promised to anyone; time
+  windows were. Any sequence honouring every Mission's window and the vehicle's capacity is
+  permitted, and needs no override because nothing is being overridden.
+
 ### Multi-stop breaks the two-phase assumption — RECOMMENDATION
 
 **This model assumes one pickup and one delivery.** A milk run —

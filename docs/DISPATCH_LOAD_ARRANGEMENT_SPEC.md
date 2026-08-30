@@ -146,7 +146,113 @@ current Dispatch money figure is linehaul-only.
 measure; it cannot see dwell. Two loads at $3.50/mile are not comparable when one has two
 stops and the other has seven.
 
-## 8. Impact on the Mission Record — needs a ruling
+## 7a. Two levels: the Run and the Mission
+
+**CONFIRMED by the operator, 30 August 2026:** the van's capacity may be filled by one
+broker for the whole vehicle, or shared across several brokers going to several stops.
+This is the LTL and courier model, and it is the normal case, not an edge case.
+
+That single fact requires a level Dispatch does not have.
+
+### The conflict it exposes
+
+The Mission Record carries **dual numbering** — our mission number and *the broker's* load
+number, preserved exactly. With three brokers on one van, there is no single broker load
+number. Either the record stops being one broker's commitment, or something above it
+holds the vehicle.
+
+### The resolution — two records, two different jobs
+
+```
+Run  (the plan for the vehicle)          Tuesday, van-1, stops 1..7
+ ├── Mission A   broker X, load 847261    pallets 2, stops 1 and 4
+ ├── Mission B   broker Y, load 55120     pallets 3, stops 2 and 6
+ └── Mission C   broker Z, load A-9931    pallets 1, stops 3 and 7
+```
+
+| | **Mission** | **Run** |
+|---|---|---|
+| What it is | A **commitment to a broker** | A **plan for the vehicle** |
+| Identity | Mission number + their load number | Run id + date + vehicle |
+| Created by | ACCEPT LOAD | Assigning a Mission to a day |
+| Changeable | No — a promise was made | **Yes — freely, until executed** |
+| Owns | The freight, the rate, the customer | The stop order, the vehicle, the day |
+| Completes | When *its* stops are done | When *all* its stops are done |
+
+**Everything already specified about the Mission Record stands unchanged.** Dual numbering,
+one record one identity, progressive enrichment, ACCEPT LOAD as the irreversible gate — all
+of it holds. The Run does not replace the Mission; it **schedules** it.
+
+### Capacity binds at the Run, not the Mission
+
+This is the consequence that changes evaluation most.
+
+```
+run.weight_utilization = Σ(mission weights on this run) ÷ vehicle.weight_limit_lbs
+run.pallet_utilization = Σ(mission pallets on this run) ÷ vehicle.pallet_positions
+run.cube_utilization   = Σ(mission cube    on this run) ÷ vehicle.cube_capacity_ft3
+```
+
+A Mission of two pallets is never "over capacity" by itself. It is over capacity **on a
+particular run**, and only when added to what is already there.
+
+**So the real evaluation question is not "does this load fit the van?" — it is "does this
+load still fit Tuesday?"** Capacity is contextual. An opportunity must be evaluated against
+**remaining** capacity on a candidate run, and the same opportunity can be a comfortable
+fit on Wednesday and blocked on Tuesday.
+
+`DISPATCH_EVALUATION_ENGINE_SPEC.md` gains a `candidate_run` input for this reason. With no
+run in view it falls back to the empty vehicle, which is the single-broker FTL case — the
+model degrades correctly to the simple shape.
+
+### Stop numbering and the calendar
+
+Both belong to the Run, and both are now explained:
+
+- **Stop #** is a position in the Run's sequence — not a property of any one Mission. This
+  is why the portal showed it: with three brokers aboard, stop order is the only thing that
+  describes the driver's actual day.
+- **The calendar shows Runs**, and within a day, its stops in order. A Mission appears on
+  the calendar *through* the Run that carries it.
+
+## 8. The three open questions — now answerable
+
+The operator's clarification settles what the earlier draft left open.
+
+### Does a multi-stop load complete per stop or at the last stop?
+
+**Both, at different levels.** A **Mission** completes when its own stops are done — broker
+X is served at stops 1 and 4 and is finished, whatever remains on the van. The **Run**
+completes when every stop is done.
+
+This matters for money: broker X can be invoiced when their freight is delivered, not when
+the driver finishes their day.
+
+### Can stops be resequenced after ACCEPT LOAD?
+
+**Yes — resequencing changes the Run, which is a plan, not the Mission, which is a
+commitment.** The order of stops was never promised to anyone. What was promised is each
+Mission's time window.
+
+The constraint is therefore: **any sequence is permitted that honours every Mission's
+window and the vehicle's capacity.** No override is required, because nothing is being
+overridden.
+
+### Does dropping a filler stop break the commitment?
+
+**It depends on whether the stop belongs to a Mission or is spare capacity.**
+
+- Dropping a stop that belongs to an **accepted Mission** breaks that Mission's commitment
+  to that broker. It requires a recorded decision and it affects one broker, not the run.
+- Dropping a stop not yet accepted — a `filler` still being considered — costs nothing.
+  Nothing was promised.
+
+**`priority` is therefore the operator's classification of a *candidate*, and loses its
+force the moment a Mission is accepted.** After acceptance, `filler` and `critical` freight
+carry the same commitment; only the operator's willingness to disappoint differs, and that
+is a human judgement the system records rather than makes.
+
+## 8b. What this leaves open
 
 **This is the one place the operator's model reaches past Lane B into existing code.**
 
@@ -173,13 +279,20 @@ CURRENT still resolves; it never becomes a stored third state. `filter_bundle()`
 reveals rather than deletes. The doctrine in `DISPATCH_STATE_TRANSITION_RULES.md` §6 holds
 unchanged — only the input to `phase_for()` changes, from run status to stop type.
 
-**What this does not settle**, and should not be settled by this document:
+With the Run in place, `phase_for()` reads the **current stop of the current Run**. The
+three commitment questions this section previously left open are answered in §8 above.
 
-- Does a multi-stop load complete when the last stop completes, or per stop?
-- Can a stop be skipped or resequenced after ACCEPT LOAD, and does that need an override?
-- Is a `filler` stop droppable without breaking the commitment to the broker?
+**What genuinely remains open**, and belongs to the operator rather than to this document:
 
-Those are commitment questions, not data-model questions. They belong to the operator.
+- **Can a Mission span two Runs?** Freight picked up Tuesday and delivered Thursday sits on
+  the van overnight. The model permits it; whether the operation does is a business
+  question.
+- **Can a Run carry Missions for a broker on the avoid list**, if another broker's freight
+  is already aboard and the stop is on the way?
+- **Who resequences — the operator, or the engine proposing an order for approval?** The
+  engine may recommend a sequence. It may not commit one.
+- **Does a Run need its own record before any Mission is accepted?** A planned empty
+  Tuesday is either a real object or nothing at all.
 
 ## 9. Evaluation fields this adds
 
