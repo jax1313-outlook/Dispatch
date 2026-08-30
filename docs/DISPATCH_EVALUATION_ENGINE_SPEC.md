@@ -118,6 +118,17 @@ UNKNOWN). Never a bare number.
 | **Return Position Value** | Where does it leave me? | current Dispatch `compute_position_impact`, `compute_tomorrow_position_risk` |
 | **Mission Risk** | What could go wrong? | current Dispatch `compute_route_risk`, `compute_hos_risk` |
 | **Information Completeness** | How much do I actually know? | **new** |
+| **Utilization** | How full does this leave the van — weight, cube, pallets? | operator model, 30 Aug 2026 |
+| **Service Risk** | Tight windows, high dwell, appointment vs FCFS | operator model, 30 Aug 2026 |
+| **Complexity** | Stops, handling, compatibility — how hard is this day? | operator model, 30 Aug 2026 |
+
+**Complexity never folds into profit.** The question an owner-operator actually asks is
+*"is the extra money worth the extra hassle"*, and that question only exists while the two
+are separate numbers. Merge them and the engine will keep recommending loads that pay well
+and cost the operator their evening.
+
+See `DISPATCH_LOAD_ARRANGEMENT_SPEC.md` for the load, stop and cargo structure these three
+dimensions read from.
 
 **Dimensions are never collapsed into one unexplained score.** They are stored separately,
 displayed separately, and each carries its own reason.

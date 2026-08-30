@@ -150,7 +150,7 @@ then written for a truck the operation does not have. The July judgement was sou
 later calibration was not.
 
 **Pallet capacity is a blocking condition, and a new one.** It is not in the recovered
-catalogue because no build in the lineage tracked pallets. Over pallet capacity is a
+catalogue because no build in the lineage tracked pallets. Over pallet positions is a
 physical impossibility, not a preference — see `DISPATCH_OVERRIDE_RULES_SPEC.md` §5.
 
 ### What current Dispatch does better than the lineage

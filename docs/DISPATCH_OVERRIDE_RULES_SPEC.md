@@ -77,7 +77,7 @@ them safe:
 |---|---|
 | Endorsement not held (hazmat, tanker) | Legal. Cannot be overridden by wanting to. |
 | Over legal weight | Legal. |
-| **Over pallet capacity** | **Physical. Six pallets do not become seven.** |
+| **Over pallet positions** | **Physical. Six pallets do not become seven.** |
 | Deadline already passed | Physical. The load is gone. |
 
 And some clearly should remain overridable:
@@ -105,7 +105,7 @@ nothing is a system that gets worked around.
   "not_permitted": [
     "endorsement_not_held",
     "over_legal_weight",
-    "over_pallet_capacity",
+    "over_pallet_positions",
     "deadline_passed"
   ],
   "expire_after_days": null,

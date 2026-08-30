@@ -50,7 +50,8 @@ weekends.
   "fleet": [
     { "id": "van-1", "name": "Cargo van + trailer", "active": true,
       "equipment": ["cargo_van","trailer"], "endorsements": [],
-      "pallet_capacity": 6, "weight_limit_lbs": 10000,
+      "pallet_positions": 6, "weight_limit_lbs": 10000,
+      "cube_capacity_ft3": null,
       "operating_radius_miles": 500,
       "hours_available_default": 11.0, "drive_speed_mph": 50,
       "fuel_cost_per_mile": 0.62 }
@@ -169,18 +170,18 @@ original trailer has been retired.
 "fleet": [
   { "id": "van-1", "name": "Cargo van + trailer", "active": true,
     "equipment": ["cargo_van","trailer"], "endorsements": [],
-    "pallet_capacity": 6, "weight_limit_lbs": 10000,
+    "pallet_positions": 6, "weight_limit_lbs": 10000, "cube_capacity_ft3": null,
     "operating_radius_miles": 500, "fuel_cost_per_mile": 0.62 },
 
   { "id": "box-1", "name": "26ft box truck", "active": true,
     "acquired": "2027-04-12",
     "equipment": ["box_truck","liftgate"], "endorsements": [],
-    "pallet_capacity": 12, "weight_limit_lbs": 26000,
+    "pallet_positions": 12, "weight_limit_lbs": 26000,
     "operating_radius_miles": 700, "fuel_cost_per_mile": 0.48 },
 
   { "id": "trailer-old", "name": "Original trailer", "active": false,
     "retired": "2027-03-01",
-    "equipment": ["trailer"], "pallet_capacity": 4,
+    "equipment": ["trailer"], "pallet_positions": 4,
     "weight_limit_lbs": 7000, "fuel_cost_per_mile": 0.62 }
 ]
 ```

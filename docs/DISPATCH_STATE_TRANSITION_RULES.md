@@ -73,6 +73,28 @@ DELIVERY  picked_up, in_transit, at_delivery, delivered, completed, archived
 `in_transit` is the hinge and belongs to DELIVERY: once loaded, the only question that
 matters is where it has to be.
 
+### Multi-stop breaks the two-phase assumption — RECOMMENDATION
+
+**This model assumes one pickup and one delivery.** A milk run —
+pickup → pickup → delivery → pickup → delivery — has no single pickup phase and crosses
+back and forth between them.
+
+The minimal change that preserves the doctrine: **phase becomes a property of the current
+stop, not of the run.**
+
+```
+phase = phase_for(current_stop.stop_type)
+```
+
+CURRENT still resolves and never becomes a stored third state. `filter_bundle()` still
+reveals rather than deletes. Only the input to `phase_for()` changes — from run status to
+stop type.
+
+Not settled here, because they are commitment questions rather than data questions: whether
+a multi-stop load completes per stop or at the last stop, whether stops may be resequenced
+or dropped after ACCEPT LOAD, and whether dropping a `filler` stop breaks the commitment to
+the broker. See `DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §8.
+
 ## 6. CURRENT is resolved, never stored
 
 **CONFIRMED in code.** `resolve_view()` derives CURRENT from the record's status. There is

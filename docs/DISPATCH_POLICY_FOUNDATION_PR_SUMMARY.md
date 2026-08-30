@@ -131,6 +131,34 @@ cargo-van business.
 | 9 | **Is 10,000 lb payload, or gross vehicle weight rating?** | Determines whether FMCSA hours-of-service applies at all. Changes the HOS model. |
 | 10 | **What does fuel actually cost per mile?** | $0.62 implies ~6 mpg. Every margin figure is currently pessimistic. |
 | 11 | **What are the real rate bands for this work?** | $2.50 / $4.00 / $5.50 are truckload numbers. Expedite and courier rates differ. |
+| 12 | **Cube capacity of van and trailer?** | Two of three utilization ratios work without it; the third is guesswork. |
+| 13 | **Accessorial rates** — detention/hour, layover, TONU, lumper, liftgate. | Every profitability figure. Detention on a multi-stop run can exceed the linehaul. |
+| 14 | **Target margin** for the profit score. | Profit scoring has no reference point without it. |
+| 15 | **Complexity tolerance** — how many stops before a load stops being worth it? | Complexity scoring bands. |
+| 16 | **May stops be resequenced or dropped after acceptance?** | The commitment model for multi-stop loads. |
+
+### The Load Arrangement model changed the scope
+
+The operator supplied a full Load Arrangement Data Model on 30 August 2026. It is
+specified in `DISPATCH_LOAD_ARRANGEMENT_SPEC.md` and it added four things these
+specifications did not have:
+
+1. **Multi-stop is first-class** — ordered stops, types, windows, dwell, priority. This is
+   the one item that reaches past Lane B into existing code: `dispatch/mission.py` assumes
+   one pickup and one delivery. Recommended fix is minimal — phase becomes a property of
+   the current stop rather than of the run — and it preserves the CURRENT-resolves
+   doctrine unchanged.
+2. **Three utilization ratios** — weight, cube, pallet. The binding constraint is whichever
+   reaches 1.0 first, and being weight-out is a different situation from being cube-out.
+3. **Accessorials** — detention, layover, TONU, lumper, liftgate, temp control. Every
+   money figure in current Dispatch is linehaul-only, which is wrong for this work.
+4. **Complexity as a dimension**, kept strictly separate from profit. *Is the extra money
+   worth the extra hassle* is a question that only exists while the two are separate
+   numbers.
+
+It also resolved the Full / Heavy / Mixed capacity figures: 6 / 5 / 4 pallets all land on
+the same 10,000 lb ceiling, so they are one weight limit at three pallet weights, capped at
+6 positions by deck space — not three capacity rules.
 
 ## 8. Not in this package, and why
 

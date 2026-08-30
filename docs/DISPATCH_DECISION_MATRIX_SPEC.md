@@ -39,7 +39,10 @@ From the profile, not from code. Proposed starting set:
 | Territory tier `hard_no` | v1.3.3 tier, veto is new |
 | Equipment not held | new |
 | Endorsement not held (hazmat, tanker) | INFERRED from v1.0.1 risk string |
-| **Over pallet capacity** | **new — nothing in the lineage tracked pallets** |
+| **Over pallet positions** | **new — nothing in the lineage tracked pallets** |
+| **Over cube capacity** | **new — needs the van's cube figure** |
+| **Incompatible commodities on one load** | **new — physical, not a preference** |
+| **Temp control required, not held** | **new — equipment** |
 | Over weight limit | current Dispatch (today a 4-point deduction) |
 | Exceeds available hours | current Dispatch (today a score band) |
 | Operator hard stop | current Dispatch (today a 5-point deduction) |

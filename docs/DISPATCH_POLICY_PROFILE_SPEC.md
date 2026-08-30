@@ -32,8 +32,7 @@ text editor. A settings screen comes later and edits this same file.
   "effective_from": "2026-09-01",
 
   "identity": {
-    "home_base": "Jacksonville, FL",
-    "trucks": 1
+    "home_base": "Jacksonville, FL"
   },
 
   "territory": {
@@ -72,14 +71,42 @@ text editor. A settings screen comes later and edits this same file.
       "retired": null,
       "equipment": ["cargo_van", "trailer"],
       "endorsements": [],
-      "pallet_capacity": 6,
+      "trailer_length_ft": null,
+      "pallet_positions": 6,
       "weight_limit_lbs": 10000,
+      "cube_capacity_ft3": null,
+      "temp_control": false,
+      "liftgate": false,
       "operating_radius_miles": 500,
       "hours_available_default": 11.0,
       "drive_speed_mph": 50,
       "fuel_cost_per_mile": 0.62
     }
   ],
+
+  "accessorials": {
+    "detention_per_hour": null,
+    "detention_free_minutes": 120,
+    "layover": null,
+    "tonu": null,
+    "lumper": null,
+    "liftgate": null,
+    "temp_control": null
+  },
+
+  "utilization": {
+    "target_weight": 0.85,
+    "target_cube": 0.85,
+    "target_pallet": 0.85,
+    "underutilised_below": 0.50
+  },
+
+  "complexity": {
+    "stops_comfortable": 3,
+    "stops_maximum": null,
+    "dwell_minutes_concern": 60,
+    "penalise_non_stackable": true
+  },
 
   "reserve_capacity": {
     "protect_return_home": true,
@@ -220,7 +247,7 @@ intended by the move itself — same values, new home.
 | `_WEIGHT_LIMIT_LBS` | `fleet[].weight_limit_lbs` |
 | `_HOURS_AVAILABLE_DEFAULT` | `fleet[].hours_available_default` |
 | `_DRIVE_SPEED_MPH` | `fleet[].drive_speed_mph` |
-| *(none — new)* | `fleet[].pallet_capacity` |
+| *(none — new)* | `fleet[].pallet_positions` |
 
 The bottom five belong to a **vehicle**, not to the business, so they move into `fleet`
 rather than into a flat `capability` block. `fuel_cost_per_mile` in particular is a

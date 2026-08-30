@@ -108,6 +108,8 @@ constitution, the business matrix and the workflow chassis from different builds
 Specification only. Not implemented.
 
 - **[Policy Profile Spec](docs/DISPATCH_POLICY_PROFILE_SPEC.md)**
+- **[Load Arrangement Spec](docs/DISPATCH_LOAD_ARRANGEMENT_SPEC.md)** — load, stops, cargo,
+  utilization, accessorials.
 - **[Evaluation Engine Spec](docs/DISPATCH_EVALUATION_ENGINE_SPEC.md)**
 - **[Decision Matrix Spec](docs/DISPATCH_DECISION_MATRIX_SPEC.md)**
 - **[Filter / Score / Sort Spec](docs/DISPATCH_FILTER_SCORE_SORT_SPEC.md)**
