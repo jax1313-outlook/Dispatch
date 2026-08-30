@@ -274,13 +274,54 @@ day.** Proposing is within its authority; it does not close anything.
 | **The driver** | Close it deliberately, or by powering down at final arrival |
 | **JOE** | **Propose** a close. Never perform one. |
 
-**One edge case this must handle.** A power-down is not always the end of a day — a driver
-shuts off for fuel, for a break, for a dock. The close must distinguish *parked for the
-day* from *stopped for twenty minutes*, and when it cannot tell, it asks rather than
-assumes. A day closed by mistake at 11am is worse than a question.
+### Telling the end of a day from a stop for fuel
 
-**UNKNOWN applies here as everywhere:** if the system cannot tell why the truck stopped, it
-does not guess.
+**CONFIRMED as a requirement, 30 August 2026.** A power-down is not always the end of a
+day — the driver shuts off for fuel, for a break, at a dock. A day closed by mistake at
+11am is worse than a question.
+
+**The governing rule is asymmetric, because the costs are.** A close proposed too late
+costs one prompt. A close applied too early ends the day while commitments are outstanding,
+and recovering means reopening — which re-reasons the whole sequence. So:
+
+> **Never close while any commitment is outstanding.**
+
+#### Signals that a power-down is *not* the end of the day
+
+Any one of these is sufficient, and each is deterministic:
+
+| Signal | Why it settles the question |
+|---|---|
+| **Stops remain incomplete** | The plan is not finished. Nothing else needs checking. |
+| **Position matches a planned stop** | This is the dock. It is a stop, and its dwell is already planned. |
+| **Allocations remain undelivered** | A commitment is outstanding. |
+
+#### Signals consistent with the end of the day
+
+| State | Reading | Action |
+|---|---|---|
+| All stops complete **and** at or near home base | End of day, near-certain | Propose the close. One confirmation. |
+| All stops complete, **away** from home base | Ambiguous — the driver may be repositioning home | **Ask.** Do not assume. |
+| Stops remain, for any reason | Not the end of the day | **Say nothing.** It is a stop. |
+
+The third row matters as much as the first. A system that asks *"are you done?"* at every
+fuel stop is a system the driver learns to dismiss, and the one time it matters they will
+dismiss that too. **Silence is the correct behaviour for an ordinary stop.**
+
+#### Who asks
+
+JOE is dialog assistant until final arrival, so JOE is where the question belongs. **JOE
+asks; the driver answers; the driver closes.** JOE proposing a close is within its
+authority. JOE closing a day is not.
+
+#### When it cannot tell
+
+**UNKNOWN applies here as everywhere: an unrecognised power-down is not an event.** No
+close, no guess, no prompt. The day stays open, and the driver can close it deliberately
+whenever they choose.
+
+A day left open costs nothing — it is closed on the next power-down at home, or by hand.
+A day closed wrongly costs a reopen and a re-reasoned sequence.
 
 ### Resequencing is an exception, and it has an owner
 
@@ -501,10 +542,10 @@ three commitment questions this section previously left open are answered in §8
 
 **What genuinely remains open:**
 
-- **How does the close distinguish parked-for-the-day from stopped-for-fuel?** The ruling is
-  that power down closes the day; the edge case is not yet specified. See §7b.
 - **Does an allocation rescheduled twice need a limit?** Freight that keeps missing its day
   is a signal, not a routine.
+- **What counts as "near" home base** for the close check — a radius, a geofence, or the
+  driver's own judgement?
 - **HOS:** is 10,000 lb payload or gross vehicle weight rating? Still unanswered, and it
   decides whether FMCSA hours-of-service applies at all.
 
@@ -522,6 +563,8 @@ three commitment questions this section previously left open are answered in §8
 | Who may close a day early? | **JOE may propose it; the driver closes it** — usually by powering down at final arrival. JOE is dialog assistant until then. |
 | Does a sequence survive a reopen? | **No.** Volatile and unknowable, so the day returns to PROPOSED and is re-reasoned. The old sequence is history, never a default. |
 | Is the avoid list overridable? | **Yes, blocking-but-overridable** — but the remedy is the USE list. Arrears paid moves the broker back to USE. |
+| Does a power-down always end the day? | **No.** Fuel, breaks and docks all power down. Never close while a commitment is outstanding; ask when ambiguous; stay silent at an ordinary stop. |
+| Is 10,000 lb payload or GVWR? | **Payload.** So combined GVWR is materially higher, and the profile defaults to hours-of-service applying. |
 
 ## 9. Evaluation fields this adds
 

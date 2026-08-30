@@ -123,6 +123,13 @@ human's lock, never of the engine's proposal.
 not a button to remember. JOE serves as dialog assistant until then and **may propose** a
 close; it may never perform one.
 
+**A power-down is not always the end of a day** — fuel, breaks and docks all power down.
+The rule is asymmetric because the costs are: a close proposed late costs one prompt; a
+close applied early ends the day with commitments outstanding. So **never close while any
+commitment is outstanding**, ask when all stops are done but the van is away from home, and
+**stay silent at an ordinary stop** — a system that asks at every fuel stop is one the
+driver learns to dismiss.
+
 **Locking records the approved execution plan. It does not create an immutable schedule.**
 A materially better opportunity may justify reopening it — Dispatch proposes, the operator
 authorizes. See the BOOK IT DANO rule in `DISPATCH_CAPACITY_PLAN_DOCTRINE.md` §4.
