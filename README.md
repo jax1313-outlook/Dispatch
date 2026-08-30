@@ -121,6 +121,8 @@ is the full map.
 | [`docs/readiness/OPERATIONAL_PROOF.md`](docs/readiness/OPERATIONAL_PROOF.md) | What is proven, and what is not |
 | [`docs/readiness/KNOWN_LIMITATIONS.md`](docs/readiness/KNOWN_LIMITATIONS.md) | What is broken, missing or assumed |
 | [`docs/connectors/PROVIDER_INSERTION.md`](docs/connectors/PROVIDER_INSERTION.md) | Adding an external provider |
+| [`docs/DISPATCH_CAPACITY_PLAN_DOCTRINE.md`](docs/DISPATCH_CAPACITY_PLAN_DOCTRINE.md) | Day plans stay recommendations; locking is not immutability; BOOK IT DANO |
+| [`docs/DISPATCH_ACCESSORIAL_POLICY_DOCTRINE.md`](docs/DISPATCH_ACCESSORIAL_POLICY_DOCTRINE.md) | Accessorials are versioned Library policies, not settings |
 | [`cin_lite/README.md`](cin_lite/README.md) | CIN-Lite, layer by layer |
 
 ---
@@ -135,3 +137,33 @@ not as a default, a seed, or a test fixture.
 **Status words are fixed.** `LIVE`, `CONFIGURED`, `UNCONFIGURED`, `SIMULATED`, `UNAVAILABLE`,
 `MANUAL`, `ABSENT`, `UNVERIFIED`. No synonyms, no invented variants — several modules
 validate this and will raise on one.
+
+### Lineage recovery and the evaluation foundation
+
+Recovered from the L1-COS v1 lineage (v1.0 / v1.0.1 / v1.1 / v1.3 / v1.3.1 / v1.3.3 /
+v1.3.2 GOLD) and specified against it. **No single v1 build is complete** — Dispatch inherits
+the constitution, the business matrix and the workflow chassis from different builds.
+
+Findings: [recovery findings](docs/DISPATCH_GOLD_RECOVERY_FINDINGS.md) ·
+[scoring lineage](docs/DISPATCH_SCORING_LINEAGE_AND_RECOVERY.md) ·
+[component register](docs/DISPATCH_COMPONENT_RECOVERY_REGISTER.md) (61 entries) ·
+[build sequence](docs/DISPATCH_AGGRESSIVE_BUILD_SEQUENCE.md)
+
+Doctrine: [deterministic chassis](docs/DISPATCH_DETERMINISTIC_CHASSIS.md) ·
+[system independence](docs/DISPATCH_SYSTEM_INDEPENDENCE_DOCTRINE.md) ·
+[configurable business policy](docs/DISPATCH_CONFIGURABLE_BUSINESS_POLICY_DOCTRINE.md) ·
+[fact and provenance](docs/DISPATCH_FACT_AND_PROVENANCE_DOCTRINE.md) ·
+[state transitions](docs/DISPATCH_STATE_TRANSITION_RULES.md) ·
+[adapter boundaries](docs/DISPATCH_EXTERNAL_ADAPTER_BOUNDARIES.md)
+
+Specification, not implemented: [policy profile](docs/DISPATCH_POLICY_PROFILE_SPEC.md) ·
+[load arrangement](docs/DISPATCH_LOAD_ARRANGEMENT_SPEC.md) ·
+[evaluation engine](docs/DISPATCH_EVALUATION_ENGINE_SPEC.md) ·
+[decision matrix](docs/DISPATCH_DECISION_MATRIX_SPEC.md) ·
+[filter/score/sort](docs/DISPATCH_FILTER_SCORE_SORT_SPEC.md) ·
+[recommendation](docs/DISPATCH_RECOMMENDATION_MODEL_SPEC.md) ·
+[confidence](docs/DISPATCH_CONFIDENCE_MODEL_SPEC.md) ·
+[override rules](docs/DISPATCH_OVERRIDE_RULES_SPEC.md) ·
+[profile examples](docs/DISPATCH_POLICY_PROFILE_EXAMPLES.md) ·
+[PR summary](docs/DISPATCH_POLICY_FOUNDATION_PR_SUMMARY.md)
+
