@@ -85,6 +85,9 @@ Governing principles. Binding on all code in this repository.
   fabrication; every fact carries its origin; UNKNOWN is a value.
 - **[State Transition Rules](docs/DISPATCH_STATE_TRANSITION_RULES.md)** — one record, one
   identity; atomic human gates.
+- **[Capacity Plan Doctrine](docs/DISPATCH_CAPACITY_PLAN_DOCTRINE.md)** — day plans stay
+  recommendations until a human approves; locking is not immutability; the BOOK IT DANO
+  rule.
 - **[External Adapter Boundaries](docs/DISPATCH_EXTERNAL_ADAPTER_BOUNDARIES.md)** — the
   UNAVAILABLE contract, and what an adapter may never do.
 

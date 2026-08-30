@@ -74,40 +74,36 @@ DELIVERY  picked_up, in_transit, at_delivery, delivered, completed, archived
 `in_transit` is the hinge and belongs to DELIVERY: once loaded, the only question that
 matters is where it has to be.
 
-### One truck, one route, one driver, one record — CONFIRMED requirement
+### The Capacity Plan carries the day; the Mission Record carries the promise
 
-**The van's capacity may be shared across several brokers.** Six pallets can be one
-broker's whole vehicle, or six brokers at one pallet each — the LTL and courier model, and
-the normal case.
+**The van's capacity may be shared across several brokers** — the LTL and courier model,
+and the normal case. Ownership fragments; execution does not.
 
-Ownership of the freight fragments. **Execution does not.** The record follows execution:
+Governed by `DISPATCH_CAPACITY_PLAN_DOCTRINE.md`:
 
 ```
-Mission Record
-├── Stop Sequence        ordered stops, windows, dwell
-├── Capacity Allocation  who owns which pallets, and their commitment
-├── Stakeholders         brokers, customers, facilities
-├── Documents            BOL, POD, rate confirmations
-├── Communications       what was said, to whom, when
-└── Archive
+Capacity Plan   vehicle day, stop sequence, capacity allocation,
+                route sequence, remaining capacity
+      ▲
+      │  Mission Records attach to Capacity Plans.
+      │  Capacity Plans do not replace Mission Records.
+      │
+Mission Record  the commitment - per broker, may span multiple days
 ```
 
-**Everything in this document holds literally.** One record, one identity, progressively
-enriched, never copied. Six brokers do not make six records.
+**Everything in this document holds unchanged.** One record, one identity, progressively
+enriched, never copied, dual numbering intact. The Capacity Plan does not replace the
+Mission Record — it schedules it.
 
-Dual numbering moves down a level rather than breaking: the Mission Record carries our
-mission number, and **each allocation carries its broker's load number**, preserved
-exactly. With one broker aboard it reads exactly as before.
-
-Three consequences:
-
-- **Capacity binds at the record**, because the van is one van. Two pallets are never over
-  capacity alone — only against what the day already holds. The question is not "does this
-  fit the van" but **"does this still fit Tuesday"**.
-- **Resequencing is not an override.** Stop order was never promised; time windows were.
-  Any sequence honouring every allocation's window and the vehicle's capacity is permitted.
+- **The driver sees one Capacity Plan**: one day, one route, one vehicle.
+- **Each stakeholder sees only their own Mission** — their load number, documents, proof,
+  tracking and status. No broker sees another's freight.
+- **A Mission Record may span days.** Pickup Tuesday, delivery Thursday is a valid Mission
+  lifecycle, and is why the commitment could not live inside a single day's plan.
+- **Capacity binds at the Capacity Plan.** Two pallets are never over capacity alone, only
+  against what the day already holds.
 - **Every day starts and ends at home base.** Overnight stays are avoided as a matter of
-  business model — repositioning to Jacksonville is worth more than staying out.
+  business model.
 
 ### LOCK DAY — a third activation event
 
@@ -127,10 +123,16 @@ human's lock, never of the engine's proposal.
 not a button to remember. JOE serves as dialog assistant until then and **may propose** a
 close; it may never perform one.
 
-**Reopening a locked day returns it to PROPOSED.** What changes between a lock and a reopen
-is unknowable, so the sequence is re-reasoned from current facts rather than carried
-forward. The previous sequence is kept as history, never as a default. See
-`DISPATCH_LOAD_ARRANGEMENT_SPEC.md` §7b.
+**Locking records the approved execution plan. It does not create an immutable schedule.**
+A materially better opportunity may justify reopening it — Dispatch proposes, the operator
+authorizes. See the BOOK IT DANO rule in `DISPATCH_CAPACITY_PLAN_DOCTRINE.md` §4.
+
+**Reopening returns the day to PROPOSED**, and the sequence is re-reasoned from current
+facts rather than carried forward — what changed while the day was locked is unknowable.
+The previous sequence is kept as history, never as a default.
+
+**A high score is never authority to change the plan.** Only human authority reopens a day,
+approves a revised plan, and authorizes the resulting changes.
 
 ### Multi-stop breaks the two-phase assumption — RECOMMENDATION
 

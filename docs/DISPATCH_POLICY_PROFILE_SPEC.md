@@ -74,10 +74,12 @@ text editor. A settings screen comes later and edits this same file.
       "trailer_length_ft": null,
       "pallet_positions": 6,
       "weight_limit_lbs": 10000,
+      "weight_limit_basis": "payload",
       "cube_capacity_ft3": null,
       "temp_control": false,
       "liftgate": false,
       "operating_radius_miles": 500,
+      "hos_applies": true,
       "hours_available_default": 11.0,
       "drive_speed_mph": 50,
       "fuel_cost_per_mile": 0.62

@@ -146,107 +146,83 @@ current Dispatch money figure is linehaul-only.
 measure; it cannot see dwell. Two loads at $3.50/mile are not comparable when one has two
 stops and the other has seven.
 
-## 7a. One truck, one route, one driver, one Mission Record
+## 7a. The Capacity Plan and the Mission Record
 
-**CONFIRMED by the operator, 30 August 2026.** The van's capacity may be filled by one
-broker or split six ways. Ownership of the freight fragments. **Execution does not.**
+**SUPERSEDED HERE.** The day/commitment model is now governed by
+`DISPATCH_CAPACITY_PLAN_DOCTRINE.md`, issued by the operator on 30 August 2026. This
+section states only what this document needs; the doctrine is authoritative.
+
+```
+Capacity Plan  (the vehicle day - execution planning)
+├── Vehicle Day          ├── Route Sequence
+├── Stop Sequence        └── Remaining Capacity
+├── Capacity Allocation
+        ▲
+        │  Mission Records attach to Capacity Plans.
+        │  Capacity Plans do not replace Mission Records.
+        │
+Mission Record  (the commitment - per broker, may span days)
+```
+
+The van's capacity may be filled by one broker or split six ways:
 
 ```
 Pallet 1  Broker A        One Truck
 Pallet 2  Broker B        One Route
 Pallet 3  Broker C   ►    One Driver
-Pallet 4  Broker D        One Mission Record
+Pallet 4  Broker D        One Capacity Plan
 Pallet 5  Broker E
 Pallet 6  Broker F
 ```
 
-### The structure
+Ownership fragments; execution does not. **The Capacity Plan carries that unity** — the
+driver sees one day, one route, one plan. **The Mission Record carries the commitment**,
+durable, per broker, and able to span days: pickup Tuesday, delivery Thursday is a valid
+Mission lifecycle.
 
-```
-Mission Record
-├── Stop Sequence          ordered stops, windows, dwell, priority
-├── Capacity Allocation    who owns which pallets, and their commitment
-├── Stakeholders           brokers, customers, facilities, contacts
-├── Documents              BOL, POD, rate confirmations, photos
-├── Communications         what was said, to whom, when
-└── Archive                the closed record
-```
+An earlier draft of this section collapsed the two into a single record. That lost the
+commitment's identity the moment freight moved to another day, which is exactly the case
+the operator confirmed happens.
 
-This is the operator's model, adopted. It replaces an earlier draft in which the per-broker
-commitment was the top-level record and the day was a container above it. **That was
-backwards.** The driver has one day, one route, one vehicle; a model that makes them
-assemble six records to see it is a model that fails the Driver First test.
+### Where the numbers live
 
-**The Mission Record doctrine holds literally.** One record, one identity, progressively
-enriched, never copied. Six brokers do not make six records.
+The Mission Record carries our mission number **and** its broker's load number, preserved
+exactly — dual numbering is unchanged. The Capacity Plan carries no broker's number,
+because it belongs to no broker.
 
-### Capacity Allocation is where the commitment lives
-
-Fragmented ownership has to live somewhere, and it lives here — not as a sibling record,
-but as a first-class component of this one.
+### Capacity Allocation
 
 ```
 allocation
-  allocation_id       durable, ours
-  broker              stakeholder reference
-  load_number         THEIR number, preserved exactly
+  allocation_id       durable, ours - survives moving to another day
+  mission_ref         the commitment this serves
   pallets, weight, cube
-  stops               which stops in the sequence serve this allocation
-  rate, accessorials
+  stops               which stops in the sequence serve it
   status              committed / delivered / rescheduled / failed
-  accepted_at, accepted_by
 ```
 
-**This resolves the dual-numbering problem.** The Mission Record carries our mission
-number. Each allocation carries its broker's load number. With one broker aboard it reads
-exactly like a single load; with six, nothing is lost and nothing is invented.
+**CONFIRMED:** allocations move between days keeping their identity, and their history
+remains traceable.
 
-### The one thing this model must handle — RECOMMENDATION
+### Stakeholder visibility
 
-The operator confirmed that **capacity can be returned the next day or rescheduled** when a
-business is closed. If the Mission Record is the day, then Broker C moving to Thursday
-means their commitment leaves Tuesday's record and appears in Thursday's — and the history
-of that commitment fragments across two records. Asking *"what happened with Broker C's
-load?"* would mean searching both.
-
-**Proposed fix: the allocation identity is durable and moves as itself.**
-
-```
-allocation_id A-4471   Tuesday   status: rescheduled -> moved to Thursday
-allocation_id A-4471   Thursday  status: delivered
-```
-
-Same `allocation_id`, same broker, same load number, appearing on the second day's Mission
-Record with its history intact. The allocation is re-pointed, not re-created.
-
-This gives commitment durability **without** a second top-level record type. The driver
-still sees one record per day; the broker's commitment still has one continuous history.
-
-**Flagging it as a proposal rather than a decision** — it is the only part of this
-structure that is mine rather than the operator's, and it exists to solve a problem the
-operator's own rescheduling ruling creates.
+Each stakeholder sees only **their** load number, documents, proof artifacts, tracking and
+status. Six brokers may share a vehicle day; **none sees another's freight, rate, customer
+or stops.** The Capacity Plan is the operator's view and never a stakeholder's.
 
 ### What binds where
 
-| Belongs to the Mission Record | Belongs to an Allocation |
+| Capacity Plan | Mission Record |
 |---|---|
 | The vehicle, the driver, the day | The broker and their load number |
-| The stop sequence and its order | Which stops serve this freight |
-| Total weight / cube / pallet utilization | This freight's share of it |
-| Return to home base | — |
-| The locked calendar | Invoicing and payment |
+| Stop sequence and its order | What was promised, and when |
+| Total weight / cube / pallet utilization | This freight's share |
+| Return to home base | Invoicing and payment |
+| The locked calendar | Documents and proof for that stakeholder |
 
-**Capacity binds at the Mission Record**, because the van is one van. An allocation of two
-pallets is never over capacity by itself — only against what the day already holds. The
-real question remains *"does this still fit Tuesday?"*
-## 7a-i. Superseded
-
-An earlier draft of this document made the per-broker commitment the top-level record and
-the day a container above it, called a Run. **The operator's model replaces it.** Execution
-is not fragmented, so the record is not either: one truck, one route, one driver, one
-Mission Record, with ownership held in Capacity Allocation.
-
-The word *Run* does not appear below. The day **is** the Mission Record.
+**Capacity binds at the Capacity Plan**, because the van is one van. Two pallets are never
+over capacity alone — only against what the day already holds. The question is not "does
+this fit the van" but **"does this still fit Tuesday?"**
 
 ## 7b. The lifecycle of a day — CONFIRMED by the operator, 30 August 2026
 
@@ -322,6 +298,15 @@ approve or send. Nothing here extends what JOE is permitted to do.
 
 **The operator's ruling: this is volatile and unknowable.** The variety of things that can
 happen between a lock and a reopen cannot be enumerated in advance.
+
+**Reopening is not only reactive.** Under the BOOK IT DANO rule, Dispatch continuously
+evaluates new opportunities against the locked day and **proposes** reopening when one
+materially improves it. A locked plan exists to support profitable operations — it must not
+prevent the operator from taking a materially superior load merely because the day was
+already approved. See `DISPATCH_CAPACITY_PLAN_DOCTRINE.md` §4.
+
+Both plans are shown side by side. The approved plan stands until a human authorizes the
+change; presenting only the proposal would make a recommendation into an act.
 
 **So the design does not try.** When the unknowable is the input, guessing is the failure
 mode, not the solution.
