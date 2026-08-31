@@ -254,10 +254,6 @@ def compute_route_risk(load: dict) -> str:
         reason = load.get("hard_stop_reason", "unspecified")
         risks.append(f"hard stop: {reason}")
 
-    detention = load.get("detention_history", "")
-    if detention and "high" in detention.lower():
-        risks.append("high detention history")
-
     # "unknown broker" is deliberately not a risk. Trust is assumed until broken
     # and is not a program variable, so an unfamiliar broker is an unfamiliar
     # broker -- not a hazard the engine has detected.
@@ -267,6 +263,39 @@ def compute_route_risk(load: dict) -> str:
     if len(risks) == 1:
         return f"Medium — {risks[0]}"
     return f"High — {'; '.join(risks)}"
+
+
+def compute_capacity_flags(load: dict) -> list[str]:
+    """What this load costs in capacity, as opposed to what it earns.
+
+    Detention lives here rather than in risk or score. The operator's ruling is
+    that detention is not a penalty -- his accessorial policy prices it to make
+    waiting worth its lost capacity, so a load likely to sit is not a worse load.
+
+    What it does consume is a **day**:
+
+        "If shipper warns about possible detention and accepts rate then that is
+        a dedicated day to that load even if there is no detention."
+
+    That is an allocation against the Capacity Plan, not an opinion about the
+    load's quality. A flag says plan for it; it never lowers the score.
+    """
+    flags: list[str] = []
+
+    detention = load.get("detention_history", "")
+    if detention and "high" in detention.lower():
+        flags.append(
+            "Expect detention - plan a dedicated day. Detention is billable and "
+            "does not reduce this load's score."
+        )
+
+    if load.get("detention_warned"):
+        flags.append(
+            "Shipper warned of possible detention - treat as a dedicated day "
+            "whether or not it occurs."
+        )
+
+    return flags
 
 
 def compute_economic_opportunity(load: dict) -> str:
@@ -386,9 +415,11 @@ def compute_score(load: dict) -> int:
         op_risk -= 4
     if load.get("hard_stop"):
         op_risk -= 5
-    detention = load.get("detention_history", "")
-    if detention and "high" in detention.lower():
-        op_risk -= 3
+    # Detention is deliberately not deducted here. It cost 3 points, which
+    # treated a load likely to sit as a worse load -- and at the operator's own
+    # opportunity-cost rate it is not one: "detention is free money even if it is
+    # 3 hours". What detention does cost is a day, and that is reported by
+    # compute_capacity_flags rather than hidden in the score.
     score += max(op_risk, 0)
 
     # Broker trust is deliberately absent. It was worth 10 points of 100 here --
@@ -413,6 +444,7 @@ def score_load(load: dict) -> dict:
         "tomorrow_position_risk": compute_tomorrow_position_risk(load),
         "hos_risk": compute_hos_risk(load),
         "route_risk": compute_route_risk(load),
+        "capacity_flags": compute_capacity_flags(load),
         "economic_opportunity_flag": compute_economic_opportunity(load),
         "deadhead_miles": compute_deadhead_miles(load),
         "fuel_estimate": compute_fuel_estimate(load),

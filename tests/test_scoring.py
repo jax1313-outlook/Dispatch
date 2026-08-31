@@ -158,10 +158,18 @@ class TestRouteRisk:
         result = compute_route_risk(load)
         assert "outside operating radius" in result.lower()
 
-    def test_high_detention(self):
+    def test_high_detention_is_not_a_risk(self):
+        """Rewritten, not weakened: this asserted a rule the operator overruled.
+
+        Detention used to be a hazard and a 3-point deduction. His accessorial
+        policy prices it to make waiting worth its lost capacity, so a load
+        likely to sit is not a worse load. It survives as a capacity flag -- see
+        test_detention_is_not_a_penalty.py -- and the assertion here is inverted
+        so the behaviour is still pinned, to the opposite answer.
+        """
         load = {**SAMPLE_LOAD_GOOD, "detention_history": "High - avg 3 hours"}
-        result = compute_route_risk(load)
-        assert "detention" in result.lower()
+        assert "detention" not in compute_route_risk(load).lower()
+        assert compute_route_risk(load) == compute_route_risk(SAMPLE_LOAD_GOOD)
 
     def test_an_unknown_broker_is_not_a_risk(self):
         """Rewritten, not weakened: this asserted a rule the operator overruled.
