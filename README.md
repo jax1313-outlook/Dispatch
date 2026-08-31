@@ -144,6 +144,9 @@ Recovered from the L1-COS v1 lineage (v1.0 / v1.0.1 / v1.1 / v1.3 / v1.3.1 / v1.
 v1.3.2 GOLD) and specified against it. **No single v1 build is complete** — Dispatch inherits
 the constitution, the business matrix and the workflow chassis from different builds.
 
+[Sweep and the opportunity board](docs/DISPATCH_SWEEP_AND_OPPORTUNITY_BOARD.md) — settled
+design direction for the Operations Portal: qualified opportunities, not freight listings.
+
 Acceptance criteria the engine is built against and judged by:
 [scoring acceptance criteria](docs/DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md) — fifteen
 categories, three of them hard stops.

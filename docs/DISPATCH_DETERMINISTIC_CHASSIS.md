@@ -73,14 +73,53 @@ that cannot legally or physically be run does not become runnable at 95 points.
 100 (`op_risk -= 5`). A load carrying `hard_stop=True` can still score in the 90s and sort
 to the top of the list. There is no veto anywhere in the module.
 
-## 4. Recommendation is not authority
+## 4. Two classes of decision, and only one of them is the operator's
 
-The engine may say `PURSUE`. That is a sentence, not an act. Nothing moves until a human
-acts on it, and the record stores *who* acted and *when* — never *that the system decided*.
+**CORRECTED, 30 August 2026, by the operator.** An earlier draft of this section said
+flatly that *the system may recommend; it may not decide*. That is contradicted by the code
+it governs — the engine plainly decides that a load fails a hard stop, that it scores 94,
+and that two loads pair better than either alone. A doctrine its own program violates on
+every run is a doctrine nobody can apply.
 
-Inherited directly from current Dispatch doctrine and from the JOE authority model:
-**the system may recommend; it may not approve, decide, or state that an action has been
-taken.**
+The distinction is not whether Dispatch decides. It is **what kind of decision**.
+
+| **Dispatch decides — operational** | **The operator decides — authority** |
+|---|---|
+| This load fails a hard stop | Take it |
+| This load scores 94 | Do not take it |
+| These two loads make a stronger pair | Commit |
+| This creates a schedule conflict | Override |
+| This preserves reserve capacity | Change policy |
+| This is noise | Lock the day |
+
+The left column is **analysis**: reproducible, explainable, and wrong in ways that can be
+found and fixed. The right column is **commitment**: it binds the operator to a broker,
+spends his week, and cannot be undone by finding a bug.
+
+**Recommendation remains a sentence, not an act.** `PURSUE` moves nothing. The record
+stores *who* acted and *when* — never *that the system decided*. What changes is that this
+is now stated as one rule about commitment rather than a blanket claim about deciding that
+the engine breaks a hundred times a day.
+
+## 4a. JOE is a business function, not an AI component
+
+**The operator's realisation, and it reframes the whole question:**
+
+> *"I was unconsciously treating JOE as an AI component. You were treating JOE as a business
+> function."*
+
+JOE is the **co-driver**. A co-driver does not merely relay messages — they research,
+evaluate, compare, organise, recommend and communicate. Every one of those is operational
+work, and none is authority.
+
+So the question was never *should JOE do opportunity reasoning*. Opportunity reasoning is a
+job the operator performs today, which makes it co-driver work by definition. The real
+question, in his words:
+
+> *"How much of Mike's opportunity evaluation process can be formalized into Dispatch?"*
+
+That is a question about **formalising expertise**, not about expanding software authority —
+and it is where the design work actually is.
 
 ## 5. Human interest is not commitment
 

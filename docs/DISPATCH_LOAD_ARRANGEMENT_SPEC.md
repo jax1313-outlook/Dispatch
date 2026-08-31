@@ -338,8 +338,9 @@ and presents alternative proposals or rerouting.** The human decides.
 driver hits a closed dock  ─►  JOE proposes alternatives  ─►  human chooses  ─►  re-lock
 ```
 
-JOE proposing routes is within its authority — it recommends and it may not decide,
-approve or send. Nothing here extends what JOE is permitted to do.
+JOE proposing routes is co-driver work: researching, comparing and recommending are
+operational, and none of them commits anything. Nothing here extends what JOE is permitted
+to do. See `DISPATCH_DETERMINISTIC_CHASSIS.md` §4 for the operational/authority split.
 
 ### Reopening a locked day — CONFIRMED, 30 August 2026
 
