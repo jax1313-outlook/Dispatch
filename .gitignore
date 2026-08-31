@@ -54,3 +54,7 @@ proof/
 .dispatch/
 dispatch_launcher_logs/
 run/
+
+# The operator's live Policy Profile is theirs and machine-specific.
+# The shipped defaults (config/policy_profile.default.json) ARE committed.
+config/policy_profile.json

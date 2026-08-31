@@ -20,20 +20,15 @@ import math
 import re
 from datetime import datetime, timedelta
 
-_HOME_BASE = "Jacksonville, FL"
+from dispatch.policy import active_profile
 
-_OPERATING_RADIUS_MILES = 500
-
-_FUEL_COST_PER_MILE = 0.62
-
-_HOURS_AVAILABLE_DEFAULT = 11.0
-_DRIVE_SPEED_MPH = 50
-
-_RATE_PER_MILE_FLOOR = 2.50
-_RATE_PER_MILE_GOOD = 4.00
-_RATE_PER_MILE_EXCELLENT = 5.50
-
-_WEIGHT_LIMIT_LBS = 45000
+# The nine business values this module used to hold as constants now live in the
+# Policy Profile, where the operator can edit them without a programmer. See
+# dispatch/policy.py and docs/DISPATCH_CONFIGURABLE_BUSINESS_POLICY_DOCTRINE.md.
+#
+# `_p()` is the profile in force. It is cached, so reading it per call is cheap,
+# and an edit followed by `set_active_profile(None)` takes effect immediately.
+_p = active_profile
 
 _KNOWN_DISTANCES: dict[tuple[str, str], float] = {
     ("jacksonville", "savannah"): 140,
@@ -80,7 +75,7 @@ def _lookup_distance(origin: str, destination: str) -> float | None:
 
 
 def _estimate_deadhead(destination: str) -> float | None:
-    return _lookup_distance(destination, _HOME_BASE)
+    return _lookup_distance(destination, _p().home_base)
 
 
 def _parse_window_start(window: str | None) -> datetime | None:
@@ -116,7 +111,7 @@ def _parse_window_end(window: str | None) -> datetime | None:
 
 def compute_position_impact(load: dict) -> str:
     destination = load.get("destination", "")
-    distance_home = _lookup_distance(destination, _HOME_BASE)
+    distance_home = _lookup_distance(destination, _p().home_base)
     if distance_home is None:
         return "Unknown"
     if distance_home <= 50:
@@ -130,13 +125,13 @@ def compute_position_impact(load: dict) -> str:
 
 def compute_return_home(load: dict) -> str:
     destination = load.get("destination", "")
-    distance_home = _lookup_distance(destination, _HOME_BASE)
+    distance_home = _lookup_distance(destination, _p().home_base)
     delivery_end = _parse_window_end(load.get("delivery_window"))
 
     if distance_home is None:
         return "Unknown"
 
-    drive_hours = distance_home / _DRIVE_SPEED_MPH
+    drive_hours = distance_home / _p().drive_speed_mph
 
     if distance_home <= 50:
         return "Same-day return likely"
@@ -145,11 +140,11 @@ def compute_return_home(load: dict) -> str:
         hour = delivery_end.hour
         if hour <= 14 and drive_hours <= 6:
             return f"Same-day return possible ({drive_hours:.1f}h drive)"
-        if drive_hours <= _HOURS_AVAILABLE_DEFAULT:
+        if drive_hours <= _p().hours_available_default:
             return f"Next-day return ({drive_hours:.1f}h drive)"
         return f"Multi-day return ({drive_hours:.1f}h drive, layover required)"
 
-    if drive_hours <= _HOURS_AVAILABLE_DEFAULT:
+    if drive_hours <= _p().hours_available_default:
         return f"Return requires {drive_hours:.1f}h drive"
     return f"Extended return — {drive_hours:.1f}h drive, layover required"
 
@@ -157,12 +152,12 @@ def compute_return_home(load: dict) -> str:
 def compute_tomorrow_position_risk(load: dict) -> str:
     destination = load.get("destination", "")
     dest_city = _normalize_city(destination)
-    home_city = _normalize_city(_HOME_BASE)
+    home_city = _normalize_city(_p().home_base)
 
     if not dest_city:
         return "Unknown"
 
-    distance_home = _lookup_distance(destination, _HOME_BASE)
+    distance_home = _lookup_distance(destination, _p().home_base)
     if distance_home is None:
         return "Unknown — destination not in route database"
 
@@ -202,7 +197,7 @@ def compute_hos_risk(load: dict) -> str:
     if distance is None:
         return "Unknown"
 
-    drive_time = distance / _DRIVE_SPEED_MPH
+    drive_time = distance / _p().drive_speed_mph
     pickup_start = _parse_window_start(load.get("pickup_window"))
     delivery_end = _parse_window_end(load.get("delivery_window"))
 
@@ -210,7 +205,7 @@ def compute_hos_risk(load: dict) -> str:
         base = "Low"
     elif drive_time <= 8:
         base = "Medium"
-    elif drive_time <= _HOURS_AVAILABLE_DEFAULT:
+    elif drive_time <= _p().hours_available_default:
         base = "High"
     else:
         return (
@@ -230,7 +225,7 @@ def compute_route_risk(load: dict) -> str:
     risks = []
 
     weight = load.get("weight_lbs")
-    if weight and weight > _WEIGHT_LIMIT_LBS:
+    if weight and weight > _p().weight_limit_lbs:
         risks.append(f"overweight ({weight:,} lbs)")
 
     equip_match = load.get("equipment_match", "")
@@ -238,7 +233,7 @@ def compute_route_risk(load: dict) -> str:
         risks.append("equipment mismatch")
 
     distance = load.get("distance_miles")
-    if distance and distance > _OPERATING_RADIUS_MILES:
+    if distance and distance > _p().operating_radius_miles:
         risks.append(f"outside operating radius ({distance} mi)")
 
     if load.get("hard_stop"):
@@ -268,7 +263,7 @@ def compute_economic_opportunity(load: dict) -> str:
         return "Unknown — rate or distance data missing"
 
     rpm = rate / distance
-    fuel_cost = distance * _FUEL_COST_PER_MILE
+    fuel_cost = distance * _p().fuel_cost_per_mile
     net = rate - fuel_cost
     margin_pct = (net / rate) * 100 if rate > 0 else 0
 
@@ -280,11 +275,11 @@ def compute_economic_opportunity(load: dict) -> str:
     else:
         deadhead_note = ""
 
-    if rpm >= _RATE_PER_MILE_EXCELLENT:
+    if rpm >= _p().rate_per_mile.excellent:
         flag = "Strong"
-    elif rpm >= _RATE_PER_MILE_GOOD:
+    elif rpm >= _p().rate_per_mile.good:
         flag = "Good"
-    elif rpm >= _RATE_PER_MILE_FLOOR:
+    elif rpm >= _p().rate_per_mile.floor:
         flag = "Acceptable"
     else:
         flag = "Below floor"
@@ -301,7 +296,7 @@ def compute_fuel_estimate(load: dict) -> float | None:
     if distance is None:
         return None
     deadhead = compute_deadhead_miles(load) or 0
-    return round((distance + deadhead) * _FUEL_COST_PER_MILE, 2)
+    return round((distance + deadhead) * _p().fuel_cost_per_mile, 2)
 
 
 def compute_score(load: dict) -> int:
@@ -321,23 +316,23 @@ def compute_score(load: dict) -> int:
     distance = load.get("distance_miles")
     if rate and distance and distance > 0:
         rpm = rate / distance
-        if rpm >= _RATE_PER_MILE_EXCELLENT:
+        if rpm >= _p().rate_per_mile.excellent:
             score += 30
-        elif rpm >= _RATE_PER_MILE_GOOD:
-            score += 30 * ((rpm - _RATE_PER_MILE_FLOOR) / (_RATE_PER_MILE_EXCELLENT - _RATE_PER_MILE_FLOOR))
+        elif rpm >= _p().rate_per_mile.good:
+            score += 30 * ((rpm - _p().rate_per_mile.floor) / (_p().rate_per_mile.excellent - _p().rate_per_mile.floor))
             score = min(score, 30)
-        elif rpm >= _RATE_PER_MILE_FLOOR:
-            score += 15 * ((rpm - _RATE_PER_MILE_FLOOR) / (_RATE_PER_MILE_GOOD - _RATE_PER_MILE_FLOOR))
+        elif rpm >= _p().rate_per_mile.floor:
+            score += 15 * ((rpm - _p().rate_per_mile.floor) / (_p().rate_per_mile.good - _p().rate_per_mile.floor))
         # below floor: 0 points
     elif rate is None:
         score += 5  # unknown rate gets small benefit of the doubt
 
     if distance:
-        if distance <= _OPERATING_RADIUS_MILES:
-            route_score = 20 * (1 - (distance / (_OPERATING_RADIUS_MILES * 1.5)))
+        if distance <= _p().operating_radius_miles:
+            route_score = 20 * (1 - (distance / (_p().operating_radius_miles * 1.5)))
             score += max(route_score, 5)
         else:
-            over = distance - _OPERATING_RADIUS_MILES
+            over = distance - _p().operating_radius_miles
             penalty = min(over / 500, 1.0) * 15
             score += max(5 - penalty, 0)
 
@@ -350,7 +345,7 @@ def compute_score(load: dict) -> int:
         score += 7
 
     dest = load.get("destination", "")
-    dist_home = _lookup_distance(dest, _HOME_BASE)
+    dist_home = _lookup_distance(dest, _p().home_base)
     if dist_home is not None:
         if dist_home <= 50:
             score += 15
@@ -365,7 +360,7 @@ def compute_score(load: dict) -> int:
 
     weight = load.get("weight_lbs")
     op_risk = 10.0
-    if weight and weight > _WEIGHT_LIMIT_LBS:
+    if weight and weight > _p().weight_limit_lbs:
         op_risk -= 4
     if load.get("hard_stop"):
         op_risk -= 5
@@ -394,7 +389,7 @@ def _requested_drive_hours(load: dict) -> float:
     distance = load.get("distance_miles")
     if not distance:
         return 0.0
-    return float(distance) / _DRIVE_SPEED_MPH
+    return float(distance) / _p().drive_speed_mph
 
 
 def assess_capacity(load: dict, capacity) -> "CapacityAssessment":
@@ -430,7 +425,7 @@ def score_load(load: dict, capacity=None) -> dict:
     load that cannot be run does not become a lower score, it becomes blocked.
 
     Without `capacity` the result is exactly what it has always been. The weight
-    check inside `compute_route_risk` then falls back to `_WEIGHT_LIMIT_LBS`,
+    check inside `compute_route_risk` then falls back to `_p().weight_limit_lbs`,
     which describes a Class 8 tractor-trailer and is not authoritative for any
     other asset. When `capacity` is supplied, `capacity_blocked` is the
     authoritative answer on whether the load fits.
