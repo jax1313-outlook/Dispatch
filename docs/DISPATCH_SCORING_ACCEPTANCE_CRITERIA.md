@@ -335,30 +335,34 @@ this business is, which the planner obeys when it lays out a day.
 **Consequence:** `reserve_capacity.protect_return_home` was drafted as a boolean, which framed
 the business model as an option. It should be the operating pattern instead.
 
-### Broker trust — **not a category. Not the program's business.**
+### Trust is not a program variable
 
-**CONFIRMED:**
+**CONFIRMED, and stated as a rule:**
 
+> *"Trust is not a program variable."*
 > *"Trust is assumed until broken, and is not a program issue. It is a human issue."*
 
-This closes the last gap, and it does so by removing the question rather than answering it.
-**The engine does not assess trust.** It does not rate brokers, compute a reliability figure,
-or decide who is dependable. That judgement is the operator's, formed the way such judgements
-are actually formed — by being paid, or not.
+**There is no trust in the data model.** No trust score, no reliability rating, no confidence
+in a broker, no derived state that means "dependable". Not a field, not a weight, not an
+inference. The engine has no opinion about anyone.
 
-**The avoid list is not a contradiction of this.** The list is a decision the operator has
-already made; the engine merely honours it. Enforcing a human's recorded decision is mechanical.
-Forming the judgement behind it is not, and the engine does neither the forming nor the
-reviewing.
+An earlier draft of this section still framed the avoid list as the engine *honouring a trust
+decision*. That framing is wrong and is removed: it kept trust as a concept the program
+reasons about, one level of indirection away from scoring it.
 
-| The engine may | The engine may not |
+**The avoid list is a list.** It is a policy value naming brokers the operator will not haul
+for, exactly like the territory `hard_no` list names states. It carries no trust semantics,
+supports no trust arithmetic, and implies nothing the engine can generalise. A name is on it or
+it is not, and only the operator puts it there or takes it off.
+
+| Exists | Does not exist, and will not be added |
 |---|---|
-| Refuse a load from a broker on the avoid list | Decide who belongs on the avoid list |
-| Report that a broker settled and is now on USE | Score a broker's reliability |
-| Warn that the same broker was overridden three times | Prefer a known broker over an unknown one |
+| A list of broker names in the Policy Profile | A trust score, rating, tier or index |
+| A blocking condition when a name matches | Any inference from payment history |
+| The operator editing that list | Any preference for a known broker over an unknown one |
 
-**The fifteen categories are therefore complete.** Nothing is missing; the sixteenth was never
-a category.
+**Trust is formed by being paid, or not being paid. That happens to a person, not in a
+database.**
 
 ### CONFIRMED DEFECT: the engine scores broker trust today
 

@@ -118,6 +118,13 @@ three times, the profile is probably wrong. The system should say so — *"you h
 overridden HARD-NO for TX three times; consider moving TX to expansion"* — rather than
 keep blocking something the operator has repeatedly decided is fine.
 
+**It counts overrides; it never draws a conclusion about a broker.** For the avoid list the
+warning says the *list* may be out of date. It does not say the broker is now trustworthy, and
+it must never be worded that way: **trust is not a program variable**, and a counter that
+implies one is the same inference wearing arithmetic. Whether a broker belongs on that list is
+formed by being paid or not being paid, which happens to a person and not in a database. See
+`DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md` §3.
+
 That is the override log earning its keep: it turns friction into a signal that the policy
 needs updating.
 
