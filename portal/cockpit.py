@@ -341,6 +341,30 @@ def arrive_for(record: dict, mode: str) -> dict:
     }
 
 
+#: Placeholders that are honest on a screen and dishonest in a document. The
+#: cockpit shows "—" or "Not stated" so a driver can see the field exists and is
+#: unanswered. A broker reading the same words in a notice sees an answer.
+_SCREEN_PLACEHOLDERS = {"—", "-", "Not stated", "Unknown", "None"}
+
+
+def _blank_if_placeholder(value: str) -> str:
+    return "" if str(value).strip() in _SCREEN_PLACEHOLDERS else str(value)
+
+
+def _contact(record: dict, *keys) -> str:
+    """A name and a number if both are known, whichever exists if only one.
+
+    Empty when neither is recorded. A contact line reading "Unknown" on a notice
+    to a broker is worse than a blank -- it looks like the field was answered.
+    """
+    parts = []
+    for key in keys:
+        value = record.get(key)
+        if value not in (None, "", []) and str(value) not in parts:
+            parts.append(str(value))
+    return " · ".join(parts)
+
+
 def arrival_notice_for(record: dict, mode: str) -> dict:
     """What the notice will say, so the driver can see it before it goes.
 
@@ -355,13 +379,23 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
         "phase": phase,
         "title": f"{phase} ARRIVAL NOTICE",
         "opening": "Truck arrived on site.",
+        # The operator's capture list, in his order. Broker and the two points of
+        # contact matter to the reader: a notice that proves a truck arrived is
+        # only useful to somebody who can act on it, and the facility contact is
+        # who the broker rings when he wants it confirmed from the other end.
         "fields": [
             {"key": "Date", "value": record.get("arrived_date") or ""},
             {"key": "Time", "value": record.get("arrived_time") or ""},
             {"key": "GPS", "value": record.get(f"{end}_gps") or ""},
-            {"key": "Facility", "value": ends[end]["place"]},
+            {"key": "Facility", "value": _blank_if_placeholder(ends[end]["place"])},
             {"key": "Load Number", "value": (record.get("numbers") or {}).get("load_label") or ""},
-            {"key": "Description", "value": cargo_for(record)["description"]},
+            {"key": "Description",
+             "value": _blank_if_placeholder(cargo_for(record)["description"])},
+            {"key": "Broker", "value": broker_for(record)["name"]},
+            {"key": "Broker POC", "value": _contact(record, "broker_poc", "broker_contact",
+                                                    "broker_phone")},
+            {"key": "Facility POC", "value": _contact(record, f"{end}_poc",
+                                                      f"{end}_contact", f"{end}_phone")},
         ],
         "follows_intro": ("The following documents will be provided upon completion "
                           f"of {phase.lower()} activities:"),

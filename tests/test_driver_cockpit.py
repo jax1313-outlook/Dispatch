@@ -371,6 +371,22 @@ class TestTheArrivalNotice:
         assert any("invoice" in f for f in follows)
         assert any("pod" in f or "bol" in f for f in follows)
 
+    def test_it_carries_the_broker_and_both_points_of_contact(self):
+        """A notice proving a truck arrived is only useful to someone who can
+        act on it, and the facility contact is who the broker rings to confirm
+        it from the other end."""
+        keys = [f["key"] for f in cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)["fields"]]
+        assert "Broker" in keys
+        assert "Broker POC" in keys
+        assert "Facility POC" in keys
+
+    def test_a_contact_joins_a_name_and_a_number(self):
+        record = dict(RECORD, broker_poc="D. Reyes")
+        notice = cockpit.arrival_notice_for(record, cockpit.MODE_PICKUP)
+        value = {f["key"]: f["value"] for f in notice["fields"]}["Broker POC"]
+        assert "D. Reyes" in value
+        assert "555-0199" in value
+
     def test_it_leaves_unknown_fields_empty_rather_than_inventing_them(self):
         """This text reaches a broker under the company name."""
         notice = cockpit.arrival_notice_for({"numbers": {}, "card_data": {}},
@@ -378,6 +394,15 @@ class TestTheArrivalNotice:
         values = {f["key"]: f["value"] for f in notice["fields"]}
         assert values["Date"] == ""
         assert values["GPS"] == ""
+        assert values["Broker POC"] == ""
+
+    def test_screen_placeholders_never_reach_the_notice(self):
+        """The cockpit shows an em dash so the driver sees an unanswered field.
+        A broker reading the same character in a document sees an answer."""
+        notice = cockpit.arrival_notice_for({"numbers": {}, "card_data": {}},
+                                            cockpit.MODE_PICKUP)
+        for field in notice["fields"]:
+            assert field["value"] not in ("—", "Not stated", "Unknown")
 
     def test_it_reports_whether_it_actually_went(self):
         notice = cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)
