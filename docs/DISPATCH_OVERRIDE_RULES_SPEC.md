@@ -66,35 +66,38 @@ Evaluation's answer to: *what would a human have to accept to proceed with this?
 Shown to the operator before they act, so the cost of proceeding is visible up front
 rather than discovered halfway through.
 
-## 5. Conditions that cannot be overridden
+## 5. Conditions that cannot be overridden — RESOLVED, and the list is empty
 
-**RECOMMENDATION — for Mike's ruling.**
+**Ruled by the operator, 30 August 2026.** An earlier draft proposed a `NOT PERMITTED` class:
+conditions that exist, disqualify, and may never be overridden — endorsement not held, over
+legal weight, over pallet positions, deadline passed.
 
-Some conditions should probably not be overridable at all, because no reason string makes
-them safe:
+**That class no longer exists**, because those conditions no longer reach the override stage.
+The operator ruled that an impossibility is **filtered**: the load is not selected for
+evaluation at all.
 
-| Candidate | Why |
-|---|---|
-| Endorsement not held (hazmat, tanker) | Legal. Cannot be overridden by wanting to. |
-| Over legal weight | Legal. |
-| **Over pallet positions** | **Physical. Six pallets do not become seven.** |
-| Deadline already passed | Physical. The load is gone. |
+> *"If out of range — skip. The loads are not to be selected for evaluation."*
+> *"These follow the same rule as weight and cube."* — of endorsements and deadlines
 
-And some clearly should remain overridable:
+**A condition nobody may overrule never reaches the point of being overridden.** It never
+entered the lane. See `DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md` §1.
+
+That removes a redundancy this specification carried: two mechanisms for impossibility, a
+filter and an unoverrideable block, where one was enough.
+
+### What remains overridable
+
+Everything in the blocking stage, because everything left there is a **business judgement**:
 
 | Overridable | Why |
 |---|---|
+| Below floor | A price judgement — he may take a thin load for a reason the engine cannot see |
+| Broker on the avoid list | Business trust. Arrears get paid; the remedy is the USE list |
 | Territory `hard_no` | A business judgement, and business judgements change |
-| Operator hard stop | The operator set it; the operator may lift it |
-| Over the *operator's* weight preference | A preference, not a law |
+| Operator hard stop | He set it; he may lift it |
 
-The distinction proposed is **legal or physical impossibility versus business preference**.
-A `NOT PERMITTED` condition is one where the override would be a lie rather than a
-judgement.
-
-**This needs your ruling.** A system that permits overriding a hazmat endorsement it does
-not hold is a system that can help its operator break the law. A system that permits
-nothing is a system that gets worked around.
+**Every blocking condition is overridable, with a recorded reason.** There are no exceptions,
+and that is now a property of the design rather than a list to maintain.
 
 ## 6. Configuration
 
@@ -102,12 +105,7 @@ nothing is a system that gets worked around.
 "override_rules": {
   "require_reason": true,
   "minimum_reason_length": 15,
-  "not_permitted": [
-    "endorsement_not_held",
-    "over_legal_weight",
-    "over_pallet_positions",
-    "deadline_passed"
-  ],
+  "_comment_not_permitted": "Deliberately absent. An impossibility is filtered before evaluation, so it never reaches an override. See DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md section 1.",
   "expire_after_days": null,
   "warn_on_repeat_override": 3
 }
@@ -119,6 +117,13 @@ nothing is a system that gets worked around.
 three times, the profile is probably wrong. The system should say so — *"you have
 overridden HARD-NO for TX three times; consider moving TX to expansion"* — rather than
 keep blocking something the operator has repeatedly decided is fine.
+
+**It counts overrides; it never draws a conclusion about a broker.** For the avoid list the
+warning says the *list* may be out of date. It does not say the broker is now trustworthy, and
+it must never be worded that way: **trust is not a program variable**, and a counter that
+implies one is the same inference wearing arithmetic. Whether a broker belongs on that list is
+formed by being paid or not being paid, which happens to a person and not in a database. See
+`DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md` §3.
 
 That is the override log earning its keep: it turns friction into a signal that the policy
 needs updating.
