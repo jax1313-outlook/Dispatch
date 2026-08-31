@@ -35,6 +35,15 @@ _RATE_PER_MILE_EXCELLENT = 5.50
 
 _WEIGHT_LIMIT_LBS = 45000
 
+#: The highest score `compute_score` can produce, and the figure the
+#: classification bands are calibrated against.
+#:
+#: It is 90 rather than 100 because broker confidence held ten points and was
+#: removed -- trust is not a program variable. The ceiling is named here because
+#: it was previously implicit in a clamp, which is how removing a dimension could
+#: silently rescale every band without anything failing.
+MAX_SCORE = 90
+
 _KNOWN_DISTANCES: dict[tuple[str, str], float] = {
     ("jacksonville", "savannah"): 140,
     ("jacksonville", "atlanta"): 345,
@@ -245,19 +254,48 @@ def compute_route_risk(load: dict) -> str:
         reason = load.get("hard_stop_reason", "unspecified")
         risks.append(f"hard stop: {reason}")
 
-    detention = load.get("detention_history", "")
-    if detention and "high" in detention.lower():
-        risks.append("high detention history")
-
-    broker_intel = load.get("broker_intelligence", "")
-    if broker_intel and ("unknown" in broker_intel.lower() or "no history" in broker_intel.lower()):
-        risks.append("unknown broker")
+    # "unknown broker" is deliberately not a risk. Trust is assumed until broken
+    # and is not a program variable, so an unfamiliar broker is an unfamiliar
+    # broker -- not a hazard the engine has detected.
 
     if not risks:
         return "Low — no risk factors identified"
     if len(risks) == 1:
         return f"Medium — {risks[0]}"
     return f"High — {'; '.join(risks)}"
+
+
+def compute_capacity_flags(load: dict) -> list[str]:
+    """What this load costs in capacity, as opposed to what it earns.
+
+    Detention lives here rather than in risk or score. The operator's ruling is
+    that detention is not a penalty -- his accessorial policy prices it to make
+    waiting worth its lost capacity, so a load likely to sit is not a worse load.
+
+    What it does consume is a **day**:
+
+        "If shipper warns about possible detention and accepts rate then that is
+        a dedicated day to that load even if there is no detention."
+
+    That is an allocation against the Capacity Plan, not an opinion about the
+    load's quality. A flag says plan for it; it never lowers the score.
+    """
+    flags: list[str] = []
+
+    detention = load.get("detention_history", "")
+    if detention and "high" in detention.lower():
+        flags.append(
+            "Expect detention - plan a dedicated day. Detention is billable and "
+            "does not reduce this load's score."
+        )
+
+    if load.get("detention_warned"):
+        flags.append(
+            "Shipper warned of possible detention - treat as a dedicated day "
+            "whether or not it occurs."
+        )
+
+    return flags
 
 
 def compute_economic_opportunity(load: dict) -> str:
@@ -313,7 +351,15 @@ def compute_score(load: dict) -> int:
         Equipment match:    15 points
         Position value:     15 points
         Operational risk:   10 points
-        Broker confidence:  10 points
+
+    The maximum is therefore **90, not 100**. Broker confidence held the missing
+    ten and was removed rather than redistributed: reassigning them would mean
+    deciding that rate quality is now worth 33 instead of 30, which is a business
+    judgement and belongs to the operator, not to this change.
+
+    Band thresholds were set against a 100-point maximum and have not been
+    revisited. They are policy values and are reviewed when the weights move into
+    the Policy Profile.
     """
     score = 0.0
 
@@ -369,24 +415,21 @@ def compute_score(load: dict) -> int:
         op_risk -= 4
     if load.get("hard_stop"):
         op_risk -= 5
-    detention = load.get("detention_history", "")
-    if detention and "high" in detention.lower():
-        op_risk -= 3
+    # Detention is deliberately not deducted here. It cost 3 points, which
+    # treated a load likely to sit as a worse load -- and at the operator's own
+    # opportunity-cost rate it is not one: "detention is free money even if it is
+    # 3 hours". What detention does cost is a day, and that is reported by
+    # compute_capacity_flags rather than hidden in the score.
     score += max(op_risk, 0)
 
-    broker = load.get("broker_intelligence", "")
-    if broker:
-        bl = broker.lower()
-        if "reliable" in bl or "completed" in bl:
-            score += 10
-        elif "unknown" in bl or "no history" in bl:
-            score += 3
-        else:
-            score += 5
-    else:
-        score += 5
+    # Broker trust is deliberately absent. It was worth 10 points of 100 here --
+    # 10 for a broker the string-match believed reliable, 3 for one it did not
+    # recognise -- which is the engine forming a judgement the operator has ruled
+    # is his, and penalising an unknown broker 7 points when trust is assumed
+    # until broken. See docs/DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md section 3:
+    # trust is not a program variable. It is not scored, inferred or stored.
 
-    return max(0, min(100, round(score)))
+    return max(0, min(MAX_SCORE, round(score)))
 
 
 def _requested_drive_hours(load: dict) -> float:
@@ -441,6 +484,7 @@ def score_load(load: dict, capacity=None) -> dict:
         "tomorrow_position_risk": compute_tomorrow_position_risk(load),
         "hos_risk": compute_hos_risk(load),
         "route_risk": compute_route_risk(load),
+        "capacity_flags": compute_capacity_flags(load),
         "economic_opportunity_flag": compute_economic_opportunity(load),
         "deadhead_miles": compute_deadhead_miles(load),
         "fuel_estimate": compute_fuel_estimate(load),
