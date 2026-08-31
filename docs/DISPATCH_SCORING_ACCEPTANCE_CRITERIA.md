@@ -292,20 +292,57 @@ Strong Match  ·  Recommended  ·  Review Required  ·  Not Recommended
 
 ---
 
-## 3. Missing from the fifteen
+## 3. Two rules with no category — one answered, one open
 
-Two rules the operator has already given elsewhere have no category, and would otherwise live
-nowhere:
+### Return to home base — **not a category, and not a constraint**
 
-**Broker trust.** The avoid list is a blocking condition — nonpayment, *"I would simply work
-for free."* It is not among the fifteen. Either it becomes a category or it is a standing
-blocking condition outside them; it cannot be neither.
+**CONFIRMED:**
 
-**Return to home base.** *"Every day starts and ends at home base"* is stated as a hard
-constraint, not a preference. Category 14 mentions "repositioning philosophy", which
-understates it. With deadhead retired as a dimension, this is the constraint that replaces it.
+> *"It is not a restraint. It is business model. It is the same model used by tanker
+> companies. All tanks are returned to home base. No different here."*
 
----
+This answers a question I asked wrongly. I asked where the constraint should live; it is not a
+constraint. **It is the shape of a day**, not a property of a load.
+
+The difference is operational, not semantic:
+
+| A constraint | A business model |
+|---|---|
+| Checked per load | Assumed for every day |
+| Can be violated, flagged, overridden | Defines what a day *is* |
+| Belongs in scoring | Belongs in the Capacity Plan |
+
+Every Capacity Plan starts and ends at home base. Loads are evaluated *within* that frame; the
+frame is not evaluated against them. **The engine never scores a load for returning home,
+because every load returns home.**
+
+This is the same reasoning that retired deadhead. If the truck comes home regardless, coming
+home is a constant, and scoring a constant only adds noise.
+
+### It is still policy, because it is not universal
+
+A tanker fleet returns to base. A long-haul operator runs out for a week and sleeps in the
+cab. Both are business models, and the engine must serve either — so the *pattern* is a Policy
+Profile value that the Capacity Plan reads when it builds a day:
+
+```json
+"operating_pattern": "daily_return_to_base"
+```
+
+Not a score. Not a threshold. Not a toggle to be switched off mid-week. A statement of what
+this business is, which the planner obeys when it lays out a day.
+
+**Consequence:** `reserve_capacity.protect_return_home` was drafted as a boolean, which framed
+the business model as an option. It should be the operating pattern instead.
+
+### Broker trust — **still open**
+
+The avoid list is a blocking condition on the operator's own ruling — nonpayment, *"I would
+simply work for free."* It has no category among the fifteen.
+
+It cannot be a filter: an avoided broker who settles up becomes a USE broker, so it is exactly
+the overrideable business judgement that blocking exists for. But it is scored nowhere and
+named nowhere, and a rule that lives in no category lives nowhere.
 
 ## 4. UNRESOLVED — not guessed
 
