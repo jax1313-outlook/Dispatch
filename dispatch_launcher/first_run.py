@@ -623,6 +623,31 @@ def ensure_desktop_shortcut(report: FirstRunReport) -> None:
 # ── the whole path ───────────────────────────────────────────────────────────
 
 
+def check_one_copy(report: FirstRunReport) -> None:
+    """Warn when more than one Dispatch is on the machine. BLOCK-04.
+
+    Never fatal. A second copy is worth knowing about, not a reason to refuse to
+    start -- and a startup check that can stop Dispatch is one that will
+    eventually stop it wrongly. The search is bounded; if it cannot run at all,
+    that is recorded as an unknown rather than as "one copy".
+    """
+    from dispatch_launcher import copies
+
+    try:
+        others = copies.find_copies()
+    except Exception as exc:  # noqa: BLE001 -- a check must never break a start
+        report.add("One copy of Dispatch", True,
+                   f"Could not check for other copies ({exc}). This is not a "
+                   "statement that there is only one.")
+        return
+
+    if not others:
+        report.add("One copy of Dispatch", True, copies.describe(others=[]))
+        return
+
+    report.add("One copy of Dispatch", True, copies.describe(others=others))
+
+
 def first_run(*, open_browser: bool = True) -> FirstRunReport:
     """Make a fresh machine ready, start Dispatch, and open it. In that order.
 
@@ -636,6 +661,7 @@ def first_run(*, open_browser: bool = True) -> FirstRunReport:
     report = FirstRunReport()
 
     report.add("Dispatch folder", True, str(locations.repo_root()))
+    check_one_copy(report)
 
     ensure_secrets(report)
     if not ensure_flask(report):
