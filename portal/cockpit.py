@@ -219,47 +219,58 @@ def transmission_status() -> str:
 def completion_effect(record: dict, mode: str) -> dict:
     """What ticking the last box actually sets in motion.
 
-    **The operator's rule:** the final green check on the delivery checklist
-    activates the automatic email of the final document packet to the broker.
+    **The operator's rule, corrected 31 August 2026.** The final checklist item
+    does **not** send anything. It triggers:
 
-    That is not the system deciding to send. The driver completing a checklist
-    *is* the authorising act, and it is the one place in this screen where a
-    human action reaches outside the truck -- so it is stated on the drawer in
-    plain words *before* the last box is ticked, not discovered afterwards.
+        Publisher packet creation -> JOE review -> Outlook draft creation
 
-    What this function will not do is claim a send. Transmission is not wired in
-    this build. A screen that reports "sent to broker" when nothing left the
-    machine is the precise failure the no-fabrication rule exists to prevent,
-    and it is worse here than usual: the driver would drive away believing the
-    broker had his paperwork.
+    **Human review and Outlook send remain required.** The driver completing the
+    checklist prepares the packet; a person still reads it and a person still
+    presses send.
+
+    An earlier version of this said the last check "sends the final document
+    packet to the broker". That overstated it in the direction that matters: it
+    told the driver an outbound act had been authorised by ticking a box, when
+    what he actually authorised was preparation. The distinction is the whole
+    authority model -- Dispatch performs operational work, a human commits.
+
+    Nothing here claims a send, and nothing here claims a draft exists when the
+    machinery to make one is not wired.
     """
     status = document_status(record, mode)
     sendable = transmission_status()
 
     if mode != MODE_DELIVERY:
         return {
-            "arms_send": False,
+            "prepares_packet": False,
             "consequence": "Completing this checklist records pickup readiness.",
+            "chain": "",
             "transmission": sendable,
             "note": "",
         }
 
+    chain = "Publisher packet -> JOE review -> Outlook draft. You review and send."
+
     if status["complete"]:
         return {
-            "arms_send": True,
-            "consequence": "Delivery complete. The final document packet goes to the broker.",
+            "prepares_packet": True,
+            "consequence": ("Delivery complete. The final document packet is prepared "
+                            "for review and sending."),
+            "chain": chain,
             "transmission": sendable,
-            "note": ("Transmission is UNCONFIGURED in this build, so the packet is "
-                     "prepared and held. Nothing has been sent."
+            "note": ("Packet preparation is UNCONFIGURED in this build. Nothing has "
+                     "been prepared, drafted or sent."
                      if sendable != "CONFIGURED" else
-                     "The packet has been prepared for sending."),
+                     "Review the draft in Outlook, then send it yourself."),
         }
 
     return {
-        "arms_send": False,
-        "consequence": ("The last check sends the final document packet to the broker."),
+        "prepares_packet": False,
+        "consequence": ("The last check prepares the final document packet for "
+                        "review and sending."),
+        "chain": chain,
         "transmission": sendable,
-        "note": "Nothing is sent until every item is checked.",
+        "note": "Nothing is prepared until every item is checked.",
     }
 
 

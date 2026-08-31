@@ -194,11 +194,12 @@
       <div class="checklist-status">STATUS: {{ d.status }}</div>
 
       {# What the last check does, said before it is ticked rather than
-         discovered afterwards. This is the one control on the screen whose
-         consequence leaves the truck. #}
+         discovered afterwards. It prepares a packet; it does not send one.
+         Human review and Outlook send remain required. #}
       {% if d.effect %}
-      <div class="completion-effect {{ 'armed' if d.effect.arms_send else '' }}">
+      <div class="completion-effect {{ 'armed' if d.effect.prepares_packet else '' }}">
         <div class="effect-line">{{ d.effect.consequence }}</div>
+        {% if d.effect.chain %}<div class="effect-chain">{{ d.effect.chain }}</div>{% endif %}
         {% if d.effect.note %}<div class="effect-note">{{ d.effect.note }}</div>{% endif %}
         {% if d.effect.transmission != 'CONFIGURED' %}
           <div class="effect-status">TRANSMISSION: {{ d.effect.transmission }}</div>

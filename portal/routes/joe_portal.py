@@ -109,8 +109,13 @@ def portal_home():
     chosen = (active or missions)
     if chosen:
         newest = sorted(chosen, key=lambda r: r.get("accepted_at", ""))[-1]
+        # Carry the requested mode through the redirect. Without this a link or
+        # bookmark to /portal?view=DELIVERY silently lands in CURRENT -- the
+        # driver presses a saved shortcut and gets a different screen than the
+        # one he saved, with nothing to tell him why.
         return redirect(url_for("joe_portal.portal_mission",
-                                record_id=newest["id"]))
+                                record_id=newest["id"],
+                                view=cockpit.normalise_mode(request.args.get("view"))))
     return render_template(
         "joe_portal.html",
         record={"id": "", "title": "No mission accepted",
@@ -126,10 +131,14 @@ def portal_home():
         next_action="Run a sweep, then accept a load",
         route_risk="", facility_intel="",
         actions_for=_actions_for,
+        # The empty state honours the requested mode too. Hard-coding it here
+        # meant a link to ?view=DELIVERY landed in CURRENT whenever no mission
+        # was accepted -- the screen quietly disagreeing with the URL that
+        # opened it, which is the same defect as the dropped redirect above.
         **cockpit.cockpit_context(
             {"id": "", "title": "No mission accepted",
              "numbers": mission_svc.display_numbers({}), "card_data": {}},
-            cockpit.MODE_IN_TRANSIT),
+            cockpit.normalise_mode(request.args.get("view"))),
     )
 
 

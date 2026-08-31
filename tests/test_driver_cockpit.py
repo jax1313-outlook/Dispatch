@@ -8,6 +8,8 @@ that closes itself while he is counting pallets on a dock.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from portal import cockpit
@@ -202,42 +204,60 @@ class TestItInventsNothing:
 
 
 class TestWhatTheLastCheckDoes:
-    """Completing the delivery checklist sends the packet to the broker.
+    """Completing the delivery checklist PREPARES a packet. It does not send one.
 
-    The driver ticking the final box is the authorising act -- so the screen
-    says what the box will do *before* it is ticked, and never claims a send
-    that did not happen.
+        Publisher packet creation -> JOE review -> Outlook draft creation
+
+    Human review and Outlook send remain required. The driver ticking the last
+    box authorises preparation, and the screen must say exactly that -- an
+    earlier version claimed it sent to the broker, which told him an outbound
+    act had happened when it had not.
     """
 
     def _complete(self):
         return dict(RECORD, artifacts_held=list(cockpit.DELIVERY_ARTIFACTS))
 
-    def test_an_incomplete_list_arms_nothing(self):
+    def test_an_incomplete_list_prepares_nothing(self):
         effect = cockpit.completion_effect(RECORD, cockpit.MODE_DELIVERY)
-        assert effect["arms_send"] is False
-        assert "nothing is sent" in effect["note"].lower()
+        assert effect["prepares_packet"] is False
+        assert "nothing is prepared" in effect["note"].lower()
 
-    def test_it_warns_before_the_last_box_not_after(self):
-        """The consequence is stated while the list is still incomplete."""
+    def test_it_says_what_the_last_box_does_before_it_is_ticked(self):
         effect = cockpit.completion_effect(RECORD, cockpit.MODE_DELIVERY)
-        assert "broker" in effect["consequence"].lower()
+        assert "prepares" in effect["consequence"].lower()
+        assert "review" in effect["consequence"].lower()
 
-    def test_completing_delivery_arms_the_send(self):
+    def test_completing_delivery_prepares_the_packet(self):
         effect = cockpit.completion_effect(self._complete(), cockpit.MODE_DELIVERY)
-        assert effect["arms_send"] is True
-        assert "broker" in effect["consequence"].lower()
+        assert effect["prepares_packet"] is True
+        assert "prepared" in effect["consequence"].lower()
 
-    def test_completing_pickup_does_not_send_to_the_broker(self):
+    def test_it_never_says_it_sent_anything(self):
+        """The correction that matters. Preparation is not transmission."""
+        for record in (RECORD, self._complete()):
+            effect = cockpit.completion_effect(record, cockpit.MODE_DELIVERY)
+            words = " ".join([effect["consequence"], effect["note"], effect["chain"]]).lower()
+            assert "sends the" not in words
+            assert "sent to the broker" not in words
+            assert "has been sent" not in words
+
+    def test_it_names_the_chain_and_who_finishes_it(self):
+        """Publisher -> JOE -> Outlook draft, and a human presses send."""
+        chain = cockpit.completion_effect(self._complete(), cockpit.MODE_DELIVERY)["chain"]
+        assert "publisher" in chain.lower()
+        assert "joe review" in chain.lower()
+        assert "outlook draft" in chain.lower()
+        assert "you review and send" in chain.lower()
+
+    def test_completing_pickup_does_not_prepare_a_broker_packet(self):
         held = dict(RECORD, artifacts_held=list(cockpit.PICKUP_ARTIFACTS))
         effect = cockpit.completion_effect(held, cockpit.MODE_PICKUP)
-        assert effect["arms_send"] is False
+        assert effect["prepares_packet"] is False
 
-    def test_it_never_claims_a_send_that_did_not_happen(self):
-        """The failure this guards against is specific and bad: a driver who
-        reads 'sent to broker' and drives away believing the paperwork went."""
+    def test_it_does_not_claim_a_draft_that_was_never_made(self):
         effect = cockpit.completion_effect(self._complete(), cockpit.MODE_DELIVERY)
         if effect["transmission"] != "CONFIGURED":
-            assert "nothing has been sent" in effect["note"].lower()
+            assert "nothing has been prepared" in effect["note"].lower()
 
     def test_it_reports_transmission_rather_than_assuming_it(self):
         assert cockpit.transmission_status() in (
@@ -246,4 +266,34 @@ class TestWhatTheLastCheckDoes:
     def test_the_effect_reaches_the_checklist_drawer(self):
         docs = [d for d in cockpit.drawers_for(self._complete(), cockpit.MODE_DELIVERY)
                 if d["key"] == "documents"][0]
-        assert docs["effect"]["arms_send"] is True
+        assert docs["effect"]["prepares_packet"] is True
+
+
+class TestTheModeSurvivesTheRedirect:
+    """/portal redirects to the mission being worked. The mode must ride along.
+
+    Without this a bookmark to /portal?view=DELIVERY lands in CURRENT: the
+    driver presses a saved shortcut, gets a different screen than the one he
+    saved, and nothing on it explains why.
+    """
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    @pytest.mark.parametrize("mode", ["PICKUP", "DELIVERY", "CURRENT"])
+    def test_the_requested_mode_survives(self, client, mode):
+        html = client.get("/portal?view=" + mode, follow_redirects=True).get_data(as_text=True)
+        selected = re.search(
+            r'data-mode="([A-Z_]+)"[^>]*aria-selected="true"', html, re.S)
+        assert selected and selected.group(1) == mode
+
+    def test_delivery_reaches_the_delivery_checklist(self, client):
+        """The end-to-end symptom that exposed it."""
+        html = client.get("/portal?view=DELIVERY", follow_redirects=True).get_data(as_text=True)
+        assert "prepares the final document packet" in html

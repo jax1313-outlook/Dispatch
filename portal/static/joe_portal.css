@@ -294,6 +294,10 @@
 }
 .completion-effect.armed { border-left-color: var(--go); background: #0d2418; }
 .effect-line { font-size: 0.98rem; line-height: 1.45; }
+.effect-chain {
+    margin-top: 8px; font-size: 0.82rem; letter-spacing: 0.02em;
+    color: var(--ink); font-family: ui-monospace, Consolas, monospace;
+}
 .effect-note { margin-top: 6px; font-size: 0.85rem; color: var(--ink-dim); line-height: 1.45; }
 .effect-status {
     margin-top: 8px; font-size: 0.75rem; font-weight: 700;
