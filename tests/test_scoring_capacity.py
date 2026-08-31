@@ -14,6 +14,12 @@ from dispatch.scoring import assess_capacity, score_load
 
 OBSERVED_AT = "2026-07-30T06:00:00+00:00"
 
+#: What `score_load` returns with no capacity supplied.
+#:
+#: `capacity_flags` joined this set when detention moved out of the score: it is
+#: derived from the load alone and does not need a DynamicCapacity, so it belongs
+#: to the base result. The point these tests pin is unchanged -- passing a
+#: capacity adds only capacity-specific keys and alters none of these.
 SCORE_KEYS = {
     "position_impact",
     "return_home_required",
@@ -23,6 +29,7 @@ SCORE_KEYS = {
     "economic_opportunity_flag",
     "deadhead_miles",
     "fuel_estimate",
+    "capacity_flags",
     "score",
 }
 
