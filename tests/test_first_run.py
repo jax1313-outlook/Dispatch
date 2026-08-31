@@ -412,6 +412,7 @@ class TestFirstRun:
         assert report.ok is True
         assert [step.name for step in report.steps] == [
             "Dispatch folder",
+            "One copy of Dispatch",
             "Security settings",
             "Flask",
             "Sign-in PIN",
