@@ -335,14 +335,56 @@ this business is, which the planner obeys when it lays out a day.
 **Consequence:** `reserve_capacity.protect_return_home` was drafted as a boolean, which framed
 the business model as an option. It should be the operating pattern instead.
 
-### Broker trust — **still open**
+### Broker trust — **not a category. Not the program's business.**
 
-The avoid list is a blocking condition on the operator's own ruling — nonpayment, *"I would
-simply work for free."* It has no category among the fifteen.
+**CONFIRMED:**
 
-It cannot be a filter: an avoided broker who settles up becomes a USE broker, so it is exactly
-the overrideable business judgement that blocking exists for. But it is scored nowhere and
-named nowhere, and a rule that lives in no category lives nowhere.
+> *"Trust is assumed until broken, and is not a program issue. It is a human issue."*
+
+This closes the last gap, and it does so by removing the question rather than answering it.
+**The engine does not assess trust.** It does not rate brokers, compute a reliability figure,
+or decide who is dependable. That judgement is the operator's, formed the way such judgements
+are actually formed — by being paid, or not.
+
+**The avoid list is not a contradiction of this.** The list is a decision the operator has
+already made; the engine merely honours it. Enforcing a human's recorded decision is mechanical.
+Forming the judgement behind it is not, and the engine does neither the forming nor the
+reviewing.
+
+| The engine may | The engine may not |
+|---|---|
+| Refuse a load from a broker on the avoid list | Decide who belongs on the avoid list |
+| Report that a broker settled and is now on USE | Score a broker's reliability |
+| Warn that the same broker was overridden three times | Prefer a known broker over an unknown one |
+
+**The fifteen categories are therefore complete.** Nothing is missing; the sixteenth was never
+a category.
+
+### CONFIRMED DEFECT: the engine scores broker trust today
+
+`dispatch/scoring.py`, in `compute_score`:
+
+```python
+broker = load.get("broker_intelligence", "")
+if broker:
+    bl = broker.lower()
+    if "reliable" in bl or "completed" in bl:
+        score += 10
+    elif "unknown" in bl or "no history" in bl:
+        score += 3
+```
+
+Ten points of a hundred for a broker the engine believes is reliable, three for one it does not
+recognise. That is the engine forming exactly the judgement the operator has ruled is his — and
+it fails his rule in the specific direction that matters: **an unknown broker is penalised
+seven points, when trust is supposed to be assumed until broken.**
+
+It also decides by string-matching English prose, so a broker described as *"no history of
+late payment"* scores as though they had no history at all.
+
+**This comes out.** Broker reliability is not a scoring dimension. Whether a *replacement*
+exists — a plain fact such as "first time with this broker" shown beside the load without a
+number attached — is a presentation question, not a scoring one.
 
 ## 4. UNRESOLVED — not guessed
 
