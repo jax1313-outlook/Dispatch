@@ -22,20 +22,33 @@ preferences, hard stops and weighting.
 
 ---
 
-## 1. Physical fit is a FILTER, not a score
+## 1. Impossibility is a FILTER, not a score
 
-Three categories decide whether a load is a candidate at all.
+**The principle, confirmed twice by the operator:** a condition the operator *cannot overrule*
+removes the load from evaluation. It is not scored, not shown, and not offered as a decision.
+
+A condition he *could* reasonably overrule — a business judgement — stays a blocking condition:
+visible, disqualified, overridable with a recorded reason.
 
 **CONFIRMED, and it defines the two terms:**
 
 > *"I take cube as size and weight as heft measured by scale. If they are out of range for
 > equipment then they are no opportunity at all."*
 
-| # | Category | Measures | Out of range |
-|---|---|---|---|
-| 7 | **Cube** | **size** — the space the freight occupies | **Filtered. Not evaluated.** |
-| 9 | **Weight** | **heft** — what it reads on a scale | **Filtered. Not evaluated.** |
-| 8 | **Equipment compatibility** | what the equipment can do | **Filtered. Not evaluated.** |
+| Condition | Kind | Out of range |
+|---|---|---|
+| **Cube** — size, the space it occupies | physical | **Filtered. Not evaluated.** |
+| **Weight** — heft, what the scale reads | physical | **Filtered. Not evaluated.** |
+| **Equipment** cannot perform the load | physical | **Filtered. Not evaluated.** |
+| **Endorsement not held** — hazmat, tanker | legal | **Filtered. Not evaluated.** |
+| **Deadline already passed** | temporal | **Filtered. Not evaluated.** |
+| *Pallet positions exceeded* | physical | *Filtered — by the principle. Confirm.* |
+
+**CONFIRMED:** *"these follow the same rule as weight and cube"* — endorsements and deadlines.
+
+Pallet positions are the same shape and are **not** separately ruled on: they are deck space,
+as physical and as unoverruleable as cube. Included here by the principle, marked so it can be
+corrected.
 
 Cube and weight are **two independent limits, not one**. Freight can be light and bulky, or
 small and immensely heavy, and either alone disqualifies. A load at 40% of the weight limit can
@@ -283,15 +296,21 @@ than resolved by assumption.
 
 ---
 
-## 5. Follow-on question this raises
+## 5. What this leaves in the blocking stage
 
-Cube, weight and equipment are filtered because they are physical impossibilities the operator
-cannot overrule. **Two other conditions are the same shape and have not been ruled on:**
+With every impossibility moved to the filter, **blocking now holds only conditions the
+operator might genuinely overrule**:
 
-- **An endorsement not held** — hazmat, tanker. Legal impossibility rather than physical, and
-  no reason string makes it safe.
-- **A deadline already passed** — the load is gone.
+| Blocking condition | Why it is not a filter |
+|---|---|
+| **Below floor** | A price judgement. He may take a thin load for a reason the engine cannot see. |
+| **Broker on the avoid list** | Business trust. Arrears get paid, and the remedy is the USE list. |
+| **Territory `hard_no`** | A business judgement, and business judgements change. |
 
-Both were previously proposed as `NOT PERMITTED` blocking conditions. Under this ruling they
-look like filters instead. **Not assumed either way** — filtered and blocked behave
-differently, and the operator has ruled on three categories, not five.
+**Consequence for `DISPATCH_OVERRIDE_RULES_SPEC.md`:** its `not_permitted` list — conditions
+that exist but may never be overridden — is now **empty by construction**. A condition nobody
+may overrule never reaches the point of being overridden, because it never entered evaluation.
+
+That is a simplification worth naming. The specification previously carried two mechanisms for
+impossibility: a filter, and an unoverrideable block. One of them was redundant, and the
+operator's ruling removed it.
