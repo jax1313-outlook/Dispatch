@@ -18,6 +18,11 @@
 <header class="px-4 pt-4 pb-2">
   <div class="flex justify-between items-center flex-wrap gap-3">
     <div>
+      {# The way out. This screen had none: its only two links were a stylesheet
+         and the broker's phone number, so the only exit was the browser's Back
+         button or typing a URL. A screen with no exit is the same defect as a
+         launcher nobody can find. #}
+      <a class="way-out" href="{{ url_for('pages.home') }}">&larr; Dispatch</a>
       <div class="fact-label">Level 1 Transport</div>
       <div class="flex items-center gap-3 mt-1">
         <span class="big-fact">{{ record.title or 'Untitled mission' }}</span>

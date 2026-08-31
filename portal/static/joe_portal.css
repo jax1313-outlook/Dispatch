@@ -243,3 +243,33 @@ body { font-family: var(--font-ui); }
   .big-fact { font-size: 20px; }
   .mode-btn { flex: 1 1 auto; padding: 0 10px; font-size: 12px; }
 }
+
+/* The way out of a mission screen.
+   Sized for a thumb rather than a mouse -- this is read and pressed in a cab,
+   sometimes moving, and a 12px text link is not a target. Deliberately quiet
+   in colour: it must be findable without competing with the load itself. */
+.way-out {
+    display: inline-block;
+    margin-bottom: 6px;
+    padding: 8px 14px 8px 10px;
+    min-height: 40px;
+    line-height: 24px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #9fb3c8;
+    text-decoration: none;
+    border: 1px solid #2c3e50;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+}
+.way-out:hover,
+.way-out:focus {
+    color: #e8eef4;
+    border-color: #4a6785;
+    background: rgba(255, 255, 255, 0.08);
+}
+.way-out:focus-visible {
+    outline: 2px solid #4a9eff;
+    outline-offset: 2px;
+}
