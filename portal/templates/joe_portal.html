@@ -56,10 +56,13 @@
 </header>
 
 {# =========================================================== MODE BAR #}
-{# CURRENT / PICKUP / DELIVERY. Deterministic views over ONE record - the
-   same switchTab mechanism the prototype already used, widened from
-   overview/lanes/clusters to mission phase. CURRENT is not a third data
-   set: it resolves to whichever phase the record's own status is in. #}
+{# CURRENT / PICKUP / DELIVERY, and nothing else. Deterministic views over ONE
+   record. CURRENT is not a third data set: it resolves to whichever phase the
+   record's own status is in.
+
+   The arrangement does not move between modes -- only what sits in the slots.
+   At 70mph a driver does not read a screen, he checks a position, and a layout
+   that rearranges itself costs him a re-read on every switch. #}
 <nav class="mode-bar px-4" role="tablist" aria-label="Mission view">
   {% for mode in ['CURRENT', 'PICKUP', 'DELIVERY'] %}
     <button class="mode-btn {% if mode == requested_view %}active{% endif %}"
@@ -68,7 +71,6 @@
       {{ mode }}
     </button>
   {% endfor %}
-  <button class="mode-btn" data-mode="SWEEP">Sweep</button>
   <span class="ml-auto flex items-center gap-2 pr-2">
     <span class="fact-label">Showing</span>
     <span class="badge badge-blue" id="resolved-phase">{{ view.phase }}</span>
@@ -258,69 +260,31 @@
 </section>
 {% endfor %}
 
-{# =============================================================== SWEEP #}
-{# Activation event 1. The timer lives here, in the portal, not in a config
-   file and not on the public website. #}
-<section data-panel="SWEEP" class="space-y-4 hidden">
-  <div class="card">
-    <div class="card-header">
-      <span class="radar-sweep inline-block">◐</span> Intelligence sweep
-    </div>
-    <div class="card-body space-y-4">
-      <div class="flex flex-wrap gap-8">
-        <div><div class="fact-label">Status</div>
-          <div class="big-fact" id="sweep-state">{{ sweep.state }}</div></div>
-        <div><div class="fact-label">Last run</div>
-          <div class="text-base font-mono" id="sweep-last">{{ sweep.last_run or 'never' }}</div></div>
-        <div><div class="fact-label">Next run</div>
-          <div class="text-base font-mono" id="sweep-next">{{ sweep.next_run or 'not scheduled' }}</div></div>
-      </div>
+{# ============================================================ JOE DOCK #}
+{# Three lines, the full width of the screen, at the bottom where a thumb
+   already rests. Two lines in, one line out.
 
-      {% if sweep.message %}
-        <div class="border-l-2 border-caution pl-3 text-sm">{{ sweep.message }}</div>
-      {% endif %}
+   JOE had a whole mode of its own. It did not need one: asking a question is
+   something done *while* looking at the load, not instead of looking at it.
+   Taking the screen away and leaving the dialog is the smaller thing that does
+   the same job.
 
-      <div class="flex flex-wrap gap-3 items-center">
-        <button class="sweep-btn act-btn-go" id="sweep-start">Start sweep now</button>
-        <button class="sweep-btn act-btn-alert" id="sweep-stop">Stop scheduled sweeping</button>
-      </div>
-
-      <div class="flex flex-wrap gap-3 items-center">
-        <label class="fact-label" for="sweep-time">Run daily at</label>
-        <input class="sweep-btn" id="sweep-time" type="time"
-               value="{{ sweep.daily_at or '05:30' }}" style="padding:0 12px;">
-        <label class="fact-label flex items-center gap-2" style="min-height:44px;">
-          <input type="checkbox" id="sweep-enabled"
-                 style="width:22px;height:22px;"
-                 {% if sweep.timer_enabled %}checked{% endif %}>
-          Timer enabled
-        </label>
-        <button class="sweep-btn" id="sweep-save">Save schedule</button>
-      </div>
-
-      <div class="font-mono text-xs text-muted-light">
-        A sweep creates or enriches Opportunity Records. It never creates a
-        Mission. Only ACCEPT LOAD does that, and only you can press it.
-      </div>
-    </div>
+   The spoken line is 24px, non-bold, monospace, by the operator's
+   specification. Monospace because a fixed width makes a number the same shape
+   every time it appears, and non-bold because a whole line of bold reads as
+   shouting and stops being scannable. #}
+<footer class="joe-dock">
+  <div class="joe-dock-numbers">
+    <span class="num-mission">{{ record.numbers.mission_label }}</span>
+    <span class="joe-dock-sep">·</span>
+    <span class="num-load">{{ record.numbers.load_label }}</span>
   </div>
-</section>
 
-</main>
-
-{# ========================================================= JOE FOOTER #}
-{# JOE sits inside the Presentation Layer as a communication mechanism. The
-   panel is a window onto JOE, never a copy of it: it holds no mission data
-   and reads nothing it is not handed. #}
-<footer class="px-4 py-3" style="border-top:1px solid #1e2d44;">
-  <div class="flex items-center gap-3 flex-wrap">
-    <span class="badge badge-blue">JOE</span>
-    <span class="font-mono text-xs text-muted-light" id="joe-line">
-      {{ joe.status }}
-    </span>
-    <span class="ml-auto num-mission text-xs">
-      {{ record.numbers.mission_label }} · {{ record.numbers.load_label }}
-    </span>
+  <div class="joe-box">
+    <label class="joe-box-tag" for="joe-entry">JOE</label>
+    <textarea id="joe-entry" class="joe-entry" rows="2" spellcheck="false"
+              placeholder="Ask JOE. It answers; it does not decide."></textarea>
+    <div class="joe-speech" id="joe-line" role="status" aria-live="polite">{{ joe.status }}</div>
   </div>
 </footer>
 

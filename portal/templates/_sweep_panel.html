@@ -1,0 +1,57 @@
+{# Manual sweep control, lifted off the driver screen.
+
+   The operator keeps manual activation - he asked for it - but a sweep is an
+   operations function, not a driver function, and mixing the two is how a
+   screen read at 70mph acquires a control nobody needs while moving. This
+   partial is the same panel, waiting for the operations screen he has not
+   designed yet. Nothing about it changed in the move.
+#}
+{# =============================================================== SWEEP #}
+{# Activation event 1. The timer lives here, in the portal, not in a config
+   file and not on the public website. #}
+<section class="space-y-4">
+  <div class="card">
+    <div class="card-header">
+      <span class="radar-sweep inline-block">◐</span> Intelligence sweep
+    </div>
+    <div class="card-body space-y-4">
+      <div class="flex flex-wrap gap-8">
+        <div><div class="fact-label">Status</div>
+          <div class="big-fact" id="sweep-state">{{ sweep.state }}</div></div>
+        <div><div class="fact-label">Last run</div>
+          <div class="text-base font-mono" id="sweep-last">{{ sweep.last_run or 'never' }}</div></div>
+        <div><div class="fact-label">Next run</div>
+          <div class="text-base font-mono" id="sweep-next">{{ sweep.next_run or 'not scheduled' }}</div></div>
+      </div>
+
+      {% if sweep.message %}
+        <div class="border-l-2 border-caution pl-3 text-sm">{{ sweep.message }}</div>
+      {% endif %}
+
+      <div class="flex flex-wrap gap-3 items-center">
+        <button class="sweep-btn act-btn-go" id="sweep-start">Start sweep now</button>
+        <button class="sweep-btn act-btn-alert" id="sweep-stop">Stop scheduled sweeping</button>
+      </div>
+
+      <div class="flex flex-wrap gap-3 items-center">
+        <label class="fact-label" for="sweep-time">Run daily at</label>
+        <input class="sweep-btn" id="sweep-time" type="time"
+               value="{{ sweep.daily_at or '05:30' }}" style="padding:0 12px;">
+        <label class="fact-label flex items-center gap-2" style="min-height:44px;">
+          <input type="checkbox" id="sweep-enabled"
+                 style="width:22px;height:22px;"
+                 {% if sweep.timer_enabled %}checked{% endif %}>
+          Timer enabled
+        </label>
+        <button class="sweep-btn" id="sweep-save">Save schedule</button>
+      </div>
+
+      <div class="font-mono text-xs text-muted-light">
+        A sweep creates or enriches Opportunity Records. It never creates a
+        Mission. Only ACCEPT LOAD does that, and only you can press it.
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
