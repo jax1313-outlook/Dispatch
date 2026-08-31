@@ -72,17 +72,11 @@ his attention on it.
 
 **The engine does not score what it cannot carry.**
 
-### The mis-typed dimension is still recoverable, and that is not a compromise
+### Filtering is recorded, never silent
 
-Filtering in Dispatch is **recorded, never silent** — the same specification requires it:
-
-> *Every filtered record keeps its reason and remains retrievable. The operator can always ask
-> "what did you not show me?"*
-
-So a broker who posts 60 feet meaning 6 produces a filtered record carrying
-*"exceeds cube capacity"*, retrievable on request. It costs no screen space and loses no
-freight. The concern that argued for showing these is answered by the filter being auditable
-rather than by putting them in front of him.
+A filtered load keeps its reason and stays retrievable — the operator can ask what was not
+shown. That is a standing property of the filter stage, not a special provision for this
+category.
 
 **A filter that deletes would be a different thing entirely, and is forbidden.**
 
