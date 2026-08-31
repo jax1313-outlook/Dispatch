@@ -192,6 +192,17 @@
 </div>
 {% endif %}
 
+{% if simulated_count %}
+<div class="sample-data-banner">
+    <strong>{{ simulated_count }} sample load{{ '' if simulated_count == 1 else 's' }} on screen.</strong>
+    These are bundled examples, not real freight. Nothing here has been booked and no broker has been contacted.
+    <form method="post" action="{{ url_for('pages.clear_sample_data') }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm">Clear sample data</button>
+    </form>
+</div>
+{% endif %}
+
 {% if dispatch_cards %}
 <section class="card-section">
     <h2>Dispatch — Top Loads</h2>
@@ -206,6 +217,7 @@
             <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
             <div class="card-meta">
                 <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+                {% if entry.data_origin == 'SIMULATED' %}<span class="origin-tag origin-simulated" title="Bundled sample data. This is not a real load.">SAMPLE DATA</span>{% endif %}
             </div>
             <div class="card-fields">
                 {% set cd = entry.card_data %}
@@ -241,6 +253,7 @@
             <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
             <div class="card-meta">
                 <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+                {% if entry.data_origin == 'SIMULATED' %}<span class="origin-tag origin-simulated" title="Bundled sample data. This is not a real load.">SAMPLE DATA</span>{% endif %}
             </div>
             <div class="card-fields">
                 {% set cd = entry.card_data %}

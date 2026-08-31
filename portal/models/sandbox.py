@@ -130,6 +130,7 @@ def create_entry(
     summary: str = "",
     score: int | None = None,
     decision: dict | None = None,
+    data_origin: str = "LIVE",
 ) -> dict:
     data = _load()
     sid = f"SBX-{source_type.upper()}-{source_id}"
@@ -149,11 +150,16 @@ def create_entry(
             entry["score"] = score
         if decision is not None:
             entry["decision"] = decision
+        # An entry that was ever SIMULATED stays SIMULATED. Re-ingesting a
+        # sample must not launder it into a live record.
+        if entry.get("data_origin") != "SIMULATED":
+            entry["data_origin"] = data_origin
     else:
         entry = {
             "id": sid,
             "source_type": source_type,
             "source_id": source_id,
+            "data_origin": data_origin,
             "status": "OPEN",
             "title": title,
             "score": score,
@@ -300,3 +306,37 @@ def run_hold_sweep(source_type: str = SANDBOX_SOURCE_FREIGHT, now: datetime | No
     if expired_ids:
         _save(data)
     return expired_ids
+
+
+def clear_simulated(source_type: str | None = None) -> list[str]:
+    """Remove every SIMULATED entry. Returns the ids removed.
+
+    The one-click clear behind BLOCK-01. It removes only records marked
+    SIMULATED -- a live record is never deleted by this, whatever else is true
+    of it, because a clear that could take real freight with it is a clear
+    nobody would dare press.
+
+    Entries with no `data_origin` predate the marking and are left alone: this
+    function deletes what it can prove is sample data, not what it cannot
+    prove is real.
+    """
+    data = _load()
+    removed = [
+        sid for sid, entry in data.items()
+        if entry.get("data_origin") == "SIMULATED"
+        and (source_type is None or entry.get("source_type") == source_type)
+    ]
+    for sid in removed:
+        del data[sid]
+    if removed:
+        _save(data)
+    return removed
+
+
+def simulated_count(source_type: str | None = None) -> int:
+    """How many SIMULATED entries are present."""
+    return len([
+        1 for entry in _load().values()
+        if entry.get("data_origin") == "SIMULATED"
+        and (source_type is None or entry.get("source_type") == source_type)
+    ])
