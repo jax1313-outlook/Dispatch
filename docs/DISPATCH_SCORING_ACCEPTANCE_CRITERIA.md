@@ -26,15 +26,43 @@ preferences, hard stops and weighting.
 
 Three categories can disqualify. A high score never overrides one.
 
-| # | Category | Rule |
-|---|---|---|
-| 7 | **Cube utilization** | *"Cube is critical. If it does not fit I cannot take it."* |
-| 8 | **Equipment compatibility** | *"Hard limit is my equipment. Like cube, if it does not fit I cannot take it."* |
-| 9 | **Weight** | Moderate **within** limits — but exceeding the equipment limit is the same class of impossibility as cube. |
+**CONFIRMED, and it defines the two terms:**
 
-Category 9 was rated Moderate, and that is right for scoring *within* the limit. **The limit
-itself is a ceiling, not a penalty.** This is the defect that began the whole recovery: today
-a hard stop costs five points out of a hundred.
+> *"I take cube as size and weight as heft measured by scale. If they are out of range for
+> equipment then they are no opportunity at all."*
+
+| # | Category | Measures | Rule |
+|---|---|---|---|
+| 7 | **Cube** | **size** — the space the freight occupies | Out of range → **no opportunity at all** |
+| 9 | **Weight** | **heft** — what it reads on a scale | Out of range → **no opportunity at all** |
+| 8 | **Equipment compatibility** | what the equipment can do | *"If it does not fit I cannot take it."* |
+
+Cube and weight are **two independent limits, not one**. Freight can be light and bulky, or
+small and immensely heavy, and either alone disqualifies. A load at 40% of the weight limit can
+still be cube-out.
+
+**Weight is Moderate only *within* range.** Scoring how heavy a load is, once it fits, barely
+matters. Exceeding the limit is not a heavy penalty — it is the same class of impossibility as
+cube, and both are ceilings rather than deductions.
+
+This is the defect that began the whole recovery: today a hard stop costs five points out of a
+hundred, and the weight check tests `weight > 45000` on a vehicle that will carry a fraction of
+that.
+
+**Both limits are properties of the equipment**, so both live in the fleet profile — and both
+are `UNCONFIGURED` until the van is bought.
+
+### Open: reject-and-show, or filter-and-hide?
+
+*"No opportunity at all"* could mean either. **RECOMMENDATION: show it, marked rejected, with
+the number that disqualified it** — *"exceeds cube capacity by 40%"*.
+
+The reason is a case that will happen: **a broker mis-types a dimension.** A load silently
+filtered out for being 60 feet long, when the poster meant 6, is real freight the operator
+never learns existed. Rejected-and-visible costs one line on a screen; filtered-and-hidden
+costs a load, invisibly, and never announces itself.
+
+Needs the operator's ruling — this is presentation, and presentation is his.
 
 **Cube cannot be evaluated at all yet.** The van has not been purchased, so
 `cube_capacity_ft3` is `UNCONFIGURED`. The most critical category is currently blind: it
@@ -106,7 +134,10 @@ capacity is a high score."** Capacity fit is assessed across the **week**, not o
 
 ### 8 · Equipment Compatibility — **HARD STOP**. See §1.
 
-### 9 · Weight Compatibility — *moderate within limits, ceiling above*. See §1.
+### 9 · Weight Compatibility — *moderate within limits, hard stop above*. See §1.
+
+Distinct from cube: cube is the space it takes, weight is what the scale reads. Either alone
+disqualifies.
 
 ### 10 · Accessorial Value — *high, and it inverts the usual sign*
 
@@ -229,7 +260,7 @@ Two items are genuinely unclear and are **not** actioned:
 | Item | Question |
 |---|---|
 | *"4. no longer relevant"* | Which is retired? Category 4 (Revenue Opportunity) contradicts the answer at item 6, which keeps the additional-stop case explicitly. |
-| *"8. As long as cube size and limit is not exceeded, medium factor"* | Says *cube* but describes *weight* — cube is separately called critical at item 9. Read as Weight (category 9) above; confirm. |
+| ~~*"8. As long as cube size and limit is not exceeded, medium factor"*~~ | **RESOLVED.** Cube is size; weight is heft on a scale. Both are hard stops when out of range for the equipment; both are moderate within it. |
 
 Per the Fact and Provenance doctrine, an unclear instruction is recorded as unresolved rather
 than resolved by assumption.
