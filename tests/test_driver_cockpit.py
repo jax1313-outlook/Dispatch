@@ -418,3 +418,82 @@ class TestLoadDiagram:
     def test_it_has_its_own_drawer(self):
         keys = [d["key"] for d in cockpit.drawers_for(RECORD, cockpit.MODE_PICKUP)]
         assert "loaddiagram" in keys
+
+
+class TestEmptyPositionsAreCapacity:
+    """An empty pallet space is not a gap in a picture. It is capacity.
+
+    It answers "can I take two more on the way back", which is a question asked
+    at a truck stop with a phone in one hand -- and a diagram drawing only what
+    is loaded answers half of it.
+    """
+
+    LOADED = {
+        "pallet_positions": 6,
+        "load_plan": [
+            {"position": 1, "stop": "Stop 1", "description": "Aviation parts"},
+            {"position": 2, "stop": "Stop 1", "description": "Aviation parts"},
+            {"position": 3, "stop": "Stop 2", "description": "Fasteners"},
+        ],
+    }
+
+    def test_every_position_is_shown_not_only_the_full_ones(self):
+        diagram = cockpit.load_diagram_for(self.LOADED)
+        assert len(diagram["positions"]) == 6
+
+    def test_the_empty_ones_are_marked_empty(self):
+        diagram = cockpit.load_diagram_for(self.LOADED)
+        assert [p["position"] for p in diagram["positions"] if p["empty"]] == [4, 5, 6]
+
+    def test_it_counts_what_is_still_available(self):
+        diagram = cockpit.load_diagram_for(self.LOADED)
+        assert diagram["occupied_count"] == 3
+        assert diagram["empty_count"] == 3
+        assert "3 available" in diagram["capacity_line"]
+
+    def test_each_loaded_position_says_which_stop_it_belongs_to(self):
+        """Which decides whether stop three is reachable without unloading four."""
+        diagram = cockpit.load_diagram_for(self.LOADED)
+        assert diagram["positions"][2]["stop"] == "Stop 2"
+
+    def test_unknown_capacity_is_reported_not_invented(self):
+        """The van is not bought. A guessed six would sit under a real decision."""
+        diagram = cockpit.load_diagram_for({"load_plan": [{"position": 1}]})
+        assert diagram["total"] is None
+        assert diagram["empty_count"] is None
+        assert "UNCONFIGURED" in diagram["capacity_line"]
+
+    def test_no_plan_produces_no_invented_positions(self):
+        assert cockpit.load_diagram_for({}) ["positions"] == []
+
+
+class TestTheCardStaysCompressed:
+    """Compressed on instruction, and it must not creep back."""
+
+    def _html(self, client, mode="PICKUP"):
+        return client.get("/portal?view=" + mode,
+                          follow_redirects=True).get_data(as_text=True)
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    def test_the_card_is_four_lines(self, client):
+        html = self._html(client)
+        for n in (1, 2, 3, 4):
+            assert 'class="trip-line-%d"' % n in html
+        assert 'class="trip-line-5"' not in html
+
+    def test_stop_navigation_appears_only_when_there_is_somewhere_to_go(self, client):
+        """One stop of one offers neither. Offering a dead control is filler."""
+        html = self._html(client)
+        stops = cockpit.stops_for({})
+        if not stops["has_next"]:
+            assert 'data-action="next-stop"' not in html
+        if not stops["has_previous"]:
+            assert 'data-action="previous-stop"' not in html

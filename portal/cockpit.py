@@ -373,19 +373,65 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
 
 
 def load_diagram_for(record: dict) -> dict:
-    """Where the freight sits, and in what order it comes off.
+    """Where the freight sits, in what order it comes off, and what is still free.
 
     **Ruled by the operator: the Load Diagram is not a checklist item.** It is
     something the driver works *from* while loading and unloading, not something
     he collects and hands over. On a multi-stop run it decides whether stop
     three is reachable without unloading stop four onto the dock.
+
+    **Empty positions are shown, and they are not decoration.** An empty space is
+    operational capacity -- it is the answer to "can I take another two pallets
+    on the way back", which is a question asked at a truck stop with a phone in
+    one hand. A diagram that draws only what is loaded answers half of it.
+
+    Capacity is reported, never assumed. The van has not been bought, so the
+    position count is frequently unknown, and an invented six would put a number
+    under a decision about real freight.
     """
+    plan = record.get("load_plan") or []
+    total = record.get("pallet_positions")
+    try:
+        total = int(total) if total not in (None, "", []) else None
+    except (TypeError, ValueError):
+        total = None
+
+    occupied = []
+    for entry in plan:
+        if not isinstance(entry, dict):
+            continue
+        occupied.append({
+            "position": entry.get("position") or "?",
+            "stop": entry.get("stop") or "",
+            "description": entry.get("description") or "",
+        })
+
+    positions = []
+    if total:
+        taken = {str(o["position"]) for o in occupied}
+        for n in range(1, total + 1):
+            match = next((o for o in occupied if str(o["position"]) == str(n)), None)
+            positions.append(match or {"position": n, "stop": "", "description": "",
+                                       "empty": True})
+        for slot in positions:
+            slot.setdefault("empty", False)
+
+    empty_count = (total - len(occupied)) if total is not None else None
+
     return {
-        "available": bool(record.get("load_diagram") or record.get("load_position")),
+        "available": bool(plan or record.get("load_position")),
         "position": record.get("load_position") or "Not recorded",
-        "diagram": record.get("load_diagram") or "",
-        "sub": ("Cargo arrangement and unload order"
-                if record.get("load_diagram") else "No diagram produced yet"),
+        "positions": positions,
+        "occupied_count": len(occupied),
+        "total": total,
+        "empty_count": empty_count,
+        "capacity_line": (
+            f"{len(occupied)} of {total} positions occupied · {empty_count} available"
+            if total is not None
+            else f"{len(occupied)} positions occupied · capacity UNCONFIGURED"
+        ),
+        "sub": ("Cargo arrangement and unload order" if plan
+                else "No diagram produced yet"),
     }
 
 
@@ -449,11 +495,7 @@ def drawers_for(record: dict, mode: str, route_risk: str = "") -> list:
 
         # Worked from, not collected. Left side: it belongs to the freight.
         {"key": "loaddiagram", "side": "left", "title": "Load diagram",
-         "rows": rows(("Load position", load_diagram_for(record)["position"]),
-                      ("Diagram", load_diagram_for(record)["diagram"]
-                       or "Not produced yet"),
-                      ("Cargo", cargo["description"]),
-                      ("Detail", cargo["brackets"]))},
+         "diagram": load_diagram_for(record)},
 
         # What ARRIVE will send, visible before it is pressed.
         {"key": "arrival", "side": "right", "title": "Arrival notice",

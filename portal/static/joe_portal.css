@@ -104,7 +104,7 @@
 
 .trip-card {
     background: linear-gradient(180deg, #12283f 0%, #0f1f31 100%);
-    border: 1px solid #24466b; border-radius: 9px; padding: 12px 14px;
+    border: 1px solid #24466b; border-radius: 9px; padding: 10px 14px 11px;
 }
 .trip-card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .trip-label { font-size: 0.7rem; letter-spacing: 0.1em; color: #8fb6dd; }
@@ -307,19 +307,20 @@
 /* ---- Active Trip Card: mission progress and cargo position -------------- */
 /* The cockpit felt light because this was missing, not because the layout was
    wrong. Where the driver is inside the mission, and where the freight sits. */
-.trip-lane { font-size: 1.02rem; font-weight: 600; margin-top: 4px; }
-.trip-stop {
-    display: inline-block; margin-top: 6px; padding: 4px 10px;
-    font-size: 0.85rem; font-weight: 700; letter-spacing: 0.06em;
-    border: 1px solid #3d6890; border-radius: 5px; background: rgba(0,0,0,0.25);
+/* Four lines, no filler. */
+.trip-line-1, .trip-line-2, .trip-line-3, .trip-line-4 {
+    display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
 }
-.trip-cargo, .trip-position {
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
-    margin-top: 8px; font-size: 0.95rem;
-}
+.trip-line-1 { justify-content: space-between; }
+.trip-line-2 { margin-top: 3px; font-size: 0.98rem; }
+.trip-line-3, .trip-line-4 { margin-top: 5px; font-size: 0.94rem; }
+.trip-line-4 { align-items: center; }
+.trip-sep { opacity: 0.45; }
+.trip-lane { font-weight: 600; }
+.trip-position-text { flex: 1 1 auto; }
 .trip-cargo-desc { font-weight: 600; }
 .trip-diagram {
-    margin-top: 10px; width: 100%; min-height: var(--tap);
+    flex: 0 0 auto; min-height: 38px; padding: 0 14px;
     font-size: 0.88rem; font-weight: 700; letter-spacing: 0.07em;
     color: var(--ink); background: rgba(0,0,0,0.3);
     border: 1px solid #3d6890; border-radius: 7px; cursor: pointer;
@@ -349,3 +350,29 @@
     display: block; font-size: 0.75rem; font-weight: 400;
     color: var(--ink-faint); letter-spacing: 0.02em;
 }
+
+/* ---- Load diagram: what is on the truck, and what is still free --------- */
+.capacity-line {
+    font-size: 0.95rem; font-weight: 700; letter-spacing: 0.03em;
+    padding: 10px 12px; margin-bottom: 12px;
+    border: 1px solid var(--edge-lit); border-radius: 7px; background: var(--panel);
+}
+.positions { list-style: none; margin: 0 0 14px; padding: 0; }
+.slot {
+    display: flex; align-items: center; gap: 12px;
+    min-height: 46px; padding: 6px 10px; margin-bottom: 4px;
+    border: 1px solid var(--edge); border-radius: 6px;
+}
+.slot-no {
+    width: 28px; text-align: center; font-weight: 700;
+    font-family: ui-monospace, Consolas, monospace; color: var(--ink-dim);
+}
+.slot-what { flex: 1 1 auto; font-size: 0.98rem; }
+.slot-stop {
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em;
+    padding: 3px 8px; border-radius: 4px;
+    background: rgba(74,158,255,0.15); color: #9ccbff;
+}
+.slot.taken { background: #0f1b28; border-color: var(--edge-lit); }
+.slot.empty { background: transparent; border-style: dashed; }
+.slot.empty .slot-what { color: var(--go); font-weight: 700; letter-spacing: 0.08em; }

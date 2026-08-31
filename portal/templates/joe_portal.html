@@ -64,33 +64,35 @@
 {# ------------------------------------------------------- LEFT: THE MISSION #}
 <section class="mission-column" aria-label="Mission record">
 
+  {# Compressed to four lines. Every one carries something the driver acts on:
+     where he is in the run, the lane, what is on the truck, and where it sits.
+     No filler -- a card padded to look substantial costs vertical space that
+     the mission itself needs. #}
   <div class="trip-card">
-    <div class="trip-card-head">
-      <span class="trip-label">{{ mode_label }}: STOP {{ stops.number }}</span>
+    <div class="trip-line-1">
+      <span class="trip-label">{{ mode_label }} &middot; {{ stops.label }}</span>
       <span class="trip-number">{{ record.numbers.mission_label or '—' }}</span>
     </div>
 
-    <div class="trip-broker">{{ broker.name or 'Broker unassigned' }}</div>
-    <div class="trip-lane">{{ ends.pickup.place }} &rarr; {{ ends.delivery.place }}</div>
-    <div class="trip-stop">{{ stops.label }}</div>
+    <div class="trip-line-2">
+      <span class="trip-broker">{{ broker.name or 'Broker unassigned' }}</span>
+      <span class="trip-sep">&middot;</span>
+      <span class="trip-lane">{{ ends.pickup.place }} &rarr; {{ ends.delivery.place }}</span>
+    </div>
 
-    <div class="trip-cargo">
+    <div class="trip-line-3">
       <span class="fact-key">CARGO:</span>
       <span class="trip-cargo-desc">{{ cargo.description }}</span>
       <span class="fact-bracket">{{ cargo.brackets }}</span>
     </div>
 
-    {# Where it sits, and therefore what order it comes off. On a multi-stop run
-       this decides whether stop three is reachable without unloading stop four
-       onto the dock. #}
-    <div class="trip-position">
+    <div class="trip-line-4">
       <span class="fact-key">LOAD POSITION:</span>
-      <span>{{ load_diagram.position }}</span>
+      <span class="trip-position-text">{{ load_diagram.position }}</span>
+      <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
+        OPEN LOAD DIAGRAM
+      </button>
     </div>
-
-    <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
-      OPEN LOAD DIAGRAM
-    </button>
   </div>
 
   {# Both ends stay visible. The mode changes which is bright, never which
@@ -213,7 +215,31 @@
     <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
   </header>
   <div class="drawer-body">
-    {% if d.notice is defined and d.notice %}
+    {% if d.diagram is defined and d.diagram %}
+      {# Empty positions are shown because an empty position is capacity --
+         the answer to "can I take two more on the way back". #}
+      <div class="capacity-line">{{ d.diagram.capacity_line }}</div>
+      {% if d.diagram.positions %}
+        <ul class="positions">
+          {% for slot in d.diagram.positions %}
+            <li class="slot {{ 'empty' if slot.empty else 'taken' }}">
+              <span class="slot-no">{{ slot.position }}</span>
+              {% if slot.empty %}
+                <span class="slot-what">EMPTY</span>
+              {% else %}
+                <span class="slot-what">{{ slot.description or 'Loaded' }}</span>
+                {% if slot.stop %}<span class="slot-stop">{{ slot.stop }}</span>{% endif %}
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="drawer-note">No position plan recorded for this load.</p>
+      {% endif %}
+      <dl class="detail-list">
+        <dt>Load position</dt><dd>{{ d.diagram.position }}</dd>
+      </dl>
+    {% elif d.notice is defined and d.notice %}
       <div class="notice">
         <div class="notice-title">{{ d.notice.title }}</div>
         <p class="notice-open">{{ d.notice.opening }}</p>
