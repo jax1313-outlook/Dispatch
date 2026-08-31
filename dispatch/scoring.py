@@ -35,6 +35,15 @@ _RATE_PER_MILE_EXCELLENT = 5.50
 
 _WEIGHT_LIMIT_LBS = 45000
 
+#: The highest score `compute_score` can produce, and the figure the
+#: classification bands are calibrated against.
+#:
+#: It is 90 rather than 100 because broker confidence held ten points and was
+#: removed -- trust is not a program variable. The ceiling is named here because
+#: it was previously implicit in a clamp, which is how removing a dimension could
+#: silently rescale every band without anything failing.
+MAX_SCORE = 90
+
 _KNOWN_DISTANCES: dict[tuple[str, str], float] = {
     ("jacksonville", "savannah"): 140,
     ("jacksonville", "atlanta"): 345,
@@ -249,9 +258,9 @@ def compute_route_risk(load: dict) -> str:
     if detention and "high" in detention.lower():
         risks.append("high detention history")
 
-    broker_intel = load.get("broker_intelligence", "")
-    if broker_intel and ("unknown" in broker_intel.lower() or "no history" in broker_intel.lower()):
-        risks.append("unknown broker")
+    # "unknown broker" is deliberately not a risk. Trust is assumed until broken
+    # and is not a program variable, so an unfamiliar broker is an unfamiliar
+    # broker -- not a hazard the engine has detected.
 
     if not risks:
         return "Low — no risk factors identified"
@@ -313,7 +322,15 @@ def compute_score(load: dict) -> int:
         Equipment match:    15 points
         Position value:     15 points
         Operational risk:   10 points
-        Broker confidence:  10 points
+
+    The maximum is therefore **90, not 100**. Broker confidence held the missing
+    ten and was removed rather than redistributed: reassigning them would mean
+    deciding that rate quality is now worth 33 instead of 30, which is a business
+    judgement and belongs to the operator, not to this change.
+
+    Band thresholds were set against a 100-point maximum and have not been
+    revisited. They are policy values and are reviewed when the weights move into
+    the Policy Profile.
     """
     score = 0.0
 
@@ -374,19 +391,14 @@ def compute_score(load: dict) -> int:
         op_risk -= 3
     score += max(op_risk, 0)
 
-    broker = load.get("broker_intelligence", "")
-    if broker:
-        bl = broker.lower()
-        if "reliable" in bl or "completed" in bl:
-            score += 10
-        elif "unknown" in bl or "no history" in bl:
-            score += 3
-        else:
-            score += 5
-    else:
-        score += 5
+    # Broker trust is deliberately absent. It was worth 10 points of 100 here --
+    # 10 for a broker the string-match believed reliable, 3 for one it did not
+    # recognise -- which is the engine forming a judgement the operator has ruled
+    # is his, and penalising an unknown broker 7 points when trust is assumed
+    # until broken. See docs/DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md section 3:
+    # trust is not a program variable. It is not scored, inferred or stored.
 
-    return max(0, min(100, round(score)))
+    return max(0, min(MAX_SCORE, round(score)))
 
 
 def score_load(load: dict) -> dict:
