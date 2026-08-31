@@ -132,11 +132,17 @@ happen anyway.
 > **Deadhead is retired as a scoring dimension.** It may still be *displayed* as a fact. It no
 > longer moves the score.
 
-### 4 · Revenue Opportunity
+### 4 · Revenue Opportunity — **RETIRED**
 
-**Marked "no longer relevant" in the clarifications — but see §4, UNRESOLVED.** The
-clarification numbering does not align cleanly with the category numbering, and category 6's
-answer explicitly *keeps* the additional-stop case. Not actioned pending confirmation.
+**CONFIRMED: "retire, not relevant."**
+
+Kept in the list as retired rather than deleted, so the numbering does not silently shift and
+a future reader can see it was considered and dropped.
+
+It is not a loss of capability: **category 6 already scores the case** — *"adding a single stop
+for additional revenue and route fit within capacity is a high score."* Revenue opportunity was
+a second name for something the delivery-complexity and capacity-fit categories were already
+measuring, and two categories scoring one thing is double-counting.
 
 ### 5 · Pickup Complexity — *high; pickups outrank deliveries*
 
@@ -234,6 +240,33 @@ agreement.
 
 > Confidence measures what is **unknown about an opportunity**. It does not second-guess a
 > **commitment already made**. A committed load is treated as accurate unless proven otherwise.
+
+**And the operator goes further, which narrows this more than I expected:**
+
+> *"This industry operates on all post data is trustworthy. It is also verified during
+> negotiation process. Data changes will be made before commitment is formal."*
+
+**Posted load data is trusted by default.** It is checked by a human during negotiation, and
+corrections happen before anything is formal. The verification step this industry already has
+is a conversation, not a scoring model.
+
+**This retires most of `DISPATCH_CONFIDENCE_MODEL_SPEC.md`, and the correction is mine to
+take.** That specification weighted every field of a posted load — rate, windows, weight,
+broker history — and reported *"strong fit, low confidence"* when fields were missing. I called
+that the most useful sentence the engine could produce. For this operation it is mostly noise:
+it hedges data the operator will confirm by telephone anyway, and it would train him to ignore
+a signal that fires on almost everything.
+
+**What survives, and why it is different:**
+
+| Survives | Retired |
+|---|---|
+| **Dispatch does not know its own equipment.** Cube capacity is `UNCONFIGURED`; the engine cannot evaluate a category and must say so. | Weighting a broker's posted fields and reporting a completeness percentage. |
+| A field the engine needs and **cannot obtain** — a system gap. | A field the operator will obtain in the next phone call — a negotiation step. |
+
+The distinction is **who can resolve it**. If the operator resolves it during negotiation, it
+is not a confidence problem. If Dispatch cannot resolve it at all — an unconfigured vehicle, an
+`UNAVAILABLE` adapter — it is, and it still reports `UNKNOWN` rather than guessing.
 
 ### 14 · Territory Alignment
 
