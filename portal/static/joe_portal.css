@@ -284,3 +284,18 @@
     background: rgba(255,255,255,0.03);
 }
 .way-out:hover, .way-out:focus { color: var(--ink); border-color: #4a6785; }
+
+/* What ticking the last box sets in motion. Stated before it is ticked --
+   this is the only control on the cockpit whose consequence leaves the truck. */
+.completion-effect {
+    margin-top: 12px; padding: 12px 14px;
+    border: 1px solid var(--edge-lit); border-left: 4px solid var(--key);
+    border-radius: 7px; background: var(--panel);
+}
+.completion-effect.armed { border-left-color: var(--go); background: #0d2418; }
+.effect-line { font-size: 0.98rem; line-height: 1.45; }
+.effect-note { margin-top: 6px; font-size: 0.85rem; color: var(--ink-dim); line-height: 1.45; }
+.effect-status {
+    margin-top: 8px; font-size: 0.75rem; font-weight: 700;
+    letter-spacing: 0.08em; color: var(--key);
+}

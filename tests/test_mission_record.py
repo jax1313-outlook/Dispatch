@@ -245,9 +245,10 @@ class TestPortalRenders:
         record_id = mission_record["id"]
         html = client.get("/portal/mission/%s" % record_id).get_data(as_text=True)
         assert "mode-btn" in html
-        # PICKUP / IN TRANSIT / DELIVERY. "Current" was a software state; a
-        # driver is going to a pickup, moving freight, or making a delivery.
-        for mode in ("PICKUP", "IN_TRANSIT", "DELIVERY"):
+        # PICKUP / CURRENT / DELIVERY. IN TRANSIT was tried and reverted: the
+        # word is better but CURRENT is a resolver, and renaming it turned out
+        # to touch the state model rather than a label.
+        for mode in ("PICKUP", "CURRENT", "DELIVERY"):
             assert 'data-mode="%s"' % mode in html
 
 

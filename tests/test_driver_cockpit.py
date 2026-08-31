@@ -28,15 +28,14 @@ RECORD = {
 
 
 class TestTheThreeModes:
-    def test_the_modes_are_the_drivers_words(self):
-        assert [m["label"] for m in cockpit.MODES] == ["PICKUP", "IN TRANSIT", "DELIVERY"]
+    def test_the_three_modes(self):
+        assert [m["label"] for m in cockpit.MODES] == ["PICKUP", "CURRENT", "DELIVERY"]
 
-    def test_current_is_gone_from_the_drivers_vocabulary(self):
-        """CURRENT is a software state. A driver is going somewhere."""
-        assert "CURRENT" not in [m["label"] for m in cockpit.MODES]
+    def test_an_in_transit_url_still_opens(self):
+        """A link written while the label read IN TRANSIT must not land elsewhere."""
+        assert cockpit.normalise_mode("IN_TRANSIT") == cockpit.MODE_IN_TRANSIT
 
-    def test_a_legacy_current_url_still_opens(self):
-        """A bookmark must not break because the vocabulary improved."""
+    def test_a_current_url_opens(self):
         assert cockpit.normalise_mode("CURRENT") == cockpit.MODE_IN_TRANSIT
 
     def test_an_unknown_mode_falls_back_rather_than_failing(self):
@@ -200,3 +199,51 @@ class TestItInventsNothing:
     def test_the_delivery_checklist_is_not_padded_to_look_finished(self):
         """The final lists are an operating-procedure decision, not a guess."""
         assert len(cockpit.DELIVERY_ARTIFACTS) <= 4
+
+
+class TestWhatTheLastCheckDoes:
+    """Completing the delivery checklist sends the packet to the broker.
+
+    The driver ticking the final box is the authorising act -- so the screen
+    says what the box will do *before* it is ticked, and never claims a send
+    that did not happen.
+    """
+
+    def _complete(self):
+        return dict(RECORD, artifacts_held=list(cockpit.DELIVERY_ARTIFACTS))
+
+    def test_an_incomplete_list_arms_nothing(self):
+        effect = cockpit.completion_effect(RECORD, cockpit.MODE_DELIVERY)
+        assert effect["arms_send"] is False
+        assert "nothing is sent" in effect["note"].lower()
+
+    def test_it_warns_before_the_last_box_not_after(self):
+        """The consequence is stated while the list is still incomplete."""
+        effect = cockpit.completion_effect(RECORD, cockpit.MODE_DELIVERY)
+        assert "broker" in effect["consequence"].lower()
+
+    def test_completing_delivery_arms_the_send(self):
+        effect = cockpit.completion_effect(self._complete(), cockpit.MODE_DELIVERY)
+        assert effect["arms_send"] is True
+        assert "broker" in effect["consequence"].lower()
+
+    def test_completing_pickup_does_not_send_to_the_broker(self):
+        held = dict(RECORD, artifacts_held=list(cockpit.PICKUP_ARTIFACTS))
+        effect = cockpit.completion_effect(held, cockpit.MODE_PICKUP)
+        assert effect["arms_send"] is False
+
+    def test_it_never_claims_a_send_that_did_not_happen(self):
+        """The failure this guards against is specific and bad: a driver who
+        reads 'sent to broker' and drives away believing the paperwork went."""
+        effect = cockpit.completion_effect(self._complete(), cockpit.MODE_DELIVERY)
+        if effect["transmission"] != "CONFIGURED":
+            assert "nothing has been sent" in effect["note"].lower()
+
+    def test_it_reports_transmission_rather_than_assuming_it(self):
+        assert cockpit.transmission_status() in (
+            "CONFIGURED", "UNCONFIGURED", "SIMULATED", "UNAVAILABLE")
+
+    def test_the_effect_reaches_the_checklist_drawer(self):
+        docs = [d for d in cockpit.drawers_for(self._complete(), cockpit.MODE_DELIVERY)
+                if d["key"] == "documents"][0]
+        assert docs["effect"]["arms_send"] is True

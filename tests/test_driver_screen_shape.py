@@ -37,7 +37,7 @@ def screen(client) -> str:
 
 
 class TestThreeModes:
-    @pytest.mark.parametrize("mode", ["PICKUP", "IN_TRANSIT", "DELIVERY"])
+    @pytest.mark.parametrize("mode", ["PICKUP", "CURRENT", "DELIVERY"])
     def test_the_driver_modes_are_present(self, client, mode):
         assert f'data-mode="{mode}"' in screen(client)
 
