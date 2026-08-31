@@ -432,13 +432,53 @@ def compute_score(load: dict) -> int:
     return max(0, min(MAX_SCORE, round(score)))
 
 
-def score_load(load: dict) -> dict:
+def _requested_drive_hours(load: dict) -> float:
+    """Planning drive time for the capacity engine, in hours."""
+    distance = load.get("distance_miles")
+    if not distance:
+        return 0.0
+    return float(distance) / _DRIVE_SPEED_MPH
+
+
+def assess_capacity(load: dict, capacity) -> "CapacityAssessment":
+    """Ask the capacity engine whether this load fits the asset.
+
+    `capacity` is a `dispatch.capacity.DynamicCapacity`. The call is advisory
+    and non-mutating: it reserves nothing and records nothing.
+
+    Physical dimensions absent from the load are passed as zero, which is a
+    request for none of that dimension -- not a claim that the load needs none.
+    The capacity engine raises its own data-gap findings for anything the asset
+    cannot answer, which is why this function does not invent values.
+    """
+    return capacity.evaluate(
+        weight_lbs=float(load.get("weight_lbs") or 0.0),
+        linear_feet=float(load.get("linear_feet") or 0.0),
+        volume_cuft=float(load.get("volume_cuft") or 0.0),
+        pallets=int(load.get("pallets") or 0),
+        drive_hours=_requested_drive_hours(load),
+        requires_liftgate=bool(load.get("requires_liftgate")),
+        stacking_policy=str(load.get("stacking_policy") or "UNKNOWN"),
+    )
+
+
+def score_load(load: dict, capacity=None) -> dict:
     """Run all scoring computations on a load and return the full result.
 
-    Returns a dict with all 6 Position/HOS fields, route economics,
-    and the overall score.
+    Returns the 6 Position/HOS fields, route economics, and the overall score.
+
+    Pass `capacity` -- a `dispatch.capacity.DynamicCapacity` -- to have the load
+    assessed against a real asset. Doing so adds capacity keys to the result and
+    **changes no existing key**: fit and blocking are separate answers, and a
+    load that cannot be run does not become a lower score, it becomes blocked.
+
+    Without `capacity` the result is exactly what it has always been. The weight
+    check inside `compute_route_risk` then falls back to `_WEIGHT_LIMIT_LBS`,
+    which describes a Class 8 tractor-trailer and is not authoritative for any
+    other asset. When `capacity` is supplied, `capacity_blocked` is the
+    authoritative answer on whether the load fits.
     """
-    return {
+    result = {
         "position_impact": compute_position_impact(load),
         "return_home_required": compute_return_home(load),
         "tomorrow_position_risk": compute_tomorrow_position_risk(load),
@@ -450,3 +490,15 @@ def score_load(load: dict) -> dict:
         "fuel_estimate": compute_fuel_estimate(load),
         "score": compute_score(load),
     }
+    if capacity is None:
+        return result
+
+    assessment = assess_capacity(load, capacity)
+    result["capacity_status"] = assessment.status
+    result["capacity_blocked"] = bool(
+        assessment.blocking_findings or assessment.exceeds_total_capacity
+    )
+    result["capacity_clear"] = assessment.clear_to_proceed
+    result["blocking_reasons"] = [f.message for f in assessment.blocking_findings]
+    result["capacity_findings"] = [f.to_dict() for f in assessment.findings]
+    return result
