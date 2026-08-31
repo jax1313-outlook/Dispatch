@@ -40,13 +40,33 @@ _LOAD_SHAPE_FIELDS = [
 ]
 
 
+#: Origin of a record, in the repository's fixed status vocabulary.
+#: SIMULATED means bundled sample data -- never to be shown as if it were real.
+ORIGIN_SIMULATED = "SIMULATED"
+ORIGIN_LIVE = "LIVE"
+
+
 def acquire() -> list[dict]:
-    """Return normalized load dicts from the configured source."""
+    """Return normalized load dicts from the configured source.
+
+    Every record carries `data_origin`. Records read from the bundled sample
+    directory are `SIMULATED`; records from a source the operator configured are
+    `LIVE`. Nothing downstream has to guess, and no surface can show sample
+    freight as though it were real -- `CLAUDE.md` §6.
+    """
     api_url = os.environ.get("DISPATCH_LOAD_API_URL")
     if api_url:
         return _acquire_api(api_url)
     source_dir = _get_source_dir()
     return _acquire_local(source_dir)
+
+
+def _origin_for(source_dir: Path) -> str:
+    """Bundled samples are SIMULATED. A configured directory is LIVE."""
+    try:
+        return ORIGIN_SIMULATED if Path(source_dir).resolve() == _DEFAULT_SAMPLE_DIR.resolve() else ORIGIN_LIVE
+    except OSError:
+        return ORIGIN_LIVE
 
 
 def _get_source_dir() -> Path:
@@ -56,7 +76,7 @@ def _get_source_dir() -> Path:
     return _DEFAULT_SAMPLE_DIR
 
 
-def _acquire_local(source_dir: Path) -> list[dict]:
+def _acquire_local(source_dir: Path, origin: str | None = None) -> list[dict]:
     """Load and normalize JSON files from a directory.
 
     One malformed or wrongly-shaped file (invalid JSON, or valid JSON whose
@@ -64,6 +84,7 @@ def _acquire_local(source_dir: Path) -> list[dict]:
     directory -- skip and log the offending file, keep going.
     """
     loads: list[dict] = []
+    origin = origin or _origin_for(source_dir)
     if not source_dir.exists():
         return loads
     for path in sorted(source_dir.glob("*.json")):
@@ -76,7 +97,9 @@ def _acquire_local(source_dir: Path) -> list[dict]:
             print(f"[dispatch.acquisition] skipping {path.name}: {exc}", file=sys.stderr)
             continue
         data.setdefault("_source_file", path.name)
-        loads.append(_normalize(data))
+        record = _normalize(data)
+        record["data_origin"] = origin
+        loads.append(record)
     return loads
 
 
@@ -101,8 +124,15 @@ def _acquire_api(api_url: str) -> list[dict]:
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read())
     except Exception as exc:
-        print(f"dispatch: load board API failed ({exc}), falling back to local", file=sys.stderr)
-        return _acquire_local(_get_source_dir())
+        # The source was UNAVAILABLE. Returning bundled samples as though the
+        # call had succeeded is the fabrication v1.0.1 shipped and v1.1 removed;
+        # the records come back explicitly SIMULATED instead.
+        print(
+            f"dispatch: load board API UNAVAILABLE ({exc}); "
+            "returning bundled SIMULATED samples, not live loads",
+            file=sys.stderr,
+        )
+        return _acquire_local(_get_source_dir(), origin=ORIGIN_SIMULATED)
 
     if isinstance(body, list):
         raw_loads = body
@@ -111,7 +141,7 @@ def _acquire_api(api_url: str) -> list[dict]:
     else:
         raw_loads = []
 
-    return [_normalize(load) for load in raw_loads]
+    return [dict(_normalize(load), data_origin=ORIGIN_LIVE) for load in raw_loads]
 
 
 def _normalize(data: dict) -> dict:

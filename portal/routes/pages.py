@@ -63,6 +63,7 @@ def home():
         "home.html",
         sam_cards=sam_sorted,
         dispatch_cards=dispatch_sorted,
+        simulated_count=sandbox.simulated_count(),
         conflict_count=len(unresolved),
         publisher_count=len(pub_queue),
         archive_count=arc_model.total_count(),
@@ -250,6 +251,18 @@ def rate_confirmation_print(load_id):
         assigned_driver=bundle.get("assigned_driver"),
         assigned_equipment=bundle.get("assigned_equipment"),
     )
+
+
+@pages_bp.route("/clear-sample-data", methods=["POST"])
+def clear_sample_data():
+    """Remove the bundled sample loads. BLOCK-01.
+
+    Only records marked SIMULATED are removed. A live record is never deleted
+    by this, whatever else is true of it -- a clear that could take real
+    freight with it is a clear nobody would dare press.
+    """
+    sandbox.clear_simulated()
+    return redirect(url_for("pages.home"))
 
 
 @pages_bp.route("/brokers")
