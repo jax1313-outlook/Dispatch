@@ -66,11 +66,31 @@
 
   <div class="trip-card">
     <div class="trip-card-head">
-      <span class="trip-label">ACTIVE TRIP CARD</span>
+      <span class="trip-label">{{ mode_label }}: STOP {{ stops.number }}</span>
       <span class="trip-number">{{ record.numbers.mission_label or '—' }}</span>
     </div>
+
     <div class="trip-broker">{{ broker.name or 'Broker unassigned' }}</div>
-    <div class="trip-title">{{ record.title or 'Untitled mission' }}</div>
+    <div class="trip-lane">{{ ends.pickup.place }} &rarr; {{ ends.delivery.place }}</div>
+    <div class="trip-stop">{{ stops.label }}</div>
+
+    <div class="trip-cargo">
+      <span class="fact-key">CARGO:</span>
+      <span class="trip-cargo-desc">{{ cargo.description }}</span>
+      <span class="fact-bracket">{{ cargo.brackets }}</span>
+    </div>
+
+    {# Where it sits, and therefore what order it comes off. On a multi-stop run
+       this decides whether stop three is reachable without unloading stop four
+       onto the dock. #}
+    <div class="trip-position">
+      <span class="fact-key">LOAD POSITION:</span>
+      <span>{{ load_diagram.position }}</span>
+    </div>
+
+    <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
+      OPEN LOAD DIAGRAM
+    </button>
   </div>
 
   {# Both ends stay visible. The mode changes which is bright, never which
@@ -93,12 +113,6 @@
   <button class="fact-row" data-drawer="route" data-side="right">
     <span class="fact-key">ROUTE NOTES &amp; CORRIDOR RISK:</span>
     <span class="fact-value">{{ route_risk or 'No corridor risk reported' }}</span>
-  </button>
-
-  <button class="fact-row" data-drawer="cargo" data-side="left">
-    <span class="fact-key">CARGO:</span>
-    <span class="fact-value">{{ cargo.description }}
-      <span class="fact-bracket">[{{ cargo.brackets }}]</span></span>
   </button>
 
   <button class="fact-row" data-drawer="broker" data-side="left">
@@ -126,7 +140,17 @@
           {% if not arrive.available %}disabled{% endif %}>
     <span class="action-name">ARRIVE</span>
     <span class="action-sub">{{ arrive.sub }}</span>
+    {% if arrive.auto_sends %}
+      <span class="action-flag">AUTO-SENDS &middot; BCC {{ arrive.bcc }}</span>
+    {% endif %}
   </button>
+
+  {% if arrive.available %}
+  <button class="action quiet" data-drawer="arrival" data-side="right">
+    <span class="action-name">SEE ARRIVAL NOTICE</span>
+    <span class="action-sub">What will be sent</span>
+  </button>
+  {% endif %}
 
   <button class="action" data-action="facility-map"
           {% if not facility_map.available %}disabled{% endif %}>
@@ -146,7 +170,14 @@
 
   <div class="action-spacer"></div>
 
-  {% if stops.total > 1 %}
+  {% if stops.has_previous %}
+  <button class="action prev-stop" data-action="previous-stop">
+    <span class="action-name">PREVIOUS STOP</span>
+    <span class="action-sub">{{ stops.previous_sub }}</span>
+  </button>
+  {% endif %}
+
+  {% if stops.has_next %}
   <button class="action next-stop" data-action="next-stop">
     <span class="action-name">NEXT STOP</span>
     <span class="action-sub">{{ stops.next_sub }}</span>
@@ -182,12 +213,33 @@
     <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
   </header>
   <div class="drawer-body">
-    {% if d.checklist is defined and d.checklist %}
+    {% if d.notice is defined and d.notice %}
+      <div class="notice">
+        <div class="notice-title">{{ d.notice.title }}</div>
+        <p class="notice-open">{{ d.notice.opening }}</p>
+        <dl class="detail-list">
+          {% for f in d.notice.fields %}
+            <dt>{{ f.key }}</dt><dd>{{ f.value or '—' }}</dd>
+          {% endfor %}
+        </dl>
+        <p class="notice-follows">{{ d.notice.follows_intro }}</p>
+        <ul class="notice-list">
+          {% for item in d.notice.follows %}<li>{{ item }}</li>{% endfor %}
+        </ul>
+        <div class="notice-foot">
+          BCC {{ d.notice.bcc }}
+          {% if d.notice.transmission != 'CONFIGURED' %}
+            &middot; TRANSMISSION: {{ d.notice.transmission }} &middot; not sent
+          {% elif d.notice.sent %}&middot; sent{% endif %}
+        </div>
+      </div>
+    {% elif d.checklist is defined and d.checklist %}
       <ul class="checklist">
         {% for item in d.checklist %}
           <li class="{{ 'done' if item.done else 'todo' }}">
             <span class="box">{% if item.done %}&#10003;{% else %}&#9744;{% endif %}</span>
-            <span class="item">{{ item.label }}</span>
+            <span class="item">{{ item.label }}{% if item.note %}
+              <span class="item-note">{{ item.note }}</span>{% endif %}</span>
           </li>
         {% endfor %}
       </ul>

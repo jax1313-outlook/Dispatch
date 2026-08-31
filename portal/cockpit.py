@@ -140,32 +140,55 @@ def stops_for(record: dict) -> dict:
     return {
         "number": number,
         "total": total,
+        "label": f"STOP {number} OF {total}",
+        "has_next": number < total,
+        "has_previous": number > 1,
         "next_sub": (f"Advance to stop {number + 1}" if number < total
                      else "Last stop on this run"),
+        "previous_sub": (f"Back to stop {number - 1}" if number > 1
+                         else "First stop on this run"),
     }
 
 
 # ---------------------------------------------------------- document status --
 
-#: Recovered from the operator's notes. **Not yet approved as policy** -- the
-#: final pickup and delivery lists are an operating-procedure decision he has
-#: said he needs to think through, and inventing the rest would be exactly the
-#: fabrication the doctrine forbids. What is here is what he named.
+#: The checklists, as specified by the operator on 31 August 2026.
+#:
+#: The Arrival Notice leads both and is already satisfied when the driver opens
+#: the drawer, because Dispatch generated and sent it when he pressed ARRIVE.
+#: Everything below it is something he has to come back with.
+#:
+#: The Load Diagram is deliberately NOT here. It is a mission-execution item he
+#: works *from*, not an artifact he collects -- see `load_diagram_for`.
+ARRIVAL_NOTICE = "Arrival Notice"
+
 PICKUP_ARTIFACTS = (
-    "Proof of Pickup (POP)",
-    "Bill of Lading (BOL)",
+    ARRIVAL_NOTICE,
     "Packing List",
-    "Load Diagram",
-    "Photos",
+    "Bill of Lading (BOL)",
+    "Photos - Load Securement",
 )
 
-#: The delivery list has NOT been reconstructed. This is deliberately short and
-#: is marked provisional on screen rather than padded out to look finished.
 DELIVERY_ARTIFACTS = (
-    "Proof of Delivery (POD)",
-    "Signed POD",
-    "Photos",
+    ARRIVAL_NOTICE,
+    "Proof Of Delivery Document",
+    "Packing List (if included)",
+    "Photos - Condition / Delivery",
+    "Invoice To Broker",
 )
+
+#: What each notice promises will follow. Reproduced from the operator's
+#: templates rather than summarised: this text goes to a broker.
+ARRIVAL_NOTICE_FOLLOWS = {
+    "PICKUP": ("Bill of Lading (BOL)", "Packing List",
+               "Load Diagram", "Load Securement Photos"),
+    "DELIVERY": ("Signed POD / Signed BOL", "Packing List (if included)",
+                 "Delivery Photos", "Invoice"),
+}
+
+#: Every arrival notice is blind-copied here, so the office holds the evidence
+#: whether or not the broker acknowledges it.
+ARRIVAL_NOTICE_BCC = "Ops@l1truck.com"
 
 STATUS_READY = "READY"
 STATUS_COMPLETE = "COMPLETE"
@@ -181,9 +204,22 @@ def _held(record: dict) -> set:
 
 
 def document_checklist(record: dict, mode: str) -> list:
+    """What the driver must come back with, and what Dispatch already has.
+
+    The Arrival Notice is ticked by pressing ARRIVE rather than by collecting
+    anything -- Dispatch generated it and sent it. Showing it unticked would ask
+    him to go and find a document that is already in the broker's inbox.
+    """
     held = _held(record)
-    return [{"label": name, "done": name.lower() in held}
-            for name in _artifact_list(mode)]
+    arrived = bool(record.get("arrived_at"))
+    items = []
+    for name in _artifact_list(mode):
+        if name == ARRIVAL_NOTICE:
+            items.append({"label": name, "done": arrived,
+                          "note": "Dispatch generated and auto-sent"})
+        else:
+            items.append({"label": name, "done": name.lower() in held, "note": ""})
+    return items
 
 
 def document_status(record: dict, mode: str) -> dict:
@@ -277,19 +313,80 @@ def completion_effect(record: dict, mode: str) -> dict:
 # ----------------------------------------------------------------- actions --
 
 def arrive_for(record: dict, mode: str) -> dict:
-    """The mission transition event, not a status button.
+    """The mission transition event, and the one action that sends by itself.
 
-    It stamps date, time and position, and it is what starts packet creation,
-    review and send. Its meaning changes with the mode; its position does not.
+    **Workflow 1, and it is auto-send.** Pressing ARRIVE captures date, time,
+    GPS, facility, load number, description, broker, broker POC and facility
+    POC; Publisher writes the Arrival Notice; COMI routes it; it **sends**,
+    blind-copied to the office.
+
+    That is deliberate and it is not the same act as the delivery packet. An
+    arrival notice is *evidence that the truck was on site at a time* -- it is
+    only worth anything if it leaves immediately, because its whole value is
+    being contemporaneous. A packet that closes out a load is a different thing
+    and a human sends that one. See `completion_effect`.
     """
-    if mode == MODE_DELIVERY:
-        return {"available": True, "phase": "DELIVERY",
-                "sub": "Stamp arrival · start delivery packet"}
-    if mode == MODE_PICKUP:
-        return {"available": True, "phase": "PICKUP",
-                "sub": "Stamp arrival · start pickup packet"}
-    return {"available": False, "phase": "IN_TRANSIT",
-            "sub": "Available at pickup or delivery"}
+    phase = "DELIVERY" if mode == MODE_DELIVERY else "PICKUP"
+    if mode == MODE_IN_TRANSIT:
+        return {"available": False, "phase": "CURRENT", "auto_sends": False,
+                "sub": "Available at pickup or delivery",
+                "bcc": "", "follows": ()}
+    return {
+        "available": True,
+        "phase": phase,
+        "auto_sends": True,
+        "sub": f"Stamps time and GPS. Sends the {phase.lower()} arrival notice.",
+        "bcc": ARRIVAL_NOTICE_BCC,
+        "follows": ARRIVAL_NOTICE_FOLLOWS[phase],
+    }
+
+
+def arrival_notice_for(record: dict, mode: str) -> dict:
+    """What the notice will say, so the driver can see it before it goes.
+
+    Fields left empty are left empty. A notice that invents a facility name is
+    worse than one that admits it does not have it -- this text reaches a broker
+    under Level 1 Transport's name.
+    """
+    phase = "DELIVERY" if mode == MODE_DELIVERY else "PICKUP"
+    ends = ends_for(record)
+    end = "delivery" if mode == MODE_DELIVERY else "pickup"
+    return {
+        "phase": phase,
+        "title": f"{phase} ARRIVAL NOTICE",
+        "opening": "Truck arrived on site.",
+        "fields": [
+            {"key": "Date", "value": record.get("arrived_date") or ""},
+            {"key": "Time", "value": record.get("arrived_time") or ""},
+            {"key": "GPS", "value": record.get(f"{end}_gps") or ""},
+            {"key": "Facility", "value": ends[end]["place"]},
+            {"key": "Load Number", "value": (record.get("numbers") or {}).get("load_label") or ""},
+            {"key": "Description", "value": cargo_for(record)["description"]},
+        ],
+        "follows_intro": ("The following documents will be provided upon completion "
+                          f"of {phase.lower()} activities:"),
+        "follows": ARRIVAL_NOTICE_FOLLOWS[phase],
+        "bcc": ARRIVAL_NOTICE_BCC,
+        "sent": bool(record.get("arrived_at")),
+        "transmission": transmission_status(),
+    }
+
+
+def load_diagram_for(record: dict) -> dict:
+    """Where the freight sits, and in what order it comes off.
+
+    **Ruled by the operator: the Load Diagram is not a checklist item.** It is
+    something the driver works *from* while loading and unloading, not something
+    he collects and hands over. On a multi-stop run it decides whether stop
+    three is reachable without unloading stop four onto the dock.
+    """
+    return {
+        "available": bool(record.get("load_diagram") or record.get("load_position")),
+        "position": record.get("load_position") or "Not recorded",
+        "diagram": record.get("load_diagram") or "",
+        "sub": ("Cargo arrangement and unload order"
+                if record.get("load_diagram") else "No diagram produced yet"),
+    }
 
 
 def facility_map_for(record: dict, mode: str) -> dict:
@@ -348,7 +445,19 @@ def drawers_for(record: dict, mode: str, route_risk: str = "") -> list:
         {"key": "cargo", "side": "left", "title": "Cargo",
          "rows": rows(("Commodity", cargo["description"]),
                       ("Detail", cargo["brackets"]),
-                      ("Load diagram", _first(record, "load_diagram", default="Not yet produced")))},
+                      ("Load position", load_diagram_for(record)["position"]))},
+
+        # Worked from, not collected. Left side: it belongs to the freight.
+        {"key": "loaddiagram", "side": "left", "title": "Load diagram",
+         "rows": rows(("Load position", load_diagram_for(record)["position"]),
+                      ("Diagram", load_diagram_for(record)["diagram"]
+                       or "Not produced yet"),
+                      ("Cargo", cargo["description"]),
+                      ("Detail", cargo["brackets"]))},
+
+        # What ARRIVE will send, visible before it is pressed.
+        {"key": "arrival", "side": "right", "title": "Arrival notice",
+         "notice": arrival_notice_for(record, mode)},
 
         {"key": "broker", "side": "left", "title": "Broker",
          "rows": rows(("Broker", broker["name"] or "—"),
@@ -379,6 +488,8 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "") -> dict:
         "doc_status": document_status(record, mode),
         "completion": completion_effect(record, mode),
         "arrive": arrive_for(record, mode),
+        "arrival_notice": arrival_notice_for(record, mode),
+        "load_diagram": load_diagram_for(record),
         "facility_map": facility_map_for(record, mode),
         "drawers": drawers_for(record, mode, route_risk),
     }
