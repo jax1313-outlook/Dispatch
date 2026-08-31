@@ -22,20 +22,20 @@ preferences, hard stops and weighting.
 
 ---
 
-## 1. Hard stops — REJECT, whatever the score
+## 1. Physical fit is a FILTER, not a score
 
-Three categories can disqualify. A high score never overrides one.
+Three categories decide whether a load is a candidate at all.
 
 **CONFIRMED, and it defines the two terms:**
 
 > *"I take cube as size and weight as heft measured by scale. If they are out of range for
 > equipment then they are no opportunity at all."*
 
-| # | Category | Measures | Rule |
+| # | Category | Measures | Out of range |
 |---|---|---|---|
-| 7 | **Cube** | **size** — the space the freight occupies | Out of range → **no opportunity at all** |
-| 9 | **Weight** | **heft** — what it reads on a scale | Out of range → **no opportunity at all** |
-| 8 | **Equipment compatibility** | what the equipment can do | *"If it does not fit I cannot take it."* |
+| 7 | **Cube** | **size** — the space the freight occupies | **Filtered. Not evaluated.** |
+| 9 | **Weight** | **heft** — what it reads on a scale | **Filtered. Not evaluated.** |
+| 8 | **Equipment compatibility** | what the equipment can do | **Filtered. Not evaluated.** |
 
 Cube and weight are **two independent limits, not one**. Freight can be light and bulky, or
 small and immensely heavy, and either alone disqualifies. A load at 40% of the weight limit can
@@ -52,17 +52,39 @@ that.
 **Both limits are properties of the equipment**, so both live in the fleet profile — and both
 are `UNCONFIGURED` until the van is bought.
 
-### Open: reject-and-show, or filter-and-hide?
+### RESOLVED: skip them. They are not selected for evaluation.
 
-*"No opportunity at all"* could mean either. **RECOMMENDATION: show it, marked rejected, with
-the number that disqualified it** — *"exceeds cube capacity by 40%"*.
+> *"If out of range — skip. The loads are not to be selected for evaluation."*
 
-The reason is a case that will happen: **a broker mis-types a dimension.** A load silently
-filtered out for being 60 feet long, when the poster meant 6, is real freight the operator
-never learns existed. Rejected-and-visible costs one line on a screen; filtered-and-hidden
-costs a load, invisibly, and never announces itself.
+**This places physical fit at the FILTER stage, not the blocking stage**, and the distinction
+is architectural rather than cosmetic. See `DISPATCH_FILTER_SCORE_SORT_SPEC.md`:
 
-Needs the operator's ruling — this is presentation, and presentation is his.
+| | **FILTER** | **BLOCKING** |
+|---|---|---|
+| Asks | Is this a candidate at all? | Can this be run? |
+| Result | Not shown by default | Shown, marked disqualified |
+| Example | Cube, weight, equipment out of range | Below floor; broker on the avoid list |
+
+Territory and floor compliance are **business judgements** — the operator may want to see one
+and overrule it. Cube, weight and equipment are **physical facts about the vehicle**. There is
+no judgement to exercise and no override that makes a load fit, so there is no reason to spend
+his attention on it.
+
+**The engine does not score what it cannot carry.**
+
+### The mis-typed dimension is still recoverable, and that is not a compromise
+
+Filtering in Dispatch is **recorded, never silent** — the same specification requires it:
+
+> *Every filtered record keeps its reason and remains retrievable. The operator can always ask
+> "what did you not show me?"*
+
+So a broker who posts 60 feet meaning 6 produces a filtered record carrying
+*"exceeds cube capacity"*, retrievable on request. It costs no screen space and loses no
+freight. The concern that argued for showing these is answered by the filter being auditable
+rather than by putting them in front of him.
+
+**A filter that deletes would be a different thing entirely, and is forbidden.**
 
 **Cube cannot be evaluated at all yet.** The van has not been purchased, so
 `cube_capacity_ft3` is `UNCONFIGURED`. The most critical category is currently blind: it
@@ -130,11 +152,11 @@ with overlapping ones.
 **CONFIRMED, weekly basis: "adding a single stop for additional revenue and route fit within
 capacity is a high score."** Capacity fit is assessed across the **week**, not only the day.
 
-### 7 · Cube Utilization — **HARD STOP**. See §1.
+### 7 · Cube Utilization — **FILTER**. See §1.
 
-### 8 · Equipment Compatibility — **HARD STOP**. See §1.
+### 8 · Equipment Compatibility — **FILTER**. See §1.
 
-### 9 · Weight Compatibility — *moderate within limits, hard stop above*. See §1.
+### 9 · Weight Compatibility — *moderate within limits, filtered above*. See §1.
 
 Distinct from cube: cube is the space it takes, weight is what the scale reads. Either alone
 disqualifies.
@@ -264,3 +286,18 @@ Two items are genuinely unclear and are **not** actioned:
 
 Per the Fact and Provenance doctrine, an unclear instruction is recorded as unresolved rather
 than resolved by assumption.
+
+---
+
+## 5. Follow-on question this raises
+
+Cube, weight and equipment are filtered because they are physical impossibilities the operator
+cannot overrule. **Two other conditions are the same shape and have not been ruled on:**
+
+- **An endorsement not held** — hazmat, tanker. Legal impossibility rather than physical, and
+  no reason string makes it safe.
+- **A deadline already passed** — the load is gone.
+
+Both were previously proposed as `NOT PERMITTED` blocking conditions. Under this ruling they
+look like filters instead. **Not assumed either way** — filtered and blocked behave
+differently, and the operator has ruled on three categories, not five.
