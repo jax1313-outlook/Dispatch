@@ -1,285 +1,164 @@
+{# ============================================================================
+   DRIVER COCKPIT
+
+   A mission-execution instrument panel, used from key-on to key-off. Not a
+   website, not a dashboard, not a portal in the software sense.
+
+   The governing interaction, in the operator's words:
+
+       Observe -> Tap -> Expand -> Act -> Collapse -> Return
+
+   without ever leaving the Mission Record. Every major title is a control, not
+   a heading. Detail arrives in a drawer that opens from the side the data
+   lives on, and the Mission Record stays lit behind it.
+
+   The layout does not move between modes. Only what sits in the slots, which
+   end is emphasised, which checklist applies, and which actions are live. At
+   seventy miles an hour a driver does not read a screen, he checks a position.
+============================================================================ #}
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>{{ record.numbers.mission_label or 'JOE Portal' }} — Level 1 Transport</title>
-
-{# Vendored, not fetched. The prototype pulled Tailwind, Lucide and Google
-   Fonts from three CDNs; in a truck with no signal that renders unstyled.
-   These are served from this machine. #}
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driver Cockpit — {{ record.numbers.mission_label or 'Mission' }}</title>
 <script src="{{ url_for('static', filename='vendor/tailwind.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='joe_portal.css') }}">
 </head>
+<body class="cockpit">
 
-<body class="flex flex-col min-h-screen">
+{# ------------------------------------------------------------------ BANNER #}
+<header class="cockpit-banner">
+  <a class="way-out" href="{{ url_for('pages.home') }}">&larr; Dispatch</a>
 
-{# ============================================================= HEADER #}
-<header class="px-4 pt-4 pb-2">
-  <div class="flex justify-between items-center flex-wrap gap-3">
-    <div>
-      {# The way out. This screen had none: its only two links were a stylesheet
-         and the broker's phone number, so the only exit was the browser's Back
-         button or typing a URL. A screen with no exit is the same defect as a
-         launcher nobody can find. #}
-      <a class="way-out" href="{{ url_for('pages.home') }}">&larr; Dispatch</a>
-      <div class="fact-label">Level 1 Transport</div>
-      <div class="flex items-center gap-3 mt-1">
-        <span class="big-fact">{{ record.title or 'Untitled mission' }}</span>
-        {% if record.purpose == 'MISSION' %}
-          <span class="badge badge-go">Mission</span>
-        {% else %}
-          <span class="badge badge-blue">Opportunity</span>
-        {% endif %}
-      </div>
-    </div>
+  <div class="banner-identity">
+    <span class="brand">LEVEL 1 TRANSPORT</span>
+    <span class="brand-sub">Jacksonville Regional Micro-Response Carrier</span>
+  </div>
 
-    {# The two numbers, side by side and labelled, so they can never be
-       confused. Ours is short and dim. Theirs is the one on the invoice. #}
-    <div class="flex items-center gap-6">
-      <div>
-        <div class="fact-label">Mission (ours)</div>
-        <div class="num-mission text-lg">
-          {{ record.numbers.mission_number or '—' }}</div>
-      </div>
-      <div>
-        <div class="fact-label">Load (broker's)</div>
-        <div class="num-load text-lg">
-          {{ record.numbers.load_number or '—' }}</div>
-      </div>
-      <div>
-        <div class="fact-label">Clock</div>
-        <div class="font-mono text-lg tabular-nums" id="clock">--:--:--</div>
-      </div>
+  <div class="banner-title-row">
+    <h1 class="cockpit-title">DRIVER COCKPIT</h1>
+    <div class="banner-state">
+      {% if stops.total > 1 %}
+        <div class="stop-counter">STOP {{ stops.number }} OF {{ stops.total }}</div>
+      {% endif %}
+      <div class="status-chip">STATUS: {{ mode_label }}</div>
     </div>
   </div>
+
+  {# Three modes, in the driver's own words. Thumb-sized, permanently
+     positioned, never reordered. #}
+  <nav class="mode-bar" role="tablist" aria-label="Mission phase">
+    {% for m in modes %}
+      <button class="mode-btn {% if m.key == requested_view %}active{% endif %}"
+              data-mode="{{ m.key }}" role="tab"
+              aria-selected="{{ 'true' if m.key == requested_view else 'false' }}">
+        {{ m.label }}
+      </button>
+    {% endfor %}
+  </nav>
 </header>
 
-{# =========================================================== MODE BAR #}
-{# CURRENT / PICKUP / DELIVERY, and nothing else. Deterministic views over ONE
-   record. CURRENT is not a third data set: it resolves to whichever phase the
-   record's own status is in.
+<main class="cockpit-body">
 
-   The arrangement does not move between modes -- only what sits in the slots.
-   At 70mph a driver does not read a screen, he checks a position, and a layout
-   that rearranges itself costs him a re-read on every switch. #}
-<nav class="mode-bar px-4" role="tablist" aria-label="Mission view">
-  {% for mode in ['CURRENT', 'PICKUP', 'DELIVERY'] %}
-    <button class="mode-btn {% if mode == requested_view %}active{% endif %}"
-            data-mode="{{ mode }}" role="tab"
-            aria-selected="{{ 'true' if mode == requested_view else 'false' }}">
-      {{ mode }}
+{# ------------------------------------------------------- LEFT: THE MISSION #}
+<section class="mission-column" aria-label="Mission record">
+
+  <div class="trip-card">
+    <div class="trip-card-head">
+      <span class="trip-label">ACTIVE TRIP CARD</span>
+      <span class="trip-number">{{ record.numbers.mission_label or '—' }}</span>
+    </div>
+    <div class="trip-broker">{{ broker.name or 'Broker unassigned' }}</div>
+    <div class="trip-title">{{ record.title or 'Untitled mission' }}</div>
+  </div>
+
+  {# Both ends stay visible. The mode changes which is bright, never which
+     exists: a driver who loses sight of where the mission started has lost
+     his orientation, not just a panel. #}
+  <div class="ends">
+    <button class="end-panel {{ emphasis.pickup }}" data-drawer="pickup" data-side="left">
+      <span class="end-title">PICKUP DETAILS</span>
+      <span class="end-place">{{ ends.pickup.place }}</span>
+      <span class="end-window">{{ ends.pickup.window }}</span>
     </button>
-  {% endfor %}
-  <span class="ml-auto flex items-center gap-2 pr-2">
-    <span class="fact-label">Showing</span>
-    <span class="badge badge-blue" id="resolved-phase">{{ view.phase }}</span>
-  </span>
-</nav>
 
-<main class="flex-1 px-4 py-4 space-y-4">
-
-{# ============================================================= CURRENT #}
-<section data-panel="CURRENT" class="space-y-4 {% if requested_view != 'CURRENT' %}hidden{% endif %}">
-
-  <div class="card">
-    <div class="card-header">What matters now</div>
-    <div class="card-body space-y-3">
-      <div class="flex flex-wrap gap-6">
-        <div>
-          <div class="fact-label">Next required action</div>
-          <div class="big-fact">{{ next_action }}</div>
-        </div>
-        <div>
-          <div class="fact-label">Status</div>
-          <div class="big-fact">{{ (record.status or 'created')|replace('_',' ')|title }}</div>
-        </div>
-      </div>
-
-      <div class="flex flex-wrap gap-6 pt-2">
-        <div>
-          <div class="fact-label">Going to</div>
-          <div class="text-base">
-            {% if view.phase == 'PICKUP' %}{{ record.pickup_location or '—' }}
-            {% else %}{{ record.delivery_location or '—' }}{% endif %}
-          </div>
-        </div>
-        <div>
-          <div class="fact-label">Time that matters</div>
-          <div class="text-base font-mono">
-            {% if view.phase == 'PICKUP' %}{{ record.pickup_window or '—' }}
-            {% else %}{{ record.delivery_window or '—' }}{% endif %}
-          </div>
-        </div>
-        <div>
-          <div class="fact-label">Contact</div>
-          <div class="text-base">
-            {{ record.broker or '—' }}
-            {% if record.broker_phone %}
-              <a class="num-load ml-2" href="tel:{{ record.broker_phone }}">
-                {{ record.broker_phone }}</a>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
+    <button class="end-panel {{ emphasis.delivery }}" data-drawer="delivery" data-side="left">
+      <span class="end-title">DELIVERY DETAILS</span>
+      <span class="end-place">{{ ends.delivery.place }}</span>
+      <span class="end-window">{{ ends.delivery.window }}</span>
+    </button>
   </div>
 
-  {# Anything unresolved. Open exceptions appear in every phase, because a
-     problem is never irrelevant just because you moved down the road. #}
-  <div class="card">
-    <div class="card-header">Unresolved</div>
-    <div class="card-body space-y-2">
-      {% if view.exceptions %}
-        {% for x in view.exceptions %}
-          <div class="border-l-2 border-alert pl-3">
-            <span class="badge badge-alert">{{ x.exception_type }}</span>
-            <span class="ml-2">{{ x.description or x.notes or '' }}</span>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="text-muted font-mono text-xs">Nothing unresolved.</div>
-      {% endif %}
+  <button class="fact-row" data-drawer="route" data-side="right">
+    <span class="fact-key">ROUTE NOTES &amp; CORRIDOR RISK:</span>
+    <span class="fact-value">{{ route_risk or 'No corridor risk reported' }}</span>
+  </button>
 
-      {% if view.detentions %}
-        {% for d in view.detentions %}
-          <div class="border-l-2 border-caution pl-3">
-            <span class="badge badge-caution">Detention</span>
-            <span class="ml-2 font-mono text-xs">
-              {{ d.location_type }} — since {{ d.started_at or '—' }}</span>
-          </div>
-        {% endfor %}
-      {% endif %}
+  <button class="fact-row" data-drawer="cargo" data-side="left">
+    <span class="fact-key">CARGO:</span>
+    <span class="fact-value">{{ cargo.description }}
+      <span class="fact-bracket">[{{ cargo.brackets }}]</span></span>
+  </button>
 
-      {% if route_risk %}
-        <div class="border-l-2 border-caution pl-3">
-          <span class="badge badge-caution">Route risk</span>
-          <span class="ml-2">{{ route_risk }}</span>
-        </div>
-      {% endif %}
-    </div>
-  </div>
+  <button class="fact-row" data-drawer="broker" data-side="left">
+    <span class="fact-key">BROKER:</span>
+    <span class="fact-value">{{ broker.reference }}
+      {% if broker.phone %}<span class="fact-bracket">{{ broker.phone }}</span>{% endif %}</span>
+  </button>
 
-  {# Money, read-only here. Dispatch owns the workflow that changes it. #}
-  <div class="card">
-    <div class="card-header">The run</div>
-    <div class="card-body flex flex-wrap gap-8">
-      <div><div class="fact-label">Rate</div>
-        <div class="big-fact">{% if record.rate %}${{ record.rate }}{% else %}—{% endif %}</div></div>
-      <div><div class="fact-label">Per mile</div>
-        <div class="big-fact">{% if record.rpm %}{{ record.rpm }}{% else %}—{% endif %}</div></div>
-      <div><div class="fact-label">Miles</div>
-        <div class="big-fact">{{ record.distance_miles or '—' }}</div></div>
-      <div><div class="fact-label">Equipment</div>
-        <div class="text-base">{{ record.equipment or '—' }}</div></div>
-    </div>
-  </div>
+  {# Two states only: READY and COMPLETE. Not pending, not holding, not in
+     progress -- those are administrative words for an operational question. #}
+  <button class="fact-row doc-status" data-drawer="documents" data-side="right">
+    <span class="fact-key">DOCUMENT STATUS:</span>
+    <span class="fact-value doc-state">{{ doc_status.label }}{% if doc_status.complete %} <span class="tick">&#10003;</span>{% endif %}</span>
+  </button>
 </section>
 
-{# ====================================================== PICKUP / DELIVERY #}
-{% for mode in ['PICKUP', 'DELIVERY'] %}
-<section data-panel="{{ mode }}" class="space-y-4 {% if requested_view != mode %}hidden{% endif %}">
-  <div class="card">
-    <div class="card-header">{{ mode }} — where and when</div>
-    <div class="card-body space-y-3">
-      <div class="flex flex-wrap gap-6">
-        <div><div class="fact-label">Location</div>
-          <div class="big-fact">
-            {% if mode == 'PICKUP' %}{{ record.pickup_location or '—' }}
-            {% else %}{{ record.delivery_location or '—' }}{% endif %}</div></div>
-        <div><div class="fact-label">Window</div>
-          <div class="text-base font-mono">
-            {% if mode == 'PICKUP' %}{{ record.pickup_window or '—' }}
-            {% else %}{{ record.delivery_window or '—' }}{% endif %}</div></div>
-      </div>
-      <div class="flex flex-wrap gap-6">
-        <div><div class="fact-label">Contact</div>
-          <div class="text-base">{{ record.broker or '—' }}</div></div>
-        <div><div class="fact-label">Reference to quote</div>
-          <div class="num-load">{{ record.numbers.load_number or '—' }}</div></div>
-      </div>
-      {% if facility_intel %}
-        <div class="border-l-2 border-electric pl-3">
-          <div class="fact-label">Facility intelligence</div>
-          <div class="text-sm">{{ facility_intel }}</div>
-        </div>
-      {% endif %}
-    </div>
-  </div>
+{# ------------------------------------------------- RIGHT: MISSION ACTIONS #}
+<section class="action-column" aria-label="Mission actions">
+  <div class="action-heading">MISSION ACTIONS</div>
 
-  {# Arrival, waiting, detention, loaded/delivered. These POST to Dispatch,
-     which owns the workflow. The portal collects the press; it decides
-     nothing. #}
-  <div class="card">
-    <div class="card-header">{{ mode }} — record what happened</div>
-    <div class="card-body flex flex-wrap gap-3">
-      {% for label, milestone in actions_for(mode) %}
-        <button class="act-btn act-btn-go" data-milestone="{{ milestone }}"
-                data-record="{{ record.id }}">{{ label }}</button>
-      {% endfor %}
-    </div>
-  </div>
+  {# ARRIVE is first because it is not a status button. It is the mission
+     transition event: it stamps date, time and position, and it is what starts
+     packet creation, review and send. #}
+  <button class="action arrive" data-action="arrive"
+          {% if not arrive.available %}disabled{% endif %}>
+    <span class="action-name">ARRIVE</span>
+    <span class="action-sub">{{ arrive.sub }}</span>
+  </button>
 
-  <div class="card">
-    <div class="card-header">{{ mode }} — timeline</div>
-    <div class="card-body space-y-2">
-      {% set shown = views[mode].milestones %}
-      {% if shown %}
-        {% for m in shown %}
-          <div class="border-l-2 border-go pl-3 font-mono text-xs">
-            {{ m.event_time or m.created_at or '' }} —
-            {{ (m.event_type or m.milestone_type or '')|replace('_',' ') }}
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="text-muted font-mono text-xs">
-          Nothing recorded for this phase yet.</div>
-      {% endif %}
-    </div>
-  </div>
+  <button class="action" data-action="facility-map"
+          {% if not facility_map.available %}disabled{% endif %}>
+    <span class="action-name">FACILITY MAP</span>
+    <span class="action-sub">{{ facility_map.sub }}</span>
+  </button>
 
-  <div class="card">
-    <div class="card-header">{{ mode }} — documents and photos</div>
-    <div class="card-body space-y-2">
-      {% set docs = views[mode].evidence %}
-      {% if docs %}
-        {% for e in docs %}
-          <div class="font-mono text-xs">
-            <span class="badge badge-blue">{{ e.evidence_type }}</span>
-            <span class="ml-2">{{ e.original_filename or e.description or '' }}</span>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="text-muted font-mono text-xs">
-          {% if mode == 'PICKUP' %}No BOL or pickup photos filed.
-          {% else %}No POD or delivery photos filed.{% endif %}
-        </div>
-      {% endif %}
-    </div>
-  </div>
+  <button class="action" data-drawer="documents" data-side="right">
+    <span class="action-name">DOCUMENT STATUS</span>
+    <span class="action-sub">{{ doc_status.label }}</span>
+  </button>
+
+  <button class="action" data-action="upload">
+    <span class="action-name">UPLOAD DOCUMENTS - PHOTOS</span>
+    <span class="action-sub">Scanner or camera</span>
+  </button>
+
+  <div class="action-spacer"></div>
+
+  {% if stops.total > 1 %}
+  <button class="action next-stop" data-action="next-stop">
+    <span class="action-name">NEXT STOP</span>
+    <span class="action-sub">{{ stops.next_sub }}</span>
+  </button>
+  {% endif %}
 </section>
-{% endfor %}
+</main>
 
-{# ============================================================ JOE DOCK #}
-{# Three lines, the full width of the screen, at the bottom where a thumb
-   already rests. Two lines in, one line out.
-
-   JOE had a whole mode of its own. It did not need one: asking a question is
-   something done *while* looking at the load, not instead of looking at it.
-   Taking the screen away and leaving the dialog is the smaller thing that does
-   the same job.
-
-   The spoken line is 24px, non-bold, monospace, by the operator's
-   specification. Monospace because a fixed width makes a number the same shape
-   every time it appears, and non-bold because a whole line of bold reads as
-   shouting and stops being scannable. #}
+{# ------------------------------------------------------------- JOE DOCK #}
+{# Two lines in, one line out. JOE has no screen of its own: asking a question
+   is done *while* looking at the load, not instead of looking at it. #}
 <footer class="joe-dock">
-  <div class="joe-dock-numbers">
-    <span class="num-mission">{{ record.numbers.mission_label }}</span>
-    <span class="joe-dock-sep">·</span>
-    <span class="num-load">{{ record.numbers.load_label }}</span>
-  </div>
-
   <div class="joe-box">
     <label class="joe-box-tag" for="joe-entry">JOE</label>
     <textarea id="joe-entry" class="joe-entry" rows="2" spellcheck="false"
@@ -288,94 +167,86 @@
   </div>
 </footer>
 
+{# --------------------------------------------------------------- DRAWERS #}
+{# One drawer per data point, opening from the side its control lives on. The
+   Mission Record is never replaced -- it stays lit behind, which is the whole
+   of the Progressive Detail rule. #}
+<div class="scrim" id="scrim" hidden></div>
+
+{% for d in drawers %}
+<aside class="drawer drawer-{{ d.side }}" id="drawer-{{ d.key }}" hidden
+       role="dialog" aria-label="{{ d.title }}"
+       {% if d.sticky %}data-sticky="1"{% endif %}>
+  <header class="drawer-head">
+    <span class="drawer-title">{{ d.title }}</span>
+    <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
+  </header>
+  <div class="drawer-body">
+    {% if d.checklist is defined and d.checklist %}
+      <ul class="checklist">
+        {% for item in d.checklist %}
+          <li class="{{ 'done' if item.done else 'todo' }}">
+            <span class="box">{% if item.done %}&#10003;{% else %}&#9744;{% endif %}</span>
+            <span class="item">{{ item.label }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+      <div class="checklist-status">STATUS: {{ d.status }}</div>
+      <p class="drawer-note">This checklist stays open until you close it.</p>
+    {% else %}
+      <dl class="detail-list">
+        {% for row in d.rows %}
+          <dt>{{ row.key }}</dt><dd>{{ row.value or '—' }}</dd>
+        {% endfor %}
+      </dl>
+    {% endif %}
+  </div>
+</aside>
+{% endfor %}
+
 <script>
-// The prototype's switchTab, widened to mission phase. Hides every panel,
-// reveals one, and marks the pressed control. No fetch, no second query, no
-// second record - the same bundle is already on the page.
-function switchMode(mode) {
-  document.querySelectorAll('[data-panel]').forEach(function (p) {
-    p.classList.toggle('hidden', p.dataset.panel !== mode);
-  });
-  document.querySelectorAll('.mode-btn').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.mode === mode);
-    b.setAttribute('aria-selected', b.dataset.mode === mode ? 'true' : 'false');
-  });
-  if (mode === 'CURRENT' || mode === 'PICKUP' || mode === 'DELIVERY') {
-    var url = new URL(window.location);
-    url.searchParams.set('view', mode);
-    history.replaceState({}, '', url);
-  }
-}
+// Mode switch. The URL carries the mode so a reload lands where the driver was.
 document.querySelectorAll('.mode-btn').forEach(function (b) {
-  b.addEventListener('click', function () { switchMode(b.dataset.mode); });
+  b.addEventListener('click', function () {
+    var url = new URL(window.location);
+    url.searchParams.set('view', b.dataset.mode);
+    window.location = url;
+  });
 });
 
-function updateClock() {
-  var d = new Date();
-  var el = document.getElementById('clock');
-  if (el) el.textContent = d.toTimeString().slice(0, 8);
+// Drawers. One at a time, from either side, with the record still behind it.
+var scrim = document.getElementById('scrim');
+
+function closeDrawers() {
+  document.querySelectorAll('.drawer').forEach(function (d) { d.hidden = true; });
+  scrim.hidden = true;
 }
-updateClock();
-setInterval(updateClock, 1000);
 
-// Milestones POST to Dispatch, which owns the workflow.
-document.querySelectorAll('[data-milestone]').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    btn.disabled = true;
-    fetch('/api/dispatch/loads/' + btn.dataset.record + '/milestones', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      // The endpoint's field is event_type, not milestone_type. Sending
-      // the wrong name returned 400 and the press did nothing.
-      body: JSON.stringify({event_type: btn.dataset.milestone, source: 'driver'})
-    }).then(function (r) {
-      if (r.ok) { window.location.reload(); return; }
-      return r.json().then(function (d) {
-        btn.disabled = false;
-        var line = document.getElementById('joe-line');
-        if (line) line.textContent =
-          'That did not record: ' + (d.error || 'Dispatch refused it') + '.';
-      });
-    }).catch(function () {
-      btn.disabled = false;
-      var line = document.getElementById('joe-line');
-      if (line) line.textContent =
-        'That did not record. Dispatch did not answer.';
-    });
+document.querySelectorAll('[data-drawer]').forEach(function (t) {
+  t.addEventListener('click', function () {
+    var target = document.getElementById('drawer-' + t.dataset.drawer);
+    if (!target) { return; }
+    var wasOpen = !target.hidden;
+    closeDrawers();
+    if (!wasOpen) { target.hidden = false; scrim.hidden = false; }
   });
 });
 
-// Sweep controls.
-function sweepPost(path, body) {
-  return fetch('/api/sweep/' + path, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body || {})
-  }).then(function (r) { return r.json(); });
-}
-var startBtn = document.getElementById('sweep-start');
-if (startBtn) startBtn.addEventListener('click', function () {
-  document.getElementById('sweep-state').textContent = 'starting…';
-  sweepPost('start').then(function (d) {
-    document.getElementById('sweep-state').textContent = d.state || 'unknown';
-    document.getElementById('sweep-last').textContent = d.last_run || 'never';
-  });
+document.querySelectorAll('[data-close]').forEach(function (b) {
+  b.addEventListener('click', closeDrawers);
 });
-var stopBtn = document.getElementById('sweep-stop');
-if (stopBtn) stopBtn.addEventListener('click', function () {
-  sweepPost('schedule', {timer_enabled: false}).then(function (d) {
-    document.getElementById('sweep-next').textContent = d.next_run || 'not scheduled';
-    document.getElementById('sweep-enabled').checked = false;
-  });
+
+// The scrim closes an ordinary drawer. It does NOT close the document
+// checklist: that one is worked from while walking a dock with the tablet in
+// hand, and a stray touch that shuts it mid-count is worse than no drawer.
+scrim.addEventListener('click', function () {
+  var open = document.querySelector('.drawer:not([hidden])');
+  if (open && open.dataset.sticky) { return; }
+  closeDrawers();
 });
-var saveBtn = document.getElementById('sweep-save');
-if (saveBtn) saveBtn.addEventListener('click', function () {
-  sweepPost('schedule', {
-    timer_enabled: document.getElementById('sweep-enabled').checked,
-    daily_at: document.getElementById('sweep-time').value
-  }).then(function (d) {
-    document.getElementById('sweep-next').textContent = d.next_run || 'not scheduled';
-  });
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { closeDrawers(); }
 });
 </script>
 </body>

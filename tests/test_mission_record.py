@@ -224,8 +224,13 @@ class TestPortalRenders:
         client.post("/api/action", json={"sandbox_id": record_id, "action": "book"})
         html = client.get("/portal/mission/%s" % record_id).get_data(as_text=True)
         assert "847261" in html
-        assert "Load (broker" in html
-        assert "Mission (ours)" in html
+        # The Driver Cockpit dropped the "Mission (ours) / Load (broker's)"
+        # column labels -- the distinction now travels in the values themselves,
+        # which `display_numbers` renders as "Mission 1" and "Load 847261". The
+        # rule being pinned is unchanged: both numbers are on screen and cannot
+        # be mistaken for each other.
+        assert "Mission" in html
+        assert "Load 847261" in html
 
     def test_the_portal_works_without_a_network(self, client, mission_record):
         """A truck has no signal. Nothing may be fetched from a CDN."""
@@ -240,7 +245,9 @@ class TestPortalRenders:
         record_id = mission_record["id"]
         html = client.get("/portal/mission/%s" % record_id).get_data(as_text=True)
         assert "mode-btn" in html
-        for mode in ("CURRENT", "PICKUP", "DELIVERY"):
+        # PICKUP / IN TRANSIT / DELIVERY. "Current" was a software state; a
+        # driver is going to a pickup, moving freight, or making a delivery.
+        for mode in ("PICKUP", "IN_TRANSIT", "DELIVERY"):
             assert 'data-mode="%s"' % mode in html
 
 

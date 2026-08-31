@@ -1,0 +1,352 @@
+/* JOE Presentation Layer - operational stylesheet.
+ *
+ * Lifted verbatim from the Planning Mode prototype Mike supplied, so the
+ * portal is that prototype's evolution rather than a lookalike. The colour
+ * vocabulary, card system, badge grammar and radar animation are his.
+ *
+ * Two things are added below the original: local font faces, because the
+ * prototype pulled Inter and JetBrains Mono from Google and a truck has no
+ * signal; and touch sizing, because the prototype's controls are mouse-sized
+ * and this is operated by a driver's thumb.
+ */
+
+:root {
+    --navy-900: #0a0f1a;
+    --navy-800: #0f1624;
+    --navy-700: #151d30;
+    --navy-600: #1a2540;
+    --electric: #1e90ff;
+    --go: #00e676;
+    --caution: #ffab40;
+    --alert: #ff3d3d;
+    --muted: #8899aa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--navy-800);
+    color: #c8d6e5;
+    font-family: 'Inter', system-ui, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+  }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .blink { animation: blink 1.5s ease-in-out infinite; }
+  @keyframes pulse-glow { 0%,100%{box-shadow:0 0 4px #00e676} 50%{box-shadow:0 0 16px #00e676, 0 0 32px #00e67644} }
+  .pulse-go { animation: pulse-glow 2s ease-in-out infinite; }
+  @keyframes radar-sweep {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .radar-sweep { animation: radar-sweep 6s linear infinite; }
+  @keyframes refresh-spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+  .refresh-spinning i { animation: refresh-spin 1s linear infinite; }
+  .card {
+    background: var(--navy-700);
+    border: 1px solid #1e2d44;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #1e2d44;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--electric);
+  }
+  .card-body { padding: 16px; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-go { background: #00e67622; color: var(--go); border: 1px solid #00e67644; }
+  .badge-caution { background: #ffab4022; color: var(--caution); border: 1px solid #ffab4044; }
+  .badge-alert { background: #ff3d3d22; color: var(--alert); border: 1px solid #ff3d3d44; }
+  .badge-blue { background: #1e90ff22; color: var(--electric); border: 1px solid #1e90ff44; }
+  table.intel-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.intel-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #1e2d44;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  table.intel-table th:hover { color: var(--electric); }
+  table.intel-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #111a2e;
+    font-variant-numeric: tabular-nums;
+  }
+  table.intel-table tr:hover td { background: #1a253899; }
+  .tab-btn-nav {
+    padding: 8px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab-btn-nav:hover { color: #c8d6e5; background: #1a254066; }
+  .tab-btn-nav.active {
+    color: var(--electric);
+    background: #1e90ff15;
+    border-color: #1e90ff44;
+  }
+  .timeline-item {
+    position: relative;
+    padding-left: 36px;
+    padding-bottom: 20px;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 24px;
+    bottom: 0;
+    width: 1px;
+    background: #1e2d44;
+  }
+  .timeline-item:last-child::before { display: none; }
+  .timeline-dot {
+    position: absolute;
+    left: 4px;
+    top: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--electric);
+    background: var(--navy-700);
+  }
+  .expand-card { cursor: pointer; transition: all 0.2s; }
+  .expand-card:hover { border-color: #1e90ff66; }
+  .expand-detail { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+  .expand-detail.open { max-height: 200px; }
+  .sort-arrow { display: inline-block; margin-left: 4px; font-size: 9px; color: var(--electric); }
+  @media (max-width: 767px) {
+    .header-bar { flex-direction: column; gap: 8px; text-align: center; }
+    .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
+
+/* Local font stack. The prototype loaded Inter and JetBrains Mono from
+ * fonts.googleapis.com; offline that silently falls back to a serif and the
+ * whole instrument-panel look collapses. These stacks name faces Windows
+ * already has, so the portal looks the same with the antenna unplugged. */
+:root {
+  --font-ui: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
+body { font-family: var(--font-ui); }
+.font-mono, .card-header, .badge, table.intel-table { font-family: var(--font-mono); }
+
+
+/* ==================================================================
+ * ADDED - touch sizing
+ *
+ * The prototype's controls are mouse targets. This portal is worked by a
+ * thumb, in a cab, often moving. 44px is the smallest target that can be hit
+ * reliably without looking straight at it, so nothing operational goes below
+ * it. Reading panels stay dense; only the things you PRESS grow.
+ * ================================================================== */
+
+:root { --tap: 44px; }
+
+.mode-btn,
+.act-btn,
+.sweep-btn {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 1px solid #1e2d44;
+  background: var(--navy-600);
+  color: #c8d6e5;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mode-btn.active {
+  background: #1e90ff22;
+  border-color: var(--electric);
+  color: var(--electric);
+}
+.act-btn:active, .mode-btn:active, .sweep-btn:active { transform: scale(0.97); }
+.act-btn-go { border-color: #00e67666; color: var(--go); }
+.act-btn-alert { border-color: #ff3d3d66; color: var(--alert); }
+
+/* The mode bar is the most-pressed control in the product. It stays put when
+ * the page scrolls, so the driver never has to find it again. */
+.mode-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  background: var(--navy-800);
+  border-bottom: 1px solid #1e2d44;
+  overflow-x: auto;
+}
+
+/* Numbers a driver reads at a glance, not squinting. */
+.big-fact { font-size: 22px; font-weight: 700; color: #e8f0fa; line-height: 1.2; }
+.fact-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* The two numbers, never confusable. Ours is dim and short; theirs is bright
+ * and exact, because theirs is the one that appears on an invoice. */
+.num-mission { font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+.num-load { font-family: 'JetBrains Mono', monospace; color: #e8f0fa; font-weight: 700; }
+
+.hidden { display: none !important; }
+
+@media (max-width: 700px) {
+  .card-body { padding: 12px; }
+  .big-fact { font-size: 20px; }
+  .mode-btn { flex: 1 1 auto; padding: 0 10px; font-size: 12px; }
+}
+
+/* The way out of a mission screen.
+   Sized for a thumb rather than a mouse -- this is read and pressed in a cab,
+   sometimes moving, and a 12px text link is not a target. Deliberately quiet
+   in colour: it must be findable without competing with the load itself. */
+.way-out {
+    display: inline-block;
+    margin-bottom: 6px;
+    padding: 8px 14px 8px 10px;
+    min-height: 40px;
+    line-height: 24px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #9fb3c8;
+    text-decoration: none;
+    border: 1px solid #2c3e50;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+}
+.way-out:hover,
+.way-out:focus {
+    color: #e8eef4;
+    border-color: #4a6785;
+    background: rgba(255, 255, 255, 0.08);
+}
+.way-out:focus-visible {
+    outline: 2px solid #4a9eff;
+    outline-offset: 2px;
+}
+
+/* ---- JOE dock ----------------------------------------------------------
+   Two lines in, one line out, the width of the screen, at the bottom.
+   Sized for a cab: the entry is a thumb target, and the spoken line is large
+   enough to take in without leaning toward the glass. */
+.joe-dock {
+    border-top: 1px solid #1e2d44;
+    padding: 8px 16px 12px;
+    background: #0d1520;
+}
+.joe-dock-numbers {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 0.78rem;
+    padding-bottom: 6px;
+    opacity: 0.75;
+}
+.joe-dock-sep { opacity: 0.4; }
+
+.joe-box {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+        "tag   entry"
+        "tag   speech";
+    gap: 0 12px;
+    align-items: start;
+    border: 1px solid #2c3e50;
+    border-radius: 8px;
+    background: #0a1119;
+    padding: 10px 14px;
+}
+.joe-box-tag {
+    grid-area: tag;
+    align-self: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #4a9eff;
+    padding-right: 12px;
+    border-right: 1px solid #1e2d44;
+}
+
+/* Two lines in. */
+.joe-entry {
+    grid-area: entry;
+    width: 100%;
+    resize: none;
+    border: 0;
+    background: transparent;
+    color: #e8eef4;
+    font-family: inherit;
+    font-size: 1.05rem;
+    line-height: 1.5;
+    padding: 2px 0;
+}
+.joe-entry::placeholder { color: #5b7086; }
+.joe-entry:focus { outline: none; }
+.joe-box:focus-within { border-color: #4a9eff; }
+
+/* One line out. 24px, non-bold, monospace -- by specification.
+   Monospace so a number is the same shape every time it appears; non-bold
+   because a whole line of bold reads as shouting and stops being scannable. */
+.joe-speech {
+    grid-area: speech;
+    font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #cfe3f7;
+    padding-top: 8px;
+    margin-top: 6px;
+    border-top: 1px solid #16222f;
+    min-height: 34px;
+    overflow-wrap: anywhere;
+}

@@ -1,352 +1,286 @@
-/* JOE Presentation Layer - operational stylesheet.
- *
- * Lifted verbatim from the Planning Mode prototype Mike supplied, so the
- * portal is that prototype's evolution rather than a lookalike. The colour
- * vocabulary, card system, badge grammar and radar animation are his.
- *
- * Two things are added below the original: local font faces, because the
- * prototype pulled Inter and JetBrains Mono from Google and a truck has no
- * signal; and touch sizing, because the prototype's controls are mouse-sized
- * and this is operated by a driver's thumb.
- */
+/* ===========================================================================
+   DRIVER COCKPIT
+
+   An instrument panel, not a webpage. Read in a cab, sometimes moving, often
+   under interruption. Three rules drive every choice below:
+
+     1. Nothing moves between modes. Only contents, emphasis and live actions.
+        At speed a driver checks a position; a layout that rearranges itself
+        costs him a re-read every time he switches.
+
+     2. Every title is a control. Nothing is decorative text.
+
+     3. Targets are sized for a thumb on a tablet, not a mouse on a desk.
+=========================================================================== */
 
 :root {
-    --navy-900: #0a0f1a;
-    --navy-800: #0f1624;
-    --navy-700: #151d30;
-    --navy-600: #1a2540;
-    --electric: #1e90ff;
-    --go: #00e676;
-    --caution: #ffab40;
-    --alert: #ff3d3d;
-    --muted: #8899aa;
-  }
-  * { box-sizing: border-box; }
-  body {
-    background: var(--navy-800);
-    color: #c8d6e5;
-    font-family: 'Inter', system-ui, sans-serif;
+    --ink:        #e8eef4;
+    --ink-dim:    #9fb3c8;
+    --ink-faint:  #5b7086;
+    --panel:      #0d1520;
+    --panel-deep: #0a1119;
+    --edge:       #1e2d44;
+    --edge-lit:   #2c3e50;
+    --key:        #f0a04b;   /* the orange every actionable title carries */
+    --live:       #4a9eff;
+    --go:         #35c46b;
+    --tap:        44px;      /* minimum target */
+}
+
+* { box-sizing: border-box; }
+
+.cockpit {
     margin: 0;
     min-height: 100vh;
-  }
-  .font-mono { font-family: 'JetBrains Mono', monospace; }
-  .tabular-nums { font-variant-numeric: tabular-nums; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-  .blink { animation: blink 1.5s ease-in-out infinite; }
-  @keyframes pulse-glow { 0%,100%{box-shadow:0 0 4px #00e676} 50%{box-shadow:0 0 16px #00e676, 0 0 32px #00e67644} }
-  .pulse-go { animation: pulse-glow 2s ease-in-out infinite; }
-  @keyframes radar-sweep {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  .radar-sweep { animation: radar-sweep 6s linear infinite; }
-  @keyframes refresh-spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
-  .refresh-spinning i { animation: refresh-spin 1s linear infinite; }
-  .card {
-    background: var(--navy-700);
-    border: 1px solid #1e2d44;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .card-header {
-    padding: 12px 16px;
-    border-bottom: 1px solid #1e2d44;
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--electric);
-  }
-  .card-body { padding: 16px; }
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 10px;
-    border-radius: 4px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .badge-go { background: #00e67622; color: var(--go); border: 1px solid #00e67644; }
-  .badge-caution { background: #ffab4022; color: var(--caution); border: 1px solid #ffab4044; }
-  .badge-alert { background: #ff3d3d22; color: var(--alert); border: 1px solid #ff3d3d44; }
-  .badge-blue { background: #1e90ff22; color: var(--electric); border: 1px solid #1e90ff44; }
-  table.intel-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.intel-table th {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    padding: 8px 12px;
-    text-align: left;
-    border-bottom: 1px solid #1e2d44;
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-  }
-  table.intel-table th:hover { color: var(--electric); }
-  table.intel-table td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #111a2e;
-    font-variant-numeric: tabular-nums;
-  }
-  table.intel-table tr:hover td { background: #1a253899; }
-  .tab-btn-nav {
-    padding: 8px 16px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-  }
-  .tab-btn-nav:hover { color: #c8d6e5; background: #1a254066; }
-  .tab-btn-nav.active {
-    color: var(--electric);
-    background: #1e90ff15;
-    border-color: #1e90ff44;
-  }
-  .timeline-item {
-    position: relative;
-    padding-left: 36px;
-    padding-bottom: 20px;
-  }
-  .timeline-item::before {
-    content: '';
-    position: absolute;
-    left: 11px;
-    top: 24px;
-    bottom: 0;
-    width: 1px;
-    background: #1e2d44;
-  }
-  .timeline-item:last-child::before { display: none; }
-  .timeline-dot {
-    position: absolute;
-    left: 4px;
-    top: 6px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 2px solid var(--electric);
-    background: var(--navy-700);
-  }
-  .expand-card { cursor: pointer; transition: all 0.2s; }
-  .expand-card:hover { border-color: #1e90ff66; }
-  .expand-detail { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
-  .expand-detail.open { max-height: 200px; }
-  .sort-arrow { display: inline-block; margin-left: 4px; font-size: 9px; color: var(--electric); }
-  @media (max-width: 767px) {
-    .header-bar { flex-direction: column; gap: 8px; text-align: center; }
-    .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  }
-
-/* Local font stack. The prototype loaded Inter and JetBrains Mono from
- * fonts.googleapis.com; offline that silently falls back to a serif and the
- * whole instrument-panel look collapses. These stacks name faces Windows
- * already has, so the portal looks the same with the antenna unplugged. */
-:root {
-  --font-ui: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+    flex-direction: column;
+    background: #060b12;
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
 }
-body { font-family: var(--font-ui); }
-.font-mono, .card-header, .badge, table.intel-table { font-family: var(--font-mono); }
 
+/* ------------------------------------------------------------- banner ---- */
 
-/* ==================================================================
- * ADDED - touch sizing
- *
- * The prototype's controls are mouse targets. This portal is worked by a
- * thumb, in a cab, often moving. 44px is the smallest target that can be hit
- * reliably without looking straight at it, so nothing operational goes below
- * it. Reading panels stay dense; only the things you PRESS grow.
- * ================================================================== */
-
-:root { --tap: 44px; }
-
-.mode-btn,
-.act-btn,
-.sweep-btn {
-  min-height: var(--tap);
-  min-width: var(--tap);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 18px;
-  border-radius: 8px;
-  border: 1px solid #1e2d44;
-  background: var(--navy-600);
-  color: #c8d6e5;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+.cockpit-banner {
+    padding: 10px 16px 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--edge);
 }
+.banner-identity { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.06em; }
+.brand-sub { font-size: 0.72rem; color: var(--ink-faint); letter-spacing: 0.03em; }
+
+.banner-title-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-top: 2px;
+}
+.cockpit-title {
+    margin: 0; font-size: 1.5rem; font-weight: 800;
+    letter-spacing: 0.05em; color: #fff;
+}
+.banner-state { display: flex; align-items: center; gap: 10px; }
+.stop-counter {
+    font-size: 0.9rem; font-weight: 700; letter-spacing: 0.05em;
+    color: var(--ink); padding: 5px 10px;
+    border: 1px solid var(--edge-lit); border-radius: 5px;
+}
+.status-chip {
+    font-size: 0.9rem; font-weight: 700; letter-spacing: 0.05em;
+    color: #06121f; background: var(--live);
+    padding: 6px 12px; border-radius: 5px;
+}
+
+/* Three modes, permanently positioned. */
+.mode-bar { display: flex; gap: 8px; padding: 10px 0 0; }
+.mode-btn {
+    flex: 1 1 0; min-height: var(--tap);
+    font-size: 1rem; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--ink-dim); background: transparent;
+    border: 1px solid var(--edge-lit);
+    border-bottom: none; border-radius: 7px 7px 0 0;
+    cursor: pointer;
+}
+.mode-btn:hover { color: var(--ink); background: rgba(255,255,255,0.04); }
 .mode-btn.active {
-  background: #1e90ff22;
-  border-color: var(--electric);
-  color: var(--electric);
-}
-.act-btn:active, .mode-btn:active, .sweep-btn:active { transform: scale(0.97); }
-.act-btn-go { border-color: #00e67666; color: var(--go); }
-.act-btn-alert { border-color: #ff3d3d66; color: var(--alert); }
-
-/* The mode bar is the most-pressed control in the product. It stays put when
- * the page scrolls, so the driver never has to find it again. */
-.mode-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  gap: 10px;
-  padding: 10px 0;
-  background: var(--navy-800);
-  border-bottom: 1px solid #1e2d44;
-  overflow-x: auto;
+    color: #fff; background: var(--panel-deep);
+    border-color: var(--live); box-shadow: inset 0 3px 0 var(--live);
 }
 
-/* Numbers a driver reads at a glance, not squinting. */
-.big-fact { font-size: 22px; font-weight: 700; color: #e8f0fa; line-height: 1.2; }
-.fact-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+/* --------------------------------------------------------------- body ---- */
+
+.cockpit-body {
+    flex: 1; display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.8fr);
+    gap: 14px; padding: 14px 16px; align-items: start;
+}
+@media (max-width: 860px) {
+    .cockpit-body { grid-template-columns: 1fr; }
 }
 
-/* The two numbers, never confusable. Ours is dim and short; theirs is bright
- * and exact, because theirs is the one that appears on an invoice. */
-.num-mission { font-family: 'JetBrains Mono', monospace; color: var(--muted); }
-.num-load { font-family: 'JetBrains Mono', monospace; color: #e8f0fa; font-weight: 700; }
+.mission-column, .action-column { display: flex; flex-direction: column; gap: 10px; }
 
-.hidden { display: none !important; }
+/* ------------------------------------------------------- the trip card --- */
 
-@media (max-width: 700px) {
-  .card-body { padding: 12px; }
-  .big-fact { font-size: 20px; }
-  .mode-btn { flex: 1 1 auto; padding: 0 10px; font-size: 12px; }
+.trip-card {
+    background: linear-gradient(180deg, #12283f 0%, #0f1f31 100%);
+    border: 1px solid #24466b; border-radius: 9px; padding: 12px 14px;
 }
+.trip-card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.trip-label { font-size: 0.7rem; letter-spacing: 0.1em; color: #8fb6dd; }
+.trip-number { font-size: 1.1rem; font-weight: 800; letter-spacing: 0.04em; }
+.trip-broker { font-size: 0.85rem; color: #b9d3ec; margin-top: 3px; }
+.trip-title { font-size: 1.05rem; margin-top: 6px; }
 
-/* The way out of a mission screen.
-   Sized for a thumb rather than a mouse -- this is read and pressed in a cab,
-   sometimes moving, and a 12px text link is not a target. Deliberately quiet
-   in colour: it must be findable without competing with the load itself. */
-.way-out {
-    display: inline-block;
-    margin-bottom: 6px;
-    padding: 8px 14px 8px 10px;
-    min-height: 40px;
-    line-height: 24px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: #9fb3c8;
-    text-decoration: none;
-    border: 1px solid #2c3e50;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.03);
-}
-.way-out:hover,
-.way-out:focus {
-    color: #e8eef4;
-    border-color: #4a6785;
-    background: rgba(255, 255, 255, 0.08);
-}
-.way-out:focus-visible {
-    outline: 2px solid #4a9eff;
-    outline-offset: 2px;
-}
+/* --------------------------------------------------------- the two ends -- */
+/* White on black for both. Colour is not used to tell them apart -- emphasis
+   is. Giving each a hue makes the driver learn two colours for no gain. */
 
-/* ---- JOE dock ----------------------------------------------------------
-   Two lines in, one line out, the width of the screen, at the bottom.
-   Sized for a cab: the entry is a thumb target, and the spoken line is large
-   enough to take in without leaning toward the glass. */
+.ends { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 620px) { .ends { grid-template-columns: 1fr; } }
+
+.end-panel {
+    display: flex; flex-direction: column; gap: 4px;
+    text-align: left; padding: 12px 14px; min-height: 92px;
+    background: var(--panel-deep); color: var(--ink);
+    border: 1px solid var(--edge-lit); border-radius: 8px; cursor: pointer;
+}
+.end-title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; color: var(--key); }
+.end-place { font-size: 1rem; font-weight: 600; }
+.end-window { font-size: 0.85rem; color: var(--ink-dim); }
+
+/* The mode decides which end is bright. Neither is ever hidden. */
+.end-panel.bright  { border-color: var(--live); background: #0f1b28; }
+.end-panel.neutral { opacity: 1; }
+.end-panel.subdued { opacity: 0.55; }
+.end-panel:hover   { opacity: 1; border-color: #4a6785; }
+
+/* ----------------------------------------------------------- fact rows --- */
+/* Every one is a control. The orange key says what it is, the value says what
+   it holds, and tapping opens the whole of it in a drawer. */
+
+.fact-row {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    width: 100%; text-align: left; min-height: var(--tap);
+    padding: 10px 14px; background: var(--panel);
+    color: var(--ink); border: 1px solid var(--edge);
+    border-radius: 8px; cursor: pointer;
+}
+.fact-row:hover { border-color: var(--edge-lit); background: #101a26; }
+.fact-key {
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--key); white-space: nowrap;
+}
+.fact-value { font-size: 0.98rem; }
+.fact-bracket { color: var(--ink-dim); font-size: 0.88rem; }
+.doc-state { font-weight: 700; letter-spacing: 0.04em; }
+.tick { color: var(--go); }
+
+/* ------------------------------------------------------ action column ---- */
+
+.action-heading {
+    font-size: 0.7rem; letter-spacing: 0.12em; color: var(--ink-faint);
+    padding: 2px 2px 4px;
+}
+.action {
+    display: flex; flex-direction: column; gap: 3px;
+    text-align: left; width: 100%; min-height: 62px;
+    padding: 12px 14px; background: var(--panel);
+    color: var(--ink); border: 1px solid var(--edge-lit);
+    border-radius: 8px; cursor: pointer;
+}
+.action:hover:not(:disabled) { background: #14202e; border-color: #4a6785; }
+.action-name { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.05em; }
+.action-sub { font-size: 0.78rem; color: var(--ink-dim); }
+.action:disabled { opacity: 0.38; cursor: not-allowed; }
+
+/* ARRIVE is the mission transition event, and it looks like one. */
+.action.arrive:not(:disabled) { border-color: var(--go); background: #0d2418; }
+.action.arrive:not(:disabled) .action-name { color: #7fe3a4; }
+.action.next-stop { border-color: #6b5bd2; background: #14122b; }
+.action-spacer { flex: 1; min-height: 8px; }
+
+/* ---------------------------------------------------------- JOE dock ----- */
+/* Two lines in, one line out. Full width, at the bottom, always present. */
+
 .joe-dock {
-    border-top: 1px solid #1e2d44;
-    padding: 8px 16px 12px;
-    background: #0d1520;
+    border-top: 1px solid var(--edge);
+    padding: 8px 16px 12px; background: var(--panel);
 }
-.joe-dock-numbers {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    font-size: 0.78rem;
-    padding-bottom: 6px;
-    opacity: 0.75;
-}
-.joe-dock-sep { opacity: 0.4; }
-
 .joe-box {
     display: grid;
     grid-template-columns: auto 1fr;
-    grid-template-areas:
-        "tag   entry"
-        "tag   speech";
-    gap: 0 12px;
-    align-items: start;
-    border: 1px solid #2c3e50;
-    border-radius: 8px;
-    background: #0a1119;
-    padding: 10px 14px;
+    grid-template-areas: "tag entry" "tag speech";
+    gap: 0 12px; align-items: start;
+    border: 1px solid var(--edge-lit); border-radius: 8px;
+    background: var(--panel-deep); padding: 10px 14px;
 }
 .joe-box-tag {
-    grid-area: tag;
-    align-self: center;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: #4a9eff;
-    padding-right: 12px;
-    border-right: 1px solid #1e2d44;
+    grid-area: tag; align-self: center;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--live); padding-right: 12px; border-right: 1px solid var(--edge);
 }
-
-/* Two lines in. */
 .joe-entry {
-    grid-area: entry;
-    width: 100%;
-    resize: none;
-    border: 0;
-    background: transparent;
-    color: #e8eef4;
-    font-family: inherit;
-    font-size: 1.05rem;
-    line-height: 1.5;
-    padding: 2px 0;
+    grid-area: entry; width: 100%; resize: none; border: 0;
+    background: transparent; color: var(--ink);
+    font-family: inherit; font-size: 1.05rem; line-height: 1.5; padding: 2px 0;
 }
-.joe-entry::placeholder { color: #5b7086; }
+.joe-entry::placeholder { color: var(--ink-faint); }
 .joe-entry:focus { outline: none; }
-.joe-box:focus-within { border-color: #4a9eff; }
+.joe-box:focus-within { border-color: var(--live); }
 
-/* One line out. 24px, non-bold, monospace -- by specification.
-   Monospace so a number is the same shape every time it appears; non-bold
-   because a whole line of bold reads as shouting and stops being scannable. */
+/* 24px, non-bold, monospace, by specification. Monospace so a number is the
+   same shape every time it appears; non-bold because a whole line of bold
+   reads as shouting and stops being scannable. */
 .joe-speech {
     grid-area: speech;
-    font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
-    font-size: 24px;
-    font-weight: 400;
-    line-height: 1.35;
-    color: #cfe3f7;
-    padding-top: 8px;
-    margin-top: 6px;
-    border-top: 1px solid #16222f;
-    min-height: 34px;
-    overflow-wrap: anywhere;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 24px; font-weight: 400; line-height: 1.35;
+    color: #cfe3f7; padding-top: 8px; margin-top: 6px;
+    border-top: 1px solid #16222f; min-height: 34px; overflow-wrap: anywhere;
 }
+
+/* ------------------------------------------------------------ drawers ---- */
+/* Detail comes to the screen. The screen never goes away. */
+
+.scrim { position: fixed; inset: 0; background: rgba(3, 7, 12, 0.55); z-index: 40; }
+.drawer {
+    position: fixed; top: 0; bottom: 0; z-index: 50;
+    width: min(460px, 92vw);
+    display: flex; flex-direction: column;
+    background: #0b131d; border: 1px solid var(--edge-lit);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+.drawer-left  { left: 0;  border-radius: 0 12px 12px 0; border-left: none; }
+.drawer-right { right: 0; border-radius: 12px 0 0 12px; border-right: none; }
+
+.drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--edge);
+}
+.drawer-title { font-size: 1rem; font-weight: 700; letter-spacing: 0.04em; color: var(--key); }
+.drawer-close {
+    min-height: var(--tap); padding: 8px 16px;
+    font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--ink-dim); background: transparent;
+    border: 1px solid var(--edge-lit); border-radius: 6px; cursor: pointer;
+}
+.drawer-close:hover { color: var(--ink); border-color: #4a6785; }
+.drawer-body { padding: 14px 16px; overflow-y: auto; }
+
+.detail-list { margin: 0; }
+.detail-list dt {
+    font-size: 0.72rem; letter-spacing: 0.08em; color: var(--ink-faint); margin-top: 14px;
+}
+.detail-list dt:first-child { margin-top: 0; }
+.detail-list dd { margin: 3px 0 0; font-size: 1.02rem; }
+
+/* The working checklist. Big rows: this is read standing on a dock. */
+.checklist { list-style: none; margin: 0; padding: 0; }
+.checklist li {
+    display: flex; align-items: center; gap: 12px;
+    min-height: 52px; padding: 6px 4px;
+    border-bottom: 1px solid #13202e; font-size: 1.05rem;
+}
+.checklist .box { font-size: 1.3rem; width: 26px; text-align: center; }
+.checklist li.done .box { color: var(--go); }
+.checklist li.todo .box { color: var(--ink-faint); }
+.checklist li.todo .item { color: var(--ink-dim); }
+
+.checklist-status {
+    margin-top: 14px; padding: 10px 12px;
+    font-weight: 700; letter-spacing: 0.06em;
+    border: 1px solid var(--edge-lit); border-radius: 7px; background: var(--panel);
+}
+.drawer-note { margin: 10px 0 0; font-size: 0.78rem; color: var(--ink-faint); }
+
+/* ------------------------------------------------------------ way out ---- */
+.way-out {
+    display: inline-block; margin-bottom: 6px;
+    padding: 8px 14px 8px 10px; min-height: 40px; line-height: 24px;
+    font-size: 0.95rem; font-weight: 600; letter-spacing: 0.02em;
+    color: var(--ink-dim); text-decoration: none;
+    border: 1px solid var(--edge-lit); border-radius: 6px;
+    background: rgba(255,255,255,0.03);
+}
+.way-out:hover, .way-out:focus { color: var(--ink); border-color: #4a6785; }

@@ -19,6 +19,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, url_fo
 
 from dispatch import mission as mission_svc
 from dispatch import scheduling, sweep
+from portal import cockpit
 from portal.models import sandbox
 
 joe_bp = Blueprint("joe_portal", __name__)
@@ -120,12 +121,15 @@ def portal_home():
               "exceptions": [], "detentions": [], "pods": []},
         views={"PICKUP": {"milestones": [], "evidence": []},
                "DELIVERY": {"milestones": [], "evidence": []}},
-        requested_view="SWEEP",
         sweep=sweep.status(),
         joe={"status": "Ask JOE anything. It answers; it does not decide."},
         next_action="Run a sweep, then accept a load",
         route_risk="", facility_intel="",
         actions_for=_actions_for,
+        **cockpit.cockpit_context(
+            {"id": "", "title": "No mission accepted",
+             "numbers": mission_svc.display_numbers({}), "card_data": {}},
+            cockpit.MODE_IN_TRANSIT),
     )
 
 
@@ -136,9 +140,8 @@ def portal_mission(record_id: str):
     if not record:
         return redirect(url_for("joe_portal.portal_home"))
 
-    requested = str(request.args.get("view", "CURRENT")).upper()
-    if requested not in mission_svc.VIEWS:
-        requested = "CURRENT"
+    mode = cockpit.normalise_mode(request.args.get("view"))
+    requested = cockpit.backend_view(mode)
 
     # ONE read. The filter works over what is already assembled - that is the
     # property that keeps three views from becoming three records.
@@ -157,19 +160,40 @@ def portal_mission(record_id: str):
         "DELIVERY": mission_svc.filter_bundle(merged, "DELIVERY"),
     }
 
+    risk = _route_risk(record)
     return render_template(
         "joe_portal.html",
         record=merged,
         view=view,
         views=views,
-        requested_view=requested,
         sweep=sweep.status(),
         joe={"status": "Ask JOE anything. It answers; it does not decide."},
         next_action=_next_action(merged, phase),
-        route_risk=_route_risk(record),
+        route_risk=risk,
         facility_intel=_facility_intel(record, phase),
         actions_for=_actions_for,
+        **cockpit.cockpit_context(merged, mode, risk),
     )
+
+
+@joe_bp.route("/portal/prototype")
+def portal_prototype():
+    """Mike's original Planning Mode dashboard, served as it arrived.
+
+    Kept reachable so the two can be compared at a URL rather than by
+    hunting through Edge's temp folder - which is where it was found, and
+    which Windows clears without asking.
+
+    Served exactly as supplied, including its three CDN references. It will
+    look wrong with no signal, and that is the point: it is the evidence for
+    why the portal vendors them.
+    """
+    from flask import send_from_directory
+    from pathlib import Path
+
+    folder = Path(__file__).resolve().parent.parent / "prototype"
+    return send_from_directory(
+        folder, "L1_Transport_Planning_Intelligence_Dashboard.html")
 
 
 # ---- Sweep Control -----------------------------------------------------
