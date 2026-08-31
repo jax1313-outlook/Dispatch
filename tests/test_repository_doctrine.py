@@ -472,7 +472,11 @@ class TestAuthority:
         }
         offenders: list[str] = []
         for path, number, line in _attribution_hits(_first_party_python_files()):
-            relative = str(path.relative_to(REPO_ROOT))
+            # `as_posix`, not `str`: on Windows `str` yields backslashes, the
+            # allowlist keys are written with forward slashes, and the lookup
+            # silently misses -- so the one legitimate docstring was reported as
+            # a violation on the only platform the operator actually runs.
+            relative = path.relative_to(REPO_ROOT).as_posix()
             excerpt = allowed.get(relative)
             if excerpt is not None and excerpt in line:
                 continue
@@ -483,6 +487,32 @@ class TestAuthority:
             + "\nNo record may carry one unless Mike personally performed an authenticated "
             "action that produced it."
         )
+
+    def test_the_allowance_is_narrow_and_platform_independent(self):
+        """The allowlist must match one file and one excerpt, on Windows too.
+
+        It previously keyed on `str(path)`, which is backslash-separated on
+        Windows while the keys use forward slashes. The lookup missed, and the
+        single permitted docstring was reported as a violation on the operator's
+        own platform -- a guard against manufactured authority, failing open into
+        noise on the machine that matters.
+
+        This asserts the allowance still admits exactly one line, and that it
+        turns on the excerpt as well as the path: a different attribution in the
+        same file is still a violation.
+        """
+        from pathlib import PurePosixPath, PureWindowsPath
+
+        for flavour in (PurePosixPath, PureWindowsPath):
+            rendered = flavour("dispatch/connectors/outlook_connector.py").as_posix()
+            assert rendered == "dispatch/connectors/outlook_connector.py"
+
+        allowed_excerpt = 'manufacturing "Approved by'
+        prohibition_prose = 'the mission forbids manufacturing "Approved by Mike Zachary" anywhere'
+        manufactured_value = 'APPROVAL_DEFAULT = "Approved by Mike Zachary"'
+
+        assert allowed_excerpt in prohibition_prose
+        assert allowed_excerpt not in manufactured_value
 
     def test_the_attribution_detector_actually_detects(self, tmp_path):
         """Proves the test above is not vacuous.
