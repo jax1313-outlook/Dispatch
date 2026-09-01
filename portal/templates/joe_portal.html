@@ -151,10 +151,6 @@
       <span class="fact-value">{{ load_diagram.position }}</span>
       <span class="fact-bracket">{{ load_diagram.capacity_line }}</span>
     </div>
-
-    <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
-      OPEN LOAD DIAGRAM
-    </button>
   </div>
 
   <button class="fact-row" data-drawer="broker" data-side="left">
@@ -339,6 +335,12 @@
           <dt>{{ row.key }}</dt><dd>{{ row.value or '—' }}</dd>
         {% endfor %}
       </dl>
+      {% if d.key == 'cargo' %}
+        {# The diagram belongs to the cargo, so it opens from the cargo. #}
+        <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
+          OPEN LOAD DIAGRAM
+        </button>
+      {% endif %}
     {% endif %}
   </div>
 </aside>

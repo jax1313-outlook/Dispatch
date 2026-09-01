@@ -22,7 +22,7 @@ Verified against the running code, not asserted:
 | ARRIVE auto-sending, BCC `Ops@l1truck.com` | built |
 | Arrival notice generation | built |
 | Checklists at READY / COMPLETE only | built |
-| **Manual mission creation** | **not built — see §7** |
+| Manual mission creation, email and voice | built — see §8 |
 
 ## 2. Stop selector
 
@@ -142,8 +142,9 @@ speak, and a driver would learn to trust neither.
 
 ## 8. MANUAL MISSION CREATION — new, and not built
 
-**The operator names this a major discovery, and it is the only item here that does not
-exist yet.**
+**The operator names this a major discovery.** Built 1 September 2026 in
+`dispatch/mission_template.py`; the equivalence tests are in
+`tests/test_mission_intake.py`.
 
 Dispatch must support automatic **and** manual mission creation **using the same Mission
 Template**.

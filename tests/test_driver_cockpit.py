@@ -712,11 +712,21 @@ class TestCargoOwnsTheDiagram:
     def test_there_is_one_cargo_block(self, client):
         assert self._html(client).count('class="fact-row block cargo-block"') == 1
 
-    def test_the_diagram_button_lives_inside_it(self, client):
+    def test_the_diagram_button_lives_in_the_cargo_drawer(self, client):
+        """The diagram belongs to the cargo, so it opens from the cargo -- one
+        step in, not a button standing on the glass."""
         html = self._html(client)
+        drawer = html[html.index('id="drawer-cargo"'):]
+        drawer = drawer[:drawer.index("</aside>")]
+        assert "OPEN LOAD DIAGRAM" in drawer
+
+    def test_the_button_is_not_on_the_glass(self, client):
+        """Moving it means moving it. Two ways in is two things to read."""
+        html = self._html(client)
+        assert html.count("OPEN LOAD DIAGRAM") == 1
         block = html[html.index("cargo-block"):]
-        block = block[:block.index("data-drawer=\"broker\"")]
-        assert "OPEN LOAD DIAGRAM" in block
+        block = block[:block.index('data-drawer="broker"')]
+        assert "OPEN LOAD DIAGRAM" not in block
 
     def test_load_arrangement_is_no_longer_its_own_row(self, client):
         assert 'fact-row block arrangement' not in self._html(client)
