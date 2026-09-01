@@ -14,15 +14,15 @@ from __future__ import annotations
 
 import pytest
 
-from dispatch import mission, mission_template as mt
+from dispatch import load_number as ln, mission, mission_template as mt
 from portal.models import sandbox
 
 
 COMPLETE = {
-    "broker": "Southeast Freight Partners",
+    "customer": "Southeast Freight Partners",
     "load_number": "847261",
-    "broker_poc": "D. Reyes",
-    "broker_phone": "904-555-0199",
+    "customer_poc": "D. Reyes",
+    "customer_phone": "904-555-0199",
     "rate": "1150",
     "pickup_location": "Jacksonville, FL 32202",
     "pickup_window": "2026-09-02 06:00 - 10:00",
@@ -57,7 +57,7 @@ class TestOneTemplate:
     def test_the_template_matches_what_the_cockpit_shows(self):
         """Intake and display agree, or a phoned-in load renders with holes a
         swept one does not have."""
-        for key in ("broker", "pickup_location", "pickup_window", "pickup_contact",
+        for key in ("customer", "pickup_location", "pickup_window", "pickup_contact",
                     "pickup_phone", "pickup_notes", "delivery_location",
                     "delivery_window", "delivery_contact", "delivery_phone",
                     "delivery_notes", "commodity"):
@@ -72,7 +72,7 @@ class TestOneTemplate:
 class TestTheEmailRoundTrip:
     def test_a_completed_template_parses_back(self):
         parsed = mt.parse_email(mt.render_email(COMPLETE))
-        assert parsed["broker"] == COMPLETE["broker"]
+        assert parsed["customer"] == COMPLETE["customer"]
         assert parsed["load_number"] == "847261"
         assert mt.validate(parsed) == []
 
@@ -88,15 +88,17 @@ class TestTheEmailRoundTrip:
         assert parsed["commodity"] == ""
         assert parsed["pickup_location"] == ""
 
-    def test_the_subject_token_is_on_the_template(self):
-        """It is what COMI watches for."""
-        assert mt.INTAKE_SUBJECT_TOKEN in mt.render_email()
-        assert mt.INTAKE_MAILBOX in mt.render_email()
+    def test_the_load_number_rides_the_subject(self):
+        """It is what COMI watches for, and what threads the reply back."""
+        body = mt.render_email(load_number="L1-0007")
+        assert "L1-0007" in body
+        assert mt.INTAKE_MAILBOX in body
+        assert ln.is_mission_intake("L1-0007")
 
 
 class TestItRefusesAnIncompleteLoad:
     def test_every_problem_is_reported_not_the_first(self):
-        problems = mt.validate({"broker": "Someone"})
+        problems = mt.validate({"customer": "Someone"})
         assert len(problems) >= 4
 
     def test_a_non_numeric_weight_is_refused(self):
@@ -105,7 +107,12 @@ class TestItRefusesAnIncompleteLoad:
 
     def test_an_incomplete_template_creates_nothing(self):
         with pytest.raises(mt.TemplateError):
-            mt.to_record({"broker": "Someone"}, source=mt.SOURCE_EMAIL)
+            mt.to_record({"customer": "Someone"}, source=mt.SOURCE_EMAIL)
+
+    def test_a_missing_load_number_is_not_a_problem(self):
+        """Work nobody else numbered is still work. Dispatch numbers it."""
+        assert mt.validate(COMPLETE) == []
+        assert not any("oad number" in p for p in mt.validate({}))
 
 
 class TestTheRecordIsTheSameWhateverBroughtItIn:
@@ -136,11 +143,12 @@ class TestTheRecordIsTheSameWhateverBroughtItIn:
         by_email = self._create(mt.SOURCE_EMAIL)
         by_voice = self._create(mt.SOURCE_VOICE)
         assert by_email["card_data"]["source"] == "email"
-        assert by_voice["card_data"]["source"] == "voice"
+        assert by_voice["card_data"]["source"] == "joe"
 
     def test_the_brokers_load_number_is_preserved_exactly(self):
         record = self._create(mt.SOURCE_VOICE)
         assert record["card_data"]["load_id"] == "847261"
+        assert record["load_number"] == "847261"
 
     def test_dispatch_assigns_the_mission_number(self):
         """Same numbering as a swept mission. Not a second scheme."""
@@ -151,7 +159,7 @@ class TestTheRecordIsTheSameWhateverBroughtItIn:
 
     def test_the_record_says_how_it_arrived(self):
         """Who told us about this load is a real question later."""
-        assert self._create(mt.SOURCE_VOICE)["intake_source"] == "VOICE"
+        assert self._create(mt.SOURCE_JOE)["intake_source"] == "JOE"
 
     def test_it_records_who_took_it(self):
         assert self._create(mt.SOURCE_EMAIL)["intake_taken_by"] == "Mike"

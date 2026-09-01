@@ -11,6 +11,10 @@ the checklist and the live actions changing with the mode.
 
 from __future__ import annotations
 
+#: JOE's words for system conditions. Nothing that names a subsystem reaches
+#: the glass; the driver is talking to JOE, not to a mail transport.
+from portal import joe_voice
+
 # ---------------------------------------------------------------- modes ----
 
 #: The driver's three situations, in the driver's own words.
@@ -467,9 +471,12 @@ def completion_effect(record: dict, mode: str) -> dict:
                             "for review and sending."),
             "chain": chain,
             "transmission": sendable,
-            "note": ("Packet preparation is UNCONFIGURED in this build. Nothing has "
-                     "been prepared, drafted or sent."
-                     if sendable != "CONFIGURED" else
+            # Truthful, and in his language. Nothing was prepared -- but the
+            # line says what happens instead, because a driver told only that
+            # something failed has been handed a problem to solve.
+            "note": ("I can't put the packet together myself yet. Hold your "
+                     "paperwork -- the office assembles it."
+                     if not joe_voice.can_send(sendable) else
                      "Review the draft in Outlook, then send it yourself."),
         }
 
@@ -575,7 +582,15 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
         "follows": ARRIVAL_NOTICE_FOLLOWS[phase],
         "bcc": ARRIVAL_NOTICE_BCC,
         "sent": bool(record.get("arrived_at")),
+        # What the driver reads about delivery of this notice. The precise
+        # system condition stays available to engineering under `transmission`;
+        # `delivery` is what reaches the glass, in his language and with what
+        # happens next attached. See `portal/joe_voice.py`.
         "transmission": transmission_status(),
+        "delivery": joe_voice.sending(
+            transmission_status(),
+            what="the arrival notice",
+            instead="Dispatch has your arrival on record. It goes out from the office."),
     }
 
 
@@ -635,7 +650,10 @@ def load_diagram_for(record: dict) -> dict:
         "capacity_line": (
             f"{len(occupied)} of {total} positions occupied · {empty_count} available"
             if total is not None
-            else f"{len(occupied)} positions occupied · capacity UNCONFIGURED"
+            # Still refuses to invent a total -- it just says so in his words.
+            # "Capacity not recorded" is a fact about the truck; the other
+            # phrasing was a fact about a config file.
+            else f"{len(occupied)} positions occupied · total capacity not recorded"
         ),
         "sub": ("Cargo arrangement and unload order" if plan
                 else "No diagram produced yet"),

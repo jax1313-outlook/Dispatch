@@ -299,9 +299,16 @@ class TestWhatTheLastCheckDoes:
         assert effect["prepares_packet"] is False
 
     def test_it_does_not_claim_a_draft_that_was_never_made(self):
+        """Said in his words now, but it still refuses to claim the packet
+        exists -- and it tells him what to do with the paperwork instead."""
+        from portal import joe_voice
+
         effect = cockpit.completion_effect(self._complete(), cockpit.MODE_DELIVERY)
-        if effect["transmission"] != "CONFIGURED":
-            assert "nothing has been prepared" in effect["note"].lower()
+        if not joe_voice.can_send(effect["transmission"]):
+            note = effect["note"].lower()
+            assert "can't put the packet together" in note
+            assert "hold your paperwork" in note
+            assert joe_voice.is_driver_safe(effect["note"]) == []
 
     def test_it_reports_transmission_rather_than_assuming_it(self):
         assert cockpit.transmission_status() in (
@@ -493,7 +500,10 @@ class TestEmptyPositionsAreCapacity:
         diagram = cockpit.load_diagram_for({"load_plan": [{"position": 1}]})
         assert diagram["total"] is None
         assert diagram["empty_count"] is None
-        assert "UNCONFIGURED" in diagram["capacity_line"]
+        # It says so in the driver's words. It still does not invent a total.
+        assert "not recorded" in diagram["capacity_line"]
+        assert not any(ch.isdigit() for ch
+                       in diagram["capacity_line"].split("occupied")[-1])
 
     def test_no_plan_produces_no_invented_positions(self):
         assert cockpit.load_diagram_for({}) ["positions"] == []
@@ -860,10 +870,23 @@ class TestTheStopSelectorScales:
         assert cockpit.stops_for(self._record(5), selected=99)["number"] == 5
         assert cockpit.stops_for(self._record(5), selected=0)["number"] == 1
 
-    def test_the_stop_bar_wraps_rather_than_leaving_the_screen(self):
-        """Past eight stops the row is wider than a tablet. Wrapping puts them
-        on a second line; not wrapping puts stop 9 off the glass and asks a
-        driver to scroll sideways to reach it."""
+    def test_eight_stops_fit_on_one_row(self):
+        """Eight is the operator's stated maximum in a day, so eight is the
+        number that has to fit at a glance rather than wrap.
+
+        Measured on the running screen at 768px: eight buttons at 83.7px plus
+        seven 6px gaps is 712, inside the 721 control bar. The padding is what
+        buys that, so this pins the padding."""
+        css = open("portal/static/joe_portal.css", encoding="utf-8").read()
+        rule = css[css.index(".stop-btn {"):]
+        rule = rule[:rule.index("}")]
+        padding = int(rule.split("padding: 0 ")[1].split("px")[0])
+        assert padding <= 13, "eight stops no longer fit on one row"
+
+    def test_the_stop_bar_still_wraps_beyond_that(self):
+        """The safety net. A ninth stop drops to a second row rather than off
+        the right edge -- a driver should never scroll sideways to reach a
+        delivery, even on a run he says he will never take."""
         css = open("portal/static/joe_portal.css", encoding="utf-8").read()
         rule = css[css.index(".stop-bar {"):]
         rule = rule[:rule.index("}")]

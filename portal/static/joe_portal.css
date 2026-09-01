@@ -76,12 +76,13 @@
     display: flex; gap: 16px; align-items: flex-end;
     justify-content: space-between; flex-wrap: wrap; padding-top: 10px;
 }
-/* Wraps rather than running off the glass. A long multi-stop run puts
-   stops on a second row; it never asks a driver to scroll sideways to
-   reach one. Below nine stops this changes nothing. */
+/* Eight stops is the operator's stated maximum in a day, and eight fit on one
+   row -- that is what the tighter padding buys. Wrapping is the safety net
+   beyond it: a ninth stop drops to a second row rather than off the right edge,
+   because a driver should never scroll sideways to reach a delivery. */
 .stop-bar { display: flex; gap: 6px; flex-wrap: wrap; }
 .stop-btn {
-    min-height: var(--tap); padding: 0 18px;
+    min-height: var(--tap); padding: 0 13px;
     font-size: 0.95rem; font-weight: 700; letter-spacing: 0.06em;
     color: var(--ink-dim); background: transparent;
     border: 1px solid var(--edge-lit); border-bottom: none;
@@ -323,10 +324,16 @@
     color: var(--ink); font-family: ui-monospace, Consolas, monospace;
 }
 .effect-note { margin-top: 6px; font-size: 0.85rem; color: var(--ink-dim); line-height: 1.45; }
-.effect-status {
-    margin-top: 8px; font-size: 0.75rem; font-weight: 700;
-    letter-spacing: 0.08em; color: var(--key);
+/* When JOE could not do something itself. Reads as JOE talking, not as a
+   status field: the line, then what happens instead. Never the name of the
+   part that is missing. */
+.joe-says {
+    display: block; margin-top: 10px; padding: 10px 12px;
+    border-left: 3px solid var(--key); background: rgba(255,255,255,0.03);
+    border-radius: 0 5px 5px 0;
 }
+.joe-line { display: block; font-size: 0.95rem; color: var(--ink); line-height: 1.45; }
+.joe-next { display: block; margin-top: 4px; font-size: 0.85rem; color: var(--ink-dim); line-height: 1.45; }
 
 /* ---- Active Trip Card: mission progress and cargo position -------------- */
 /* The cockpit felt light because this was missing, not because the layout was

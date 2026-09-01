@@ -295,12 +295,19 @@
         <ul class="notice-list">
           {% for item in d.notice.follows %}<li>{{ item }}</li>{% endfor %}
         </ul>
+        {# JOE's words, not the system's. What did or did not happen to this
+           notice, and what happens instead -- never the name of the part that
+           is missing. See portal/joe_voice.py. #}
         <div class="notice-foot">
           BCC {{ d.notice.bcc }}
-          {% if d.notice.transmission != 'CONFIGURED' %}
-            &middot; TRANSMISSION: {{ d.notice.transmission }} &middot; not sent
-          {% elif d.notice.sent %}&middot; sent{% endif %}
+          {% if d.notice.delivery.sent and d.notice.sent %}&middot; sent{% endif %}
         </div>
+        {% if not d.notice.delivery.sent %}
+          <div class="joe-says">
+            <span class="joe-line">{{ d.notice.delivery.line }}</span>
+            <span class="joe-next">{{ d.notice.delivery.instead }}</span>
+          </div>
+        {% endif %}
       </div>
     {% elif d.checklist is defined and d.checklist %}
       <ul class="checklist">
@@ -322,9 +329,7 @@
         <div class="effect-line">{{ d.effect.consequence }}</div>
         {% if d.effect.chain %}<div class="effect-chain">{{ d.effect.chain }}</div>{% endif %}
         {% if d.effect.note %}<div class="effect-note">{{ d.effect.note }}</div>{% endif %}
-        {% if d.effect.transmission != 'CONFIGURED' %}
-          <div class="effect-status">TRANSMISSION: {{ d.effect.transmission }}</div>
-        {% endif %}
+
       </div>
       {% endif %}
 
