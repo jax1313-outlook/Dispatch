@@ -393,8 +393,15 @@
 @media (max-width: 620px) { .stop-card { width: 100%; } }
 
 /* ---- Details panels: the whole of one end, on the panel ---------------- */
+/* The broker's number: on the paperwork, and the one asked for at a gate.
+   Labelled so it reads as a load number rather than as a heading. */
 .end-load {
-    font-size: 1.05rem; font-weight: 800; letter-spacing: 0.03em; margin-top: 2px;
+    display: flex; align-items: baseline; gap: 8px; margin-top: 3px;
+    font-size: 1.22rem; font-weight: 800; letter-spacing: 0.04em; color: #fff;
+}
+.end-load-tag {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em;
+    color: var(--ink-faint);
 }
 .end-fields { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
 .end-fields dt {
@@ -441,4 +448,20 @@
 .end-trip {
     font-size: 0.82rem; color: var(--ink-dim);
     font-family: ui-monospace, Consolas, monospace;
+}
+
+/* ---- Cargo block, with load arrangement folded in ---------------------- */
+.cargo-block { padding: 0; overflow: hidden; }
+.cargo-head {
+    display: block; width: 100%; text-align: left;
+    padding: 10px 14px 8px; background: transparent; border: 0;
+    color: var(--ink); cursor: pointer; font: inherit;
+}
+.cargo-head:hover { background: #101a26; }
+.arrangement-line {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
+    padding: 8px 14px; border-top: 1px solid var(--edge);
+}
+.cargo-block .trip-diagram {
+    margin: 0; width: calc(100% - 28px); margin: 0 14px 12px;
 }

@@ -640,3 +640,45 @@ class TestTheEndPanelsCarryTheWholeEnd:
         # The delivery end has no note of its own, so it says so rather than
         # borrowing the pickup's.
         assert cockpit.end_detail(record, "delivery")["instructions"] == "—"
+
+
+class TestCargoOwnsTheDiagram:
+    """Load arrangement folded into Cargo: one section, two controls.
+
+    Where the freight sits and what is still free is a fact about the same
+    cargo, and a section of its own for one line was a section too many.
+    """
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    def _html(self, client):
+        return client.get("/portal?view=CURRENT",
+                          follow_redirects=True).get_data(as_text=True)
+
+    def test_there_is_one_cargo_block(self, client):
+        assert self._html(client).count('class="fact-row block cargo-block"') == 1
+
+    def test_the_diagram_button_lives_inside_it(self, client):
+        html = self._html(client)
+        block = html[html.index("cargo-block"):]
+        block = block[:block.index("data-drawer=\"broker\"")]
+        assert "OPEN LOAD DIAGRAM" in block
+
+    def test_load_arrangement_is_no_longer_its_own_row(self, client):
+        assert 'fact-row block arrangement' not in self._html(client)
+
+    def test_the_load_number_is_labelled_and_bold(self, client):
+        """It is the number he is asked for at a gate, so it must read as one."""
+        html = self._html(client)
+        assert "end-load-tag" in html
+        css = open("portal/static/joe_portal.css", encoding="utf-8").read()
+        block = css[css.index(".end-load {"):]
+        block = block[:block.index("}")]
+        assert "font-weight: 800" in block

@@ -80,7 +80,7 @@
                     ('delivery', delivery_detail, emphasis.delivery)] %}
     <button class="end-panel {{ side[2] }}" data-drawer="{{ side[0] }}" data-side="left">
       <span class="end-title">{{ side[0]|upper }} DETAILS</span>
-      <span class="end-load">{{ side[1].load_number }}</span>
+      <span class="end-load"><span class="end-load-tag">LOAD</span>{{ side[1].load_number }}</span>
       {# Ordered for travel: where, when, how far, who to ring, how to get in.
          Then what comes off, last, because that is dock work rather than
          driving. #}
@@ -110,31 +110,35 @@
     <span class="fact-value">{{ route_risk or 'No corridor risk reported' }}</span>
   </button>
 
-  {# Truck-wide, summarised by the stop it comes off at. A summary showing only
-     the current stop hides the freight sitting behind it. #}
-  <button class="fact-row block" data-drawer="cargo" data-side="left">
-    <span class="fact-key">CARGO:</span>
-    {% if cargo_by_stop.has_rows %}
-      <span class="cargo-rows">
-        {% for row in cargo_by_stop.rows %}
-          <span class="cargo-row">
-            <span class="cargo-stop">{{ row.stop }}</span>
-            <span class="cargo-what">{{ row.description }}</span>
-            <span class="fact-bracket">{{ row.pallets }} pallets</span>
-          </span>
-        {% endfor %}
-      </span>
-    {% else %}
-      <span class="fact-value">{{ cargo_by_stop.summary }}</span>
-    {% endif %}
-    <span class="cargo-total">{{ cargo_by_stop.total }}</span>
-  </button>
+  {# Truck-wide, summarised by the stop it comes off at -- a summary showing
+     only the current stop hides the freight sitting behind it. Load arrangement
+     collapsed in here: where it sits and what is still free is a fact about the
+     same cargo, and a section of its own for one line was a section too many. #}
+  <div class="fact-row block cargo-block">
+    <button class="cargo-head" data-drawer="cargo" data-side="left">
+      <span class="fact-key">CARGO:</span>
+      {% if cargo_by_stop.has_rows %}
+        <span class="cargo-rows">
+          {% for row in cargo_by_stop.rows %}
+            <span class="cargo-row">
+              <span class="cargo-stop">{{ row.stop }}</span>
+              <span class="cargo-what">{{ row.description }}</span>
+              <span class="fact-bracket">{{ row.pallets }} pallets</span>
+            </span>
+          {% endfor %}
+        </span>
+      {% else %}
+        <span class="fact-value">{{ cargo_by_stop.summary }}</span>
+      {% endif %}
+      <span class="cargo-total">{{ cargo_by_stop.total }}</span>
+    </button>
 
-  {# Its own section, and it owns the diagram. #}
-  <div class="fact-row block arrangement">
-    <span class="fact-key">LOAD ARRANGEMENT:</span>
-    <span class="fact-value">{{ load_diagram.position }}</span>
-    <span class="fact-bracket">{{ load_diagram.capacity_line }}</span>
+    <div class="arrangement-line">
+      <span class="fact-key">LOAD ARRANGEMENT:</span>
+      <span class="fact-value">{{ load_diagram.position }}</span>
+      <span class="fact-bracket">{{ load_diagram.capacity_line }}</span>
+    </div>
+
     <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
       OPEN LOAD DIAGRAM
     </button>
