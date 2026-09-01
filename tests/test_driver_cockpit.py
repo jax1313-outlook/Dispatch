@@ -15,6 +15,13 @@ import pytest
 from portal import cockpit
 
 
+def _demo_record() -> dict:
+    """Whatever the running store holds, so tests do not assert on fixtures."""
+    from portal.models import sandbox
+
+    return sandbox.get("SBX-DISPATCH-E2E-DEMO-001") or {}
+
+
 RECORD = {
     "id": "SBX-1",
     "title": "Dry Van - Jacksonville FL to Atlanta GA",
@@ -30,23 +37,23 @@ RECORD = {
 
 
 class TestTheThreeModes:
-    def test_the_three_modes(self):
-        assert [m["label"] for m in cockpit.MODES] == ["PICKUP", "CURRENT", "DELIVERY"]
+    def test_two_modes_not_three(self):
+        """CURRENT dropped: a driver is going to a pickup or making a delivery."""
+        assert [m["label"] for m in cockpit.MODES] == ["PICKUP", "DELIVERY"]
 
-    def test_an_in_transit_url_still_opens(self):
-        """A link written while the label read IN TRANSIT must not land elsewhere."""
-        assert cockpit.normalise_mode("IN_TRANSIT") == cockpit.MODE_IN_TRANSIT
+    def test_current_survives_as_the_default_not_as_a_button(self):
+        assert cockpit.normalise_mode(None, {"status": "open"}) == cockpit.MODE_PICKUP
+        assert cockpit.normalise_mode(None, {"status": "in_transit"}) == cockpit.MODE_DELIVERY
 
-    def test_a_current_url_opens(self):
-        assert cockpit.normalise_mode("CURRENT") == cockpit.MODE_IN_TRANSIT
+    def test_an_older_url_still_opens_somewhere_sensible(self):
+        """Links written when CURRENT and IN TRANSIT were controls must not break."""
+        for legacy in ("CURRENT", "IN_TRANSIT"):
+            assert cockpit.normalise_mode(legacy, {"status": "in_transit"}) in (
+                cockpit.MODE_PICKUP, cockpit.MODE_DELIVERY)
 
     def test_an_unknown_mode_falls_back_rather_than_failing(self):
-        assert cockpit.normalise_mode("nonsense") == cockpit.MODE_IN_TRANSIT
-        assert cockpit.normalise_mode(None) == cockpit.MODE_IN_TRANSIT
-
-    def test_in_transit_maps_onto_the_resolver(self):
-        assert cockpit.backend_view(cockpit.MODE_IN_TRANSIT) == "CURRENT"
-        assert cockpit.backend_view(cockpit.MODE_PICKUP) == "PICKUP"
+        assert cockpit.normalise_mode("nonsense", {}) in (
+            cockpit.MODE_PICKUP, cockpit.MODE_DELIVERY)
 
 
 class TestEmphasisNotHiding:
@@ -323,7 +330,7 @@ class TestTheModeSurvivesTheRedirect:
         with app.test_client() as c:
             yield c
 
-    @pytest.mark.parametrize("mode", ["PICKUP", "DELIVERY", "CURRENT"])
+    @pytest.mark.parametrize("mode", ["PICKUP", "DELIVERY"])
     def test_the_requested_mode_survives(self, client, mode):
         html = client.get("/portal?view=" + mode, follow_redirects=True).get_data(as_text=True)
         selected = re.search(
@@ -492,12 +499,72 @@ class TestEmptyPositionsAreCapacity:
         assert cockpit.load_diagram_for({}) ["positions"] == []
 
 
-class TestTheStopCardHoldsOneFact:
-    """Superseded the four-line card. The rule is stronger than a line count.
+class TestTheStopSelector:
+    """The stop is a toggle, and delivery follows it.
 
-    The stop card carries stop progress and nothing else. Cargo, load position
-    and the broker moved out to sections of their own, because a card that
-    accumulates the whole mission is a card nobody can read at a glance.
+    A multi-stop run is not one delivery seen three times. Each stop has its own
+    facility, appointment, contact and freight, and switching between them must
+    not cost the driver the rest of the mission.
+    """
+
+    RECORD = {
+        "numbers": {"load_label": "Load 847261"},
+        "card_data": {"origin": "Jacksonville, FL", "destination": "Atlanta, GA"},
+        "stops": [
+            {"number": 1, "label": "STOP 1", "facility": "Delta TechOps",
+             "window": "15:00 - 17:00", "poc": "K. Mills", "phone": "770-555-0142",
+             "notes": "Dock 4 after 06:00"},
+            {"number": 2, "label": "STOP 2", "facility": "Aviall Services",
+             "window": "18:00 - 19:30", "poc": "J. Boone", "phone": "678-555-0119",
+             "notes": "No overnight parking"},
+        ],
+    }
+
+    def test_the_run_knows_its_stops(self):
+        stops = cockpit.stops_for(self.RECORD)
+        assert stops["total"] == 2
+        assert stops["selectable"] is True
+
+    def test_a_single_stop_run_offers_no_toggle(self):
+        """Two buttons where there is one stop is a control that does nothing."""
+        assert cockpit.stops_for({"card_data": {}})["selectable"] is False
+
+    def test_selecting_a_stop_changes_the_delivery_facility(self):
+        assert cockpit.end_detail(self.RECORD, "delivery", 1)["address"] == "Delta TechOps"
+        assert cockpit.end_detail(self.RECORD, "delivery", 2)["address"] == "Aviall Services"
+
+    def test_selecting_a_stop_changes_the_appointment(self):
+        assert cockpit.end_detail(self.RECORD, "delivery", 1)["appointment"] == "15:00 - 17:00"
+        assert cockpit.end_detail(self.RECORD, "delivery", 2)["appointment"] == "18:00 - 19:30"
+
+    def test_selecting_a_stop_changes_the_contact(self):
+        """Ringing stop one from stop two is a wasted call at a gate."""
+        assert "K. Mills" in cockpit.end_detail(self.RECORD, "delivery", 1)["poc"]
+        assert "J. Boone" in cockpit.end_detail(self.RECORD, "delivery", 2)["poc"]
+
+    def test_selecting_a_stop_changes_the_access_note(self):
+        assert "Dock 4" in cockpit.end_detail(self.RECORD, "delivery", 1)["instructions"]
+        assert "overnight" in cockpit.end_detail(self.RECORD, "delivery", 2)["instructions"]
+
+    def test_the_pickup_end_does_not_move_with_the_stop(self):
+        """There is one pickup. Switching delivery stops must not rewrite it."""
+        first = cockpit.end_detail(self.RECORD, "pickup", 1)
+        second = cockpit.end_detail(self.RECORD, "pickup", 2)
+        assert first["address"] == second["address"]
+
+    def test_an_out_of_range_stop_lands_on_a_real_one(self):
+        assert cockpit.stops_for(self.RECORD, 99)["number"] == 2
+        assert cockpit.stops_for(self.RECORD, 0)["number"] == 1
+
+    def test_the_panel_says_which_stop_it_is_showing(self):
+        """Otherwise a driver has to trust the screen changed under him."""
+        assert cockpit.end_detail(self.RECORD, "delivery", 2)["stop_label"] == "STOP 2"
+
+
+class TestTheStopSurvivesAModeChange:
+    """Switching a mode keeps the stop, and switching a stop keeps the mode.
+
+    Losing either would move the driver twice for one press.
     """
 
     @pytest.fixture()
@@ -509,44 +576,24 @@ class TestTheStopCardHoldsOneFact:
         with app.test_client() as c:
             yield c
 
-    def _card(self, client):
-        html = client.get("/portal?view=CURRENT",
+    def test_a_mode_and_a_stop_are_honoured_together(self, client):
+        """Asked for both, both are applied -- neither silently wins."""
+        html = client.get("/portal?view=PICKUP&stop=2",
                           follow_redirects=True).get_data(as_text=True)
-        start = html.index('class="stop-card"')
-        return html[start:html.index("</div>", start)]
+        selected_mode = re.search(
+            r'data-mode="([A-Z_]+)"[^>]*aria-selected="true"', html, re.S)
+        assert selected_mode and selected_mode.group(1) == "PICKUP"
 
-    def test_it_shows_the_stop_progress(self, client):
-        assert "STOP" in self._card(client)
+        stops = cockpit.stops_for(_demo_record(), 2)
+        if stops["selectable"]:
+            selected_stop = re.search(
+                r'data-stop="(\d+)"[^>]*aria-selected="true"', html, re.S)
+            assert selected_stop and selected_stop.group(1) == "2"
 
-    def test_it_does_not_carry_the_broker(self, client):
-        assert "Southeast" not in self._card(client)
-
-    def test_it_does_not_carry_the_cargo(self, client):
-        card = self._card(client)
-        assert "CARGO" not in card
-        assert "pallets" not in card
-
-    def test_it_does_not_carry_the_load_position(self, client):
-        assert "LOAD POSITION" not in self._card(client)
-        assert "LOAD ARRANGEMENT" not in self._card(client)
-
-    def test_the_mission_number_is_gone_from_the_screen(self, client):
-        """Removed on instruction. The load number is the one he is asked for."""
-        html = client.get("/portal?view=CURRENT",
-                          follow_redirects=True).get_data(as_text=True)
-        body = html[html.index("<body"):]
-        assert "Mission 1" not in body
-
-    def test_stop_navigation_appears_only_when_there_is_somewhere_to_go(self, client):
-        """Offering a dead control is filler wearing a button."""
-        html = client.get("/portal?view=CURRENT",
-                          follow_redirects=True).get_data(as_text=True)
-        from portal.models import sandbox
-
-        record = sandbox.get("SBX-DISPATCH-E2E-DEMO-001") or {}
-        stops = cockpit.stops_for(record)
-        assert ('data-action="next-stop"' in html) == stops["has_next"]
-        assert ('data-action="previous-stop"' in html) == stops["has_previous"]
+    def test_both_controls_write_their_own_parameter(self, client):
+        html = client.get("/portal", follow_redirects=True).get_data(as_text=True)
+        assert "go('view'" in html
+        assert "go('stop'" in html
 
 
 class TestTheMissionLevelSections:

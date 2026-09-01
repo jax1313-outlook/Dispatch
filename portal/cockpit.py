@@ -32,13 +32,19 @@ MODE_DELIVERY = "DELIVERY"
 #:
 #: The label is one string. It costs nothing to switch back once the phase
 #: question is settled on purpose rather than as a side effect.
+#: Two controls. CURRENT was dropped on the operator's instruction: a driver is
+#: going to a pickup or making a delivery, and a third button for "whichever of
+#: those you are already in" is a button that answers a question he did not ask.
+#:
+#: It survives as the *default* rather than as a control -- opening the cockpit
+#: with no mode chosen still resolves to the phase the record is actually in.
 MODES = (
     {"key": MODE_PICKUP, "label": "PICKUP"},
-    {"key": MODE_IN_TRANSIT, "label": "CURRENT"},
     {"key": MODE_DELIVERY, "label": "DELIVERY"},
 )
 
 MODE_LABELS = {m["key"]: m["label"] for m in MODES}
+MODE_LABELS[MODE_IN_TRANSIT] = "CURRENT"   # still addressable by URL
 
 #: `dispatch.mission` speaks the same three words, so the mapping is direct.
 _BACKEND_VIEW = {
@@ -48,16 +54,30 @@ _BACKEND_VIEW = {
 }
 
 
-def normalise_mode(requested: str | None) -> str:
-    """Accept a mode, or fall back to IN TRANSIT.
+def normalise_mode(requested: str | None, record: dict | None = None) -> str:
+    """Accept a mode, or resolve the one the record is actually in.
 
-    Also accepts `IN_TRANSIT`, so a link written while that label was in use
-    still opens rather than silently landing somewhere else.
+    With no mode asked for, the phase decides: before the freight is loaded he
+    is going to a pickup, after it he is making a delivery. CURRENT and
+    IN_TRANSIT still resolve, so older links open where they used to.
     """
     key = str(requested or "").upper().replace(" ", "_").replace("-", "_")
-    if key == "IN_TRANSIT":
-        return MODE_IN_TRANSIT  # a link written while the label was IN TRANSIT
-    return key if key in MODE_LABELS else MODE_IN_TRANSIT
+    if key in (MODE_PICKUP, MODE_DELIVERY):
+        return key
+    if key in ("CURRENT", "IN_TRANSIT"):
+        return default_mode(record)
+    return default_mode(record)
+
+
+#: Statuses before the freight is on the truck. After them, the next thing that
+#: matters is where it has to be.
+_PICKUP_STATUSES = {"", "open", "created", "dispatched", "en_route_pickup", "at_pickup"}
+
+
+def default_mode(record: dict | None = None) -> str:
+    """The phase the record is in, which is what CURRENT used to answer."""
+    status = str((record or {}).get("status") or "").strip().lower()
+    return MODE_PICKUP if status in _PICKUP_STATUSES else MODE_DELIVERY
 
 
 def backend_view(mode: str) -> str:
@@ -126,21 +146,59 @@ def broker_for(record: dict) -> dict:
     }
 
 
-def stops_for(record: dict) -> dict:
-    """Where the driver is in the sequence, when there is a sequence."""
+def stop_list(record: dict) -> list:
+    """Every stop on the run, each with its own delivery information.
+
+    A multi-stop run is not one delivery seen three times. Each stop has its own
+    facility, its own appointment, its own contact and its own freight, and the
+    screen has to switch between them without the driver losing the mission.
+    """
+    raw = record.get("stops") or []
+    stops = []
+    for i, entry in enumerate(raw, start=1):
+        if not isinstance(entry, dict):
+            continue
+        stops.append({
+            "number": entry.get("number") or i,
+            "label": entry.get("label") or f"STOP {entry.get('number') or i}",
+            "facility": entry.get("facility") or entry.get("address") or "",
+            "window": entry.get("window") or "",
+            "poc": entry.get("poc") or "",
+            "phone": entry.get("phone") or "",
+            "notes": entry.get("notes") or "",
+            "gps": entry.get("gps") or "",
+        })
+    return stops
+
+
+def stops_for(record: dict, selected: int | None = None) -> dict:
+    """Where the driver is in the run, and which stop the screen is showing."""
+    listed = stop_list(record)
+    if listed:
+        total = len(listed)
+    else:
+        try:
+            total = int(record.get("stop_total") or 1)
+        except (TypeError, ValueError):
+            total = 1
+
+    if selected is None:
+        try:
+            selected = int(record.get("stop_number") or 1)
+        except (TypeError, ValueError):
+            selected = 1
     try:
-        total = int(record.get("stop_total") or 1)
+        selected = int(selected)
     except (TypeError, ValueError):
-        total = 1
-    try:
-        number = int(record.get("stop_number") or 1)
-    except (TypeError, ValueError):
-        number = 1
-    number = max(1, min(number, total))
+        selected = 1
+    number = max(1, min(selected, total))
+
     return {
         "number": number,
         "total": total,
         "label": f"STOP {number} OF {total}",
+        "list": listed,
+        "selectable": total > 1,
         "has_next": number < total,
         "has_previous": number > 1,
         "next_sub": (f"Advance to stop {number + 1}" if number < total
@@ -148,6 +206,14 @@ def stops_for(record: dict) -> dict:
         "previous_sub": (f"Back to stop {number - 1}" if number > 1
                          else "First stop on this run"),
     }
+
+
+def selected_stop(record: dict, number: int) -> dict:
+    """The stop being shown, or an empty shape when the run has no stop list."""
+    for stop in stop_list(record):
+        if int(stop["number"]) == int(number):
+            return stop
+    return {}
 
 
 # -------------------------------------------------- mission-level sections --
@@ -198,7 +264,7 @@ def _drive_time(miles) -> str:
     return f"{whole}h {minutes:02d}m" if whole else f"{minutes}m"
 
 
-def end_detail(record: dict, end: str) -> dict:
+def end_detail(record: dict, end: str, stop_number: int | None = None) -> dict:
     """What a driver needs to get from where he is to this end, and get in.
 
     **The filter is travel.** Not everything known about the stop -- what is
@@ -213,9 +279,11 @@ def end_detail(record: dict, end: str) -> dict:
     ends = ends_for(record)
     card = record.get("card_data") or {}
     plan = record.get("load_plan") or []
+    number = stops_for(record, stop_number)["number"]
+    stop = selected_stop(record, number) if end == "delivery" else {}
 
     if end == "delivery":
-        stop_label = f"Stop {stops_for(record)['number']}"
+        stop_label = f"Stop {number}"
         items = [e.get("description") or "" for e in plan
                  if isinstance(e, dict) and e.get("stop") == stop_label]
     else:
@@ -234,20 +302,23 @@ def end_detail(record: dict, end: str) -> dict:
     distance = f"{miles} mi" if (end == "delivery" and miles) else ""
     drive = _drive_time(miles) if (end == "delivery" and miles) else ""
 
+    # A selected stop overrides the lane's end: on a multi-stop run the
+    # "destination" is whichever stop the driver is looking at, not the last one.
     return {
         "load_number": (record.get("numbers") or {}).get("load_label") or "—",
-        "address": ends[end]["place"],
-        "appointment": ends[end]["window"],
+        "stop_label": stop.get("label", ""),
+        "address": stop.get("facility") or ends[end]["place"],
+        "appointment": stop.get("window") or ends[end]["window"],
         "distance": distance,
         "drive_time": drive,
-        "poc": _first(record, f"{end}_poc", f"{end}_contact", default="—"),
-        "phone": _first(record, f"{end}_phone", default="—"),
+        "poc": stop.get("poc") or _first(record, f"{end}_poc", f"{end}_contact", default="—"),
+        "phone": stop.get("phone") or _first(record, f"{end}_phone", default="—"),
         # No shared fallback. `location_intelligence` is one load-level field,
         # and using it for both ends puts the pickup's dock note under the
         # delivery address -- which is how a driver ends up at the wrong door
         # with paperwork that says he is right.
-        "instructions": _first(record, f"{end}_notes", f"{end}_instructions",
-                               default="—"),
+        "instructions": stop.get("notes") or _first(record, f"{end}_notes",
+                                                    f"{end}_instructions", default="—"),
         "items": unique or ["—"],
     }
 
@@ -652,7 +723,8 @@ def drawers_for(record: dict, mode: str, route_risk: str = "") -> list:
     ]
 
 
-def cockpit_context(record: dict, mode: str, route_risk: str = "") -> dict:
+def cockpit_context(record: dict, mode: str, route_risk: str = "",
+                    stop_number: int | None = None) -> dict:
     """Everything the template needs, and nothing it has to look up itself."""
     return {
         "modes": MODES,
@@ -662,10 +734,10 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "") -> dict:
         "ends": ends_for(record),
         "cargo": cargo_for(record),
         "cargo_by_stop": cargo_by_stop(record),
-        "pickup_detail": end_detail(record, "pickup"),
-        "delivery_detail": end_detail(record, "delivery"),
+        "pickup_detail": end_detail(record, "pickup", stop_number),
+        "delivery_detail": end_detail(record, "delivery", stop_number),
         "broker": broker_for(record),
-        "stops": stops_for(record),
+        "stops": stops_for(record, stop_number),
         "doc_status": document_status(record, mode),
         "completion": completion_effect(record, mode),
         "arrive": arrive_for(record, mode),

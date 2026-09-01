@@ -71,8 +71,29 @@
     padding: 6px 12px; border-radius: 5px;
 }
 
-/* Three modes, permanently positioned. */
-.mode-bar { display: flex; gap: 8px; padding: 10px 0 0; }
+/* Stops on the left, modes on the right, both permanently positioned. */
+.control-bar {
+    display: flex; gap: 16px; align-items: flex-end;
+    justify-content: space-between; flex-wrap: wrap; padding-top: 10px;
+}
+.stop-bar { display: flex; gap: 6px; }
+.stop-btn {
+    min-height: var(--tap); padding: 0 18px;
+    font-size: 0.95rem; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--ink-dim); background: transparent;
+    border: 1px solid var(--edge-lit); border-bottom: none;
+    border-radius: 7px 7px 0 0; cursor: pointer;
+}
+.stop-btn:hover { color: var(--ink); background: rgba(255,255,255,0.04); }
+.stop-btn.active {
+    color: #fff; background: var(--panel-deep);
+    border-color: var(--key); box-shadow: inset 0 3px 0 var(--key);
+}
+.stop-single {
+    padding: 10px 4px 12px; font-size: 0.9rem; font-weight: 700;
+    letter-spacing: 0.06em; color: var(--ink-dim);
+}
+.mode-bar { display: flex; gap: 8px; flex: 0 1 auto; min-width: 260px; }
 .mode-btn {
     flex: 1 1 0; min-height: var(--tap);
     font-size: 1rem; font-weight: 700; letter-spacing: 0.06em;
@@ -464,4 +485,12 @@
 }
 .cargo-block .trip-diagram {
     margin: 0; width: calc(100% - 28px); margin: 0 14px 12px;
+}
+
+/* Which stop a panel is showing, on the panel. Without it a driver switching
+   stops has to trust that the screen changed under him. */
+.end-stop-tag {
+    margin-left: 8px; padding: 2px 7px;
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em;
+    color: #06121f; background: var(--key); border-radius: 4px;
 }

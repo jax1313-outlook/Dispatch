@@ -115,7 +115,8 @@ def portal_home():
         # one he saved, with nothing to tell him why.
         return redirect(url_for("joe_portal.portal_mission",
                                 record_id=newest["id"],
-                                view=cockpit.normalise_mode(request.args.get("view"))))
+                                view=cockpit.normalise_mode(request.args.get("view"), newest),
+                                stop=request.args.get("stop")))
     return render_template(
         "joe_portal.html",
         record={"id": "", "title": "No mission accepted",
@@ -149,8 +150,12 @@ def portal_mission(record_id: str):
     if not record:
         return redirect(url_for("joe_portal.portal_home"))
 
-    mode = cockpit.normalise_mode(request.args.get("view"))
+    mode = cockpit.normalise_mode(request.args.get("view"), record)
     requested = cockpit.backend_view(mode)
+    try:
+        stop_number = int(request.args.get("stop") or 0) or None
+    except (TypeError, ValueError):
+        stop_number = None
 
     # ONE read. The filter works over what is already assembled - that is the
     # property that keeps three views from becoming three records.
@@ -181,7 +186,7 @@ def portal_mission(record_id: str):
         route_risk=risk,
         facility_intel=_facility_intel(record, phase),
         actions_for=_actions_for,
-        **cockpit.cockpit_context(merged, mode, risk),
+        **cockpit.cockpit_context(merged, mode, risk, stop_number),
     )
 
 

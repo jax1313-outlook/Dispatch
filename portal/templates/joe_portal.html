@@ -46,31 +46,43 @@
     </div>
   </div>
 
-  {# Three modes, in the driver's own words. Thumb-sized, permanently
-     positioned, never reordered. #}
-  <nav class="mode-bar" role="tablist" aria-label="Mission phase">
-    {% for m in modes %}
-      <button class="mode-btn {% if m.key == requested_view %}active{% endif %}"
-              data-mode="{{ m.key }}" role="tab"
-              aria-selected="{{ 'true' if m.key == requested_view else 'false' }}">
-        {{ m.label }}
-      </button>
-    {% endfor %}
-  </nav>
+  {# Stops on the left, modes on the right. The stop toggle switches which
+     delivery the screen is showing -- a multi-stop run is not one delivery seen
+     three times, and each stop has its own facility, appointment, contact and
+     freight. CURRENT is gone: a driver is going to a pickup or making a
+     delivery, and a button for "whichever of those you are already in" answers
+     a question he did not ask. #}
+  <div class="control-bar">
+    {% if stops.selectable %}
+    <nav class="stop-bar" role="tablist" aria-label="Stop">
+      {% for stop in stops.list %}
+        <button class="stop-btn {% if stop.number == stops.number %}active{% endif %}"
+                data-stop="{{ stop.number }}" role="tab"
+                aria-selected="{{ 'true' if stop.number == stops.number else 'false' }}">
+          {{ stop.label }}
+        </button>
+      {% endfor %}
+    </nav>
+    {% else %}
+    <div class="stop-single">{{ stops.label }}</div>
+    {% endif %}
+
+    <nav class="mode-bar" role="tablist" aria-label="Mission phase">
+      {% for m in modes %}
+        <button class="mode-btn {% if m.key == requested_view %}active{% endif %}"
+                data-mode="{{ m.key }}" role="tab"
+                aria-selected="{{ 'true' if m.key == requested_view else 'false' }}">
+          {{ m.label }}
+        </button>
+      {% endfor %}
+    </nav>
+  </div>
 </header>
 
 <main class="cockpit-body">
 
 {# ------------------------------------------------------- LEFT: THE MISSION #}
 <section class="mission-column" aria-label="Mission record">
-
-  {# The stop card carries stop progress and nothing else. Narrow, because a
-     card that spans the screen implies it holds the mission -- and this one
-     holds one fact. #}
-  <div class="stop-card">
-    <span class="stop-card-label">CURRENT STOP</span>
-    <span class="stop-card-value">{{ stops.label }}</span>
-  </div>
 
   {# Both ends stay visible. The mode changes which is bright, never which
      exists: a driver who loses sight of where the mission started has lost
@@ -79,7 +91,8 @@
     {% for side in [('pickup', pickup_detail, emphasis.pickup),
                     ('delivery', delivery_detail, emphasis.delivery)] %}
     <button class="end-panel {{ side[2] }}" data-drawer="{{ side[0] }}" data-side="left">
-      <span class="end-title">{{ side[0]|upper }} DETAILS</span>
+      <span class="end-title">{{ side[0]|upper }} DETAILS{% if side[1].stop_label %}
+        <span class="end-stop-tag">{{ side[1].stop_label }}</span>{% endif %}</span>
       <span class="end-load"><span class="end-load-tag">LOAD</span>{{ side[1].load_number }}</span>
       {# Ordered for travel: where, when, how far, who to ring, how to get in.
          Then what comes off, last, because that is dock work rather than
@@ -199,19 +212,6 @@
 
   <div class="action-spacer"></div>
 
-  {% if stops.has_previous %}
-  <button class="action prev-stop" data-action="previous-stop">
-    <span class="action-name">PREVIOUS STOP</span>
-    <span class="action-sub">{{ stops.previous_sub }}</span>
-  </button>
-  {% endif %}
-
-  {% if stops.has_next %}
-  <button class="action next-stop" data-action="next-stop">
-    <span class="action-name">NEXT STOP</span>
-    <span class="action-sub">{{ stops.next_sub }}</span>
-  </button>
-  {% endif %}
 </section>
 </main>
 
@@ -326,12 +326,19 @@
 
 <script>
 // Mode switch. The URL carries the mode so a reload lands where the driver was.
+function go(param, value) {
+  var url = new URL(window.location);
+  url.searchParams.set(param, value);
+  window.location = url;
+}
+
+// Switching a mode keeps the stop, and switching a stop keeps the mode. Losing
+// either would move the driver twice for one press.
 document.querySelectorAll('.mode-btn').forEach(function (b) {
-  b.addEventListener('click', function () {
-    var url = new URL(window.location);
-    url.searchParams.set('view', b.dataset.mode);
-    window.location = url;
-  });
+  b.addEventListener('click', function () { go('view', b.dataset.mode); });
+});
+document.querySelectorAll('.stop-btn').forEach(function (b) {
+  b.addEventListener('click', function () { go('stop', b.dataset.stop); });
 });
 
 // Drawers. One at a time, from either side, with the record still behind it.
