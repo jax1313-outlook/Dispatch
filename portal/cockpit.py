@@ -372,12 +372,28 @@ PICKUP_ARTIFACTS = (
     "Photos - Load Securement",
 )
 
-#: The default delivery list, used when a customer has not stated what they
-#: accept as proof of delivery. It is a default now rather than a fixed list:
-#: **POD requirements vary by customer** (ruled by the operator, 1 September
-#: 2026), and a checklist item that cannot be completed on this load -- an
-#: invoice to a broker who is not on it -- teaches a driver to tick without
-#: reading, which costs the items that do matter.
+#: The delivery list. **Fixed, for every mission.**
+#:
+#: An earlier version derived it from a per-customer POD requirement so that a
+#: direct-pay run would not be asked for an invoice to a broker. The operator
+#: reversed that, and was right twice over.
+#:
+#: Right on the freight: XPO is still in the transaction chain on a Mayo C.O.D.
+#: run. Mayo hands over the check, and XPO still receives the normal POD packet
+#: so they can reconcile the load on their side. The invoice was never wrong.
+#:
+#: Right on the architecture, which matters more:
+#:
+#:     KISS is a survivability doctrine.
+#:
+#: A checklist that branches per customer is a branch to be remembered, tested,
+#: debugged and explained years from now, in a one-truck business with no
+#: maintenance budget. The strongest decisions in Dispatch have all removed
+#: special cases rather than added them -- one Mission Record instead of record
+#: types, modes as views instead of screens, C.O.D. as a field instead of a
+#: process.
+#:
+#: The data changes. The workflow does not.
 DELIVERY_ARTIFACTS = (
     ARRIVAL_NOTICE,
     "Proof Of Delivery Document",
@@ -386,39 +402,6 @@ DELIVERY_ARTIFACTS = (
     "Invoice To Broker",
 )
 
-#: Kept on every delivery whatever the customer asks for. Condition photographs
-#: are the driver's own protection against a damage claim, not a document the
-#: receiver requested, so a customer's shorter list does not remove them.
-DRIVERS_OWN_RECORD = "Photos - Condition / Delivery"
-
-
-def pod_artifacts(record: dict) -> tuple:
-    """What this customer accepts as proof of delivery, or the default list.
-
-    Read from the record's stated requirement -- "scanned signed BOL and
-    packing list" -- rather than assumed. Splitting is deliberately forgiving:
-    the field is filled in by a driver at a truck stop, not by a form.
-    """
-    stated = str(record.get("pod_required") or "").strip()
-    if not stated:
-        return DELIVERY_ARTIFACTS
-
-    text = stated.replace(" and ", ",").replace(";", ",").replace(chr(10), ",")
-    items, seen = [], set()
-    for part in text.split(","):
-        label = part.strip().strip(".").strip()
-        if not label:
-            continue
-        label = label[0].upper() + label[1:]
-        if label.lower() not in seen:
-            seen.add(label.lower())
-            items.append(label)
-
-    artifacts = [ARRIVAL_NOTICE] + items
-    if not any(DRIVERS_OWN_RECORD.lower() in a.lower() or "photo" in a.lower()
-               for a in artifacts):
-        artifacts.append(DRIVERS_OWN_RECORD)
-    return tuple(artifacts)
 
 #: What each notice promises will follow. Reproduced from the operator's
 #: templates rather than summarised: this text goes to a broker.
@@ -437,10 +420,8 @@ STATUS_READY = "READY"
 STATUS_COMPLETE = "COMPLETE"
 
 
-def _artifact_list(mode: str, record: dict | None = None) -> tuple:
-    if mode != MODE_DELIVERY:
-        return PICKUP_ARTIFACTS
-    return pod_artifacts(record or {})
+def _artifact_list(mode: str) -> tuple:
+    return DELIVERY_ARTIFACTS if mode == MODE_DELIVERY else PICKUP_ARTIFACTS
 
 
 def _held(record: dict) -> set:
@@ -458,50 +439,67 @@ def document_checklist(record: dict, mode: str) -> list:
     held = _held(record)
     arrived = bool(record.get("arrived_at"))
     items = []
-    for name in _artifact_list(mode, record):
+    for name in _artifact_list(mode):
         if name == ARRIVAL_NOTICE:
             items.append({"label": name, "done": arrived,
                           "note": "Dispatch generated and auto-sent"})
         else:
             items.append({"label": name, "done": name.lower() in held, "note": ""})
 
-    # A load paid at the dock is a load he can drive away from unpaid. When the
-    # record says payment is collected on delivery, collecting it is a step on
-    # the checklist -- not a line in the notes he reads once at intake and not
-    # again at 12:00 with a receiver waiting.
+    # The one thing that differs operationally on a C.O.D. load: do not pull
+    # away from the dock without the check. Not a workflow and not a branch --
+    # a reminder, on the list he is already reading.
+    #
+    # Everything else stays identical, because the Mission Template already
+    # encoded the payment arrangement when it created the record. The data
+    # changes; the workflow does not.
     if mode == MODE_DELIVERY:
-        cod = str(record.get("cod") or "").strip()
-        terms = str(record.get("payment_terms") or "").strip()
-        # The explicit field decides. Reading the terms is a fallback for
-        # records written before C.O.D. had a field of its own -- guessing from
-        # phrasing is fine as a safety net and wrong as the primary rule.
-        if cod:
-            items.append({"label": f"C.O.D. collected - {cod}",
-                          "done": bool(record.get("payment_collected_at")),
-                          "note": terms})
-        elif terms and _collected_on_delivery(terms):
-            items.append({"label": "Payment collected",
-                          "done": bool(record.get("payment_collected_at")),
-                          "note": terms})
+        cod = cod_for(record)
+        if cod["is_cod"]:
+            items.append({"label": cod["label"], "done": cod["collected"],
+                          "note": cod["note"]})
     return items
 
 
-#: Words that mean the driver leaves with money rather than an invoice number.
-_COLLECT_WORDS = ("check", "cash", "collect", "cod", "on delivery", "at delivery")
+def cod_for(record: dict) -> dict:
+    """Whether the driver collects at this delivery, and what the line says.
 
-
-def _collected_on_delivery(terms: str) -> bool:
-    """Whether payment is taken at the dock rather than invoiced.
-
-    Deliberately generous about phrasing -- "check by Mayo", "cash load",
-    "COD" all mean the same thing to a driver, and a term this misses is a
-    checklist item he does not get.
+    C.O.D. is a field on the Mission Record, not a kind of mission. A record
+    carrying `payment_type: C.O.D.` produces one extra line; a record without
+    it produces none. Nothing downstream behaves differently either way --
+    the arrival notice, the invoice, the POD packet and the courtesy email all
+    run exactly as they do for every other load, because on a C.O.D. run the
+    broker is still in the transaction chain and still reconciles his side.
     """
-    lowered = terms.lower()
-    if "invoice" in lowered and not any(w in lowered for w in
-                                        ("check", "cash", "cod")):
-        return False
-    return any(word in lowered for word in _COLLECT_WORDS)
+    payment_type = str(record.get("payment_type") or "").strip()
+    legacy = str(record.get("cod") or "").strip()
+    is_cod = payment_type.upper().replace(".", "") == "COD" or bool(legacy)
+
+    if not is_cod:
+        return {"is_cod": False, "label": "", "note": "", "collected": False,
+                "payor": "", "amount": "", "balance_due": ""}
+
+    payor = str(record.get("payor") or "").strip() or legacy
+    amount = str(record.get("amount") or "").strip()
+    collected = bool(record.get("payment_collected_at"))
+
+    label = "C.O.D. Collected"
+    if payor:
+        label += f" - {payor}"
+    if amount:
+        label += f" - {amount}"
+
+    return {
+        "is_cod": True,
+        "label": label,
+        "note": "Do not leave the dock without it.",
+        "collected": collected,
+        "payor": payor,
+        "amount": amount,
+        # Zero once collected. The record shows the balance; nothing else in
+        # the closeout sequence reads it.
+        "balance_due": ("0.00" if collected else amount),
+    }
 
 
 def document_status(record: dict, mode: str) -> dict:

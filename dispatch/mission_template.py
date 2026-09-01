@@ -132,21 +132,20 @@ TEMPLATE: tuple[Field, ...] = (
     Field("rate_basis", "Rate agreed with", "LOAD CONTROL",
           hint="Posted, or who you negotiated it with",
           spoken="Was the rate posted, or did you negotiate it with somebody?"),
-    # A load paid at the dock is a load you can drive away from unpaid. The
-    # difference between "invoice it" and "collect a check" is not a billing
-    # note -- it is an action at the delivery, and the checklist has to say so.
-    # C.O.D. is its own field rather than a phrase inside payment terms.
-    # Whether the driver leaves the dock with money is too consequential to
-    # depend on somebody having written "check" instead of "cheque".
-    Field("cod", "C.O.D.", "LOAD CONTROL",
-          hint="Amount to collect at delivery. Blank if it is not a C.O.D. load",
-          spoken="Is this a C.O.D. load -- do you collect at delivery?"),
-    Field("payment_terms", "Payment", "LOAD CONTROL",
-          hint="Invoice, or collected on delivery -- say who pays and how",
-          spoken="How does this one pay -- invoiced, or do you collect at delivery?"),
-    Field("pod_required", "POD required", "LOAD CONTROL",
-          hint="What this customer accepts as proof of delivery",
-          spoken="What do they want back as proof of delivery?"),
+    # The payment arrangement is encoded here, once, when the record is
+    # created. It changes the data on the Mission Record and nothing else --
+    # the arrival notice, invoice, POD packet and courtesy email run the same
+    # sequence on every load. The driver never has to work out which kind of
+    # load he is on.
+    Field("payment_type", "Payment type", "LOAD CONTROL",
+          hint="Broker Invoice, or C.O.D.",
+          spoken="Is it billed to the broker, or C.O.D.?"),
+    Field("payor", "Paid by", "LOAD CONTROL",
+          hint="Who hands over the money on a C.O.D. load",
+          spoken="Who pays you?"),
+    Field("amount", "Amount to collect", "LOAD CONTROL",
+          hint="C.O.D. loads only",
+          spoken="How much do you collect?"),
 
     # --- PICKUP
     Field("pickup_location", "Pickup facility and address", "PICKUP",
@@ -610,7 +609,7 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
                 "pickup_special", "delivery_special", "delivery_location",
                 "delivery_window", "delivery_contact", "delivery_phone",
                 "delivery_notes", "commodity", "service", "notes",
-                "rate_basis", "payment_terms", "pod_required", "cod"):
+                "rate_basis", "payment_type", "payor", "amount"):
         if value(key):
             record[key] = value(key)
     return record

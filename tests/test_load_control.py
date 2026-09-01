@@ -193,143 +193,111 @@ class TestTheStopCardCarriesItThrough:
         assert joe_voice.is_driver_safe(control["line"]) == []
 
 
-class TestAPaidAtTheDockLoadSaysSoOnTheChecklist:
-    """From the operator: this run is frequently a cash load, paid by check by
-    Mayo Clinic Jacksonville, rate negotiated by calling XPO dispatch.
+class TestCodIsAFieldNotAKindOfMission:
+    """Ruled by the operator, 1 September 2026, reversing a dynamic checklist
+    this had grown:
 
-    A load paid at the dock is a load a driver can leave without being paid
-    for. That is not a billing note -- it is a step at the delivery, and it
-    belongs where he is already looking.
+        KISS is a survivability doctrine.
+
+    An earlier version derived the delivery list from a per-customer POD
+    requirement so a direct-pay run would not be asked for an invoice to a
+    broker. That was wrong twice. Wrong on the freight -- XPO is still in the
+    transaction chain on a Mayo C.O.D. run, still receives the POD packet, and
+    still reconciles. And wrong on the architecture, which matters more: a
+    checklist that branches per customer is a branch to be remembered, tested
+    and explained years from now, in a one-truck business with no maintenance
+    budget.
+
+    The Mission Template encodes the payment arrangement once. The data
+    changes; the workflow does not. C.O.D. adds exactly one line, and it
+    exists to prevent one failure: pulling away from the dock without the
+    check.
     """
 
-    def _checklist(self, terms="", cod=""):
+    def _labels(self, **record):
         from portal import cockpit
 
-        record = {"card_data": {"load_id": "ROC-2026-884471"},
-                  "payment_terms": terms, "cod": cod}
+        record.setdefault("card_data", {})
         return [i["label"] for i in
                 cockpit.document_checklist(record, cockpit.MODE_DELIVERY)]
 
-    def test_the_cod_field_decides_not_the_phrasing(self):
-        """Whether he leaves the dock with money is too consequential to depend
-        on somebody having written 'check' rather than 'cheque'."""
-        labels = self._checklist(terms="", cod="Check - Mayo Clinic Jacksonville")
-        assert any(l.startswith("C.O.D. collected") for l in labels)
-
-    def test_the_amount_is_on_the_item_itself(self):
+    def test_the_delivery_list_is_the_same_on_every_mission(self):
         from portal import cockpit
 
-        record = {"card_data": {}, "cod": "$1,150 check"}
+        standard = list(cockpit.DELIVERY_ARTIFACTS)
+        assert self._labels() == standard
+        assert self._labels(payment_type="Broker Invoice") == standard
+        assert self._labels(pod_required="Signed BOL only") == standard
+
+    def test_the_invoice_to_broker_survives_a_cod_load(self):
+        """XPO is still in the chain. Mayo hands over the check; XPO still
+        gets the packet and reconciles on their side."""
+        assert "Invoice To Broker" in self._labels(
+            payment_type="C.O.D.", payor="Mayo Clinic Jacksonville")
+
+    def test_cod_adds_exactly_one_line(self):
+        from portal import cockpit
+
+        plain = self._labels()
+        cod = self._labels(payment_type="C.O.D.", payor="Mayo Clinic Jacksonville")
+        assert len(cod) == len(plain) + 1
+        assert cod[:-1] == plain
+        assert cod[-1] == "C.O.D. Collected - Mayo Clinic Jacksonville"
+
+    def test_a_broker_invoice_load_adds_nothing(self):
+        from portal import cockpit
+
+        assert self._labels(payment_type="Broker Invoice") == list(
+            cockpit.DELIVERY_ARTIFACTS)
+
+    def test_the_line_says_the_one_thing_it_is_for(self):
+        from portal import cockpit
+
+        record = {"card_data": {}, "payment_type": "C.O.D.",
+                  "payor": "Mayo Clinic Jacksonville"}
         item = [i for i in cockpit.document_checklist(record, cockpit.MODE_DELIVERY)
                 if i["label"].startswith("C.O.D.")][0]
-        assert "$1,150 check" in item["label"]
+        assert item["note"] == "Do not leave the dock without it."
 
-    def test_no_cod_and_no_collect_terms_adds_nothing(self):
-        assert not any(l.startswith("C.O.D.") for l in
-                       self._checklist(terms="Invoice net 30", cod=""))
-
-    def test_a_check_on_delivery_becomes_a_checklist_item(self):
-        assert "Payment collected" in self._checklist(
-            "Check on delivery - Mayo Clinic Jacksonville")
-
-    @pytest.mark.parametrize("terms", ["Cash load", "COD", "Collect at delivery",
-                                       "Driver collects check"])
-    def test_it_reads_the_phrasings_a_driver_actually_uses(self, terms):
-        assert "Payment collected" in self._checklist(terms)
-
-    @pytest.mark.parametrize("terms", ["Invoice to broker net 30",
-                                       "Invoiced monthly", ""])
-    def test_an_invoiced_load_gains_no_item(self, terms):
-        """A checklist step that is never the driver's job teaches him to tick
-        without reading."""
-        assert "Payment collected" not in self._checklist(terms)
-
-    def test_the_terms_travel_with_the_item(self):
-        from portal import cockpit
-
-        record = {"card_data": {}, "payment_terms": "Check by Mayo Clinic Jax"}
-        item = [i for i in cockpit.document_checklist(record, cockpit.MODE_DELIVERY)
-                if i["label"] == "Payment collected"][0]
-        assert item["note"] == "Check by Mayo Clinic Jax"
-        assert item["done"] is False
+    def test_the_amount_rides_on_the_line_when_there_is_one(self):
+        assert self._labels(payment_type="COD", payor="Mayo",
+                            amount="$1,150")[-1] == "C.O.D. Collected - Mayo - $1,150"
 
     def test_pickup_never_asks_for_payment(self):
         from portal import cockpit
 
-        record = {"card_data": {}, "payment_terms": "Check on delivery"}
-        labels = [i["label"] for i in
-                  cockpit.document_checklist(record, cockpit.MODE_PICKUP)]
-        assert "Payment collected" not in labels
-
-
-class TestPodRequirementsVaryByCustomer:
-    """Ruled by the operator, 1 September 2026: POD varies by customer.
-
-    The fixed list put "Invoice To Broker" on a load with no broker that pays
-    by check at the dock. A checklist item that cannot be completed on this
-    load teaches a driver to tick without reading, which costs him the items
-    that do matter.
-    """
-
-    def _labels(self, record):
-        from portal import cockpit
-
-        return [i["label"] for i in
-                cockpit.document_checklist(record, cockpit.MODE_DELIVERY)]
-
-    def test_a_stated_requirement_replaces_the_default_list(self):
-        labels = self._labels({"card_data": {},
-                               "pod_required": "Scanned signed BOL and packing list"})
-        assert "Scanned signed BOL" in labels
-        assert "Packing list" in labels
-        assert "Invoice To Broker" not in labels
-
-    def test_no_stated_requirement_leaves_the_default_alone(self):
-        """Every existing mission keeps the list it had."""
-        from portal import cockpit
-
-        assert self._labels({"card_data": {}}) == list(cockpit.DELIVERY_ARTIFACTS)
-
-    def test_the_arrival_notice_always_leads(self):
-        """Dispatch generated and sent it. It is not the customer's to drop."""
-        from portal import cockpit
-
-        labels = self._labels({"card_data": {}, "pod_required": "Signed BOL"})
-        assert labels[0] == cockpit.ARRIVAL_NOTICE
-
-    def test_condition_photos_survive_a_shorter_list(self):
-        """They are the driver's protection against a damage claim, not a
-        document the receiver asked for. A customer wanting less does not make
-        him need them less."""
-        from portal import cockpit
-
-        labels = self._labels({"card_data": {}, "pod_required": "Signed BOL"})
-        assert cockpit.DRIVERS_OWN_RECORD in labels
-
-    def test_it_does_not_duplicate_photos_the_customer_also_wants(self):
-        labels = self._labels({"card_data": {},
-                               "pod_required": "Signed BOL, delivery photos"})
-        assert sum(1 for l in labels if "photo" in l.lower()) == 1
-
-    def test_the_requirement_is_split_the_way_a_driver_writes_it(self):
-        from portal import cockpit
-
-        for stated in ("Signed BOL and packing list",
-                       "Signed BOL, packing list",
-                       "Signed BOL; packing list."):
-            got = cockpit.pod_artifacts({"pod_required": stated})
-            assert "Signed BOL" in got, stated
-            assert "Packing list" in got, stated
-
-    def test_cod_still_rides_on_top_of_whatever_the_list_is(self):
-        labels = self._labels({"card_data": {}, "pod_required": "Signed BOL",
-                               "cod": "Check - Mayo Clinic Jacksonville"})
-        assert any(l.startswith("C.O.D. collected") for l in labels)
-
-    def test_pickup_is_untouched_by_any_of_this(self):
-        from portal import cockpit
-
-        record = {"card_data": {}, "pod_required": "Signed BOL", "cod": "Check"}
+        record = {"card_data": {}, "payment_type": "C.O.D.", "payor": "Mayo"}
         labels = [i["label"] for i in
                   cockpit.document_checklist(record, cockpit.MODE_PICKUP)]
         assert labels == list(cockpit.PICKUP_ARTIFACTS)
+
+
+class TestBalanceGoesToZeroWhenCollected:
+    """The record carries the difference. Nothing else does."""
+
+    def test_the_balance_is_the_amount_until_it_is_collected(self):
+        from portal import cockpit
+
+        cod = cockpit.cod_for({"payment_type": "C.O.D.", "amount": "1150.00"})
+        assert cod["balance_due"] == "1150.00"
+        assert cod["collected"] is False
+
+    def test_collecting_zeroes_it(self):
+        from portal import cockpit
+
+        cod = cockpit.cod_for({"payment_type": "C.O.D.", "amount": "1150.00",
+                               "payment_collected_at": "2026-09-02T12:10:00"})
+        assert cod["balance_due"] == "0.00"
+        assert cod["collected"] is True
+
+    def test_a_non_cod_load_has_no_balance_to_carry(self):
+        from portal import cockpit
+
+        assert cockpit.cod_for({"payment_type": "Broker Invoice"})["is_cod"] is False
+
+    def test_records_written_before_payment_type_existed_still_work(self):
+        from portal import cockpit
+
+        cod = cockpit.cod_for({"cod": "Check - Mayo Clinic Jacksonville"})
+        assert cod["is_cod"] is True
+        assert cod["payor"] == "Check - Mayo Clinic Jacksonville"
