@@ -21,7 +21,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Driver Cockpit — {{ record.numbers.mission_label or 'Mission' }}</title>
+<title>Driver Cockpit — {{ record.numbers.load_label or 'No load' }}</title>
 <script src="{{ url_for('static', filename='vendor/tailwind.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='joe_portal.css') }}">
 </head>
@@ -64,52 +64,34 @@
 {# ------------------------------------------------------- LEFT: THE MISSION #}
 <section class="mission-column" aria-label="Mission record">
 
-  {# Compressed to four lines. Every one carries something the driver acts on:
-     where he is in the run, the lane, what is on the truck, and where it sits.
-     No filler -- a card padded to look substantial costs vertical space that
-     the mission itself needs. #}
-  <div class="trip-card">
-    <div class="trip-line-1">
-      <span class="trip-label">{{ mode_label }} &middot; {{ stops.label }}</span>
-      <span class="trip-number">{{ record.numbers.mission_label or '—' }}</span>
-    </div>
-
-    <div class="trip-line-2">
-      <span class="trip-broker">{{ broker.name or 'Broker unassigned' }}</span>
-      <span class="trip-sep">&middot;</span>
-      <span class="trip-lane">{{ ends.pickup.place }} &rarr; {{ ends.delivery.place }}</span>
-    </div>
-
-    <div class="trip-line-3">
-      <span class="fact-key">CARGO:</span>
-      <span class="trip-cargo-desc">{{ cargo.description }}</span>
-      <span class="fact-bracket">{{ cargo.brackets }}</span>
-    </div>
-
-    <div class="trip-line-4">
-      <span class="fact-key">LOAD POSITION:</span>
-      <span class="trip-position-text">{{ load_diagram.position }}</span>
-      <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
-        OPEN LOAD DIAGRAM
-      </button>
-    </div>
+  {# The stop card carries stop progress and nothing else. Narrow, because a
+     card that spans the screen implies it holds the mission -- and this one
+     holds one fact. #}
+  <div class="stop-card">
+    <span class="stop-card-label">CURRENT STOP</span>
+    <span class="stop-card-value">{{ stops.label }}</span>
   </div>
 
   {# Both ends stay visible. The mode changes which is bright, never which
      exists: a driver who loses sight of where the mission started has lost
      his orientation, not just a panel. #}
   <div class="ends">
-    <button class="end-panel {{ emphasis.pickup }}" data-drawer="pickup" data-side="left">
-      <span class="end-title">PICKUP DETAILS</span>
-      <span class="end-place">{{ ends.pickup.place }}</span>
-      <span class="end-window">{{ ends.pickup.window }}</span>
+    {% for side in [('pickup', pickup_detail, emphasis.pickup),
+                    ('delivery', delivery_detail, emphasis.delivery)] %}
+    <button class="end-panel {{ side[2] }}" data-drawer="{{ side[0] }}" data-side="left">
+      <span class="end-title">{{ side[0]|upper }} DETAILS</span>
+      <span class="end-load">{{ side[1].load_number }}</span>
+      <dl class="end-fields">
+        <dt>Address</dt><dd>{{ side[1].address }}</dd>
+        <dt>POC</dt><dd>{{ side[1].poc }}</dd>
+        <dt>Phone</dt><dd>{{ side[1].phone }}</dd>
+        <dt>Appointment</dt><dd>{{ side[1].appointment }}</dd>
+        <dt>Instructions</dt><dd>{{ side[1].instructions }}</dd>
+        <dt>Items</dt>
+        <dd>{% for item in side[1]['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
+      </dl>
     </button>
-
-    <button class="end-panel {{ emphasis.delivery }}" data-drawer="delivery" data-side="left">
-      <span class="end-title">DELIVERY DETAILS</span>
-      <span class="end-place">{{ ends.delivery.place }}</span>
-      <span class="end-window">{{ ends.delivery.window }}</span>
-    </button>
+    {% endfor %}
   </div>
 
   <button class="fact-row" data-drawer="route" data-side="right">
@@ -117,10 +99,40 @@
     <span class="fact-value">{{ route_risk or 'No corridor risk reported' }}</span>
   </button>
 
+  {# Truck-wide, summarised by the stop it comes off at. A summary showing only
+     the current stop hides the freight sitting behind it. #}
+  <button class="fact-row block" data-drawer="cargo" data-side="left">
+    <span class="fact-key">CARGO:</span>
+    {% if cargo_by_stop.has_rows %}
+      <span class="cargo-rows">
+        {% for row in cargo_by_stop.rows %}
+          <span class="cargo-row">
+            <span class="cargo-stop">{{ row.stop }}</span>
+            <span class="cargo-what">{{ row.description }}</span>
+            <span class="fact-bracket">{{ row.pallets }} pallets</span>
+          </span>
+        {% endfor %}
+      </span>
+    {% else %}
+      <span class="fact-value">{{ cargo_by_stop.summary }}</span>
+    {% endif %}
+    <span class="cargo-total">{{ cargo_by_stop.total }}</span>
+  </button>
+
+  {# Its own section, and it owns the diagram. #}
+  <div class="fact-row block arrangement">
+    <span class="fact-key">LOAD ARRANGEMENT:</span>
+    <span class="fact-value">{{ load_diagram.position }}</span>
+    <span class="fact-bracket">{{ load_diagram.capacity_line }}</span>
+    <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
+      OPEN LOAD DIAGRAM
+    </button>
+  </div>
+
   <button class="fact-row" data-drawer="broker" data-side="left">
     <span class="fact-key">BROKER:</span>
-    <span class="fact-value">{{ broker.reference }}
-      {% if broker.phone %}<span class="fact-bracket">{{ broker.phone }}</span>{% endif %}</span>
+    <span class="fact-value">{{ broker.name or 'Broker unassigned' }}</span>
+    <span class="fact-bracket">{{ broker.reference }}{% if broker.phone %} &middot; {{ broker.phone }}{% endif %}</span>
   </button>
 
   {# Two states only: READY and COMPLETE. Not pending, not holding, not in

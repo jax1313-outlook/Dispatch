@@ -150,6 +150,74 @@ def stops_for(record: dict) -> dict:
     }
 
 
+# -------------------------------------------------- mission-level sections --
+
+def cargo_by_stop(record: dict) -> dict:
+    """Truck-wide cargo, summarised by the stop it comes off at.
+
+    Not the current stop's cargo -- the whole truck. A driver planning an unload
+    needs to know what else is aboard and whose it is, and a summary that shows
+    only the stop he is standing at hides the freight behind it.
+    """
+    plan = record.get("load_plan") or []
+    by_stop: dict = {}
+    for entry in plan:
+        if not isinstance(entry, dict):
+            continue
+        stop = entry.get("stop") or "Unassigned"
+        row = by_stop.setdefault(stop, {"stop": stop, "description": "", "pallets": 0})
+        row["pallets"] += 1
+        if not row["description"]:
+            row["description"] = entry.get("description") or ""
+
+    card = record.get("card_data") or {}
+    totals = []
+    for key, unit in (("pallets", "pallets"), ("pieces", "pieces"), ("weight_lbs", "lbs")):
+        value = record.get(key) or card.get(key)
+        if value not in (None, "", []):
+            totals.append(f"{value} {unit}")
+
+    return {
+        "rows": list(by_stop.values()),
+        "summary": cargo_for(record)["description"],
+        "total": " · ".join(totals) if totals else "no cargo detail recorded",
+        "has_rows": bool(by_stop),
+    }
+
+
+def end_detail(record: dict, end: str) -> dict:
+    """Everything a driver needs about one end of the run, on the panel itself.
+
+    LOAD NUMBER leads and is bold: it is the broker's number, the one on the
+    paperwork and the one he is asked for on the phone at the gate.
+    """
+    ends = ends_for(record)
+    plan = record.get("load_plan") or []
+    if end == "delivery":
+        stop_label = f"Stop {stops_for(record)['number']}"
+        items = [e.get("description") or "" for e in plan
+                 if isinstance(e, dict) and e.get("stop") == stop_label]
+    else:
+        items = [e.get("description") or "" for e in plan if isinstance(e, dict)]
+
+    seen, unique = set(), []
+    for item in items:
+        if item and item not in seen:
+            seen.add(item)
+            unique.append(item)
+
+    return {
+        "load_number": (record.get("numbers") or {}).get("load_label") or "—",
+        "address": ends[end]["place"],
+        "poc": _first(record, f"{end}_poc", f"{end}_contact", default="—"),
+        "phone": _first(record, f"{end}_phone", default="—"),
+        "appointment": ends[end]["window"],
+        "instructions": _first(record, f"{end}_notes", f"{end}_instructions",
+                               "location_intelligence", default="—"),
+        "items": unique or ["—"],
+    }
+
+
 # ---------------------------------------------------------- document status --
 
 #: The checklists, as specified by the operator on 31 August 2026.
@@ -559,6 +627,9 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "") -> dict:
         "emphasis": emphasis_for(mode),
         "ends": ends_for(record),
         "cargo": cargo_for(record),
+        "cargo_by_stop": cargo_by_stop(record),
+        "pickup_detail": end_detail(record, "pickup"),
+        "delivery_detail": end_detail(record, "delivery"),
         "broker": broker_for(record),
         "stops": stops_for(record),
         "doc_status": document_status(record, mode),

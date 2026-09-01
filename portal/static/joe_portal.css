@@ -376,3 +376,53 @@
 .slot.taken { background: #0f1b28; border-color: var(--edge-lit); }
 .slot.empty { background: transparent; border-style: dashed; }
 .slot.empty .slot-what { color: var(--go); font-weight: 700; letter-spacing: 0.08em; }
+
+/* ---- Current Stop card ------------------------------------------------- */
+/* Stop progress and nothing else, at roughly the width of one details panel
+   beneath it. A card spanning the screen implies it holds the mission; this
+   one holds a single fact and is sized to say so. */
+.stop-card {
+    display: inline-flex; align-items: baseline; gap: 12px;
+    width: calc(50% - 5px); min-width: 220px;
+    padding: 9px 14px;
+    background: linear-gradient(180deg, #12283f 0%, #0f1f31 100%);
+    border: 1px solid #24466b; border-radius: 9px;
+}
+.stop-card-label { font-size: 0.7rem; letter-spacing: 0.1em; color: #8fb6dd; }
+.stop-card-value { font-size: 1.05rem; font-weight: 800; letter-spacing: 0.05em; }
+@media (max-width: 620px) { .stop-card { width: 100%; } }
+
+/* ---- Details panels: the whole of one end, on the panel ---------------- */
+.end-load {
+    font-size: 1.05rem; font-weight: 800; letter-spacing: 0.03em; margin-top: 2px;
+}
+.end-fields { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+.end-fields dt {
+    font-size: 0.68rem; letter-spacing: 0.07em; color: var(--ink-faint);
+    text-transform: uppercase; padding-top: 2px;
+}
+.end-fields dd { margin: 0; font-size: 0.9rem; line-height: 1.35; }
+.end-item { display: block; }
+
+/* ---- Cargo, truck-wide, by stop ---------------------------------------- */
+.fact-row.block { display: block; }
+.cargo-rows { display: block; margin-top: 6px; }
+.cargo-row {
+    display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+    padding: 3px 0; font-size: 0.94rem;
+}
+.cargo-stop {
+    min-width: 62px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+    color: #9ccbff;
+}
+.cargo-what { flex: 1 1 auto; }
+.cargo-total {
+    display: block; margin-top: 6px; padding-top: 6px;
+    border-top: 1px solid var(--edge); font-size: 0.85rem; color: var(--ink-dim);
+}
+
+/* ---- Load arrangement --------------------------------------------------- */
+.fact-row.arrangement { cursor: default; }
+.fact-row.arrangement .fact-value { display: block; margin-top: 4px; }
+.fact-row.arrangement .fact-bracket { display: block; margin-top: 3px; }
+.fact-row.arrangement .trip-diagram { margin-top: 9px; width: 100%; }

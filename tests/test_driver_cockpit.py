@@ -492,12 +492,13 @@ class TestEmptyPositionsAreCapacity:
         assert cockpit.load_diagram_for({}) ["positions"] == []
 
 
-class TestTheCardStaysCompressed:
-    """Compressed on instruction, and it must not creep back."""
+class TestTheStopCardHoldsOneFact:
+    """Superseded the four-line card. The rule is stronger than a line count.
 
-    def _html(self, client, mode="PICKUP"):
-        return client.get("/portal?view=" + mode,
-                          follow_redirects=True).get_data(as_text=True)
+    The stop card carries stop progress and nothing else. Cargo, load position
+    and the broker moved out to sections of their own, because a card that
+    accumulates the whole mission is a card nobody can read at a glance.
+    """
 
     @pytest.fixture()
     def client(self):
@@ -508,17 +509,110 @@ class TestTheCardStaysCompressed:
         with app.test_client() as c:
             yield c
 
-    def test_the_card_is_four_lines(self, client):
-        html = self._html(client)
-        for n in (1, 2, 3, 4):
-            assert 'class="trip-line-%d"' % n in html
-        assert 'class="trip-line-5"' not in html
+    def _card(self, client):
+        html = client.get("/portal?view=CURRENT",
+                          follow_redirects=True).get_data(as_text=True)
+        start = html.index('class="stop-card"')
+        return html[start:html.index("</div>", start)]
+
+    def test_it_shows_the_stop_progress(self, client):
+        assert "STOP" in self._card(client)
+
+    def test_it_does_not_carry_the_broker(self, client):
+        assert "Southeast" not in self._card(client)
+
+    def test_it_does_not_carry_the_cargo(self, client):
+        card = self._card(client)
+        assert "CARGO" not in card
+        assert "pallets" not in card
+
+    def test_it_does_not_carry_the_load_position(self, client):
+        assert "LOAD POSITION" not in self._card(client)
+        assert "LOAD ARRANGEMENT" not in self._card(client)
+
+    def test_the_mission_number_is_gone_from_the_screen(self, client):
+        """Removed on instruction. The load number is the one he is asked for."""
+        html = client.get("/portal?view=CURRENT",
+                          follow_redirects=True).get_data(as_text=True)
+        body = html[html.index("<body"):]
+        assert "Mission 1" not in body
 
     def test_stop_navigation_appears_only_when_there_is_somewhere_to_go(self, client):
-        """One stop of one offers neither. Offering a dead control is filler."""
-        html = self._html(client)
-        stops = cockpit.stops_for({})
-        if not stops["has_next"]:
-            assert 'data-action="next-stop"' not in html
-        if not stops["has_previous"]:
-            assert 'data-action="previous-stop"' not in html
+        """Offering a dead control is filler wearing a button."""
+        html = client.get("/portal?view=CURRENT",
+                          follow_redirects=True).get_data(as_text=True)
+        from portal.models import sandbox
+
+        record = sandbox.get("SBX-DISPATCH-E2E-DEMO-001") or {}
+        stops = cockpit.stops_for(record)
+        assert ('data-action="next-stop"' in html) == stops["has_next"]
+        assert ('data-action="previous-stop"' in html) == stops["has_previous"]
+
+
+class TestTheMissionLevelSections:
+    """Cargo and Load Arrangement became sections of their own."""
+
+    RECORD = {
+        "numbers": {"load_label": "Load 847261"},
+        "card_data": {"pallets": 4, "weight_lbs": 8400},
+        "pallet_positions": 6,
+        "load_plan": [
+            {"position": 1, "stop": "Stop 1", "description": "Aviation parts"},
+            {"position": 2, "stop": "Stop 1", "description": "Aviation parts"},
+            {"position": 3, "stop": "Stop 2", "description": "Fasteners"},
+        ],
+    }
+
+    def test_cargo_is_truck_wide_not_current_stop(self):
+        """A summary showing only this stop hides the freight behind it."""
+        rows = cockpit.cargo_by_stop(self.RECORD)["rows"]
+        assert {r["stop"] for r in rows} == {"Stop 1", "Stop 2"}
+
+    def test_cargo_counts_pallets_per_stop(self):
+        rows = {r["stop"]: r["pallets"] for r in cockpit.cargo_by_stop(self.RECORD)["rows"]}
+        assert rows["Stop 1"] == 2 and rows["Stop 2"] == 1
+
+    def test_cargo_carries_a_truck_wide_total(self):
+        total = cockpit.cargo_by_stop(self.RECORD)["total"]
+        assert "4 pallets" in total and "8400 lbs" in total
+
+    def test_no_plan_reports_rather_than_inventing_stops(self):
+        assert cockpit.cargo_by_stop({"card_data": {}})["has_rows"] is False
+
+
+class TestTheEndPanelsCarryTheWholeEnd:
+    """Load number, address, POC, phone, appointment, instructions, items."""
+
+    RECORD = {
+        "numbers": {"load_label": "Load 847261"},
+        "card_data": {"origin": "Jacksonville, FL", "destination": "Atlanta, GA"},
+        "delivery_contact": "Dock 4 - K. Mills",
+        "delivery_phone": "770-555-0142",
+        "delivery_window": "15:00 - 19:00",
+        "delivery_notes": "Dock 4 after 06:00",
+        "stop_number": 1, "stop_total": 2,
+        "load_plan": [{"position": 1, "stop": "Stop 1", "description": "Aviation parts"}],
+    }
+
+    def test_the_load_number_leads(self):
+        """The broker's number: the one on the paperwork and asked for at a gate."""
+        assert cockpit.end_detail(self.RECORD, "delivery")["load_number"] == "Load 847261"
+
+    def test_every_specified_field_is_present(self):
+        detail = cockpit.end_detail(self.RECORD, "delivery")
+        for key in ("load_number", "address", "poc", "phone",
+                    "appointment", "instructions", "items"):
+            assert key in detail
+
+    def test_it_carries_the_contact_and_number(self):
+        detail = cockpit.end_detail(self.RECORD, "delivery")
+        assert "K. Mills" in detail["poc"]
+        assert "770-555-0142" in detail["phone"]
+
+    def test_delivery_items_are_this_stops_items(self):
+        assert cockpit.end_detail(self.RECORD, "delivery")["items"] == ["Aviation parts"]
+
+    def test_a_missing_field_says_so_rather_than_disappearing(self):
+        detail = cockpit.end_detail({"numbers": {}, "card_data": {}}, "pickup")
+        assert detail["poc"] == "—"
+        assert detail["items"] == ["—"]
