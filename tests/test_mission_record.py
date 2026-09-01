@@ -245,10 +245,10 @@ class TestPortalRenders:
         record_id = mission_record["id"]
         html = client.get("/portal/mission/%s" % record_id).get_data(as_text=True)
         assert "mode-btn" in html
-        # PICKUP / CURRENT / DELIVERY -- get loaded, get there, get unloaded.
-        # CURRENT went away for a revision because it had nothing of its own to
-        # show, and came back when transit information gave it a job.
-        for mode in ("PICKUP", "CURRENT", "DELIVERY"):
+        # PICKUP / DELIVERY. CURRENT was dropped as a control and kept as the
+        # default: a driver is going to a pickup or making a delivery, and a
+        # button for whichever of those he is already in answers no question.
+        for mode in ("PICKUP", "DELIVERY"):
             assert 'data-mode="%s"' % mode in html
 
 

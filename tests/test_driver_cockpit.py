@@ -37,18 +37,19 @@ RECORD = {
 
 
 class TestTheThreeModes:
-    def test_three_modes_three_jobs(self):
-        """Get loaded, get there, get unloaded."""
-        assert [m["label"] for m in cockpit.MODES] == ["PICKUP", "CURRENT", "DELIVERY"]
+    def test_two_modes_not_three(self):
+        """CURRENT dropped: a driver is going to a pickup or making a delivery."""
+        assert [m["label"] for m in cockpit.MODES] == ["PICKUP", "DELIVERY"]
 
-    def test_no_mode_resolves_to_the_phase_the_record_is_in(self):
+    def test_current_survives_as_the_default_not_as_a_button(self):
         assert cockpit.normalise_mode(None, {"status": "open"}) == cockpit.MODE_PICKUP
         assert cockpit.normalise_mode(None, {"status": "in_transit"}) == cockpit.MODE_DELIVERY
 
     def test_an_older_url_still_opens_somewhere_sensible(self):
-        """Links written when the label read IN TRANSIT must not break."""
-        assert cockpit.normalise_mode("IN_TRANSIT", {}) == cockpit.MODE_IN_TRANSIT
-        assert cockpit.normalise_mode("CURRENT", {}) == cockpit.MODE_IN_TRANSIT
+        """Links written when CURRENT and IN TRANSIT were controls must not break."""
+        for legacy in ("CURRENT", "IN_TRANSIT"):
+            assert cockpit.normalise_mode(legacy, {"status": "in_transit"}) in (
+                cockpit.MODE_PICKUP, cockpit.MODE_DELIVERY)
 
     def test_an_unknown_mode_falls_back_rather_than_failing(self):
         assert cockpit.normalise_mode("nonsense", {}) in (
@@ -728,93 +729,3 @@ class TestCargoOwnsTheDiagram:
         block = css[css.index(".end-load {"):]
         block = block[:block.index("}")]
         assert "font-weight: 800" in block
-
-
-class TestTransitInformation:
-    """CURRENT is the truck moving. It needs different facts from a dock.
-
-    The rule that matters here is negative: unknown is not the same as clear,
-    and the screen must never say otherwise.
-    """
-
-    KNOWN = {
-        "eta": "15:40 EST",
-        "miles_remaining": 212,
-        "traffic": "I-75 north slow near Macon",
-    }
-
-    def _rows(self, record, risk=""):
-        return {r["key"]: r for r in cockpit.transit_rows(record, risk)}
-
-    def test_eta_is_first(self):
-        """It is the question actually being asked while driving."""
-        assert cockpit.transit_rows(self.KNOWN)[0]["key"] == "eta"
-
-    def test_the_order_is_the_specified_order(self):
-        keys = [r["key"] for r in cockpit.transit_rows(self.KNOWN)]
-        assert keys == ["eta", "miles_remaining", "drive_time_remaining",
-                        "route_risk", "traffic", "construction", "weather"]
-
-    def test_known_fields_are_shown(self):
-        rows = self._rows(self.KNOWN)
-        assert rows["eta"]["value"] == "15:40 EST"
-        assert rows["miles_remaining"]["value"] == "212 mi"
-
-    def test_unknown_fields_are_blank_not_reassuring(self):
-        """A reassurance nobody checked is worse than silence: the driver reads
-        it and stops looking."""
-        rows = self._rows(self.KNOWN)
-        for key in ("construction", "weather"):
-            assert rows[key]["value"] == ""
-            assert rows[key]["known"] is False
-
-    def test_it_never_invents_an_all_clear(self):
-        rows = cockpit.transit_rows({})
-        joined = " ".join(r["value"] for r in rows).lower()
-        for phrase in ("no traffic", "no construction", "no weather",
-                       "no issues", "clear", "none reported"):
-            assert phrase not in joined
-
-    def test_drive_time_is_derived_only_when_miles_are_known(self):
-        assert self._rows({"miles_remaining": 212})["drive_time_remaining"]["value"]
-        assert self._rows({})["drive_time_remaining"]["value"] == ""
-
-    def test_route_risk_is_carried_not_duplicated(self):
-        """Route Risk is the intelligence. JOE announces. This panel displays."""
-        rows = self._rows(self.KNOWN, "Heavy rain, Clay County")
-        assert rows["route_risk"]["value"] == "Heavy rain, Clay County"
-
-    def test_a_record_with_nothing_known_produces_seven_blank_rows(self):
-        rows = cockpit.transit_rows({})
-        assert len(rows) == 7
-        assert all(r["known"] is False for r in rows)
-
-
-class TestCurrentModeSwapsThePanel:
-    @pytest.fixture()
-    def client(self):
-        from portal.app import create_app
-
-        app = create_app()
-        app.config["TESTING"] = True
-        with app.test_client() as c:
-            yield c
-
-    def test_current_shows_transit_instead_of_pickup(self, client):
-        html = client.get("/portal?view=CURRENT",
-                          follow_redirects=True).get_data(as_text=True)
-        assert "TRANSIT INFORMATION" in html
-        assert "PICKUP DETAILS" not in html
-
-    def test_pickup_mode_still_shows_the_pickup(self, client):
-        html = client.get("/portal?view=PICKUP",
-                          follow_redirects=True).get_data(as_text=True)
-        assert "PICKUP DETAILS" in html
-        assert "TRANSIT INFORMATION" not in html
-
-    def test_delivery_is_visible_in_every_mode(self, client):
-        """The truck is going somewhere in all three."""
-        for mode in ("PICKUP", "CURRENT", "DELIVERY"):
-            html = client.get("/portal?view=" + mode,
-                              follow_redirects=True).get_data(as_text=True)
-            assert "DELIVERY DETAILS" in html, mode
