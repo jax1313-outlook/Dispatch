@@ -812,3 +812,59 @@ class TestBrokerIdentityLivesInOnePlace:
         """It is addressed to them. That is not a duplicate identity."""
         keys = [f["key"] for f in cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)["fields"]]
         assert "Broker" in keys
+
+
+class TestTheStopSelectorScales:
+    """Two stops is the demo. Five is a normal regional run, and the selector
+    has to hold that without the driver hunting for a stop.
+
+    The failure that matters is not ugliness -- it is a stop he cannot reach.
+    """
+
+    def _record(self, count):
+        return {
+            "card_data": {"load_id": "847261"},
+            "stop_total": count,
+            "stop_number": 1,
+            "stops": [{"number": i, "label": f"STOP {i}",
+                       "facility": f"Facility {i}", "window": "08:00 - 10:00",
+                       "poc": f"Contact {i}", "phone": "904-555-0100"}
+                      for i in range(1, count + 1)],
+        }
+
+    @pytest.mark.parametrize("count", [2, 3, 5, 8, 12])
+    def test_every_stop_is_listed_and_selectable(self, count):
+        stops = cockpit.stops_for(self._record(count))
+        assert stops["total"] == count
+        assert len(stops["list"]) == count
+        assert [s["number"] for s in stops["list"]] == list(range(1, count + 1))
+        assert stops["selectable"] is True
+
+    @pytest.mark.parametrize("count", [5, 8, 12])
+    def test_each_stop_carries_its_own_details(self, count):
+        """A multi-stop run is not one delivery seen five times."""
+        record = self._record(count)
+        seen = {cockpit.selected_stop(record, i)["facility"]
+                for i in range(1, count + 1)}
+        assert len(seen) == count
+
+    @pytest.mark.parametrize("count", [5, 8, 12])
+    def test_selecting_any_stop_changes_the_delivery_panel(self, count):
+        record = self._record(count)
+        last = cockpit.end_detail(record, "delivery", stop_number=count)
+        first = cockpit.end_detail(record, "delivery", stop_number=1)
+        assert last["address"] != first["address"]
+
+    def test_a_stop_beyond_the_run_is_clamped_not_crashed(self):
+        """A stale bookmark to stop 9 of a 5-stop run lands on 5, not an error."""
+        assert cockpit.stops_for(self._record(5), selected=99)["number"] == 5
+        assert cockpit.stops_for(self._record(5), selected=0)["number"] == 1
+
+    def test_the_stop_bar_wraps_rather_than_leaving_the_screen(self):
+        """Past eight stops the row is wider than a tablet. Wrapping puts them
+        on a second line; not wrapping puts stop 9 off the glass and asks a
+        driver to scroll sideways to reach it."""
+        css = open("portal/static/joe_portal.css", encoding="utf-8").read()
+        rule = css[css.index(".stop-bar {"):]
+        rule = rule[:rule.index("}")]
+        assert "flex-wrap: wrap" in rule
