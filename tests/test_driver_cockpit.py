@@ -729,3 +729,76 @@ class TestCargoOwnsTheDiagram:
         block = css[css.index(".end-load {"):]
         block = block[:block.index("}")]
         assert "font-weight: 800" in block
+
+
+class TestTheDetailDrawersCarryExecutionInformation:
+    """Pickup and delivery drawers hold what is needed to work the stop.
+
+    The load number leads and is large because many facilities use it as the
+    access code outright -- load number, pickup number, reference number -- and
+    it is what a gate asks for before it asks anything else.
+    """
+
+    RECORD = {
+        "numbers": {"load_label": "Load 847261"},
+        "card_data": {"origin": "Jacksonville, FL", "destination": "Atlanta, GA"},
+        "pickup_contact": "Gate 2 - T. Alvarez",
+        "pickup_phone": "904-555-0188",
+        "pickup_notes": "Check in at guard shack",
+        "stops": [
+            {"number": 1, "label": "STOP 1", "facility": "Delta TechOps",
+             "window": "15:00 - 17:00", "poc": "K. Mills", "phone": "770-555-0142",
+             "notes": "Dock 4 after 06:00"},
+            {"number": 2, "label": "STOP 2", "facility": "Aviall Services",
+             "window": "18:00 - 19:30", "poc": "J. Boone", "phone": "678-555-0119",
+             "notes": "No overnight parking"},
+        ],
+    }
+
+    def _drawer(self, key, stop=None):
+        return [d for d in cockpit.drawers_for(self.RECORD, cockpit.MODE_DELIVERY,
+                                               "", stop)
+                if d["key"] == key][0]
+
+    def test_both_drawers_carry_the_full_field_set(self):
+        for key in ("pickup", "delivery"):
+            detail = self._drawer(key)["detail"]
+            for field in ("load_number", "address", "poc", "phone",
+                          "appointment", "instructions", "items"):
+                assert field in detail, (key, field)
+
+    def test_the_load_number_is_present_in_both(self):
+        for key in ("pickup", "delivery"):
+            assert self._drawer(key)["detail"]["load_number"] == "Load 847261"
+
+    def test_the_delivery_drawer_follows_the_selected_stop(self):
+        assert self._drawer("delivery", 1)["detail"]["address"] == "Delta TechOps"
+        assert self._drawer("delivery", 2)["detail"]["address"] == "Aviall Services"
+
+    def test_the_delivery_drawer_names_the_stop_it_is_showing(self):
+        """Ambiguity about whose dock is being read is the thing to prevent."""
+        assert self._drawer("delivery", 2)["detail"]["stop_label"] == "STOP 2"
+
+    def test_the_pickup_drawer_does_not_move_with_the_stop(self):
+        assert (self._drawer("pickup", 1)["detail"]["address"]
+                == self._drawer("pickup", 2)["detail"]["address"])
+
+
+class TestBrokerIdentityLivesInOnePlace:
+    """Two names on one screen means working out which is current."""
+
+    def test_the_cargo_drawer_carries_no_broker(self):
+        keys = [r["key"].lower()
+                for r in [d for d in cockpit.drawers_for(RECORD, cockpit.MODE_PICKUP)
+                          if d["key"] == "cargo"][0]["rows"]]
+        assert not any("broker" in k for k in keys)
+
+    def test_the_broker_drawer_does(self):
+        rows = [d for d in cockpit.drawers_for(RECORD, cockpit.MODE_PICKUP)
+                if d["key"] == "broker"][0]["rows"]
+        assert any("broker" in r["key"].lower() for r in rows)
+
+    def test_the_arrival_notice_may_name_the_broker(self):
+        """It is addressed to them. That is not a duplicate identity."""
+        keys = [f["key"] for f in cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)["fields"]]
+        assert "Broker" in keys

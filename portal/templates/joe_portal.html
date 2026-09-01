@@ -242,7 +242,27 @@
     <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
   </header>
   <div class="drawer-body">
-    {% if d.diagram is defined and d.diagram %}
+    {# Execution information. The load number leads and is large: many
+       facilities use it as the access code, and it is what a gate asks for
+       before it asks anything else. #}
+    {% if d.detail is defined and d.detail %}
+      <div class="drawer-load">
+        <span class="end-load-tag">LOAD</span>
+        <span class="drawer-load-number">{{ d.detail.load_number }}</span>
+        {% if d.detail.stop_label %}
+          <span class="end-stop-tag">{{ d.detail.stop_label }}</span>
+        {% endif %}
+      </div>
+      <dl class="detail-list">
+        <dt>Address</dt><dd>{{ d.detail.address }}</dd>
+        <dt>POC</dt><dd>{{ d.detail.poc }}</dd>
+        <dt>Phone</dt><dd>{{ d.detail.phone }}</dd>
+        <dt>Appointment</dt><dd>{{ d.detail.appointment }}</dd>
+        <dt>Access instructions</dt><dd>{{ d.detail.instructions }}</dd>
+        <dt>Items</dt>
+        <dd>{% for item in d.detail['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
+      </dl>
+    {% elif d.diagram is defined and d.diagram %}
       {# Empty positions are shown because an empty position is capacity --
          the answer to "can I take two more on the way back". #}
       <div class="capacity-line">{{ d.diagram.capacity_line }}</div>

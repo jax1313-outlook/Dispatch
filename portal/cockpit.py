@@ -666,7 +666,8 @@ def facility_map_for(record: dict, mode: str) -> dict:
 
 # ----------------------------------------------------------------- drawers --
 
-def drawers_for(record: dict, mode: str, route_risk: str = "") -> list:
+def drawers_for(record: dict, mode: str, route_risk: str = "",
+                stop_number: int | None = None) -> list:
     """One drawer per data point, opening from the side its control lives on."""
     ends = ends_for(record)
     cargo = cargo_for(record)
@@ -677,24 +678,24 @@ def drawers_for(record: dict, mode: str, route_risk: str = "") -> list:
         return [{"key": k, "value": v} for k, v in pairs]
 
     return [
+        # Execution information, not presentation. The load number leads and is
+        # large because many facilities use it as the access code -- load
+        # number, pickup number, reference number -- and it is what the gate
+        # asks for before anything else.
         {"key": "pickup", "side": "left", "title": "Pickup details",
-         "rows": rows(("Facility", ends["pickup"]["place"]),
-                      ("Appointment", ends["pickup"]["window"]),
-                      ("Contact", _first(record, "pickup_contact", default="—")),
-                      ("Phone", _first(record, "pickup_phone", default="—")),
-                      ("Instructions", _first(record, "pickup_notes", default="—")))},
+         "detail": end_detail(record, "pickup", stop_number)},
 
+        # Follows the selected stop, and says which one so there is no doubt
+        # about whose dock the driver is reading.
         {"key": "delivery", "side": "left", "title": "Delivery details",
-         "rows": rows(("Facility", ends["delivery"]["place"]),
-                      ("Appointment", ends["delivery"]["window"]),
-                      ("Contact", _first(record, "delivery_contact", default="—")),
-                      ("Phone", _first(record, "delivery_phone", default="—")),
-                      ("Instructions", _first(record, "delivery_notes", default="—")))},
+         "detail": end_detail(record, "delivery", stop_number)},
 
         {"key": "route", "side": "right", "title": "Route notes & corridor risk",
          "rows": rows(("Corridor risk", route_risk or "None reported"),
                       ("Route notes", _first(record, "route_notes", default="—")))},
 
+        # No broker here. Broker identity belongs in one place, or a driver
+        # reading a cargo drawer has to work out which of two names is current.
         {"key": "cargo", "side": "left", "title": "Cargo",
          "rows": rows(("Commodity", cargo["description"]),
                       ("Detail", cargo["brackets"]),
@@ -744,5 +745,5 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "",
         "arrival_notice": arrival_notice_for(record, mode),
         "load_diagram": load_diagram_for(record),
         "facility_map": facility_map_for(record, mode),
-        "drawers": drawers_for(record, mode, route_risk),
+        "drawers": drawers_for(record, mode, route_risk, stop_number),
     }

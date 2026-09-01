@@ -494,3 +494,15 @@
     font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em;
     color: #06121f; background: var(--key); border-radius: 4px;
 }
+
+/* ---- Detail drawers: execution information ------------------------------ */
+/* The load number is large because a gate asks for it before anything else.
+   Many facilities use it as the access code outright. */
+.drawer-load {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding-bottom: 12px; margin-bottom: 14px;
+    border-bottom: 1px solid var(--edge);
+}
+.drawer-load-number {
+    font-size: 1.6rem; font-weight: 800; letter-spacing: 0.03em; color: #fff;
+}
