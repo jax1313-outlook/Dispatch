@@ -32,19 +32,23 @@ MODE_DELIVERY = "DELIVERY"
 #:
 #: The label is one string. It costs nothing to switch back once the phase
 #: question is settled on purpose rather than as a side effect.
-#: Two controls. CURRENT was dropped on the operator's instruction: a driver is
-#: going to a pickup or making a delivery, and a third button for "whichever of
-#: those you are already in" is a button that answers a question he did not ask.
+#: Three modes, three jobs:
 #:
-#: It survives as the *default* rather than as a control -- opening the cockpit
-#: with no mode chosen still resolves to the phase the record is actually in.
+#:     PICKUP    get loaded
+#:     CURRENT   get there
+#:     DELIVERY  get unloaded
+#:
+#: CURRENT was dropped a revision ago and is back, because the reason it went
+#: was that it had nothing of its own to show. It does now: the truck moving
+#: between mission events needs different information from the truck standing
+#: at a dock, and that information had no home.
 MODES = (
     {"key": MODE_PICKUP, "label": "PICKUP"},
+    {"key": MODE_IN_TRANSIT, "label": "CURRENT"},
     {"key": MODE_DELIVERY, "label": "DELIVERY"},
 )
 
 MODE_LABELS = {m["key"]: m["label"] for m in MODES}
-MODE_LABELS[MODE_IN_TRANSIT] = "CURRENT"   # still addressable by URL
 
 #: `dispatch.mission` speaks the same three words, so the mapping is direct.
 _BACKEND_VIEW = {
@@ -62,11 +66,9 @@ def normalise_mode(requested: str | None, record: dict | None = None) -> str:
     IN_TRANSIT still resolve, so older links open where they used to.
     """
     key = str(requested or "").upper().replace(" ", "_").replace("-", "_")
-    if key in (MODE_PICKUP, MODE_DELIVERY):
-        return key
-    if key in ("CURRENT", "IN_TRANSIT"):
-        return default_mode(record)
-    return default_mode(record)
+    if key == "IN_TRANSIT":
+        return MODE_IN_TRANSIT   # a link written while that label was in use
+    return key if key in MODE_LABELS else default_mode(record)
 
 
 #: Statuses before the freight is on the truck. After them, the next thing that
@@ -214,6 +216,65 @@ def selected_stop(record: dict, number: int) -> dict:
         if int(stop["number"]) == int(number):
             return stop
     return {}
+
+
+# ---------------------------------------------------------------- transit ----
+
+def transit_for(record: dict, route_risk: str = "") -> dict:
+    """What the truck needs while it is moving. CURRENT mode.
+
+    **Unknown is not negative, and blank is not negative.** The screen does not
+    print "No traffic issues" unless Dispatch actually knows there are none --
+    a reassurance nobody checked is worse than silence, because a driver reads
+    it and stops looking.
+
+    So every field here is either a fact or absent. Nothing is filled in to make
+    the panel look complete.
+
+    This panel **displays**; it does not alert. Route Risk is the intelligence
+    and JOE is the announcement, and a second alert system on the glass would
+    compete with the one that can actually speak.
+    """
+    def known(*keys) -> str:
+        for key in keys:
+            value = record.get(key)
+            if value not in (None, "", []):
+                return str(value)
+        return ""
+
+    miles = known("miles_remaining")
+    drive = known("drive_time_remaining")
+    if not drive and miles:
+        drive = _drive_time(str(miles).replace("mi", "").strip())
+
+    return {
+        "eta": known("eta"),
+        "miles_remaining": f"{miles} mi" if miles and "mi" not in str(miles) else miles,
+        "drive_time_remaining": drive,
+        "route_risk": route_risk or known("route_risk_summary"),
+        "traffic": known("traffic"),
+        "construction": known("construction"),
+        "weather": known("weather"),
+    }
+
+
+TRANSIT_ORDER = (
+    ("eta", "ETA"),
+    ("miles_remaining", "Miles Remaining"),
+    ("drive_time_remaining", "Drive Time Remaining"),
+    ("route_risk", "Route Risk"),
+    ("traffic", "Traffic"),
+    ("construction", "Construction"),
+    ("weather", "Weather"),
+)
+
+
+def transit_rows(record: dict, route_risk: str = "") -> list:
+    """The transit fields in display order, each marked known or blank."""
+    data = transit_for(record, route_risk)
+    return [{"key": key, "label": label, "value": data[key],
+             "known": bool(data[key])}
+            for key, label in TRANSIT_ORDER]
 
 
 # -------------------------------------------------- mission-level sections --
@@ -735,6 +796,7 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "",
         "cargo": cargo_for(record),
         "cargo_by_stop": cargo_by_stop(record),
         "pickup_detail": end_detail(record, "pickup", stop_number),
+        "transit": transit_rows(record, route_risk),
         "delivery_detail": end_detail(record, "delivery", stop_number),
         "broker": broker_for(record),
         "stops": stops_for(record, stop_number),

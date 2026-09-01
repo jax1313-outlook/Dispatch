@@ -84,38 +84,70 @@
 {# ------------------------------------------------------- LEFT: THE MISSION #}
 <section class="mission-column" aria-label="Mission record">
 
-  {# Both ends stay visible. The mode changes which is bright, never which
-     exists: a driver who loses sight of where the mission started has lost
-     his orientation, not just a panel. #}
+  {# In CURRENT the left panel is TRANSIT INFORMATION: the truck is moving, and
+     what it needs then is not what it needs at a dock. In PICKUP and DELIVERY
+     both ends stay visible, the mode brightening one -- a driver who loses
+     sight of where the mission started has lost his orientation. #}
   <div class="ends">
-    {% for side in [('pickup', pickup_detail, emphasis.pickup),
-                    ('delivery', delivery_detail, emphasis.delivery)] %}
-    <button class="end-panel {{ side[2] }}" data-drawer="{{ side[0] }}" data-side="left">
-      <span class="end-title">{{ side[0]|upper }} DETAILS{% if side[1].stop_label %}
-        <span class="end-stop-tag">{{ side[1].stop_label }}</span>{% endif %}</span>
-      <span class="end-load"><span class="end-load-tag">LOAD</span>{{ side[1].load_number }}</span>
-      {# Ordered for travel: where, when, how far, who to ring, how to get in.
-         Then what comes off, last, because that is dock work rather than
-         driving. #}
-      <span class="end-address">{{ side[1].address }}</span>
+    {% if requested_view == 'CURRENT' %}
+      <div class="end-panel transit bright">
+        <span class="end-title">TRANSIT INFORMATION</span>
+        {% for row in transit %}
+          {% if row.known %}
+            {% if row.key == 'eta' %}
+              <span class="transit-eta"><span class="end-load-tag">ETA</span>{{ row.value }}</span>
+            {% else %}
+              <span class="transit-row">
+                <span class="transit-key">{{ row.label }}</span>
+                <span class="transit-value">{{ row.value }}</span>
+              </span>
+            {% endif %}
+          {% else %}
+            {# Blank, deliberately. Printing "no issues" would be a reassurance
+               nobody checked, and a driver who reads it stops looking. #}
+            <span class="transit-row blank">
+              <span class="transit-key">{{ row.label }}</span>
+              <span class="transit-value"></span>
+            </span>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <button class="end-panel {{ emphasis.pickup }}" data-drawer="pickup" data-side="left">
+        <span class="end-title">PICKUP DETAILS</span>
+        <span class="end-load"><span class="end-load-tag">LOAD</span>{{ pickup_detail.load_number }}</span>
+        <span class="end-address">{{ pickup_detail.address }}</span>
+        <span class="end-when"><span class="end-appt">{{ pickup_detail.appointment }}</span></span>
+        <dl class="end-fields">
+          <dt>POC</dt><dd>{{ pickup_detail.poc }}</dd>
+          <dt>Phone</dt><dd>{{ pickup_detail.phone }}</dd>
+          <dt>Access</dt><dd>{{ pickup_detail.instructions }}</dd>
+          <dt>Items</dt>
+          <dd>{% for item in pickup_detail['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
+        </dl>
+      </button>
+    {% endif %}
 
+    <button class="end-panel {{ emphasis.delivery }}" data-drawer="delivery" data-side="left">
+      <span class="end-title">DELIVERY DETAILS{% if delivery_detail.stop_label %}
+        <span class="end-stop-tag">{{ delivery_detail.stop_label }}</span>{% endif %}</span>
+      <span class="end-load"><span class="end-load-tag">LOAD</span>{{ delivery_detail.load_number }}</span>
+      <span class="end-address">{{ delivery_detail.address }}</span>
       <span class="end-when">
-        <span class="end-appt">{{ side[1].appointment }}</span>
-        {% if side[1].distance %}
-          <span class="end-trip">{{ side[1].distance }}{% if side[1].drive_time %}
-            &middot; {{ side[1].drive_time }} drive{% endif %}</span>
+        <span class="end-appt">{{ delivery_detail.appointment }}</span>
+        {% if delivery_detail.distance %}
+          <span class="end-trip">{{ delivery_detail.distance }}{% if delivery_detail.drive_time %}
+            &middot; {{ delivery_detail.drive_time }} drive{% endif %}</span>
         {% endif %}
       </span>
-
       <dl class="end-fields">
-        <dt>POC</dt><dd>{{ side[1].poc }}</dd>
-        <dt>Phone</dt><dd>{{ side[1].phone }}</dd>
-        <dt>Access</dt><dd>{{ side[1].instructions }}</dd>
+        <dt>POC</dt><dd>{{ delivery_detail.poc }}</dd>
+        <dt>Phone</dt><dd>{{ delivery_detail.phone }}</dd>
+        <dt>Access</dt><dd>{{ delivery_detail.instructions }}</dd>
         <dt>Items</dt>
-        <dd>{% for item in side[1]['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
+        <dd>{% for item in delivery_detail['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
       </dl>
     </button>
-    {% endfor %}
   </div>
 
   <button class="fact-row" data-drawer="route" data-side="right">

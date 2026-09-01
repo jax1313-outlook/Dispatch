@@ -494,3 +494,26 @@
     font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em;
     color: #06121f; background: var(--key); border-radius: 4px;
 }
+
+/* ---- CURRENT: transit information -------------------------------------- */
+/* The truck is moving. ETA is the answer to the question actually being asked,
+   so it is first and largest. Everything else supports it. */
+.end-panel.transit { cursor: default; }
+.transit-eta {
+    display: flex; align-items: baseline; gap: 8px; margin: 4px 0 10px;
+    font-size: 1.9rem; font-weight: 800; letter-spacing: 0.02em; color: #fff;
+}
+.transit-row {
+    display: flex; gap: 12px; align-items: baseline;
+    padding: 5px 0; border-top: 1px solid #13202e;
+}
+.transit-key {
+    flex: 0 0 128px; font-size: 0.7rem; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--ink-faint);
+}
+.transit-value { flex: 1 1 auto; font-size: 0.96rem; line-height: 1.35; }
+
+/* A field Dispatch does not know stays empty. Printing "no issues" would be a
+   reassurance nobody checked, and it would be read as one. */
+.transit-row.blank .transit-value { min-height: 1.2em; }
+.transit-row.blank .transit-key { opacity: 0.55; }

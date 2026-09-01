@@ -37,16 +37,16 @@ def screen(client) -> str:
 
 
 class TestTheModes:
-    @pytest.mark.parametrize("mode", ["PICKUP", "DELIVERY"])
+    @pytest.mark.parametrize("mode", ["PICKUP", "CURRENT", "DELIVERY"])
     def test_the_driver_modes_are_present(self, client, mode):
         assert f'data-mode="{mode}"' in screen(client)
 
     def test_sweep_is_not_a_mode(self, client):
         assert 'data-mode="SWEEP"' not in screen(client)
 
-    def test_there_are_exactly_two_modes(self, client):
-        """CURRENT was dropped: it answered a question the driver did not ask."""
-        assert len(re.findall(r'data-mode="', screen(client))) == 2
+    def test_there_are_exactly_three_modes(self, client):
+        """Get loaded, get there, get unloaded. Nothing else earns a tab."""
+        assert len(re.findall(r'data-mode="', screen(client))) == 3
 
     def test_no_sweep_controls_reach_the_driver_screen(self, client):
         """Not merely unlabelled -- absent."""
