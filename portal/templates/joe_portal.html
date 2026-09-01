@@ -249,6 +249,15 @@
           <span class="end-stop-tag">{{ d.detail.stop_label }}</span>
         {% endif %}
       </div>
+      {# Anything that changes the plan -- a security hold, a single permitted
+         gate, an escort. Above everything, because it is what decides when he
+         has to leave, and reading it at the gate is reading it too late. #}
+      {% if d.detail.special %}
+        <div class="special-instructions">
+          <span class="special-tag">SPECIAL INSTRUCTIONS</span>
+          <span class="special-text">{{ d.detail.special }}</span>
+        </div>
+      {% endif %}
       {# Who to call when something is wrong with the freight on THIS stop --
          not the dock contact, who receives it. On a run where authority varies
          between stops this is the difference between reporting damage to the

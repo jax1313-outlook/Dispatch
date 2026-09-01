@@ -180,6 +180,7 @@ def stop_list(record: dict) -> list:
             "control_role": entry.get("control_role") or "",
             "control_phone": entry.get("control_phone") or "",
             "control_ref": entry.get("control_ref") or "",
+            "special": entry.get("special") or "",
         })
     return stops
 
@@ -341,6 +342,12 @@ def end_detail(record: dict, end: str, stop_number: int | None = None) -> dict:
         # stops, and the shipper holding authority on the second. Standing at a
         # dock with damaged freight, the party named here is the party he rings,
         # and the cost of it being the wrong one is not a tidier screen.
+        # Distinct from access instructions, and shown apart from them. A
+        # security hold or a single permitted gate is not a note about the
+        # door -- it changes when the driver has to leave, and it has to be
+        # read before the trip rather than at the gate.
+        "special": (stop.get("special")
+                    or _first(record, f"{end}_special", default="")),
         "control": lc.control_for(stop, record.get("load_control") or {}),
         "control_varies": bool(record.get("load_control_varies")),
     }
@@ -365,6 +372,12 @@ PICKUP_ARTIFACTS = (
     "Photos - Load Securement",
 )
 
+#: The default delivery list, used when a customer has not stated what they
+#: accept as proof of delivery. It is a default now rather than a fixed list:
+#: **POD requirements vary by customer** (ruled by the operator, 1 September
+#: 2026), and a checklist item that cannot be completed on this load -- an
+#: invoice to a broker who is not on it -- teaches a driver to tick without
+#: reading, which costs the items that do matter.
 DELIVERY_ARTIFACTS = (
     ARRIVAL_NOTICE,
     "Proof Of Delivery Document",
@@ -372,6 +385,40 @@ DELIVERY_ARTIFACTS = (
     "Photos - Condition / Delivery",
     "Invoice To Broker",
 )
+
+#: Kept on every delivery whatever the customer asks for. Condition photographs
+#: are the driver's own protection against a damage claim, not a document the
+#: receiver requested, so a customer's shorter list does not remove them.
+DRIVERS_OWN_RECORD = "Photos - Condition / Delivery"
+
+
+def pod_artifacts(record: dict) -> tuple:
+    """What this customer accepts as proof of delivery, or the default list.
+
+    Read from the record's stated requirement -- "scanned signed BOL and
+    packing list" -- rather than assumed. Splitting is deliberately forgiving:
+    the field is filled in by a driver at a truck stop, not by a form.
+    """
+    stated = str(record.get("pod_required") or "").strip()
+    if not stated:
+        return DELIVERY_ARTIFACTS
+
+    text = stated.replace(" and ", ",").replace(";", ",").replace(chr(10), ",")
+    items, seen = [], set()
+    for part in text.split(","):
+        label = part.strip().strip(".").strip()
+        if not label:
+            continue
+        label = label[0].upper() + label[1:]
+        if label.lower() not in seen:
+            seen.add(label.lower())
+            items.append(label)
+
+    artifacts = [ARRIVAL_NOTICE] + items
+    if not any(DRIVERS_OWN_RECORD.lower() in a.lower() or "photo" in a.lower()
+               for a in artifacts):
+        artifacts.append(DRIVERS_OWN_RECORD)
+    return tuple(artifacts)
 
 #: What each notice promises will follow. Reproduced from the operator's
 #: templates rather than summarised: this text goes to a broker.
@@ -390,8 +437,10 @@ STATUS_READY = "READY"
 STATUS_COMPLETE = "COMPLETE"
 
 
-def _artifact_list(mode: str) -> tuple:
-    return DELIVERY_ARTIFACTS if mode == MODE_DELIVERY else PICKUP_ARTIFACTS
+def _artifact_list(mode: str, record: dict | None = None) -> tuple:
+    if mode != MODE_DELIVERY:
+        return PICKUP_ARTIFACTS
+    return pod_artifacts(record or {})
 
 
 def _held(record: dict) -> set:
@@ -409,13 +458,50 @@ def document_checklist(record: dict, mode: str) -> list:
     held = _held(record)
     arrived = bool(record.get("arrived_at"))
     items = []
-    for name in _artifact_list(mode):
+    for name in _artifact_list(mode, record):
         if name == ARRIVAL_NOTICE:
             items.append({"label": name, "done": arrived,
                           "note": "Dispatch generated and auto-sent"})
         else:
             items.append({"label": name, "done": name.lower() in held, "note": ""})
+
+    # A load paid at the dock is a load he can drive away from unpaid. When the
+    # record says payment is collected on delivery, collecting it is a step on
+    # the checklist -- not a line in the notes he reads once at intake and not
+    # again at 12:00 with a receiver waiting.
+    if mode == MODE_DELIVERY:
+        cod = str(record.get("cod") or "").strip()
+        terms = str(record.get("payment_terms") or "").strip()
+        # The explicit field decides. Reading the terms is a fallback for
+        # records written before C.O.D. had a field of its own -- guessing from
+        # phrasing is fine as a safety net and wrong as the primary rule.
+        if cod:
+            items.append({"label": f"C.O.D. collected - {cod}",
+                          "done": bool(record.get("payment_collected_at")),
+                          "note": terms})
+        elif terms and _collected_on_delivery(terms):
+            items.append({"label": "Payment collected",
+                          "done": bool(record.get("payment_collected_at")),
+                          "note": terms})
     return items
+
+
+#: Words that mean the driver leaves with money rather than an invoice number.
+_COLLECT_WORDS = ("check", "cash", "collect", "cod", "on delivery", "at delivery")
+
+
+def _collected_on_delivery(terms: str) -> bool:
+    """Whether payment is taken at the dock rather than invoiced.
+
+    Deliberately generous about phrasing -- "check by Mayo", "cash load",
+    "COD" all mean the same thing to a driver, and a term this misses is a
+    checklist item he does not get.
+    """
+    lowered = terms.lower()
+    if "invoice" in lowered and not any(w in lowered for w in
+                                        ("check", "cash", "cod")):
+        return False
+    return any(word in lowered for word in _COLLECT_WORDS)
 
 
 def document_status(record: dict, mode: str) -> dict:

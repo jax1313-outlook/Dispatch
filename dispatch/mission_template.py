@@ -129,10 +129,36 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="What kind of run is it?"),
     Field("rate", "Rate", "LOAD CONTROL", hint="Linehaul, before accessorials",
           spoken="What does it pay?"),
+    Field("rate_basis", "Rate agreed with", "LOAD CONTROL",
+          hint="Posted, or who you negotiated it with",
+          spoken="Was the rate posted, or did you negotiate it with somebody?"),
+    # A load paid at the dock is a load you can drive away from unpaid. The
+    # difference between "invoice it" and "collect a check" is not a billing
+    # note -- it is an action at the delivery, and the checklist has to say so.
+    # C.O.D. is its own field rather than a phrase inside payment terms.
+    # Whether the driver leaves the dock with money is too consequential to
+    # depend on somebody having written "check" instead of "cheque".
+    Field("cod", "C.O.D.", "LOAD CONTROL",
+          hint="Amount to collect at delivery. Blank if it is not a C.O.D. load",
+          spoken="Is this a C.O.D. load -- do you collect at delivery?"),
+    Field("payment_terms", "Payment", "LOAD CONTROL",
+          hint="Invoice, or collected on delivery -- say who pays and how",
+          spoken="How does this one pay -- invoiced, or do you collect at delivery?"),
+    Field("pod_required", "POD required", "LOAD CONTROL",
+          hint="What this customer accepts as proof of delivery",
+          spoken="What do they want back as proof of delivery?"),
 
     # --- PICKUP
     Field("pickup_location", "Pickup facility and address", "PICKUP",
-          required=True, spoken="Where does it pick up?"),
+          required=True, spoken="Where does the truck load?"),
+    # The shipper is a party; the pickup is a place. On an interline or
+    # linehaul move they are not the same -- the freight can be shipped by a
+    # hospital in Minnesota and collected from a partner's dock in Georgia.
+    # Collapsing the two puts the shipper's city in the address field, which
+    # is a thousand miles of wrong turn.
+    Field("pickup_shipper", "Shipper", "PICKUP",
+          hint="Whose freight it is, if not the facility you load at",
+          spoken="Who is the shipper, if it is not where you are loading?"),
     Field("pickup_window", "Pickup appointment", "PICKUP", required=True,
           spoken="When is the pickup appointment?"),
     Field("pickup_contact", "Pickup contact", "PICKUP",
@@ -142,6 +168,13 @@ TEMPLATE: tuple[Field, ...] = (
     Field("pickup_notes", "Pickup access instructions", "PICKUP",
           hint="Gate, dock, check-in -- what gets the truck in",
           spoken="Any access instructions for the pickup?"),
+    # Distinct from access instructions on purpose. Access is how you get in
+    # on a normal day; a special instruction changes the plan -- a security
+    # hold, a single permitted gate, an escort. Buried among routine notes it
+    # gets read at the gate instead of before leaving.
+    Field("pickup_special", "Pickup SPECIAL INSTRUCTIONS", "PICKUP",
+          hint="Anything that changes the plan: security holds, gate restrictions, escorts",
+          spoken="Anything special about getting in there -- security, gate restrictions?"),
 
     # --- DELIVERY
     Field("delivery_location", "Delivery facility and address", "DELIVERY",
@@ -154,6 +187,9 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="What is the receiver's phone number?"),
     Field("delivery_notes", "Delivery access instructions", "DELIVERY",
           spoken="Any access instructions for the delivery?"),
+    Field("delivery_special", "Delivery SPECIAL INSTRUCTIONS", "DELIVERY",
+          hint="Anything that changes the plan at this end",
+          spoken="Anything special at the delivery end?"),
     #: Additional stops are captured as repeating STOP blocks rather than as
     #: fields here -- see STOP_FIELDS. A pipe-separated line could not carry
     #: load control legibly, and load control is the field a driver reads at a
@@ -164,10 +200,21 @@ TEMPLATE: tuple[Field, ...] = (
 
     # --- CARGO
     Field("commodity", "Cargo description", "CARGO", required=True,
+          hint="What it is overall. Itemise below if it is a mixed load",
           spoken="What is the freight?"),
-    Field("pallets", "Pallets", "CARGO", spoken="How many pallets?"),
+    # A mixed load is normal, and one commodity field cannot hold two
+    # commodities at two weights. Itemising is what lets the totals be
+    # computed rather than done in the driver's head at a scale.
+    Field("cargo_lines", "Cargo items", "CARGO",
+          hint="One per line: description | pallets | weight each (lbs)",
+          spoken="Break it down for me -- what is on each pallet?"),
+    Field("pallets", "Pallets (total)", "CARGO",
+          hint="Leave blank to total the items above",
+          spoken="How many pallets altogether?"),
     Field("pieces", "Pieces", "CARGO", spoken="How many pieces?"),
-    Field("weight_lbs", "Weight (lbs)", "CARGO", spoken="What does it weigh?"),
+    Field("weight_lbs", "Weight (lbs, total)", "CARGO",
+          hint="Leave blank to total the items above",
+          spoken="What does it weigh altogether?"),
 
     # --- NOTES
     Field("notes", "Notes", "NOTES",
@@ -187,6 +234,9 @@ STOP_FIELDS: tuple[Field, ...] = (
     Field("phone", "Dock phone", "STOP", spoken="What is the dock number?"),
     Field("notes", "Access instructions", "STOP",
           spoken="Any access instructions?"),
+    Field("special", "SPECIAL INSTRUCTIONS", "STOP",
+          hint="Anything that changes the plan at this stop",
+          spoken="Anything special about this stop?"),
     Field("control_name", "Load control", "STOP",
           hint="Who to call on issues or damage for this stop",
           spoken="Who has load control on this stop?"),
@@ -367,6 +417,47 @@ def parse_stops(body: str) -> list:
             if any(stop.get(k) for k in STOP_KEYS)]
 
 
+def parse_cargo(raw: str) -> list:
+    """Cargo items, one per line: description | pallets | weight each.
+
+    A mixed load is the normal case, not an exception -- one pallet of
+    equipment and two of supplies at different weights is one load with three
+    positions on the trailer and two descriptions on the paperwork.
+    """
+    items = []
+    for line in str(raw or "").splitlines():
+        line = line.strip().lstrip(">").strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split("|")]
+
+        def whole(text):
+            text = "".join(c for c in str(text) if c.isdigit())
+            return int(text) if text else None
+
+        items.append({
+            "description": parts[0] if parts else "",
+            "pallets": whole(parts[1]) if len(parts) > 1 else None,
+            "weight_each": whole(parts[2]) if len(parts) > 2 else None,
+        })
+    return [i for i in items if i["description"]]
+
+
+def cargo_totals(items: list) -> dict:
+    """Pallets and weight across the items. Partial data totals what it has.
+
+    Returns None rather than 0 for a total nothing was recorded for: zero
+    pounds is a claim about the freight, and an absent weight is not.
+    """
+    pallets = [i["pallets"] for i in items or [] if i.get("pallets")]
+    weights = [(i["pallets"] or 1) * i["weight_each"]
+               for i in items or [] if i.get("weight_each")]
+    return {
+        "pallets": sum(pallets) if pallets else None,
+        "weight_lbs": sum(weights) if weights else None,
+    }
+
+
 # -------------------------------------------------------------- validate ----
 
 def validate(values: dict) -> list:
@@ -435,9 +526,17 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "delivery_window": value("delivery_window"),
         "source": source.lower(),
     }
+    # Itemised cargo becomes the load plan the diagram and the stop-by-stop
+    # cargo view already read; totals fall back to the items when the driver
+    # did not also state them, so he is never asked for arithmetic he has
+    # already given us the parts for.
+    items = parse_cargo(value("cargo_lines"))
+    totals = cargo_totals(items)
     for key in ("pallets", "pieces", "weight_lbs"):
         if number(key) is not None:
             card[key] = number(key)
+        elif totals.get(key) is not None:
+            card[key] = totals[key]
     if value("rate"):
         card["rate"] = value("rate")
 
@@ -457,6 +556,7 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "poc": value("delivery_contact"),
         "phone": value("delivery_phone"),
         "notes": value("delivery_notes"),
+        "special": value("delivery_special"),
         "control_name": value("delivery_control_name"),
         "control_role": "",
         "control_phone": "",
@@ -489,6 +589,12 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "stop_total": len(stops),
         "stop_number": 1,
         "load_control": mission_control,
+        "cargo_items": items,
+        "load_plan": [{"position": n, "description": item["description"],
+                       "stop": "Stop 1"}
+                      for n, item in enumerate(
+                          [i for i in items for _ in range(i.get("pallets") or 1)],
+                          start=1)],
         # When a run carries more than one point of authority the stop card has
         # to name it. That reverses the one-broker-one-place rule deliberately:
         # that rule was written for a run with one broker and fails the run
@@ -499,10 +605,12 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
                         ("customer_phone", "broker_phone")):
         if value(key):
             record[target] = value(key)
-    for key in ("pickup_location", "pickup_window", "pickup_contact",
-                "pickup_phone", "pickup_notes", "delivery_location",
+    for key in ("pickup_location", "pickup_shipper", "pickup_window",
+                "pickup_contact", "pickup_phone", "pickup_notes",
+                "pickup_special", "delivery_special", "delivery_location",
                 "delivery_window", "delivery_contact", "delivery_phone",
-                "delivery_notes", "commodity", "service", "notes"):
+                "delivery_notes", "commodity", "service", "notes",
+                "rate_basis", "payment_terms", "pod_required", "cod"):
         if value(key):
             record[key] = value(key)
     return record
