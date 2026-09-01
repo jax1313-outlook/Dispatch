@@ -249,10 +249,23 @@
           <span class="end-stop-tag">{{ d.detail.stop_label }}</span>
         {% endif %}
       </div>
+      {# Who to call when something is wrong with the freight on THIS stop --
+         not the dock contact, who receives it. On a run where authority varies
+         between stops this is the difference between reporting damage to the
+         party responsible and reporting it to one who is not. #}
+      {% if d.detail.control and d.detail.control.known %}
+        <div class="load-control {{ 'varies' if d.detail.control_varies }}">
+          <span class="control-tag">LOAD CONTROL</span>
+          <span class="control-name">{{ d.detail.control.line }}</span>
+          {% if d.detail.control.reference %}
+            <span class="control-ref">Ref {{ d.detail.control.reference }}</span>
+          {% endif %}
+        </div>
+      {% endif %}
       <dl class="detail-list">
         <dt>Address</dt><dd>{{ d.detail.address }}</dd>
-        <dt>POC</dt><dd>{{ d.detail.poc }}</dd>
-        <dt>Phone</dt><dd>{{ d.detail.phone }}</dd>
+        <dt>Dock contact</dt><dd>{{ d.detail.poc }}</dd>
+        <dt>Dock phone</dt><dd>{{ d.detail.phone }}</dd>
         <dt>Appointment</dt><dd>{{ d.detail.appointment }}</dd>
         <dt>Access instructions</dt><dd>{{ d.detail.instructions }}</dd>
         <dt>Items</dt>

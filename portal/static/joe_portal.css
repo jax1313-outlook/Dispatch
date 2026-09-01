@@ -516,3 +516,26 @@
 .drawer-load-number {
     font-size: 1.6rem; font-weight: 800; letter-spacing: 0.03em; color: #fff;
 }
+
+
+/* ---- Load control: who to call when something is wrong ------------------ */
+/* Not the dock contact, who receives freight. On a run where authority varies
+   between stops -- one broker, two companies, the shipper holding control on
+   the second -- this is what stops damage being reported to the wrong party.
+   It sits above the dock details because it outranks them at a bad moment. */
+.load-control {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+    margin: 0 0 12px; padding: 10px 12px;
+    border: 1px solid var(--edge-lit); border-left: 3px solid var(--key);
+    border-radius: 0 5px 5px 0; background: rgba(255,255,255,0.03);
+}
+.load-control.varies { border-left-color: var(--live); }
+.control-tag {
+    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em;
+    color: var(--ink-dim);
+}
+.control-name { font-size: 1rem; font-weight: 700; color: var(--ink); }
+.control-ref {
+    font-size: 0.8rem; color: var(--ink-dim);
+    font-family: ui-monospace, Consolas, monospace;
+}

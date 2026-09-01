@@ -171,10 +171,16 @@ class TestOneTemplateForEveryKindOfWork:
 
 class TestMultiStopWorkNeedsNoSecondTemplate:
     def test_additional_stops_become_the_stop_list_the_cockpit_reads(self):
-        values = dict(MINIMUM, additional_stops=(
-            "Publix DC Lakeland | 2026-09-02 14:00 | Dock 7 | 863-555-0114\n"
-            "Winn-Dixie Orlando | 2026-09-02 17:00 | Dock 2 | 407-555-0198"))
-        record = mt.to_record(values, source=mt.SOURCE_JOE, taken_by="Mike")
+        body = "\n".join([
+            mt.render_stop_block(2, {"facility": "Publix DC Lakeland",
+                                     "window": "2026-09-02 14:00",
+                                     "phone": "863-555-0114"}),
+            mt.render_stop_block(3, {"facility": "Winn-Dixie Orlando",
+                                     "window": "2026-09-02 17:00",
+                                     "phone": "407-555-0198"}),
+        ])
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE, taken_by="Mike",
+                              extra_stops=mt.parse_stops(body))
         assert record["stop_total"] == 3
         assert record["stops"][2]["facility"] == "Winn-Dixie Orlando"
         assert record["stops"][2]["phone"] == "407-555-0198"
@@ -186,8 +192,9 @@ class TestMultiStopWorkNeedsNoSecondTemplate:
 
     def test_eight_stops_is_within_reach(self):
         """The operator's stated maximum in a day."""
-        extra = "\n".join(f"Stop {i} | 2026-09-02 1{i}:00 | Dock {i} | 904-555-010{i}"
-                          for i in range(2, 9))
-        record = mt.to_record(dict(MINIMUM, additional_stops=extra),
-                              source=mt.SOURCE_JOE, taken_by="Mike")
+        body = "\n".join(mt.render_stop_block(i, {"facility": f"Consignee {i}",
+                                                  "window": f"2026-09-02 1{i}:00"})
+                         for i in range(2, 9))
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE, taken_by="Mike",
+                              extra_stops=mt.parse_stops(body))
         assert record["stop_total"] == 8

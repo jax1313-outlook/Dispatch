@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dispatch import load_number as ln
+from dispatch import load_control as lc, load_number as ln
 
 #: Where a completed template is sent. The subject is the Load Number itself --
 #: see `dispatch.load_number.is_mission_intake` for the rule COMI applies.
@@ -97,8 +97,11 @@ class Field:
 #: swept one does not have.
 TEMPLATE: tuple[Field, ...] = (
     # --- MISSION SOURCE: who the work is for and who took it
-    Field("customer", "Customer or broker", "MISSION SOURCE", required=True,
-          spoken="Who is the customer?"),
+    # One party, three names depending on who the work came from. A direct
+    # customer, the shipper, or a broker -- the record does not need three
+    # fields for it, and three fields would only ask which one is current.
+    Field("customer", "Customer / Shipper / Broker", "MISSION SOURCE",
+          required=True, spoken="Who is the customer, shipper or broker?"),
     Field("customer_poc", "Their contact", "MISSION SOURCE",
           spoken="Who is the contact there?"),
     Field("customer_phone", "Their phone", "MISSION SOURCE",
@@ -110,6 +113,17 @@ TEMPLATE: tuple[Field, ...] = (
     Field("load_number", "Load number (theirs)", "LOAD CONTROL",
           hint="Their number exactly as given. Leave blank and Dispatch assigns one",
           spoken="Do they have a load number for it?"),
+    # Who to call when something is wrong with the freight. Not necessarily
+    # the broker -- see dispatch/load_control.py. This is the run's default;
+    # any stop can name somebody else, and on a real run one usually does.
+    Field("control_name", "Load control", "LOAD CONTROL",
+          hint="Who to call on issues or damage, if it is the same for the whole run",
+          spoken="Who has load control -- who do you call if there is a problem?"),
+    Field("control_role", "Load control is the", "LOAD CONTROL",
+          hint="Broker, shipper, customer or consignee",
+          spoken="Are they the broker, the shipper, or the customer?"),
+    Field("control_phone", "Load control phone", "LOAD CONTROL",
+          spoken="What is their number?"),
     Field("service", "Service type", "LOAD CONTROL",
           hint="Truckload, courier, medical, expedite",
           spoken="What kind of run is it?"),
@@ -140,13 +154,13 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="What is the receiver's phone number?"),
     Field("delivery_notes", "Delivery access instructions", "DELIVERY",
           spoken="Any access instructions for the delivery?"),
-    #: Additional stops, one per line, pipe separated:
-    #:     Stop 2: Publix DC Lakeland | 2026-09-02 14:00 | Dock 7 | 863-555-0114
-    #: One pickup and one delivery covers most runs; this carries the rest
-    #: without a second template for multi-stop work.
-    Field("additional_stops", "Additional stops", "DELIVERY",
-          hint="One per line: facility | appointment | contact | phone",
-          spoken="Are there any stops after that one?"),
+    #: Additional stops are captured as repeating STOP blocks rather than as
+    #: fields here -- see STOP_FIELDS. A pipe-separated line could not carry
+    #: load control legibly, and load control is the field a driver reads at a
+    #: dock with damaged freight.
+    Field("delivery_control_name", "Stop 1 load control", "DELIVERY",
+          hint="Only if it differs from the run's load control",
+          spoken="Is load control for this stop the same as the run?"),
 
     # --- CARGO
     Field("commodity", "Cargo description", "CARGO", required=True,
@@ -160,6 +174,33 @@ TEMPLATE: tuple[Field, ...] = (
           hint="Anything else that matters on this run",
           spoken="Anything else I should put down?"),
 )
+
+#: A stop, captured as a repeating block. Every delivery on the run carries
+#: these, and load control is among them because it is a stop-level fact: one
+#: broker's run can still have the shipper holding authority on stop 2.
+STOP_FIELDS: tuple[Field, ...] = (
+    Field("facility", "Facility", "STOP", required=True,
+          spoken="Where does this one go?"),
+    Field("window", "Appointment", "STOP", required=True,
+          spoken="When is the appointment?"),
+    Field("poc", "Dock contact", "STOP", spoken="Who is the contact at the dock?"),
+    Field("phone", "Dock phone", "STOP", spoken="What is the dock number?"),
+    Field("notes", "Access instructions", "STOP",
+          spoken="Any access instructions?"),
+    Field("control_name", "Load control", "STOP",
+          hint="Who to call on issues or damage for this stop",
+          spoken="Who has load control on this stop?"),
+    Field("control_role", "Load control is the", "STOP",
+          hint="Broker, shipper, customer or consignee",
+          spoken="Are they the broker, the shipper, or the customer?"),
+    Field("control_phone", "Load control phone", "STOP",
+          spoken="What is their number?"),
+    Field("control_ref", "Their reference", "STOP",
+          hint="Their load or order number for this stop",
+          spoken="Do they have a reference number for this stop?"),
+)
+
+STOP_KEYS = tuple(f.key for f in STOP_FIELDS)
 
 TEMPLATE_KEYS = tuple(f.key for f in TEMPLATE)
 REQUIRED_KEYS = tuple(f.key for f in TEMPLATE if f.required)
@@ -237,6 +278,12 @@ def render_email(values: dict | None = None, *, load_number: str = "") -> str:
             if field.hint:
                 lines.append(f"    ({field.hint})")
         lines.append("")
+
+    # Additional stops, if the run has any. Blocks rather than a packed line:
+    # load control has to be readable at a dock, not decoded.
+    lines += ["ADDITIONAL STOPS", "-" * len("ADDITIONAL STOPS"),
+              "Copy the block below for each further stop. No extra stops? "
+              "Delete it.", "", render_stop_block(2), ""]
     lines += ["* required", ""]
     return "\n".join(lines)
 
@@ -269,27 +316,55 @@ def parse_email(body: str) -> dict:
     return values
 
 
-def parse_stops(raw: str) -> list:
-    """Additional stops, one per line, pipe separated.
+def render_stop_block(number: int, values: dict | None = None) -> str:
+    """One stop, as a labelled block rather than a packed line.
 
-    A blank field is no extra stops, which is the common case and must not be
-    an error.
+    The pipe-separated line this replaced could not carry load control
+    legibly, and load control is the field a driver reads standing at a dock
+    with damaged freight. Length is worth paying for there.
     """
-    stops = []
-    for line in str(raw or "").splitlines():
-        line = line.strip()
-        if not line:
+    values = values or {}
+    lines = [f"STOP {number}", "-" * len(f"STOP {number}")]
+    for field in STOP_FIELDS:
+        mark = " *" if field.required else ""
+        lines.append(f"  {field.label}{mark}: {values.get(field.key, '')}")
+        if field.hint:
+            lines.append(f"      ({field.hint})")
+    return "\n".join(lines)
+
+
+def parse_stops(body: str) -> list:
+    """Every STOP block in a returned template, in order.
+
+    No blocks is one delivery, which is the common case and is not an error.
+    """
+    label_to_key = {f.label.lower(): f.key for f in STOP_FIELDS}
+    stops, current = [], None
+
+    for raw in (body or "").splitlines():
+        line = raw.strip().lstrip(">").strip()
+        if not line or set(line) <= {"-"}:
             continue
-        if ":" in line.split("|")[0]:
-            line = line.partition(":")[2].strip()
-        parts = [p.strip() for p in line.split("|")]
-        stops.append({
-            "facility": parts[0] if parts else "",
-            "window": parts[1] if len(parts) > 1 else "",
-            "poc": parts[2] if len(parts) > 2 else "",
-            "phone": parts[3] if len(parts) > 3 else "",
-        })
-    return stops
+
+        head = line.rstrip(":").strip().upper()
+        if head.startswith("STOP ") and head[5:].strip().isdigit():
+            if current is not None:
+                stops.append(current)
+            current = {"number": int(head[5:].strip())}
+            continue
+
+        if current is None or ":" not in line:
+            continue
+        label, _, value = line.partition(":")
+        key = label_to_key.get(label.strip().rstrip("*").strip().lower())
+        if key and not current.get(key):
+            current[key] = value.strip()
+
+    if current is not None:
+        stops.append(current)
+
+    return [stop for stop in stops
+            if any(stop.get(k) for k in STOP_KEYS)]
 
 
 # -------------------------------------------------------------- validate ----
@@ -316,7 +391,8 @@ def validate(values: dict) -> list:
 # ---------------------------------------------------------------- create ----
 
 def to_record(values: dict, *, source: str, taken_by: str = "",
-              load_number: str = "", existing_load_numbers=None) -> dict:
+              load_number: str = "", existing_load_numbers=None,
+              extra_stops=None) -> dict:
     """Turn a completed template into the Mission Record shape.
 
     Populates the fields existing Mission Records already use. It does not
@@ -365,6 +441,14 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
     if value("rate"):
         card["rate"] = value("rate")
 
+    # The run's default point of authority. Any stop may name somebody else,
+    # and on a real run one usually does.
+    mission_control = {
+        "control_name": value("control_name"),
+        "control_role": lc.normalise_role(value("control_role")),
+        "control_phone": value("control_phone"),
+    }
+
     stops = [{
         "number": 1,
         "label": "STOP 1",
@@ -373,9 +457,23 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "poc": value("delivery_contact"),
         "phone": value("delivery_phone"),
         "notes": value("delivery_notes"),
+        "control_name": value("delivery_control_name"),
+        "control_role": "",
+        "control_phone": "",
+        "control_ref": assigned["supplied"],
     }]
-    for i, stop in enumerate(parse_stops(value("additional_stops")), start=2):
-        stops.append({"number": i, "label": f"STOP {i}", "notes": "", **stop})
+    for stop in extra_stops or []:
+        number = int(stop.get("number") or len(stops) + 1)
+        stops.append({
+            "number": number,
+            "label": f"STOP {number}",
+            **{key: str(stop.get(key) or "").strip() for key in STOP_KEYS},
+        })
+
+    # Resolved once, here, so every reader sees the same answer rather than
+    # each working out inheritance for itself.
+    for stop in stops:
+        stop["control"] = lc.control_for(stop, mission_control)
 
     record = {
         "title": f"{value('commodity')} - {value('pickup_location')} "
@@ -390,6 +488,12 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "stops": stops,
         "stop_total": len(stops),
         "stop_number": 1,
+        "load_control": mission_control,
+        # When a run carries more than one point of authority the stop card has
+        # to name it. That reverses the one-broker-one-place rule deliberately:
+        # that rule was written for a run with one broker and fails the run
+        # where stop 2 answers to somebody else.
+        "load_control_varies": lc.differs_across(stops, mission_control),
     }
     for key, target in (("customer", "broker"), ("customer_poc", "broker_poc"),
                         ("customer_phone", "broker_phone")):

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 #: JOE's words for system conditions. Nothing that names a subsystem reaches
 #: the glass; the driver is talking to JOE, not to a mail transport.
+from dispatch import load_control as lc
 from portal import joe_voice
 
 # ---------------------------------------------------------------- modes ----
@@ -171,6 +172,14 @@ def stop_list(record: dict) -> list:
             "phone": entry.get("phone") or "",
             "notes": entry.get("notes") or "",
             "gps": entry.get("gps") or "",
+            # Who holds authority for this stop, carried through rather than
+            # normalised away. Dropping these here silently fell back to the
+            # run's default, which showed the broker on the stop that answers
+            # to the shipper -- the precise failure this data exists to stop.
+            "control_name": entry.get("control_name") or "",
+            "control_role": entry.get("control_role") or "",
+            "control_phone": entry.get("control_phone") or "",
+            "control_ref": entry.get("control_ref") or "",
         })
     return stops
 
@@ -324,6 +333,16 @@ def end_detail(record: dict, end: str, stop_number: int | None = None) -> dict:
         "instructions": stop.get("notes") or _first(record, f"{end}_notes",
                                                     f"{end}_instructions", default="—"),
         "items": unique or ["—"],
+        # Who to call when something is wrong with the freight on THIS stop.
+        #
+        # This deliberately reverses the rule that broker identity lives in one
+        # place only. That rule was written for a run with one broker and holds
+        # for one -- it fails the run the operator described: one broker, two
+        # stops, and the shipper holding authority on the second. Standing at a
+        # dock with damaged freight, the party named here is the party he rings,
+        # and the cost of it being the wrong one is not a tidier screen.
+        "control": lc.control_for(stop, record.get("load_control") or {}),
+        "control_varies": bool(record.get("load_control_varies")),
     }
 
 
