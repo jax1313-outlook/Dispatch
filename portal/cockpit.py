@@ -185,14 +185,35 @@ def cargo_by_stop(record: dict) -> dict:
     }
 
 
-def end_detail(record: dict, end: str) -> dict:
-    """Everything a driver needs about one end of the run, on the panel itself.
+def _drive_time(miles) -> str:
+    """Planning drive time from distance. Stated as planning, not as a promise."""
+    try:
+        hours = float(miles) / 50.0
+    except (TypeError, ValueError):
+        return ""
+    whole = int(hours)
+    minutes = int(round((hours - whole) * 60))
+    if minutes == 60:
+        whole, minutes = whole + 1, 0
+    return f"{whole}h {minutes:02d}m" if whole else f"{minutes}m"
 
-    LOAD NUMBER leads and is bold: it is the broker's number, the one on the
-    paperwork and the one he is asked for on the phone at the gate.
+
+def end_detail(record: dict, end: str) -> dict:
+    """What a driver needs to get from where he is to this end, and get in.
+
+    **The filter is travel.** Not everything known about the stop -- what is
+    needed to reach it and be admitted: where it is, when he is due, how far and
+    how long, who to ring, and what the gate expects. LOAD NUMBER leads and is
+    bold because it is the broker's number, the one on the paperwork and the one
+    he is asked for at the guard shack.
+
+    Access instructions count as travel. "Dock 4 after 06:00" is not dock work,
+    it is whether the trip succeeds on arrival.
     """
     ends = ends_for(record)
+    card = record.get("card_data") or {}
     plan = record.get("load_plan") or []
+
     if end == "delivery":
         stop_label = f"Stop {stops_for(record)['number']}"
         items = [e.get("description") or "" for e in plan
@@ -206,14 +227,27 @@ def end_detail(record: dict, end: str) -> dict:
             seen.add(item)
             unique.append(item)
 
+    # Distance describes the lane, so it belongs to the far end of it. Showing
+    # it against the pickup would imply Dispatch knows where the truck is now,
+    # and it does not.
+    miles = card.get("distance_miles") or record.get("distance_miles")
+    distance = f"{miles} mi" if (end == "delivery" and miles) else ""
+    drive = _drive_time(miles) if (end == "delivery" and miles) else ""
+
     return {
         "load_number": (record.get("numbers") or {}).get("load_label") or "—",
         "address": ends[end]["place"],
+        "appointment": ends[end]["window"],
+        "distance": distance,
+        "drive_time": drive,
         "poc": _first(record, f"{end}_poc", f"{end}_contact", default="—"),
         "phone": _first(record, f"{end}_phone", default="—"),
-        "appointment": ends[end]["window"],
+        # No shared fallback. `location_intelligence` is one load-level field,
+        # and using it for both ends puts the pickup's dock note under the
+        # delivery address -- which is how a driver ends up at the wrong door
+        # with paperwork that says he is right.
         "instructions": _first(record, f"{end}_notes", f"{end}_instructions",
-                               "location_intelligence", default="—"),
+                               default="—"),
         "items": unique or ["—"],
     }
 

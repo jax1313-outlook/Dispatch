@@ -616,3 +616,27 @@ class TestTheEndPanelsCarryTheWholeEnd:
         detail = cockpit.end_detail({"numbers": {}, "card_data": {}}, "pickup")
         assert detail["poc"] == "—"
         assert detail["items"] == ["—"]
+
+    def test_the_far_end_carries_distance_and_drive_time(self):
+        """Travel facts. Needed to decide whether the appointment is reachable."""
+        detail = cockpit.end_detail(dict(self.RECORD, distance_miles=350), "delivery")
+        assert detail["distance"] == "350 mi"
+        assert detail["drive_time"] == "7h 00m"
+
+    def test_the_near_end_claims_no_distance(self):
+        """Dispatch does not know where the truck is now, so it says nothing."""
+        detail = cockpit.end_detail(dict(self.RECORD, distance_miles=350), "pickup")
+        assert detail["distance"] == ""
+
+    def test_access_notes_are_never_shared_between_ends(self):
+        """One load-level note under both addresses sends a driver to the wrong
+        door with paperwork telling him he is right."""
+        record = {
+            "numbers": {},
+            "card_data": {"location_intelligence": "Dock 4, lumper $85"},
+            "pickup_notes": "Gate 2, guard shack",
+        }
+        assert cockpit.end_detail(record, "pickup")["instructions"] == "Gate 2, guard shack"
+        # The delivery end has no note of its own, so it says so rather than
+        # borrowing the pickup's.
+        assert cockpit.end_detail(record, "delivery")["instructions"] == "—"

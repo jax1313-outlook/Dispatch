@@ -81,12 +81,23 @@
     <button class="end-panel {{ side[2] }}" data-drawer="{{ side[0] }}" data-side="left">
       <span class="end-title">{{ side[0]|upper }} DETAILS</span>
       <span class="end-load">{{ side[1].load_number }}</span>
+      {# Ordered for travel: where, when, how far, who to ring, how to get in.
+         Then what comes off, last, because that is dock work rather than
+         driving. #}
+      <span class="end-address">{{ side[1].address }}</span>
+
+      <span class="end-when">
+        <span class="end-appt">{{ side[1].appointment }}</span>
+        {% if side[1].distance %}
+          <span class="end-trip">{{ side[1].distance }}{% if side[1].drive_time %}
+            &middot; {{ side[1].drive_time }} drive{% endif %}</span>
+        {% endif %}
+      </span>
+
       <dl class="end-fields">
-        <dt>Address</dt><dd>{{ side[1].address }}</dd>
         <dt>POC</dt><dd>{{ side[1].poc }}</dd>
         <dt>Phone</dt><dd>{{ side[1].phone }}</dd>
-        <dt>Appointment</dt><dd>{{ side[1].appointment }}</dd>
-        <dt>Instructions</dt><dd>{{ side[1].instructions }}</dd>
+        <dt>Access</dt><dd>{{ side[1].instructions }}</dd>
         <dt>Items</dt>
         <dd>{% for item in side[1]['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
       </dl>

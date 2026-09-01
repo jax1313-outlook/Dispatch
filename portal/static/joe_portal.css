@@ -426,3 +426,19 @@
 .fact-row.arrangement .fact-value { display: block; margin-top: 4px; }
 .fact-row.arrangement .fact-bracket { display: block; margin-top: 3px; }
 .fact-row.arrangement .trip-diagram { margin-top: 9px; width: 100%; }
+
+/* ---- Details panels, ordered for travel -------------------------------- */
+/* Where, when, how far, who to ring, how to get in. The three that decide
+   whether he arrives on time are large; the rest support them. */
+.end-address {
+    display: block; margin-top: 4px;
+    font-size: 1.02rem; font-weight: 600; line-height: 1.3;
+}
+.end-when {
+    display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-top: 4px;
+}
+.end-appt { font-size: 0.95rem; font-weight: 600; color: #9ccbff; }
+.end-trip {
+    font-size: 0.82rem; color: var(--ink-dim);
+    font-family: ui-monospace, Consolas, monospace;
+}
