@@ -135,9 +135,12 @@
   </button>
 
   {# Truck-wide, summarised by the stop it comes off at -- a summary showing
-     only the current stop hides the freight sitting behind it. Load arrangement
-     collapsed in here: where it sits and what is still free is a fact about the
-     same cargo, and a section of its own for one line was a section too many. #}
+     only the current stop hides the freight sitting behind it.
+
+     What is on the truck belongs on the glass; where it physically sits does
+     not. The arrangement grid lives one step in, behind OPEN LOAD DIAGRAM in
+     this drawer, because it is worked from at a dock rather than read while
+     driving. #}
   <div class="fact-row block cargo-block">
     <button class="cargo-head" data-drawer="cargo" data-side="left">
       <span class="fact-key">CARGO:</span>
@@ -156,43 +159,6 @@
       {% endif %}
       <span class="cargo-total">{{ cargo_by_stop.total }}</span>
     </button>
-
-    {# Where the driver put the freight, laid out the way he faces the van:
-       rear doors nearest, bulkhead deepest. Route order and load order are
-       not the same thing -- on a three-stop run the first stop loads last, so
-       the route reads 1, 2, 3 while the van reads 3, 2, 1 going in.
-
-       Free-form on purpose. He is the load planner; this only remembers.
-       Grab and go, not hunt and seek. #}
-    <form class="arrangement" method="post"
-          action="{{ url_for('joe_portal.portal_save_arrangement',
-                             record_id=record.id) }}">
-      <input type="hidden" name="view" value="{{ requested_view }}">
-      <input type="hidden" name="stop" value="{{ stops.number }}">
-
-      <div class="arrangement-head">
-        <span class="fact-key">LOAD ARRANGEMENT</span>
-        <span class="fact-bracket">{{ arrangement.summary }}</span>
-      </div>
-
-      <div class="van">
-        <span class="van-end">{{ arrangement.near_label }}</span>
-        {% for row in arrangement.rows %}
-          <div class="van-row">
-            {% for slot in row %}
-              <input class="van-slot {{ 'filled' if slot.value }}"
-                     type="text" inputmode="text" autocomplete="off"
-                     name="load_position_{{ slot.position }}"
-                     value="{{ slot.value }}"
-                     aria-label="Position {{ slot.position }}">
-            {% endfor %}
-          </div>
-        {% endfor %}
-        <span class="van-end">{{ arrangement.far_label }}</span>
-      </div>
-
-      <button class="van-save" type="submit">SAVE ARRANGEMENT</button>
-    </form>
   </div>
 
   <button class="fact-row" data-drawer="broker" data-side="left">
@@ -323,6 +289,43 @@
         <dd>{% for item in d.detail['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
       </dl>
     {% elif d.diagram is defined and d.diagram %}
+      {# Where the driver put the freight, laid out the way he faces the van:
+         rear doors nearest, bulkhead deepest. Route order and load order are
+         not the same thing -- on a three-stop run the first stop loads last, so
+         the route reads 1, 2, 3 while the van reads 3, 2, 1 going in.
+
+         Free-form on purpose. He is the load planner; this only remembers.
+         Grab and go, not hunt and seek. #}
+      <form class="arrangement" method="post"
+            action="{{ url_for('joe_portal.portal_save_arrangement',
+                               record_id=record.id) }}">
+        <input type="hidden" name="view" value="{{ requested_view }}">
+        <input type="hidden" name="stop" value="{{ stops.number }}">
+
+        <div class="arrangement-head">
+          <span class="fact-key">LOAD ARRANGEMENT</span>
+          <span class="fact-bracket">{{ arrangement.summary }}</span>
+        </div>
+
+        <div class="van">
+          <span class="van-end">{{ arrangement.near_label }}</span>
+          {% for row in arrangement.rows %}
+            <div class="van-row">
+              {% for slot in row %}
+                <input class="van-slot {{ 'filled' if slot.value }}"
+                       type="text" inputmode="text" autocomplete="off"
+                       name="load_position_{{ slot.position }}"
+                       value="{{ slot.value }}"
+                       aria-label="Position {{ slot.position }}">
+              {% endfor %}
+            </div>
+          {% endfor %}
+          <span class="van-end">{{ arrangement.far_label }}</span>
+        </div>
+
+        <button class="van-save" type="submit">SAVE ARRANGEMENT</button>
+      </form>
+
       {# Empty positions are shown because an empty position is capacity --
          the answer to "can I take two more on the way back". #}
       <div class="capacity-line">{{ d.diagram.capacity_line }}</div>

@@ -157,8 +157,21 @@ class TestTheDriverCanTypeItIn:
         assert response.status_code == 302
         assert sandbox.get("NOPE") is None
 
-    def test_the_boxes_render_on_the_screen(self, client, mission):
+    def test_the_boxes_live_behind_open_load_diagram(self, client, mission):
+        """Off the glass, one step in. What is on the truck belongs on the
+        driving screen; where it physically sits is worked from at a dock."""
         html = client.get(f"/portal/mission/{mission}?view=PICKUP").get_data(as_text=True)
         assert html.count('name="load_position_') == 6
-        assert "REAR DOORS" in html
-        assert "BULKHEAD" in html
+
+        drawer = html[html.index('id="drawer-loaddiagram"'):]
+        drawer = drawer[:drawer.index("</aside>")]
+        assert drawer.count('name="load_position_') == 6
+        assert "REAR DOORS" in drawer
+        assert "BULKHEAD" in drawer
+        assert "SAVE ARRANGEMENT" in drawer
+
+    def test_it_is_not_on_the_front_screen(self, client, mission):
+        html = client.get(f"/portal/mission/{mission}?view=PICKUP").get_data(as_text=True)
+        glass = html[:html.index("<aside")]
+        assert "load_position_" not in glass
+        assert "REAR DOORS" not in glass
