@@ -107,6 +107,17 @@
         {% endif %}
       </span>
 
+      {# On the glass, not behind a tap. A security hold or a single permitted
+         gate changes what time he has to leave, so it sits against the
+         appointment it modifies -- "06:00" and "allow two hours" are one fact,
+         and separating them puts the cost of the second one at the gate. #}
+      {% if side[1].special %}
+        <span class="end-special">
+          <span class="end-special-tag">SPECIAL</span>
+          <span class="end-special-text">{{ side[1].special }}</span>
+        </span>
+      {% endif %}
+
       <dl class="end-fields">
         <dt>POC</dt><dd>{{ side[1].poc }}</dd>
         <dt>Phone</dt><dd>{{ side[1].phone }}</dd>

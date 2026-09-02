@@ -891,3 +891,61 @@ class TestTheStopSelectorScales:
         rule = css[css.index(".stop-bar {"):]
         rule = rule[:rule.index("}")]
         assert "flex-wrap: wrap" in rule
+
+
+class TestSpecialInstructionsAreOnTheGlass:
+    """A security hold the driver cannot see without opening a drawer is not
+    doing its job.
+
+    The field was built and then rendered only on the drawer's detail card, so
+    on the screen he actually looks at, "GATE 6 ONLY -- allow one hour in and
+    one hour out" was invisible. That is the one fact on the whole panel that
+    changes what time he has to leave the house.
+    """
+
+    RECORD = {
+        "card_data": {"load_id": "ROC-2026-884471"},
+        "pickup_location": "XPO Logistics, Savannah, GA",
+        "pickup_window": "2026-09-02 06:00 (GATE 6 arrival time)",
+        "pickup_notes": "Front gate of Savannah Port.",
+        "pickup_special": "GATE 6 ONLY. Port security: allow 1 hour inbound "
+                          "and 1 hour outbound.",
+    }
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    def test_the_end_panel_carries_it(self):
+        detail = cockpit.end_detail(self.RECORD, "pickup")
+        assert "GATE 6 ONLY" in detail["special"]
+
+    def test_it_is_separate_from_routine_access_instructions(self):
+        """Access is how you get in on a normal day. Special is what changes
+        the plan. Merging them buries the second in the first."""
+        detail = cockpit.end_detail(self.RECORD, "pickup")
+        assert detail["instructions"] == "Front gate of Savannah Port."
+        assert "GATE 6" not in detail["instructions"]
+
+    def test_a_stop_with_nothing_special_shows_nothing(self):
+        """An empty band on every ordinary stop teaches him to ignore the band."""
+        detail = cockpit.end_detail({"card_data": {}}, "pickup")
+        assert detail["special"] == ""
+
+    def test_it_renders_on_the_screen_not_only_in_the_drawer(self, client):
+        html = client.get("/portal?view=PICKUP",
+                          follow_redirects=True).get_data(as_text=True)
+        assert "end-special" in html or "special" not in html, (
+            "the on-screen band must exist when the template supports it")
+
+    def test_the_markup_is_present_in_the_end_panel(self):
+        source = open("portal/templates/joe_portal.html", encoding="utf-8").read()
+        panel = source[source.index('class="ends"'):]
+        panel = panel[:panel.index("</div>")]
+        assert "end-special" in panel, "special instructions left off the glass"
+        assert "side[1].special" in panel
