@@ -180,20 +180,32 @@ def stops_of(record: dict) -> list:
         if not isinstance(stop, dict):
             continue
         control = lc.control_for(stop, record.get("load_control") or {})
+        number = stop.get("number") or (len(stops) + 1)
+
+        def at(label, key, value):
+            # Keyed per stop, so a dock phone learned on the call is written
+            # to the stop it belongs to. Colons because stop field names carry
+            # underscores of their own.
+            return _field(label, value, key="stop:%s:%s" % (number, key))
+
         stops.append({
-            "label": stop.get("label") or "STOP %s" % stop.get("number", "?"),
-            "number": stop.get("number"),
+            "label": stop.get("label") or "STOP %s" % number,
+            "number": number,
             "fields": [
-                _field("Facility", stop.get("facility")),
-                _field("Appointment", stop.get("window")),
-                _field("Dock contact", stop.get("poc")),
-                _field("Dock phone", stop.get("phone")),
-                _field("Access instructions", stop.get("notes")),
-                _field("SPECIAL INSTRUCTIONS", stop.get("special")),
-                _field("Load control", control["name"]),
-                _field("Load control is the", control["role_label"]),
-                _field("Load control phone", control["phone"]),
-                _field("Their reference", control["reference"]),
+                at("Facility", "facility", stop.get("facility")),
+                at("Appointment", "window", stop.get("window")),
+                at("Dock contact", "poc", stop.get("poc")),
+                at("Dock phone", "phone", stop.get("phone")),
+                at("Access instructions", "notes", stop.get("notes")),
+                at("SPECIAL INSTRUCTIONS", "special", stop.get("special")),
+                # Inherited load control is shown as the stop reads it, and
+                # writing here names it on the stop itself -- which is the
+                # point: the run's default is right until the call says a
+                # different party holds this one.
+                at("Load control", "control_name", control["name"]),
+                at("Load control is the", "control_role", control["role_label"]),
+                at("Load control phone", "control_phone", control["phone"]),
+                at("Their reference", "control_ref", control["reference"]),
             ],
         })
     return stops
@@ -234,6 +246,36 @@ def card_for(record: dict) -> dict:
         # anywhere reads it to decide whether the mission may proceed.
         "empty_count": empty,
     }
+
+
+#: Stop fields EDIT may write, by their key on the stop.
+STOP_KEYS = ("facility", "window", "poc", "phone", "notes", "special",
+             "control_name", "control_role", "control_phone", "control_ref")
+
+
+def apply_stop_edits(record: dict, form) -> list:
+    """Write `stop:N:field` values back onto the stops they name.
+
+    Returns the updated stop list. Values are stored exactly as typed and
+    nothing is validated, for the same reason the rest of EDIT does not: a
+    brief that argues with what a broker just said on the phone is a brief he
+    stops using.
+    """
+    stops = [dict(s) for s in (record.get("stops") or []) if isinstance(s, dict)]
+    by_number = {}
+    for index, stop in enumerate(stops, start=1):
+        by_number[str(stop.get("number") or index)] = stop
+
+    for name in list(form):
+        parts = str(name).split(":")
+        if len(parts) != 3 or parts[0] != "stop":
+            continue
+        number, key = parts[1], parts[2]
+        if key not in STOP_KEYS or number not in by_number:
+            continue
+        by_number[number][key] = str(form.get(name) or "").strip()
+
+    return stops
 
 
 def editable_keys(record: dict) -> list:

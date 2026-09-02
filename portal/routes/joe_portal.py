@@ -199,12 +199,70 @@ def mission_brief(record_id: str):
 
     merged = dict(record)
     merged["numbers"] = mission_svc.display_numbers(merged)
+    from dispatch import commitment
+
     return render_template(
         "mission_brief.html",
         record=merged,
         card=brief_view.card_for(merged),
         editing=request.args.get("edit") == "1",
+        gate=commitment.describe(merged),
     )
+
+
+@joe_bp.route("/brief/mission/<path:record_id>/commit", methods=["POST"])
+def mission_commit(record_id: str):
+    """COMMIT. Booking ends here and Dispatch begins.
+
+    Not a status change. The moment this is pressed, capacity is taken, a
+    calendar entry is held, and the mission enters the driver's workflow --
+    which is why the brief exists first. Everything necessary to execute is
+    supposed to be on the record by now, and the operator is the one who
+    decides it is.
+
+    Nothing is created. The record SWEEP found, or that JOE took down by
+    voice, is the record that runs.
+    """
+    from datetime import datetime, timezone
+
+    from dispatch import commitment, scheduling
+
+    record = sandbox.get(record_id)
+    if not record:
+        return redirect(url_for("joe_portal.portal_home"))
+
+    if commitment.is_committed(record):
+        return redirect(url_for("joe_portal.mission_brief", record_id=record_id))
+
+    now = datetime.now(timezone.utc).isoformat()
+    data = sandbox._load()
+    stored = data.get(record_id) or {}
+    stored.update(commitment.commit(stored, when=now))
+    if not stored.get("mission_number"):
+        stored["mission_number"] = mission_svc.next_mission_number(
+            mission_svc.assigned_mission_numbers(data))
+    stored.setdefault("events", []).append(
+        {"action": "committed", "timestamp": now})
+
+    # Ask the real Outlook to hold the time. Its answer is recorded as given,
+    # including "I could not" -- a mission that quietly failed to reach the
+    # calendar is how an appointment gets missed, and committing must not
+    # depend on whether Outlook happens to be open.
+    #
+    # The real adapter, never get_adapter(): the demonstration adapter reports
+    # ok on an appointment it did not create, which is tolerable on a display
+    # and not on the act that takes capacity.
+    held = scheduling.on_accept_load(
+        dict(stored), scheduling.OutlookCalendarAdapter())
+    stored["calendar_hold"] = {
+        "held": bool(held.get("held")),
+        "note": held.get("note", ""),
+        "at": now,
+    }
+
+    data[record_id] = stored
+    sandbox._save(data)
+    return redirect(url_for("joe_portal.mission_brief", record_id=record_id))
 
 
 @joe_bp.route("/brief/mission/<path:record_id>/save", methods=["POST"])
@@ -235,6 +293,17 @@ def mission_brief_save(record_id: str):
 
     if control:
         stored["load_control"] = control
+
+    # Stop-level edits: a dock phone or a different party holding load control
+    # on stop 2 is learned on the same call as everything else.
+    stops = brief_view.apply_stop_edits(stored, request.form)
+    if stops:
+        from dispatch import load_control as lc
+
+        for stop in stops:
+            stop["control"] = lc.control_for(stop, control)
+        stored["stops"] = stops
+
     data[record_id] = stored
     sandbox._save(data)
 

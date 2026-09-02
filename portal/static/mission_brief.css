@@ -153,3 +153,31 @@ dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
         -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
 }
+
+/* ---- the COMMIT gate --------------------------------------------------- */
+/* Booking on one side, Dispatch on the other. Not a status badge: the button
+   is the moment the record crosses, and pressing it takes capacity, holds a
+   calendar entry and puts the mission in front of the driver. */
+.gate {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 0 0 16px; padding: 12px 14px;
+    border: 1px solid var(--rule); border-radius: 6px;
+}
+.gate.candidate { border-left: 4px solid #a16207; background: #fffbeb; }
+.gate.committed { border-left: 4px solid #15803d; background: #f0fdf4; }
+.gate-state {
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em;
+}
+.gate.candidate .gate-state { color: #a16207; }
+.gate.committed .gate-state { color: #15803d; }
+.gate-line { flex: 1 1 auto; font-size: 0.9rem; color: var(--ink-dim); }
+.btn.commit {
+    background: #15803d; border-color: #15803d; color: #fff;
+    font-size: 0.82rem;
+}
+.btn.commit:hover { background: #166534; border-color: #166534; color: #fff; }
+.gate-note {
+    margin: -8px 0 16px; padding: 8px 12px; font-size: 0.86rem;
+    color: var(--gap-ink); background: var(--gap); border-radius: 4px;
+}
+@media print { .gate .btn { display: none; } }

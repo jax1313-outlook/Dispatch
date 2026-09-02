@@ -37,6 +37,27 @@
     </nav>
   </header>
 
+  {# Which side of the gate this record is on. Booking before, Dispatch after,
+     and the button is the moment it crosses. #}
+  <div class="gate {{ gate.state|lower }}">
+    <span class="gate-state">{{ gate.state }}</span>
+    <span class="gate-line">{{ gate.line }}</span>
+    {% if gate.state == 'CANDIDATE' and not editing %}
+      <button class="btn commit" type="submit"
+              formaction="{{ url_for('joe_portal.mission_commit',
+                                     record_id=record.id) }}"
+              onclick="return confirm('Commit this load? Capacity is taken and the mission enters Dispatch.');">
+        COMMIT LOAD
+      </button>
+    {% endif %}
+  </div>
+
+  {% if record.calendar_hold and not record.calendar_hold.held %}
+    {# Committed, and Outlook did not take the appointment. Said plainly, with
+       what to do about it -- the mission is committed either way. #}
+    <p class="gate-note">{{ record.calendar_hold.note }}</p>
+  {% endif %}
+
   {# Counted, never scored. It is the number of questions worth asking while
      somebody is on the phone, and nothing reads it to decide anything. #}
   {% if card.empty_count %}
@@ -72,7 +93,14 @@
         <dl>
           {% for f in stop.fields %}
             <dt class="{{ 'empty' if f.empty }}">{{ f.label }}</dt>
-            <dd class="{{ 'empty' if f.empty }}">{{ f.value }}</dd>
+            <dd class="{{ 'empty' if f.empty }}">
+              {% if editing and f.key %}
+                <input type="text" name="{{ f.key }}" value="{{ f.value }}"
+                       autocomplete="off">
+              {% else %}
+                {{ f.value }}
+              {% endif %}
+            </dd>
           {% endfor %}
         </dl>
       </div>
