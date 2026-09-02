@@ -145,6 +145,64 @@ def portal_home():
     )
 
 
+@joe_bp.route("/brief/mission/<path:record_id>")
+def mission_brief(record_id: str):
+    """The whole Mission Record on one sheet, before the call.
+
+    Read it, fill in what the broker tells you, print it and take it with you.
+    Empty fields are shown in pale red and nothing else happens -- see
+    `portal/brief.py` for why that is the entire feature.
+    """
+    from portal import brief as brief_view
+
+    record = sandbox.get(record_id)
+    if not record:
+        return redirect(url_for("joe_portal.portal_home"))
+
+    merged = dict(record)
+    merged["numbers"] = mission_svc.display_numbers(merged)
+    return render_template(
+        "mission_brief.html",
+        record=merged,
+        card=brief_view.card_for(merged),
+        editing=request.args.get("edit") == "1",
+    )
+
+
+@joe_bp.route("/brief/mission/<path:record_id>/save", methods=["POST"])
+def mission_brief_save(record_id: str):
+    """Write in what the broker just told you.
+
+    Manual enrichment during a call, which is the whole reason the gaps are
+    visible. Values are stored exactly as typed and nothing is validated: a
+    brief that argues with what a broker just said on the phone is a brief he
+    stops using.
+    """
+    from portal import brief as brief_view
+
+    if not sandbox.get(record_id):
+        return redirect(url_for("joe_portal.portal_home"))
+
+    data = sandbox._load()
+    stored = data.get(record_id) or {}
+    control = dict(stored.get("load_control") or {})
+
+    for key in brief_view.editable_keys(stored):
+        if key not in request.form:
+            continue
+        value = str(request.form.get(key) or "").strip()
+        if key.startswith("control_"):
+            control[key] = value
+        stored[key] = value
+
+    if control:
+        stored["load_control"] = control
+    data[record_id] = stored
+    sandbox._save(data)
+
+    return redirect(url_for("joe_portal.mission_brief", record_id=record_id))
+
+
 @joe_bp.route("/portal/mission/<path:record_id>/arrive", methods=["POST"])
 def portal_arrive(record_id: str):
     """The documented arrival event, and the notice that comes from it.

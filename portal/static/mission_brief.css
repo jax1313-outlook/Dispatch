@@ -1,0 +1,155 @@
+/* The Mission BRIEF.
+ *
+ * A working sheet, not a screen. It is read at a desk with a phone in hand and
+ * it is printed and carried, so it is built light-on-white and it prints
+ * cleanly -- the cockpit's dark instrument panel is right for a cab and wrong
+ * for something that goes through a printer.
+ *
+ * Empty fields are pale red and nothing else happens. No score, no warning, no
+ * block: the colour exists so a man on the phone to a broker can see at a
+ * glance what is still worth asking while he already has somebody on the line.
+ *
+ * Empty is not a negative. It is empty. Move on.
+ */
+
+:root {
+    --ink: #1a1c1f;
+    --ink-dim: #5b6169;
+    --rule: #d6dade;
+    --gap: #fdecec;          /* pale red. Visible, never alarming. */
+    --gap-ink: #8a3f3f;
+    --key: #0b6cf0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0; padding: 24px;
+    background: #f2f4f6; color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 15px; line-height: 1.5;
+}
+
+.brief {
+    max-width: 900px; margin: 0 auto; padding: 28px 32px 20px;
+    background: #fff; border: 1px solid var(--rule); border-radius: 6px;
+}
+
+/* ---- head ------------------------------------------------------------- */
+.brief-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 20px; padding-bottom: 14px; margin-bottom: 18px;
+    border-bottom: 2px solid var(--ink);
+}
+.company {
+    display: block; font-size: 0.72rem; font-weight: 800;
+    letter-spacing: 0.16em; color: var(--ink-dim);
+}
+.brief-head h1 {
+    margin: 2px 0 4px; font-size: 1.5rem; font-weight: 800;
+    letter-spacing: 0.06em;
+}
+.brief-load {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 1.05rem; font-weight: 700;
+}
+
+.brief-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.btn {
+    display: inline-flex; align-items: center; min-height: 38px; padding: 0 16px;
+    font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em;
+    color: var(--ink); text-decoration: none; background: #fff;
+    border: 1px solid var(--rule); border-radius: 5px; cursor: pointer;
+}
+.btn:hover { border-color: var(--key); color: var(--key); }
+.btn.primary { background: var(--key); border-color: var(--key); color: #fff; }
+
+.brief-gaps {
+    margin: 0 0 18px; padding: 8px 12px;
+    font-size: 0.86rem; color: var(--gap-ink);
+    background: var(--gap); border-radius: 4px;
+}
+
+/* ---- the card --------------------------------------------------------- */
+.card-section { margin-bottom: 22px; break-inside: avoid; }
+.card-section h2 {
+    margin: 0 0 8px; padding-bottom: 4px;
+    font-size: 0.74rem; font-weight: 800; letter-spacing: 0.14em;
+    color: var(--ink-dim); border-bottom: 1px solid var(--rule);
+}
+.card-section h3 {
+    margin: 12px 0 6px; font-size: 0.8rem; font-weight: 800;
+    letter-spacing: 0.1em;
+}
+
+dl {
+    display: grid; grid-template-columns: 220px 1fr;
+    gap: 2px 14px; margin: 0;
+}
+dt { padding: 4px 6px; color: var(--ink-dim); font-size: 0.88rem; }
+dd {
+    margin: 0; padding: 4px 8px; min-height: 26px;
+    border-bottom: 1px solid #eef1f3;
+}
+
+/* The whole feature. A field with no entry, shown so it can be asked about. */
+dt.empty, dd.empty { background: var(--gap); }
+dd.empty { border-bottom-color: #f3d4d4; }
+
+dd input {
+    width: 100%; padding: 3px 6px; font: inherit; color: var(--ink);
+    background: #fff; border: 1px solid var(--rule); border-radius: 3px;
+}
+dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
+
+.stop { padding-left: 10px; border-left: 3px solid var(--rule); }
+
+.cargo { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.cargo th {
+    text-align: left; padding: 4px 8px; font-size: 0.74rem;
+    letter-spacing: 0.1em; color: var(--ink-dim);
+    border-bottom: 1px solid var(--rule);
+}
+.cargo td { padding: 5px 8px; border-bottom: 1px solid #eef1f3; }
+
+/* ---- load arrangement -------------------------------------------------- */
+.van {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 10px 14px; border: 1px solid var(--rule); border-radius: 6px;
+}
+.van-end {
+    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em;
+    color: var(--ink-dim);
+}
+.van-row { display: flex; gap: 5px; }
+.van-slot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 54px; height: 40px;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 1.1rem; font-weight: 800;
+    border: 1px solid var(--rule); border-radius: 4px;
+}
+.van-slot.empty { background: var(--gap); border-color: #f3d4d4; }
+.van-note { margin: 8px 0 0; font-size: 0.82rem; color: var(--ink-dim); }
+
+.brief-foot {
+    margin-top: 24px; padding-top: 10px;
+    font-size: 0.78rem; color: var(--ink-dim);
+    border-top: 1px solid var(--rule);
+}
+
+/* ---- print ------------------------------------------------------------- */
+/* It is carried to a phone call and written on. The buttons do not print, the
+   pale red does -- a printed sheet showing which fields are still blank is
+   the entire point of taking it to the call. */
+@media print {
+    body { background: #fff; padding: 0; font-size: 11.5pt; }
+    .brief { max-width: none; border: none; padding: 0; }
+    .brief-actions, .brief-gaps { display: none; }
+    .card-section { margin-bottom: 14px; }
+    dd input { border: none; padding: 0; }
+    dt.empty, dd.empty, .van-slot.empty {
+        background: var(--gap) !important;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+}

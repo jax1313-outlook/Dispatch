@@ -1,0 +1,119 @@
+{# The Mission BRIEF: the whole record on one sheet, before the call.
+
+   Read it, fill in what the broker tells you, print it, take it with you.
+   Empty fields are pale red and nothing else happens -- no score, no warning,
+   no block. The colour is there so a man on the phone can see what is still
+   worth asking while he already has somebody on the line.
+
+   Empty is not a negative. It is empty. Move on. #}
+<!doctype html>
+<meta charset="utf-8">
+<title>Mission Brief — {{ record.numbers.load_label or record.load_number or 'Mission' }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='mission_brief.css') }}">
+
+<form class="brief" method="post"
+      action="{{ url_for('joe_portal.mission_brief_save', record_id=record.id) }}">
+
+  <header class="brief-head">
+    <div class="brief-title">
+      <span class="company">LEVEL 1 TRANSPORT</span>
+      <h1>MISSION BRIEF</h1>
+      <span class="brief-load">{{ record.numbers.load_label
+        or record.load_number or 'Unnumbered' }}</span>
+    </div>
+
+    <nav class="brief-actions">
+      <a class="btn" href="{{ url_for('joe_portal.portal_mission',
+                                      record_id=record.id) }}">&larr; Cockpit</a>
+      {% if editing %}
+        <button class="btn primary" type="submit">SAVE</button>
+        <a class="btn" href="{{ url_for('joe_portal.mission_brief',
+                                        record_id=record.id) }}">CANCEL</a>
+      {% else %}
+        <a class="btn" href="{{ url_for('joe_portal.mission_brief',
+                                        record_id=record.id, edit=1) }}">EDIT</a>
+        <button class="btn" type="button" onclick="window.print()">PRINT</button>
+      {% endif %}
+    </nav>
+  </header>
+
+  {# Counted, never scored. It is the number of questions worth asking while
+     somebody is on the phone, and nothing reads it to decide anything. #}
+  {% if card.empty_count %}
+    <p class="brief-gaps">{{ card.empty_count }} field{{ '' if card.empty_count == 1
+      else 's' }} with no entry. Worth asking about on the call.</p>
+  {% endif %}
+
+  {% for section in card.sections %}
+  <section class="card-section">
+    <h2>{{ section.title }}</h2>
+    <dl>
+      {% for f in section.fields %}
+        <dt class="{{ 'empty' if f.empty }}">{{ f.label }}</dt>
+        <dd class="{{ 'empty' if f.empty }}">
+          {% if editing and section.editable and f.key %}
+            <input type="text" name="{{ f.key }}" value="{{ f.value }}"
+                   autocomplete="off" placeholder="{{ f.hint }}">
+          {% else %}
+            {{ f.value }}
+          {% endif %}
+        </dd>
+      {% endfor %}
+    </dl>
+  </section>
+  {% endfor %}
+
+  {% if card.stops %}
+  <section class="card-section">
+    <h2>STOPS</h2>
+    {% for stop in card.stops %}
+      <div class="stop">
+        <h3>{{ stop.label }}</h3>
+        <dl>
+          {% for f in stop.fields %}
+            <dt class="{{ 'empty' if f.empty }}">{{ f.label }}</dt>
+            <dd class="{{ 'empty' if f.empty }}">{{ f.value }}</dd>
+          {% endfor %}
+        </dl>
+      </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if card.cargo %}
+  <section class="card-section">
+    <h2>CARGO ITEMS</h2>
+    <table class="cargo">
+      <tr><th>Description</th><th>Pallets</th><th>Weight each</th></tr>
+      {% for item in card.cargo %}
+        <tr>
+          <td>{{ item.description }}</td>
+          <td>{{ item.pallets if item.pallets is not none else '' }}</td>
+          <td>{{ item.weight_each if item.weight_each is not none else '' }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  </section>
+  {% endif %}
+
+  <section class="card-section">
+    <h2>LOAD ARRANGEMENT</h2>
+    <div class="van">
+      <span class="van-end">{{ card.arrangement.near_label }}</span>
+      {% for row in card.arrangement.rows %}
+        <div class="van-row">
+          {% for slot in row %}
+            <span class="van-slot {{ 'empty' if slot.empty }}">{{ slot.value }}</span>
+          {% endfor %}
+        </div>
+      {% endfor %}
+      <span class="van-end">{{ card.arrangement.far_label }}</span>
+    </div>
+    <p class="van-note">{{ card.arrangement.summary }}</p>
+  </section>
+
+  <footer class="brief-foot">
+    Level 1 Transport &middot; Jacksonville Regional Micro-Response Carrier
+    &middot; Ops@l1truck.com
+  </footer>
+</form>
