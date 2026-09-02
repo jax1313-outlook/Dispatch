@@ -75,16 +75,29 @@ def notice_text(notice: dict) -> str:
 
     One template. Filled from the load card and the arrival event, with no
     per-broker variation -- which is what makes four readings enough to trust
-    it. Empty fields are left empty: a notice that invents a facility name is
-    worse than one admitting it does not have it, and this goes out under
-    Level 1 Transport's name.
+    it.
+
+    Every field appears whether or not it carries a value, and an empty one is
+    left empty. Those are two different rules and both matter: the field is
+    shown because a gap nobody can see is a gap nobody closes, and it is left
+    empty because a notice that invents a facility name is worse than one
+    admitting it does not have it. This goes out under Level 1 Transport's
+    name.
     """
     lines = [notice.get("title", "ARRIVAL NOTICE"), "",
              notice.get("opening", "Truck arrived on site."), ""]
+    # Every field, whether or not it has a value. An empty field is not a
+    # negative -- it means no entry, and it says so where it can be seen. A
+    # field that disappears when unfilled hides the gap from the one person
+    # who could still close it, and quality control cannot be built on fields
+    # that vanish.
+    #
+    # This is not the same as inventing one. Nothing is filled in for the sake
+    # of looking complete: the label appears and the space after it stays
+    # empty.
     for field in notice.get("fields") or []:
         value = str(field.get("value") or "").strip()
-        if value:
-            lines.append("%s: %s" % (field.get("key"), value))
+        lines.append("%s: %s" % (field.get("key"), value))
     lines += ["", notice.get("follows_intro", ""), ""]
     for item in notice.get("follows") or []:
         lines.append("  - %s" % item)

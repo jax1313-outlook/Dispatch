@@ -112,11 +112,20 @@ class TestWhatItDoesWithTheNotice:
                         recipient="dispatch@xpo.example")
         assert "ROC-2026-884471" in mail.drafted[0]["subject"]
 
-    def test_empty_fields_are_left_out_not_invented(self):
-        """This goes out under Level 1 Transport's name."""
+    def test_every_field_appears_even_when_empty(self):
+        """An empty field is not a negative -- it means no entry, and it says
+        so where it can be seen. A field that disappears when unfilled hides
+        the gap from the one person who could still close it."""
         text = arrival.notice_text(NOTICE)
-        assert "GPS" not in text
+        assert "GPS:" in text
         assert "Mayo Clinic, San Pablo Rd" in text
+
+    def test_an_empty_field_is_left_empty_not_filled_in(self):
+        """Showing the label is not the same as inventing a value. This goes
+        out under Level 1 Transport's name."""
+        text = arrival.notice_text(NOTICE)
+        gps = [l for l in text.splitlines() if l.startswith("GPS:")][0]
+        assert gps.strip() == "GPS:"
 
     def test_it_says_the_truck_arrived_safely(self):
         """The operator's word. A customer wanted to know the truck is fine
