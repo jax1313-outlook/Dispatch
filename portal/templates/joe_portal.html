@@ -157,11 +157,42 @@
       <span class="cargo-total">{{ cargo_by_stop.total }}</span>
     </button>
 
-    <div class="arrangement-line">
-      <span class="fact-key">LOAD ARRANGEMENT:</span>
-      <span class="fact-value">{{ load_diagram.position }}</span>
-      <span class="fact-bracket">{{ load_diagram.capacity_line }}</span>
-    </div>
+    {# Where the driver put the freight, laid out the way he faces the van:
+       rear doors nearest, bulkhead deepest. Route order and load order are
+       not the same thing -- on a three-stop run the first stop loads last, so
+       the route reads 1, 2, 3 while the van reads 3, 2, 1 going in.
+
+       Free-form on purpose. He is the load planner; this only remembers.
+       Grab and go, not hunt and seek. #}
+    <form class="arrangement" method="post"
+          action="{{ url_for('joe_portal.portal_save_arrangement',
+                             record_id=record.id) }}">
+      <input type="hidden" name="view" value="{{ requested_view }}">
+      <input type="hidden" name="stop" value="{{ stops.number }}">
+
+      <div class="arrangement-head">
+        <span class="fact-key">LOAD ARRANGEMENT</span>
+        <span class="fact-bracket">{{ arrangement.summary }}</span>
+      </div>
+
+      <div class="van">
+        <span class="van-end">{{ arrangement.near_label }}</span>
+        {% for row in arrangement.rows %}
+          <div class="van-row">
+            {% for slot in row %}
+              <input class="van-slot {{ 'filled' if slot.value }}"
+                     type="text" inputmode="text" autocomplete="off"
+                     name="load_position_{{ slot.position }}"
+                     value="{{ slot.value }}"
+                     aria-label="Position {{ slot.position }}">
+            {% endfor %}
+          </div>
+        {% endfor %}
+        <span class="van-end">{{ arrangement.far_label }}</span>
+      </div>
+
+      <button class="van-save" type="submit">SAVE ARRANGEMENT</button>
+    </form>
   </div>
 
   <button class="fact-row" data-drawer="broker" data-side="left">

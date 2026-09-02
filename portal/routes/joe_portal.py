@@ -143,6 +143,33 @@ def portal_home():
     )
 
 
+@joe_bp.route("/portal/mission/<path:record_id>/arrangement", methods=["POST"])
+def portal_save_arrangement(record_id: str):
+    """Record where the driver put the freight. Six boxes, stored as typed.
+
+    No validation and no interpretation. The values mean stop numbers today
+    and could mean COLD, FROZEN, DRY tomorrow -- the driver is the load
+    planner and this only remembers what he did.
+    """
+    record = sandbox.get(record_id)
+    if not record:
+        return redirect(url_for("joe_portal.portal_home"))
+
+    data = sandbox._load()
+    stored = data.get(record_id)
+    if stored is not None:
+        for number in range(1, cockpit.LOAD_POSITIONS + 1):
+            key = f"load_position_{number}"
+            stored[key] = str(request.form.get(key) or "").strip()
+        sandbox._save(data)
+
+    # Back to the view he was on, at the stop he was looking at. Saving a load
+    # chart should not move him.
+    return redirect(url_for("joe_portal.portal_mission", record_id=record_id,
+                            view=request.form.get("view") or "PICKUP",
+                            stop=request.form.get("stop") or None))
+
+
 @joe_bp.route("/portal/mission/<path:record_id>")
 def portal_mission(record_id: str):
     """One Mission Record, one of three views over it."""

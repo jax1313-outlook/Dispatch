@@ -697,6 +697,53 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
     }
 
 
+#: Cargo positions in the van. Six, because that is what the truck has.
+LOAD_POSITIONS = 6
+
+
+def load_arrangement_for(record: dict) -> dict:
+    """Where the driver put the freight. Recorded, never computed.
+
+        Grab and go, not hunt and seek.
+
+    This is the Penske load chart, which exists for one reason: to tell the
+    driver where freight physically sits so he is not opening doors and
+    digging at stop four in the rain. Route order and load order are related
+    and are not the same thing -- on a three-stop run the first stop loads
+    last, so the route reads 1, 2, 3 while the van reads 3, 2, 1 from the
+    bulkhead out.
+
+    **The driver is the load planner. Dispatch only remembers the
+    arrangement.** No optimiser, no weight balancing, no automatic placement,
+    no stop-sequencing engine -- those are maintenance, and the man who loads
+    the truck already knows where the freight goes. Values are free-form and
+    stored exactly as typed: they mean stop numbers today and could mean COLD,
+    FROZEN, DRY tomorrow without this code caring.
+
+    Laid out the way he faces it: rear doors nearest, bulkhead deepest.
+    """
+    positions = []
+    for number in range(1, LOAD_POSITIONS + 1):
+        value = str(record.get(f"load_position_{number}") or "").strip()
+        positions.append({"position": number, "value": value,
+                          "empty": not value})
+
+    occupied = [p for p in positions if p["value"]]
+    return {
+        "positions": positions,
+        # Two across, three deep. The physical shape of the van, so a glance
+        # maps to the doors rather than to a list.
+        "rows": [positions[i:i + 2] for i in range(0, LOAD_POSITIONS, 2)],
+        "near_label": "REAR DOORS",
+        "far_label": "BULKHEAD",
+        "recorded": bool(occupied),
+        "occupied_count": len(occupied),
+        "empty_count": LOAD_POSITIONS - len(occupied),
+        "summary": (f"{len(occupied)} of {LOAD_POSITIONS} positions loaded"
+                    if occupied else "Not recorded"),
+    }
+
+
 def load_diagram_for(record: dict) -> dict:
     """Where the freight sits, in what order it comes off, and what is still free.
 
@@ -856,6 +903,7 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "",
         "ends": ends_for(record),
         "cargo": cargo_for(record),
         "cargo_by_stop": cargo_by_stop(record),
+        "arrangement": load_arrangement_for(record),
         "pickup_detail": end_detail(record, "pickup", stop_number),
         "delivery_detail": end_detail(record, "delivery", stop_number),
         "broker": broker_for(record),
