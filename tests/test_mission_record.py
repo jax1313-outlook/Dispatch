@@ -253,9 +253,19 @@ class TestPortalRenders:
 
 
 class TestCalendarBoundary:
-    def test_the_real_adapter_reports_unavailable_rather_than_pretending(self):
+    def test_the_real_adapter_reports_unavailable_rather_than_pretending(self,
+                                                                        monkeypatch):
+        """With Outlook closed. The adapter is wired now, so this pins the
+        behaviour that matters -- an honest UNAVAILABLE -- instead of pinning
+        the fact that it was once a stub.
+
+        `_outlook_is_running` is forced False so the test never touches COM.
+        A test that reaches the operator's real Outlook is broken whatever it
+        asserts.
+        """
         from dispatch import scheduling
 
+        monkeypatch.setattr(scheduling, "_outlook_is_running", lambda: False)
         probe = scheduling.OutlookCalendarAdapter().probe()
         assert probe["status"] == "UNAVAILABLE"
         assert probe["live"] is False
@@ -271,15 +281,53 @@ class TestCalendarBoundary:
         assert held["held"] is False, "a demo must never claim to have booked"
         assert "DEMONSTRATION" in held["note"]
 
-    def test_accepting_a_load_never_silently_fails_to_schedule(self):
-        """If the calendar could not hold the time, the driver is told to do
-        it himself rather than left believing Outlook has it."""
+    def test_accepting_a_load_never_silently_fails_to_schedule(self, monkeypatch):
+        """If the calendar could not hold the time, the driver is told to do it
+        himself rather than left believing Outlook has it.
+
+        Outlook is forced closed. Before the adapter was wired this test called
+        `hold_appointment` on the real one and was harmless against a stub;
+        against live Outlook it wrote an appointment into the operator's own
+        calendar. A test must never reach a real calendar, a real mailbox or a
+        real anything.
+        """
         from dispatch import scheduling
 
+        monkeypatch.setattr(scheduling, "_outlook_is_running", lambda: False)
         result = scheduling.on_accept_load(
             {"mission_number": 1}, scheduling.OutlookCalendarAdapter())
         assert result["held"] is False
         assert "yourself" in result["note"].lower()
+
+    def test_no_test_reaches_the_real_outlook(self):
+        """The guard for the mistake above.
+
+        Narrow on purpose: `cin_lite.email_delivery.send` is already offline
+        by construction -- the suite scrubs the SMTP variables and redirects
+        the outbox to a tmp directory. The risk is the Outlook adapters, which
+        reach the operator's own calendar and mailbox through COM, and the only
+        thing that stops them is forcing the connection closed.
+        """
+        import pathlib
+        import re
+
+        risky = re.compile(
+            r"(OutlookCalendarAdapter|OutlookMailAdapter|on_accept_load)\s*\(")
+        offenders = []
+        for path in pathlib.Path("tests").glob("test_*.py"):
+            text = path.read_text(encoding="utf-8")
+            for match in risky.finditer(text):
+                # The guard has to appear in the same test, before the call.
+                body = text[:match.start()]
+                opened = body.rfind("    def test")
+                window = body[opened:] if opened >= 0 else body
+                if "_outlook_is_running" not in window:
+                    offenders.append("%s:%s" % (path.name, match.group(1)))
+
+        # probe() and upcoming() are read-only and safe either way; what must
+        # never run unguarded is anything that writes.
+        writes = [o for o in offenders if "on_accept_load" in o]
+        assert writes == [], writes
 
 
 class TestSweepControl:
