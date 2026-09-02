@@ -183,9 +183,27 @@ def day_state(day: date, loads: list) -> str:
     return pattern_for(day)
 
 
-def build(records=None, calendar=None, *, today=None, days=HORIZON_DAYS) -> dict:
-    """The two-week book: what is committed, what is held, what is still sellable."""
-    start = today or date.today()
+def week_start(day: date) -> date:
+    """The Monday of that day's week.
+
+    The board runs Monday to Sunday because that is the shape of the week the
+    business model describes -- Mon to Wed sellable, Thu and Fri held, Saturday
+    maintenance. A fortnight starting on whatever today happens to be splits
+    that pattern across rows and makes it unreadable.
+    """
+    return day - timedelta(days=day.weekday())
+
+
+def build(records=None, calendar=None, *, today=None, weeks=2) -> dict:
+    """The book: what is committed, what is held, what is still sellable.
+
+    Laid out in calendar weeks, Monday to Sunday. Days already gone are shown
+    to keep the week whole and are marked past -- they cannot be sold and are
+    not counted among the days that can.
+    """
+    today = today or date.today()
+    start = week_start(today)
+    days = int(weeks) * 7
     commitments = commitments_from(records)
     appointments = appointments_from(calendar)
 
@@ -206,18 +224,25 @@ def build(records=None, calendar=None, *, today=None, days=HORIZON_DAYS) -> dict
             "planned": pattern_for(day),
             "loads": loads,
             "appointments": appointments.get(day, []),
-            "is_today": day == start,
+            "is_today": day == today,
+            # Shown to keep the week whole, never counted as sellable. A day
+            # that has gone is not unsold inventory; it is just gone.
+            "past": day < today,
             # Held for expedited, and something got booked into it. Not a
             # problem -- it is the position paying off -- but worth seeing.
             "held_and_taken": state == BOOKED and pattern_for(day) == HELD,
         })
 
-    sellable = [d for d in board if d["planned"] in SELLABLE]
+    sellable = [d for d in board if d["planned"] in SELLABLE and not d["past"]]
     unsold = [d for d in sellable if d["state"] == OPEN]
-    booked = [d for d in board if d["state"] == BOOKED]
+    booked = [d for d in board if d["state"] == BOOKED and not d["past"]]
 
     return {
         "days": days,
+        "weeks_shown": int(weeks),
+        "today": today,
+        "starts": start,
+        "ends": start + timedelta(days=days - 1),
         "board": board,
         # Two weeks laid out as weeks, because that is how he thinks about it.
         "weeks": [board[i:i + 7] for i in range(0, len(board), 7)],
@@ -225,8 +250,9 @@ def build(records=None, calendar=None, *, today=None, days=HORIZON_DAYS) -> dict
         "unsold_count": len(unsold),
         "sellable_count": len(sellable),
         "booked_count": len(booked),
-        "held_count": len([d for d in board if d["state"] == HELD]),
-        "depth": depth_of(board),
+        "held_count": len([d for d in board if d["state"] == HELD
+                           and not d["past"]]),
+        "depth": depth_of([d for d in board if not d["past"]]),
         "calendar_status": (calendar or {}).get("status", "UNAVAILABLE"),
     }
 
@@ -239,7 +265,7 @@ def depth_of(board: list) -> dict:
     not an answer to anything.
     """
     booked = [d for d in board if d["state"] == BOOKED]
-    if not booked:
+    if not booked or not board:
         return {"has_work": False, "through": None, "days_out": 0,
                 "line": "Nothing booked."}
     last = booked[-1]

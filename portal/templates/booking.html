@@ -17,6 +17,12 @@
     <h1>BOOKING</h1>
   </div>
   <nav class="book-actions">
+    {# Same board at a different depth, never a second screen. Two weeks is the
+       horizon he books to; four puts the month in view. #}
+    <a class="btn {{ 'on' if weeks == 2 }}"
+       href="{{ url_for('joe_portal.booking_board', weeks=2) }}">2 WEEKS</a>
+    <a class="btn {{ 'on' if weeks == 4 }}"
+       href="{{ url_for('joe_portal.booking_board', weeks=4) }}">MONTH</a>
     <a class="btn" href="{{ url_for('pages.home') }}">Dispatch</a>
   </nav>
 </header>
@@ -43,7 +49,7 @@
 {% for week in book.weeks %}
 <section class="week">
   {% for day in week %}
-  <div class="day {{ day.state|lower }}{{ ' today' if day.is_today }}">
+  <div class="day {{ day.state|lower }}{{ ' today' if day.is_today }}{{ ' past' if day.past }}">
     <div class="day-head">
       <span class="day-name">{{ day.weekday }}</span>
       <span class="day-num">{{ day.day_number }}</span>

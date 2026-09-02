@@ -44,8 +44,8 @@ def _record(load="L1-TEST", pickup="", delivery=""):
                           "pickup_window": pickup, "delivery_window": delivery}}
 
 
-def _board(records=None, calendar=None, today=MONDAY):
-    return booking.build(records or {}, calendar or {}, today=today)
+def _board(records=None, calendar=None, today=MONDAY, weeks=2):
+    return booking.build(records or {}, calendar or {}, today=today, weeks=weeks)
 
 
 class TestTheWeekIsABusinessModel:
@@ -220,3 +220,54 @@ class TestTheScreen:
         if "Appointments are not showing" in html:
             note = html[html.index("Appointments are not showing"):]
             assert joe_voice.is_driver_safe(note[:note.index("<")]) == []
+
+
+class TestItRunsMondayToSunday:
+    """A fortnight starting on whatever today happens to be splits the week
+    pattern across rows and makes it unreadable. Mon-Wed sellable, Thu-Fri
+    held, Saturday maintenance only reads as a shape when the row is a week."""
+
+    def test_every_row_starts_on_monday_and_ends_on_sunday(self):
+        for week in _board()["weeks"]:
+            assert len(week) == 7
+            assert week[0]["date"].weekday() == 0
+            assert week[6]["date"].weekday() == 6
+
+    def test_the_board_starts_at_this_weeks_monday(self):
+        wednesday = MONDAY + timedelta(days=2)
+        book = _board(today=wednesday)
+        assert book["starts"] == MONDAY
+        assert book["board"][0]["date"] == MONDAY
+
+    def test_days_already_gone_are_shown_but_marked(self):
+        """Shown to keep the week whole; marked so they do not compete with
+        the days he can still act on."""
+        wednesday = MONDAY + timedelta(days=2)
+        board = _board(today=wednesday)["board"]
+        assert [d["past"] for d in board[:3]] == [True, True, False]
+
+    def test_a_past_day_is_not_counted_as_unsold(self):
+        """A day that has gone is not unsold inventory. It is just gone."""
+        wednesday = MONDAY + timedelta(days=2)
+        book = _board(today=wednesday)
+        assert book["sellable_count"] == 4      # Wed, then Mon Tue Wed
+        assert all(not d["past"] for d in book["unsold"])
+
+
+class TestTheHorizonSwitches:
+    def test_two_weeks_is_the_default(self):
+        assert _board()["weeks_shown"] == 2
+        assert len(_board()["weeks"]) == 2
+
+    def test_a_month_is_the_same_board_deeper(self):
+        """Not a second screen. Same states, same rules, more rows."""
+        fortnight, month = _board(), _board(weeks=4)
+        assert len(month["weeks"]) == 4
+        assert month["board"][:14] == fortnight["board"]
+
+    def test_the_sellable_count_scales_with_the_horizon(self):
+        assert _board(weeks=4)["sellable_count"] == 12   # four weeks of Mon-Wed
+
+    def test_the_pattern_holds_at_any_depth(self):
+        for day in _board(weeks=6)["board"]:
+            assert day["planned"] == booking.pattern_for(day["date"])

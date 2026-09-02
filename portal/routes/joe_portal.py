@@ -162,13 +162,22 @@ def booking_board():
     # quietly wrong is not.
     try:
         calendar = scheduling.OutlookCalendarAdapter().upcoming(
-            booking.HORIZON_DAYS)
+            max(booking.HORIZON_DAYS,
+                7 * max(1, min(6, int(request.args.get("weeks") or 2)))))
     except Exception:  # noqa: BLE001 - a quiet calendar must not take the page down
         calendar = {"status": "UNAVAILABLE", "entries": [], "blocker": ""}
 
+    # Two weeks is the operator's booking horizon; four is the same board with
+    # the month in view. Same code, different depth -- not a second screen.
+    try:
+        weeks = max(1, min(6, int(request.args.get("weeks") or 2)))
+    except (TypeError, ValueError):
+        weeks = 2
+
     return render_template(
         "booking.html",
-        book=booking.build(sandbox.get_all(), calendar),
+        weeks=weeks,
+        book=booking.build(sandbox.get_all(), calendar, weeks=weeks),
         calendar_source=calendar.get("source", ""),
         calendar_blocker=calendar.get("blocker", ""),
     )

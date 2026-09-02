@@ -157,3 +157,14 @@ body {
     .week { grid-template-columns: repeat(2, 1fr); }
     .day { min-height: 0; }
 }
+
+/* The horizon switch. Same board at a different depth. */
+.btn.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+/* Days already gone. Shown to keep the week whole -- a Mon-Sun row with the
+   first two days missing does not read as a week -- and drawn back so they do
+   not compete with the days he can still act on. A day that has gone is not
+   unsold inventory; it is just gone. */
+.day.past { opacity: 0.4; }
+.day.past.open { background: var(--panel); border-top-color: var(--rule); }
+.day.past.open .state-label { color: var(--quiet); }
