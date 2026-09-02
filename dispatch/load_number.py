@@ -17,7 +17,7 @@ than as another message from a broker.
 Two origins, one field:
 
     Supplied     847261, CVS-44912, ABC123 -- stored byte for byte.
-    Generated    L1-0001, L1-0002 -- when nobody else has numbered the work.
+    Generated    L1-8F42QC -- when nobody else has numbered the work.
 
 **A generated number is not pretending to be a broker number.** It is a
 legitimate Dispatch Load Number for work that arrived without one -- a direct
@@ -29,21 +29,30 @@ to quote it to.
 from __future__ import annotations
 
 import re
+import secrets
 
 #: The house prefix. COMI treats any inbound subject beginning with this as
 #: mission intake, so it is the hinge the whole email path turns on.
 LOAD_NUMBER_PREFIX = "L1-"
 
-#: Width of the generated sequence. Four digits keeps the number short enough
-#: to read aloud over a phone and write on a bill of lading.
-LOAD_NUMBER_DIGITS = 4
-LOAD_NUMBER_MAX = 10 ** LOAD_NUMBER_DIGITS - 1
+#: Length of the generated code. Six characters keeps it short enough to read
+#: aloud over a phone and write on a bill of lading, and long enough that the
+#: numbers cannot be counted through.
+LOAD_NUMBER_LENGTH = 6
+
+#: No I, O, 0 or 1. A load number gets read over a phone at a gate and written
+#: on paper in a cab; a character pair that can be misheard or miswritten costs
+#: more than the handful of combinations it saves.
+LOAD_NUMBER_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 #: Where the number came from. Recorded, never inferred later.
 SUPPLIED = "SUPPLIED"
 GENERATED = "GENERATED"
 
-_GENERATED_RE = re.compile(r"^%s(\d+)$" % re.escape(LOAD_NUMBER_PREFIX), re.I)
+_GENERATED_RE = re.compile(
+    r"^%s[%s]{%d}$" % (re.escape(LOAD_NUMBER_PREFIX),
+                       re.escape(LOAD_NUMBER_ALPHABET), LOAD_NUMBER_LENGTH),
+    re.I)
 
 
 class LoadNumberError(ValueError):
@@ -55,34 +64,33 @@ def is_generated(load_number: str) -> bool:
     return bool(_GENERATED_RE.match(str(load_number or "").strip()))
 
 
-def format_generated(sequence: int) -> str:
-    return f"{LOAD_NUMBER_PREFIX}{int(sequence):0{LOAD_NUMBER_DIGITS}d}"
-
-
-def taken_sequences(load_numbers) -> set:
-    """The generated sequences already in use, ignoring supplied numbers."""
-    taken = set()
-    for value in load_numbers or []:
-        match = _GENERATED_RE.match(str(value or "").strip())
-        if match:
-            taken.add(int(match.group(1)))
-    return taken
+def format_generated(code: str) -> str:
+    return f"{LOAD_NUMBER_PREFIX}{str(code).upper()}"
 
 
 def next_generated(existing=None) -> str:
-    """The lowest free house number.
+    """A fresh house number, not the next one.
 
-    Gap-filling, like the internal mission number: a number freed by an
-    archived mission comes back into use rather than marching the sequence
-    upward forever.
+    Sequential numbering made every load countable: anyone holding L1-0007
+    could try L1-0006 and L1-0008 and reach a different customer's load. The
+    number is a shared credential by design -- any member of a broker's staff
+    can use it, because the contact at 08:00 is not the contact at 18:00 and
+    managing who-has-access would make this a security company. That model is
+    right. What it needs is a number nobody can count through.
+
+    So: drawn at random from an unambiguous alphabet, checked against what is
+    already in use. Everything else about the scheme is unchanged.
     """
-    taken = taken_sequences(existing)
-    for candidate in range(1, LOAD_NUMBER_MAX + 1):
-        if candidate not in taken:
-            return format_generated(candidate)
+    taken = {str(v or "").strip().upper() for v in (existing or [])}
+    for _ in range(64):
+        candidate = format_generated(
+            "".join(secrets.choice(LOAD_NUMBER_ALPHABET)
+                    for _ in range(LOAD_NUMBER_LENGTH)))
+        if candidate.upper() not in taken:
+            return candidate
     raise LoadNumberError(
-        "all %d Dispatch load numbers are in use; archive completed missions "
-        "before opening another" % LOAD_NUMBER_MAX)
+        "could not draw an unused Dispatch load number; archive completed "
+        "missions before opening another")
 
 
 def assign(supplied: str = "", *, existing=None) -> dict:

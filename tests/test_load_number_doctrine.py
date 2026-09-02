@@ -7,7 +7,7 @@ one exists and cannot be found again, which is the definition of an orphan.
 Two origins, one field:
 
     Supplied     847261, CVS-44912, ABC123 -- stored byte for byte
-    Generated    L1-0001 -- when nobody else numbered the work
+    Generated    L1-8F42QC -- when nobody else numbered the work
 
 A generated number is not pretending to be a broker number. It is a legitimate
 Dispatch Load Number, and the record says which of the two it is -- because
@@ -50,6 +50,7 @@ class TestNoMissionRecordWithoutOne:
         record = mt.to_record(MINIMUM, source=mt.SOURCE_PHONE, taken_by="Mike")
         assert record["load_number"].startswith("L1-")
         assert record["load_number_origin"] == ln.GENERATED
+        assert ln.is_generated(record["load_number"])
 
     def test_a_generated_number_never_poses_as_a_broker_reference(self):
         """Our number in the broker's field is how a payment goes missing."""
@@ -82,11 +83,27 @@ class TestASuppliedNumberIsUsedExactly:
 
 
 class TestGeneratedNumbersDoNotCollide:
-    def test_it_fills_gaps_rather_than_marching_upward(self):
-        assert ln.next_generated(["L1-0001", "L1-0003"]) == "L1-0002"
+    def test_the_numbers_cannot_be_counted_through(self):
+        """The load number is a shared credential by design -- any member of a
+        broker's staff can use it, because the contact at 08:00 is not the
+        contact at 18:00. That model is right. What it must not be is
+        countable: L1-0007 would let anyone try L1-0006 and reach a different
+        customer's load."""
+        drawn = [ln.next_generated([]) for _ in range(40)]
+        assert len(set(drawn)) == len(drawn), "generated numbers repeated"
+        assert not any(d.endswith("0001") for d in drawn)
 
-    def test_supplied_numbers_do_not_consume_the_sequence(self):
-        assert ln.next_generated(["847261", "CVS-44912"]) == "L1-0001"
+    def test_it_never_draws_one_already_in_use(self):
+        existing = [ln.next_generated([]) for _ in range(5)]
+        for _ in range(20):
+            assert ln.next_generated(existing) not in existing
+
+    def test_the_alphabet_avoids_characters_that_get_misread(self):
+        """It is read over a phone at a gate and written on paper in a cab."""
+        for banned in ("I", "O", "0", "1"):
+            assert banned not in ln.LOAD_NUMBER_ALPHABET
+        body = ln.next_generated([])[len(ln.LOAD_NUMBER_PREFIX):]
+        assert all(c in ln.LOAD_NUMBER_ALPHABET for c in body)
 
     def test_two_missions_created_in_a_row_get_different_numbers(self):
         first = mt.create_mission(MINIMUM, source=mt.SOURCE_PHONE,
@@ -96,7 +113,7 @@ class TestGeneratedNumbersDoNotCollide:
                                    taken_by="Mike", sandbox_module=sandbox,
                                    mission_module=mission)
         assert first["load_number"] != second["load_number"]
-        assert {first["load_number"], second["load_number"]} == {"L1-0001", "L1-0002"}
+        assert all(ln.is_generated(r["load_number"]) for r in (first, second))
 
     def test_the_record_is_retrievable_by_its_load_number(self):
         """The whole point of the doctrine."""
@@ -138,7 +155,7 @@ class TestTheNumberIsIssuedBeforeTheTemplateIsFilled:
         """JOE hands out the number when the driver asks for the template, not
         when it comes back. Otherwise it cannot be the subject line."""
         opened = mt.open_template()
-        assert opened["load_number"] == "L1-0001"
+        assert ln.is_generated(opened["load_number"])
         assert opened["values"] == mt.blank_template()
 
     def test_a_known_customer_number_can_be_supplied_at_the_start(self):
