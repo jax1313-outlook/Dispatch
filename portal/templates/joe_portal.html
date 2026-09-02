@@ -431,6 +431,37 @@ function go(param, value) {
 document.querySelectorAll('.mode-btn').forEach(function (b) {
   b.addEventListener('click', function () { go('view', b.dataset.mode); });
 });
+// ARRIVE. The one action that puts mail in front of a broker by itself, so it
+// asks first -- and it reports what actually happened rather than assuming.
+// GPS is offered if the browser has it and omitted if not; a guessed
+// coordinate on arrival evidence is worse than none.
+document.querySelectorAll('[data-action="arrive"]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    if (b.disabled) { return; }
+    if (!window.confirm('Record arrival now and produce the arrival notice?')) { return; }
+    b.disabled = true;
+    var send = function (gps) {
+      var body = new URLSearchParams();
+      body.set('view', document.body.dataset.view || '');
+      if (gps) { body.set('gps', gps); }
+      fetch(window.location.pathname + '/arrive', {method: 'POST', body: body})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var line = document.getElementById('joe-line');
+          if (line) { line.textContent = d.note || 'Arrival recorded.'; }
+          window.location.reload();
+        })
+        .catch(function () { b.disabled = false; });
+    };
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function (p) { send(p.coords.latitude.toFixed(5) + ', ' + p.coords.longitude.toFixed(5)); },
+        function () { send(''); },
+        {timeout: 8000});
+    } else { send(''); }
+  });
+});
+
 document.querySelectorAll('.stop-btn').forEach(function (b) {
   b.addEventListener('click', function () { go('stop', b.dataset.stop); });
 });

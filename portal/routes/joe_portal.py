@@ -15,6 +15,8 @@ API, which owns the workflow and the consequences.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
 from dispatch import mission as mission_svc
@@ -141,6 +143,87 @@ def portal_home():
              "numbers": mission_svc.display_numbers({}), "card_data": {}},
             cockpit.normalise_mode(request.args.get("view"))),
     )
+
+
+@joe_bp.route("/portal/mission/<path:record_id>/arrive", methods=["POST"])
+def portal_arrive(record_id: str):
+    """The documented arrival event, and the notice that comes from it.
+
+    The one outbound act that does not wait for a human -- an arrival notice is
+    worth nothing if it is not contemporaneous. The first four are drafted for
+    review; after that the template has been read four times and goes on its
+    own. See `dispatch/arrival.py`.
+    """
+    from dispatch import arrival
+
+    record = sandbox.get(record_id)
+    if not record:
+        return jsonify({"ok": False,
+                        "note": "That mission is not on this machine."}), 404
+
+    mode = cockpit.normalise_mode(request.form.get("view"), record)
+    stamped = datetime.now()
+
+    data = sandbox._load()
+    stored = data.get(record_id) or {}
+    stored["arrived_at"] = stamped.isoformat()
+    stored["arrived_date"] = stamped.strftime("%Y-%m-%d")
+    stored["arrived_time"] = stamped.strftime("%H:%M")
+    # GPS as the truck reports it, when the browser offers it. Never invented:
+    # a guessed coordinate on arrival evidence is worse than none.
+    fix = str(request.form.get("gps") or "").strip()
+    if fix:
+        stored["%s_gps" % ("delivery" if mode == cockpit.MODE_DELIVERY
+                           else "pickup")] = fix
+
+    merged = dict(stored)
+    merged["numbers"] = mission_svc.display_numbers(merged)
+    notice = cockpit.arrival_notice_for(merged, mode)
+
+    outcome = arrival.deliver(
+        merged, notice, records=data, mail=_mail_connector(),
+        recipient=_notice_recipient(merged))
+
+    for key in ("arrival_notice_sent_at", "arrival_notice_drafted_at",
+                "arrival_notice_error"):
+        if outcome.get(key):
+            stored[key] = outcome[key]
+    data[record_id] = stored
+    sandbox._save(data)
+
+    return jsonify({"ok": bool(outcome.get("ok")),
+                    "sent": bool(outcome.get("sent")),
+                    "drafted": bool(outcome.get("drafted")),
+                    "note": outcome.get("note", ""),
+                    "arrived_at": stored["arrived_at"]})
+
+
+def _mail_connector():
+    try:
+        from dispatch.connectors import registry
+
+        return registry.mail()
+    except Exception:  # noqa: BLE001 - an absent connector is not an error
+        return None
+
+
+def _notice_recipient(record: dict) -> str:
+    """Who the arrival notice is addressed to.
+
+    Load control first: on a run where authority varies by stop, the party who
+    holds the freight is the party the evidence matters to. Falls back to the
+    broker contact, and returns empty rather than guessing -- an arrival notice
+    to the wrong company is worse than one nobody received.
+    """
+    control = (record.get("load_control") or {})
+    for candidate in (control.get("control_email"),
+                      record.get("customer_email"),
+                      record.get("broker_email"),
+                      (record.get("card_data") or {}).get("broker_email")):
+        value = str(candidate or "").strip()
+        if "@" in value:
+            return value
+    return ""
 
 
 @joe_bp.route("/portal/mission/<path:record_id>/arrangement", methods=["POST"])
