@@ -526,10 +526,13 @@ def transmission_status() -> str:
     saying otherwise on a driver's screen would be a lie he acts on.
     """
     try:
-        from dispatch.connectors import registry  # noqa: F401
-    except Exception:
+        from dispatch.connectors import registry
+    except Exception:  # noqa: BLE001 - an absent connector is not an error
         return "UNCONFIGURED"
-    return "UNCONFIGURED"
+    try:
+        return registry.mail_status()
+    except Exception:  # noqa: BLE001
+        return "UNAVAILABLE"
 
 
 def completion_effect(record: dict, mode: str) -> dict:
@@ -690,10 +693,11 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
         # `delivery` is what reaches the glass, in his language and with what
         # happens next attached. See `portal/joe_voice.py`.
         "transmission": transmission_status(),
-        "delivery": joe_voice.sending(
-            transmission_status(),
-            what="the arrival notice",
-            instead="Dispatch has your arrival on record. It goes out from the office."),
+        # Whether it ACTUALLY went, not whether the connector could. Those are
+        # different facts and only one of them is safe to put on a screen: a
+        # working mail connector says nothing about whether this notice left,
+        # and "sent" is a claim the driver acts on.
+        "delivery": _notice_delivery(record),
     }
 
 
@@ -741,6 +745,38 @@ def load_arrangement_for(record: dict) -> dict:
         "empty_count": LOAD_POSITIONS - len(occupied),
         "summary": (f"{len(occupied)} of {LOAD_POSITIONS} positions loaded"
                     if occupied else "Not recorded"),
+    }
+
+
+def _notice_delivery(record: dict) -> dict:
+    """What the driver reads about this notice reaching the broker.
+
+    Three states, and they are genuinely different:
+
+        sent        Outlook accepted it and the record says when.
+        not yet     He has not pressed ARRIVE. Nothing failed.
+        could not   He pressed it and it did not go.
+
+    The middle one is why capability cannot stand in for occurrence. A LIVE
+    mail connector on a mission nobody has arrived at would otherwise read as
+    "sent", which is a lie the driver acts on.
+    """
+    if record.get("arrival_notice_sent_at"):
+        return {"sent": True, "line": "Arrival notice sent.", "instead": ""}
+
+    if not record.get("arrived_at"):
+        return {"sent": False, "line": "Arrival notice goes out when you press ARRIVE.",
+                "instead": ""}
+
+    # Arrived, and no record that the notice went. Treated as NOT sent, always.
+    # The absence of proof is the only safe reading here: the notice exists to
+    # be contemporaneous evidence, and a driver who believes the broker has it
+    # does not chase it.
+    return {
+        "sent": False,
+        "line": "I couldn't send the arrival notice myself.",
+        "instead": ("Dispatch has your arrival on record with the time. "
+                    "It goes out from the office."),
     }
 
 

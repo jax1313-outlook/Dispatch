@@ -312,7 +312,8 @@ class TestWhatTheLastCheckDoes:
 
     def test_it_reports_transmission_rather_than_assuming_it(self):
         assert cockpit.transmission_status() in (
-            "CONFIGURED", "UNCONFIGURED", "SIMULATED", "UNAVAILABLE")
+            "LIVE", "CONFIGURED", "UNCONFIGURED", "SIMULATED",
+            "UNAVAILABLE", "MANUAL", "ABSENT", "UNVERIFIED")
 
     def test_the_effect_reaches_the_checklist_drawer(self):
         docs = [d for d in cockpit.drawers_for(self._complete(), cockpit.MODE_DELIVERY)
@@ -421,8 +422,12 @@ class TestTheArrivalNotice:
     def test_it_reports_whether_it_actually_went(self):
         notice = cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)
         assert notice["sent"] is False
-        assert notice["transmission"] in ("CONFIGURED", "UNCONFIGURED",
-                                          "SIMULATED", "UNAVAILABLE")
+        # The whole fixed vocabulary. Which one comes back depends on whether
+        # Outlook is open on this machine, and a test that pins it green only
+        # when Outlook happens to be running is a test that lies twice.
+        assert notice["transmission"] in ("LIVE", "CONFIGURED", "UNCONFIGURED",
+                                          "SIMULATED", "UNAVAILABLE", "MANUAL",
+                                          "ABSENT", "UNVERIFIED")
 
 
 class TestStopManagement:
