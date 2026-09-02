@@ -167,8 +167,15 @@ def display_numbers(record: dict) -> dict:
 # ---- purpose and phase -------------------------------------------------
 
 def purpose_of(record: dict) -> str:
-    """OPPORTUNITY before commitment, MISSION after. Same record throughout."""
-    if (record or {}).get("accepted_at"):
+    """OPPORTUNITY before commitment, MISSION after. Same record throughout.
+
+    The commitment is the COMMIT gate: everything before it is Booking and
+    everything after it is Dispatch. See `dispatch/commitment.py`, which names
+    what this field has always been.
+    """
+    from dispatch import commitment
+
+    if commitment.is_committed(record):
         return PURPOSE_MISSION
     return PURPOSE_OPPORTUNITY
 

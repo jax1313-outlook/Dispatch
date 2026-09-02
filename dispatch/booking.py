@@ -39,6 +39,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from dispatch import commitment
+
 #: How far out the operator books. Two weeks is the horizon he works to.
 HORIZON_DAYS = 14
 
@@ -123,6 +125,13 @@ def commitments_from(records) -> dict:
     """
     by_day = {}
     for record in _iter(records):
+        # Only committed missions take capacity. A candidate still being
+        # negotiated must not claim a Tuesday and shrink the unsold count on
+        # freight that is not his yet -- that is the whole reason COMMIT is a
+        # gate rather than a status. Candidates are gathered separately and
+        # shown without being counted.
+        if not commitment.is_committed(record):
+            continue
         card = record.get("card_data") or {}
         for phase, window in (
                 ("Pickup", record.get("pickup_window") or card.get("pickup_window")),
@@ -139,6 +148,33 @@ def commitments_from(records) -> dict:
                 "where": (card.get("origin") if phase == "Pickup"
                           else card.get("destination")) or "",
                 "when": str(window or ""),
+            })
+    return by_day
+
+
+def candidates_from(records) -> dict:
+    """Loads being worked but not yet committed, by the day they would run.
+
+    Shown so he can see what is in play on a day, and never counted as
+    capacity. Until COMMIT, the day is still sellable to somebody else.
+    """
+    by_day = {}
+    for record in _iter(records):
+        if commitment.is_committed(record):
+            continue
+        card = record.get("card_data") or {}
+        for phase, window in (
+                ("Pickup", record.get("pickup_window") or card.get("pickup_window")),
+                ("Delivery", record.get("delivery_window") or card.get("delivery_window"))):
+            when = _as_date(window)
+            if not when:
+                continue
+            by_day.setdefault(when, []).append({
+                "phase": phase,
+                "record_id": record.get("id"),
+                "load_number": record.get("load_number") or card.get("load_id") or "",
+                "where": (card.get("origin") if phase == "Pickup"
+                          else card.get("destination")) or "",
             })
     return by_day
 
@@ -205,6 +241,7 @@ def build(records=None, calendar=None, *, today=None, weeks=2) -> dict:
     start = week_start(today)
     days = int(weeks) * 7
     commitments = commitments_from(records)
+    candidates = candidates_from(records)
     appointments = appointments_from(calendar)
 
     board = []
@@ -223,6 +260,7 @@ def build(records=None, calendar=None, *, today=None, weeks=2) -> dict:
             "sub": SUBTITLES.get(state, ""),
             "planned": pattern_for(day),
             "loads": loads,
+            "candidates": candidates.get(day, []),
             "appointments": appointments.get(day, []),
             "is_today": day == today,
             # Shown to keep the week whole, never counted as sellable. A day

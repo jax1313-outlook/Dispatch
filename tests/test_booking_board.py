@@ -38,10 +38,20 @@ from dispatch import booking
 MONDAY = date(2026, 9, 7)     # a Monday, for a deterministic fortnight
 
 
-def _record(load="L1-TEST", pickup="", delivery=""):
-    return {"id": "SBX-1", "load_number": load,
-            "card_data": {"load_id": load, "origin": "A", "destination": "B",
-                          "pickup_window": pickup, "delivery_window": delivery}}
+def _record(load="L1-TEST", pickup="", delivery="", committed=True):
+    """A committed mission by default.
+
+    Only committed missions take capacity -- a candidate still being
+    negotiated must not claim a day. These tests are about what a booked day
+    looks like, so they commit; the gate itself is covered in
+    `test_commitment.py`.
+    """
+    record = {"id": "SBX-1", "load_number": load,
+              "card_data": {"load_id": load, "origin": "A", "destination": "B",
+                            "pickup_window": pickup, "delivery_window": delivery}}
+    if committed:
+        record["committed_at"] = "2026-09-01T10:00:00Z"
+    return record
 
 
 def _board(records=None, calendar=None, today=MONDAY, weeks=2):

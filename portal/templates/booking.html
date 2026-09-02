@@ -75,6 +75,18 @@
       </a>
     {% endfor %}
 
+    {# In play, not committed. Shown so he can see what is being worked on a
+       day, and never counted as capacity -- until COMMIT the day is still
+       sellable to somebody else. #}
+    {% for candidate in day.candidates %}
+      <a class="candidate" href="{{ url_for('joe_portal.mission_brief',
+                                            record_id=candidate.record_id) }}">
+        <span class="cand-phase">{{ candidate.phase }} &middot; candidate</span>
+        <span class="cand-where">{{ candidate.where }}</span>
+        <span class="cand-number">{{ candidate.load_number }}</span>
+      </a>
+    {% endfor %}
+
     {# Flagged, never blocking. A 09:00 dentist does not stop a Monday
        delivery, but it does sit across a 06:00 gate time in Savannah, and
        only he can weigh that. #}
