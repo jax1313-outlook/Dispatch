@@ -1,0 +1,100 @@
+{# Booking: the forward view of the truck.
+
+   A verb, not a noun -- the thing being done, not a record kept about it.
+   Two weeks, one state per day, and the headline is the number of unsold
+   Monday-to-Wednesday days, because those are the ones that expire worthless.
+
+   Thursday and Friday are not empty. They are unsold on purpose, and drawing
+   them as gaps would say he has a problem where he has a position. #}
+<!doctype html>
+<meta charset="utf-8">
+<title>Booking — Level 1 Transport</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='booking.css') }}">
+
+<header class="book-head">
+  <div>
+    <span class="company">LEVEL 1 TRANSPORT</span>
+    <h1>BOOKING</h1>
+  </div>
+  <nav class="book-actions">
+    <a class="btn" href="{{ url_for('pages.home') }}">Dispatch</a>
+  </nav>
+</header>
+
+{# The two numbers he actually asks. Depth first: "how far out am I covered"
+   is the question, and a count of days shown is not an answer to it. #}
+<section class="headline">
+  <div class="figure">
+    <span class="figure-value">{{ book.depth.line }}</span>
+    <span class="figure-note">{{ book.booked_count }} committed day{{ ''
+      if book.booked_count == 1 else 's' }} in the next {{ book.days }}</span>
+  </div>
+  <div class="figure {{ 'warn' if book.unsold_count else '' }}">
+    <span class="figure-value">{{ book.unsold_count }} unsold</span>
+    <span class="figure-note">of {{ book.sellable_count }} sellable days.
+      Mon&ndash;Wed only &mdash; these expire.</span>
+  </div>
+  <div class="figure">
+    <span class="figure-value">{{ book.held_count }} held</span>
+    <span class="figure-note">Thu&ndash;Fri, for expedited. Empty on purpose.</span>
+  </div>
+</section>
+
+{% for week in book.weeks %}
+<section class="week">
+  {% for day in week %}
+  <div class="day {{ day.state|lower }}{{ ' today' if day.is_today }}">
+    <div class="day-head">
+      <span class="day-name">{{ day.weekday }}</span>
+      <span class="day-num">{{ day.day_number }}</span>
+      <span class="day-month">{{ day.month }}</span>
+    </div>
+
+    <div class="day-state">
+      <span class="state-label">{{ day.label }}</span>
+      {% if day.sub %}<span class="state-sub">{{ day.sub }}</span>{% endif %}
+      {# Held for expedited and something got booked into it. Not a problem --
+         it is the position paying off -- but worth seeing. #}
+      {% if day.held_and_taken %}
+        <span class="state-sub">Expedited taken</span>
+      {% endif %}
+    </div>
+
+    {% for load in day.loads %}
+      <a class="load" href="{{ url_for('joe_portal.portal_mission',
+                                       record_id=load.record_id) }}">
+        <span class="load-phase">{{ load.phase }}</span>
+        <span class="load-where">{{ load.where }}</span>
+        <span class="load-number">{{ load.load_number }}</span>
+      </a>
+    {% endfor %}
+
+    {# Flagged, never blocking. A 09:00 dentist does not stop a Monday
+       delivery, but it does sit across a 06:00 gate time in Savannah, and
+       only he can weigh that. #}
+    {% for appointment in day.appointments %}
+      <div class="appointment">
+        <span class="appt-mark">&bull;</span>
+        <span class="appt-what">{{ appointment.subject }}</span>
+      </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+
+<footer class="book-foot">
+  <span class="week-model">
+    Mon&ndash;Wed sellable &middot; Thu&ndash;Fri held for expedited &middot;
+    Sat maintenance &middot; Sun closed
+  </span>
+  {# Said plainly, in his words. The board is still correct about freight when
+     the calendar is quiet -- it just cannot show personal commitments, and
+     pretending otherwise would be the one failure that matters here. #}
+  {% if book.calendar_status != 'LIVE' %}
+    <span class="calendar-note">
+      Appointments are not showing &mdash; open Outlook and reload to see them.
+      Everything above about freight is current.
+    </span>
+  {% endif %}
+</footer>

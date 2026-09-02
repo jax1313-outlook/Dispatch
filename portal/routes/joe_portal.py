@@ -145,6 +145,35 @@ def portal_home():
     )
 
 
+@joe_bp.route("/booking")
+def booking_board():
+    """The forward view of the truck: what is booked, held and still sellable.
+
+    Pattern plus commitments. Nothing about the week is stored -- see
+    `dispatch/booking.py` for why a stored day-state would be the second
+    calendar the scheduling doctrine forbids.
+    """
+    from dispatch import booking, scheduling
+
+    # The real Outlook, or nothing. Deliberately not `get_adapter()`: the
+    # demonstration adapter derives its entries from the mission records, and
+    # on a planning board that would draw invented appointments as real
+    # commitments. A board that is honestly empty is usable; one that is
+    # quietly wrong is not.
+    try:
+        calendar = scheduling.OutlookCalendarAdapter().upcoming(
+            booking.HORIZON_DAYS)
+    except Exception:  # noqa: BLE001 - a quiet calendar must not take the page down
+        calendar = {"status": "UNAVAILABLE", "entries": [], "blocker": ""}
+
+    return render_template(
+        "booking.html",
+        book=booking.build(sandbox.get_all(), calendar),
+        calendar_source=calendar.get("source", ""),
+        calendar_blocker=calendar.get("blocker", ""),
+    )
+
+
 @joe_bp.route("/brief/mission/<path:record_id>")
 def mission_brief(record_id: str):
     """The whole Mission Record on one sheet, before the call.

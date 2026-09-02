@@ -1,0 +1,159 @@
+/* Booking: the forward view of the truck.
+ *
+ * An operations screen, not a cab screen. It is read at a desk while deciding
+ * whether to chase freight, so density is right here in a way it is wrong on
+ * the cockpit -- he is comparing days, not glancing at 70mph.
+ *
+ * The colour rule that matters: HELD and MAINTENANCE are not warnings. Thursday
+ * unsold is the business model working. OPEN is the only state drawn to pull
+ * the eye, because an open Monday three days out is the thing he can still act
+ * on and it expires worthless.
+ */
+
+:root {
+    --ink: #1a1c1f;
+    --ink-dim: #5b6169;
+    --rule: #d6dade;
+    --panel: #fff;
+    --booked: #0b6cf0;      /* committed freight */
+    --open: #c2410c;        /* unsold and expiring. The only urgent colour. */
+    --open-bg: #fff4ed;
+    --held: #4b5563;        /* a position, not a gap */
+    --quiet: #9aa2ab;       /* maintenance, closed */
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0; padding: 22px;
+    background: #f2f4f6; color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 15px; line-height: 1.45;
+}
+
+.book-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    max-width: 1180px; margin: 0 auto 16px;
+}
+.company {
+    display: block; font-size: 0.7rem; font-weight: 800;
+    letter-spacing: 0.16em; color: var(--ink-dim);
+}
+.book-head h1 {
+    margin: 2px 0 0; font-size: 1.5rem; font-weight: 800;
+    letter-spacing: 0.08em;
+}
+.btn {
+    display: inline-flex; align-items: center; min-height: 38px; padding: 0 16px;
+    font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em;
+    color: var(--ink); text-decoration: none; background: #fff;
+    border: 1px solid var(--rule); border-radius: 5px;
+}
+.btn:hover { border-color: var(--booked); color: var(--booked); }
+
+/* ---- the two numbers he actually asks ---------------------------------- */
+.headline {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px; max-width: 1180px; margin: 0 auto 18px;
+}
+.figure {
+    padding: 12px 16px; background: var(--panel);
+    border: 1px solid var(--rule); border-radius: 6px;
+}
+.figure.warn { border-left: 4px solid var(--open); }
+.figure-value {
+    display: block; font-size: 1.15rem; font-weight: 800; letter-spacing: 0.01em;
+}
+.figure-note {
+    display: block; margin-top: 2px; font-size: 0.82rem; color: var(--ink-dim);
+}
+
+/* ---- the board ---------------------------------------------------------- */
+.week {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+    max-width: 1180px; margin: 0 auto 10px;
+}
+
+.day {
+    min-height: 132px; padding: 10px;
+    background: var(--panel); border: 1px solid var(--rule);
+    border-top: 3px solid var(--rule); border-radius: 6px;
+}
+.day.today { box-shadow: 0 0 0 2px var(--ink); }
+
+.day-head {
+    display: flex; align-items: baseline; gap: 6px;
+    padding-bottom: 6px; margin-bottom: 8px;
+    border-bottom: 1px solid #eef1f3;
+}
+.day-name {
+    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em;
+    color: var(--ink-dim);
+}
+.day-num { font-size: 1.15rem; font-weight: 800; }
+.day-month { font-size: 0.7rem; color: var(--ink-dim); }
+
+.state-label {
+    display: block; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.12em;
+}
+.state-sub {
+    display: block; font-size: 0.72rem; color: var(--ink-dim); line-height: 1.35;
+}
+
+/* Committed freight. */
+.day.booked { border-top-color: var(--booked); }
+.day.booked .state-label { color: var(--booked); }
+
+/* Unsold and expiring -- the only state drawn to pull the eye. */
+.day.open { border-top-color: var(--open); background: var(--open-bg); }
+.day.open .state-label { color: var(--open); }
+
+/* Held and maintenance are positions, not problems. Drawn calm on purpose:
+   a screen that flags Thursday as empty is telling him he has a problem where
+   he has a strategy. */
+.day.held { border-top-color: var(--held); }
+.day.held .state-label { color: var(--held); }
+.day.maintenance, .day.closed { background: #fafbfc; }
+.day.maintenance .state-label, .day.closed .state-label { color: var(--quiet); }
+.day.closed { border-top-color: #e6e9ec; }
+
+.load {
+    display: block; margin-top: 8px; padding: 6px 8px;
+    text-decoration: none; color: var(--ink);
+    background: #f4f8ff; border-left: 3px solid var(--booked); border-radius: 0 4px 4px 0;
+}
+.load:hover { background: #e8f1ff; }
+.load-phase {
+    display: block; font-size: 0.64rem; font-weight: 800;
+    letter-spacing: 0.1em; color: var(--booked);
+}
+.load-where {
+    display: block; font-size: 0.8rem; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.load-number {
+    display: block; font-size: 0.72rem; color: var(--ink-dim);
+    font-family: ui-monospace, Consolas, monospace;
+}
+
+/* Flagged, never blocking. Quiet by design -- it is information, not a claim
+   on the day. */
+.appointment {
+    display: flex; gap: 5px; margin-top: 6px;
+    font-size: 0.75rem; color: var(--ink-dim); line-height: 1.3;
+}
+.appt-mark { color: var(--quiet); }
+.appt-what { overflow: hidden; text-overflow: ellipsis; }
+
+.book-foot {
+    max-width: 1180px; margin: 14px auto 0; padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    font-size: 0.78rem; color: var(--ink-dim);
+}
+.calendar-note { display: block; margin-top: 4px; }
+
+/* A narrow screen gets the fortnight as a column rather than a squeeze. */
+@media (max-width: 900px) {
+    .week { grid-template-columns: repeat(2, 1fr); }
+    .day { min-height: 0; }
+}
