@@ -88,7 +88,11 @@ def notice_text(notice: dict) -> str:
     lines += ["", notice.get("follows_intro", ""), ""]
     for item in notice.get("follows") or []:
         lines.append("  - %s" % item)
-    lines += ["", "Level 1 Transport", "Jacksonville Regional Micro-Response Carrier"]
+    # The reply path, last. A notice that reports an arrival and gives the
+    # reader no way to answer it is a broadcast rather than a communication.
+    lines += ["", "Level 1 Transport",
+              "Jacksonville Regional Micro-Response Carrier",
+              NOTICE_BCC]
     return "\n".join(lines)
 
 

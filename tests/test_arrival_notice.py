@@ -118,6 +118,22 @@ class TestWhatItDoesWithTheNotice:
         assert "GPS" not in text
         assert "Mayo Clinic, San Pablo Rd" in text
 
+    def test_it_says_the_truck_arrived_safely(self):
+        """The operator's word. A customer wanted to know the truck is fine
+        before they wanted to know it is on the property."""
+        notice = cockpit.arrival_notice_for(RECORD, cockpit.MODE_DELIVERY)
+        assert notice["opening"] == "Truck arrived on site SAFELY."
+
+    def test_there_is_a_way_to_answer_it(self):
+        """A notice giving the reader no reply path is a broadcast."""
+        text = arrival.notice_text(NOTICE)
+        assert text.rstrip().endswith("Ops@l1truck.com")
+
+    def test_it_signs_off_as_the_company(self):
+        text = arrival.notice_text(NOTICE)
+        assert "Level 1 Transport" in text
+        assert "Jacksonville Regional Micro-Response Carrier" in text
+
 
 class TestItNeverClaimsWhatItDidNotDo:
     def test_no_recipient_means_nothing_went_and_it_says_so(self):

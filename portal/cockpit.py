@@ -664,7 +664,10 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
     return {
         "phase": phase,
         "title": f"{phase} ARRIVAL NOTICE",
-        "opening": "Truck arrived on site.",
+        # SAFELY, on the operator's instruction. The notice is the first thing
+        # a customer sees from Level 1 Transport on this load, and a truck
+        # arriving safely is the thing they actually wanted to know.
+        "opening": "Truck arrived on site SAFELY.",
         # The operator's capture list, in his order. Broker and the two points of
         # contact matter to the reader: a notice that proves a truck arrived is
         # only useful to somebody who can act on it, and the facility contact is
