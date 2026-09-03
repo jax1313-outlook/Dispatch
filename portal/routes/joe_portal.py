@@ -475,6 +475,11 @@ def portal_arrive(record_id: str):
                 "arrival_notice_error"):
         if outcome.get(key):
             stored[key] = outcome[key]
+    # A later success clears an earlier failure. A record carrying both a
+    # draft and a stale "nothing was sent" is a record that argues with
+    # itself, and the screen believed the older half.
+    if outcome.get("ok"):
+        stored.pop("arrival_notice_error", None)
     data[record_id] = stored
     sandbox._save(data)
 

@@ -316,3 +316,90 @@ class TestArriveUsesTheModeHeIsLookingAt:
         draft = draft[:draft.index("    def send(")]
         move = draft[draft.index(".Move("):]
         assert "except" in move[:200]
+
+
+class TestADraftedNoticeReadsAsSuccess:
+    """The defect the operator saw on the screen.
+
+    The notice had been drafted exactly as intended -- the vetting period
+    working -- and the drawer said "I couldn't send the arrival notice myself."
+    The display knew three states and there are four; a prepared notice waiting
+    in Drafts fell into the failure branch.
+
+    The record was also carrying both a draft timestamp and a stale error from
+    an earlier attempt when Outlook was closed, so it argued with itself and
+    the screen believed the older half.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolate(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path))
+        yield
+
+    def _delivery(self, **record):
+        record.setdefault("card_data", {})
+        return cockpit.arrival_notice_for(record, cockpit.MODE_DELIVERY)["delivery"]
+
+    def test_a_drafted_notice_is_not_reported_as_a_failure(self):
+        line = self._delivery(arrived_at="2026-09-02T20:05",
+                              arrival_notice_drafted_at="2026-09-02T20:05")
+        assert "couldn't" not in line["line"]
+        assert "Drafts" in line["line"]
+
+    def test_it_says_what_to_do_with_it(self):
+        line = self._delivery(arrived_at="x", arrival_notice_drafted_at="y")
+        assert "send it" in line["instead"]
+
+    def test_it_is_still_not_reported_as_sent(self):
+        """It is in Drafts. Nobody has sent anything."""
+        line = self._delivery(arrived_at="x", arrival_notice_drafted_at="y")
+        assert line["sent"] is False
+
+    def test_a_sent_notice_still_wins(self):
+        line = self._delivery(arrived_at="x", arrival_notice_drafted_at="y",
+                              arrival_notice_sent_at="z")
+        assert line["sent"] is True
+        assert line["line"] == "Arrival notice sent."
+
+    def test_arrived_with_nothing_produced_is_still_a_failure(self):
+        line = self._delivery(arrived_at="2026-09-02T20:05")
+        assert line["sent"] is False
+        assert "couldn't" in line["line"]
+        assert line["instead"]
+
+    @pytest.mark.parametrize("record", [
+        {"arrived_at": "x", "arrival_notice_drafted_at": "y"},
+        {"arrived_at": "x"},
+        {},
+    ])
+    def test_every_state_reads_in_the_drivers_words(self, record):
+        line = self._delivery(**record)
+        assert joe_voice.is_driver_safe(
+            line["line"] + " " + line.get("instead", "")) == []
+
+    def test_a_later_success_clears_an_earlier_failure(self, monkeypatch):
+        """A record carrying both a draft and a stale 'nothing was sent' is a
+        record that argues with itself."""
+        from portal.app import create_app
+        from portal.routes import joe_portal
+
+        entry = sandbox.create_entry(
+            source_type="dispatch", source_id="STALE-1", title="Stale probe",
+            card_data={"load_id": "STALE-1"}, summary="")
+        data = sandbox._load()
+        data[entry["id"]]["arrival_notice_error"] = "Outlook is not open"
+        sandbox._save(data)
+
+        monkeypatch.setattr(joe_portal, "_mail_connector", lambda: FakeMail())
+        monkeypatch.setattr(joe_portal, "_notice_recipient",
+                            lambda record: "a@b.example")
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as client:
+            client.post(f"/portal/mission/{entry['id']}/arrive",
+                        data={"view": "DELIVERY"})
+
+        record = sandbox.get(entry["id"])
+        assert record.get("arrival_notice_drafted_at")
+        assert "arrival_notice_error" not in record

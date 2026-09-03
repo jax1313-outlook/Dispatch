@@ -754,33 +754,58 @@ def load_arrangement_for(record: dict) -> dict:
 def _notice_delivery(record: dict) -> dict:
     """What the driver reads about this notice reaching the broker.
 
-    Three states, and they are genuinely different:
+    Four states, and they are genuinely different:
 
         sent        Outlook accepted it and the record says when.
+        drafted     Prepared and waiting in Drafts. During the vetting period
+                    this is success, not failure -- the first four notices are
+                    read before any go out on their own.
         not yet     He has not pressed ARRIVE. Nothing failed.
-        could not   He pressed it and it did not go.
+        could not   He pressed it and nothing was produced.
 
-    The middle one is why capability cannot stand in for occurrence. A LIVE
-    mail connector on a mission nobody has arrived at would otherwise read as
-    "sent", which is a lie the driver acts on.
+    The drafted state was missing, so a notice that had been prepared exactly
+    as intended read as "I couldn't send the arrival notice myself" -- telling
+    him something had gone wrong while it sat in his Drafts waiting for him.
     """
+    from dispatch import arrival
+
     if record.get("arrival_notice_sent_at"):
         return {"sent": True, "line": "Arrival notice sent.", "instead": ""}
+
+    if record.get("arrival_notice_drafted_at"):
+        left = arrival.vetting_remaining(_all_records())
+        tail = ("" if not left else
+                " %d more to check before it goes on its own." % left)
+        return {
+            "sent": False,
+            "drafted": True,
+            "line": "Arrival notice is in your Drafts.",
+            "instead": "Read it, then send it." + tail,
+        }
 
     if not record.get("arrived_at"):
         return {"sent": False, "line": "Arrival notice goes out when you press ARRIVE.",
                 "instead": ""}
 
-    # Arrived, and no record that the notice went. Treated as NOT sent, always.
-    # The absence of proof is the only safe reading here: the notice exists to
-    # be contemporaneous evidence, and a driver who believes the broker has it
-    # does not chase it.
+    # Arrived, and nothing was produced. Treated as not sent, always: the
+    # absence of proof is the only safe reading, because a driver who believes
+    # the broker has his arrival evidence does not chase it.
     return {
         "sent": False,
         "line": "I couldn't send the arrival notice myself.",
         "instead": ("Dispatch has your arrival on record with the time. "
                     "It goes out from the office."),
     }
+
+
+def _all_records():
+    """Every record, for counting notices. Never fatal to a screen."""
+    try:
+        from portal.models import sandbox
+
+        return sandbox.get_all()
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def load_diagram_for(record: dict) -> dict:
