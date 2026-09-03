@@ -233,3 +233,86 @@ class TestTheButtonIsActuallyWired:
 
     def test_an_unknown_mission_arrives_nowhere(self, client):
         assert client.post("/portal/mission/NOPE/arrive").status_code == 404
+
+
+class TestArriveUsesTheModeHeIsLookingAt:
+    """Two defects found by the operator on the first real ARRIVE.
+
+    The notice came out saying PICKUP while he was standing at the delivery.
+    The handler read `document.body.dataset.view` and the body carried no such
+    attribute, so the mode was always empty and fell back to the record's
+    phase.
+
+    And the draft landed in the personal mailbox rather than the one it sends
+    from, because Outlook saves a new item into the default store whatever
+    SendUsingAccount says -- so he was looking in Ops for something that was
+    never going to be there.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolate(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path))
+        yield
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    @pytest.fixture()
+    def mission(self):
+        entry = sandbox.create_entry(
+            source_type="dispatch", source_id="MODE-1", title="Mode probe",
+            card_data={"load_id": "MODE-1"}, summary="")
+        return entry["id"]
+
+    def test_the_page_tells_the_handler_which_mode_it_is_showing(self, client,
+                                                                 mission):
+        for view in ("PICKUP", "DELIVERY"):
+            html = client.get(f"/portal/mission/{mission}?view={view}").get_data(
+                as_text=True)
+            assert 'data-view="%s"' % view in html
+
+    def test_arriving_on_delivery_produces_a_delivery_notice(self, client,
+                                                             mission, monkeypatch):
+        from portal.routes import joe_portal
+
+        mail = FakeMail()
+        monkeypatch.setattr(joe_portal, "_mail_connector", lambda: mail)
+        monkeypatch.setattr(joe_portal, "_notice_recipient",
+                            lambda record: "someone@example.test")
+        client.post(f"/portal/mission/{mission}/arrive", data={"view": "DELIVERY"})
+        assert "DELIVERY" in mail.drafted[0]["subject"]
+
+    def test_arriving_on_pickup_produces_a_pickup_notice(self, client, mission,
+                                                         monkeypatch):
+        from portal.routes import joe_portal
+
+        mail = FakeMail()
+        monkeypatch.setattr(joe_portal, "_mail_connector", lambda: mail)
+        monkeypatch.setattr(joe_portal, "_notice_recipient",
+                            lambda record: "someone@example.test")
+        client.post(f"/portal/mission/{mission}/arrive", data={"view": "PICKUP"})
+        assert "PICKUP" in mail.drafted[0]["subject"]
+
+    def test_the_draft_goes_to_the_mailbox_it_sends_from(self):
+        """Checked in the code rather than against Outlook: a test must never
+        reach a real mailbox."""
+        source = open("dispatch/connectors/outlook_mail.py", encoding="utf-8").read()
+        draft = source[source.index("    def draft("):]
+        draft = draft[:draft.index("    def send(")]
+        assert "_drafts_of" in draft
+        assert ".Move(" in draft
+
+    def test_a_failed_move_keeps_the_draft_rather_than_losing_it(self):
+        """A notice in the wrong Drafts is recoverable. One that vanished
+        during a move is not."""
+        source = open("dispatch/connectors/outlook_mail.py", encoding="utf-8").read()
+        draft = source[source.index("    def draft("):]
+        draft = draft[:draft.index("    def send(")]
+        move = draft[draft.index(".Move("):]
+        assert "except" in move[:200]

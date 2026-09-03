@@ -185,6 +185,29 @@ class OutlookMailAdapter:
                                 % (path, type(exc).__name__)) from exc
         return item
 
+    @staticmethod
+    def _drafts_of(app, address: str):
+        """The Drafts folder of a named mailbox, or None.
+
+        Outlook saves a new item into the **default** store's Drafts whatever
+        SendUsingAccount says, so a notice meant to leave from Ops was landing
+        in the personal account and the operator was looking in the right place
+        for something that was never going to be there.
+        """
+        wanted = str(address or "").strip().lower()
+        if not wanted:
+            return None
+        try:
+            for store in app.GetNamespace("MAPI").Stores:
+                if str(store.DisplayName).strip().lower() != wanted:
+                    continue
+                for folder in store.GetRootFolder().Folders:
+                    if str(folder.Name).strip().lower() == "drafts":
+                        return folder
+        except Exception:  # noqa: BLE001 - a missing folder is not an error
+            return None
+        return None
+
     def draft(self, to, subject, body, *, bcc="", cc="",
               send_from=DEFAULT_FROM, attachments=None) -> dict:
         """Prepare it and leave it in Drafts. **Nothing is sent.**
@@ -202,10 +225,25 @@ class OutlookMailAdapter:
             item = self._compose(app, to, subject, body, bcc=bcc, cc=cc,
                                  send_from=send_from, attachments=attachments)
             item.Save()
+
+            # Into the mailbox it will leave from, so it is where he looks for
+            # it. Falls back to wherever Outlook put it rather than losing the
+            # draft: a notice in the wrong Drafts is recoverable, and one that
+            # vanished during a move is not.
+            where = str(send_from)
+            target = self._drafts_of(app, send_from)
+            if target is not None:
+                try:
+                    item = item.Move(target)
+                except Exception:  # noqa: BLE001
+                    where = "your default Drafts"
+            else:
+                where = "your default Drafts"
+
             return {"ok": True, "sent": False, "drafted": True,
                     "status": STATUS_LIVE, "blocker": "",
-                    "subject": str(subject or ""),
-                    "note": "In your Drafts. Read it, then send it yourself.",
+                    "subject": str(subject or ""), "folder": where,
+                    "note": "In %s. Read it, then send it yourself." % where,
                     "prepared_at": datetime.now(timezone.utc).isoformat()}
         except MailError as exc:
             return {"ok": False, "sent": False, "drafted": False,

@@ -25,7 +25,11 @@
 <script src="{{ url_for('static', filename='vendor/tailwind.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='joe_portal.css') }}">
 </head>
-<body class="cockpit">
+{# The mode the driver is actually looking at, so ARRIVE produces a notice for
+   the end he is standing at. Read by the ARRIVE handler; without it the mode
+   fell back to the record's phase and a delivery arrival wrote a PICKUP
+   notice. #}
+<body class="cockpit" data-view="{{ requested_view }}">
 
 {# ------------------------------------------------------------------ BANNER #}
 <header class="cockpit-banner">
