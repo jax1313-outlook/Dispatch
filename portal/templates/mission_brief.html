@@ -13,6 +13,16 @@
 
 <form class="brief" method="post"
       action="{{ url_for('joe_portal.mission_brief_save', record_id=record.id) }}">
+  {# Every Booking screen reaches every other one. A screen whose only way out
+     goes somewhere else is a screen he leaves with the browser's back button,
+     which is not navigation. #}
+  <nav class="ops-nav">
+    <a href="{{ url_for('joe_portal.candidate_queue') }}">CANDIDATES</a>
+    <a href="{{ url_for('joe_portal.booking_board') }}">BOOKING</a>
+    <a href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
+    <a href="{{ url_for('pages.home') }}">DISPATCH</a>
+  </nav>
+
 
   <header class="brief-head">
     <div class="brief-title">
@@ -23,8 +33,12 @@
     </div>
 
     <nav class="brief-actions">
+      {# Back to the list he came from. The cockpit link stayed, but it is the
+         driver's screen -- leaving a brief should return him to the load
+         listing, not to the truck. #}
+      <a class="btn" href="{{ url_for('joe_portal.candidate_queue') }}">&larr; CANDIDATES</a>
       <a class="btn" href="{{ url_for('joe_portal.portal_mission',
-                                      record_id=record.id) }}">&larr; Cockpit</a>
+                                      record_id=record.id) }}">COCKPIT</a>
       {% if editing %}
         <button class="btn primary" type="submit">SAVE</button>
         <a class="btn" href="{{ url_for('joe_portal.mission_brief',

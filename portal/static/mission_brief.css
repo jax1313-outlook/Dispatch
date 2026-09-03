@@ -243,3 +243,20 @@ dd textarea {
 .cand-actions form { margin: 0; }
 .btn.reject { color: var(--ink-dim); }
 .btn.reject:hover { border-color: #9b1c31; color: #9b1c31; }
+
+/* ---- the Booking strip -------------------------------------------------- */
+/* Every screen in Booking reaches every other one. A screen whose only way out
+   goes somewhere else is a screen he leaves with the browser's back button,
+   which is not navigation. */
+.ops-nav {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    margin: 0 0 18px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+}
+.ops-nav a {
+    padding: 7px 13px; text-decoration: none;
+    font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em;
+    color: var(--ink-dim); border-radius: 4px;
+}
+.ops-nav a:hover { color: var(--key); background: #f4f8ff; }
+.ops-nav a.on { color: #fff; background: var(--ink); }

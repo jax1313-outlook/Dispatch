@@ -192,3 +192,18 @@ body {
     display: block; font-size: 0.7rem;
     font-family: ui-monospace, Consolas, monospace;
 }
+
+/* The Booking strip, matching the other screens in the phase. */
+.ops-nav {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    max-width: 1180px; margin: 0 auto 14px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+}
+.ops-nav a {
+    padding: 7px 13px; text-decoration: none;
+    font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em;
+    color: var(--ink-dim); border-radius: 4px;
+}
+.ops-nav a:hover { color: var(--booked); background: #f4f8ff; }
+.ops-nav a.on { color: #fff; background: var(--ink); }
+@media print { .ops-nav { display: none; } }

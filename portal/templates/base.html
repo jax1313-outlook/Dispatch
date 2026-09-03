@@ -17,6 +17,13 @@
                one used from a cab, and the rest of this cockpit is desk work. #}
             <li><a href="{{ url_for('joe_portal.portal_home') }}" class="{% if request.blueprint == 'joe_portal' %}active{% endif %}">JOE Portal</a></li>
             <li><a href="{{ url_for('pages.home') }}" class="{% if request.endpoint == 'pages.home' %}active{% endif %}">Home</a></li>
+
+            {# Booking: everything before COMMIT. Candidates first because it
+               is the workbench -- what is waiting on a decision -- and Booking
+               is the answer to how far out he is covered. #}
+            <li><a href="{{ url_for('joe_portal.candidate_queue') }}" class="{% if request.endpoint == 'joe_portal.candidate_queue' %}active{% endif %}">Candidates</a></li>
+            <li><a href="{{ url_for('joe_portal.booking_board') }}" class="{% if request.endpoint == 'joe_portal.booking_board' %}active{% endif %}">Booking</a></li>
+            <li><a href="{{ url_for('joe_portal.mission_intake') }}" class="{% if request.endpoint == 'joe_portal.mission_intake' %}active{% endif %}">New Mission</a></li>
             <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Search</a></li>
             <li><a href="{{ url_for('pages.sam') }}" class="{% if request.endpoint == 'pages.sam' %}active{% endif %}">SAM</a></li>
             <li><a href="{{ url_for('pages.dispatch') }}" class="{% if request.endpoint == 'pages.dispatch' %}active{% endif %}">Dispatch</a></li>

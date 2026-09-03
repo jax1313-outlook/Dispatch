@@ -196,3 +196,57 @@ class TestThereIsOnlyOneTemplate:
         """They are how machines bring work in, never chosen on a screen."""
         offered = [key for key, _, _ in mt.MANUAL_SOURCES]
         assert "SWEEP" not in offered and "API" not in offered
+
+
+class TestNoScreenIsADeadEnd:
+    """The operator had to use the browser's back button to leave a brief.
+
+    Its only exit went to the Driver Cockpit -- the truck's screen -- when he
+    had arrived from the load listing. A screen whose one way out goes
+    somewhere else is a screen he leaves with the back button, and that is not
+    navigation.
+    """
+
+    def _screens(self, client):
+        _create(client)
+        record_id = list(sandbox.get_all())[0]
+        return {
+            "candidates": "/candidates",
+            "booking": "/booking",
+            "intake": "/intake",
+            "brief": "/brief/mission/%s" % record_id,
+        }
+
+    def test_every_booking_screen_reaches_every_other(self, client):
+        for name, url in self._screens(client).items():
+            html = client.get(url).get_data(as_text=True)
+            assert 'class="ops-nav"' in html, name
+            for target in ("/candidates", "/booking", "/intake"):
+                assert target in html, "%s cannot reach %s" % (name, target)
+
+    def test_the_brief_returns_to_the_listing_he_came_from(self, client):
+        screens = self._screens(client)
+        html = client.get(screens["brief"]).get_data(as_text=True)
+        actions = html[html.index('class="brief-actions"'):]
+        actions = actions[:actions.index("</nav>")]
+        assert "CANDIDATES" in actions
+        assert actions.index("CANDIDATES") < actions.index("COCKPIT"), (
+            "leaving a brief should return him to the load listing, not the truck")
+
+    def test_the_cockpit_is_still_reachable_from_the_brief(self, client):
+        """Still there, just not the way out."""
+        screens = self._screens(client)
+        assert "COCKPIT" in client.get(screens["brief"]).get_data(as_text=True)
+
+    def test_the_sidebar_carries_the_booking_screens(self, client):
+        """Reachable from the rest of the portal, not only by typing a URL."""
+        source = open("portal/templates/base.html", encoding="utf-8").read()
+        for endpoint in ("joe_portal.candidate_queue",
+                         "joe_portal.booking_board",
+                         "joe_portal.mission_intake"):
+            assert endpoint in source, endpoint
+
+    def test_the_strip_does_not_print(self, client):
+        """The brief is carried to a phone call. Navigation on paper is noise."""
+        css = open("portal/static/booking.css", encoding="utf-8").read()
+        assert "@media print { .ops-nav { display: none; } }" in css

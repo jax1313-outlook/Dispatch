@@ -13,6 +13,16 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='mission_brief.css') }}">
 
 <div class="brief">
+  {# Every Booking screen reaches every other one. A screen whose only way out
+     goes somewhere else is a screen he leaves with the browser's back button,
+     which is not navigation. #}
+  <nav class="ops-nav">
+    <a class="on" href="{{ url_for('joe_portal.candidate_queue') }}">CANDIDATES</a>
+    <a href="{{ url_for('joe_portal.booking_board') }}">BOOKING</a>
+    <a href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
+    <a href="{{ url_for('pages.home') }}">DISPATCH</a>
+  </nav>
+
   <header class="brief-head">
     <div class="brief-title">
       <span class="company">LEVEL 1 TRANSPORT</span>
