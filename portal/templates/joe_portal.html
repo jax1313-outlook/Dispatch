@@ -357,9 +357,12 @@
       <div class="notice">
         <div class="notice-title">{{ d.notice.title }}</div>
         <p class="notice-open">{{ d.notice.opening }}</p>
+        {# Only fields with values. The drawer shows the notice as the broker
+           will receive it, so a blank here would be a blank on his copy. The
+           gaps belong on the brief, before the truck is on the dock. #}
         <dl class="detail-list">
           {% for f in d.notice.fields %}
-            <dt>{{ f.key }}</dt><dd>{{ f.value or '—' }}</dd>
+            {% if f.value %}<dt>{{ f.key }}</dt><dd>{{ f.value }}</dd>{% endif %}
           {% endfor %}
         </dl>
         <p class="notice-follows">{{ d.notice.follows_intro }}</p>

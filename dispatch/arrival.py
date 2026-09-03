@@ -77,27 +77,28 @@ def notice_text(notice: dict) -> str:
     per-broker variation -- which is what makes four readings enough to trust
     it.
 
-    Every field appears whether or not it carries a value, and an empty one is
-    left empty. Those are two different rules and both matter: the field is
-    shown because a gap nobody can see is a gap nobody closes, and it is left
-    empty because a notice that invents a facility name is worse than one
-    admitting it does not have it. This goes out under Level 1 Transport's
-    name.
+    **Only fields with values.** This is the one document in the system that a
+    customer reads, and the rule that governs it is not the rule that governs
+    the brief.
+
+    On the brief every field appears, empty ones included, because a gap
+    nobody can see is a gap nobody closes -- and the brief is his, read before
+    a call, to work out what still needs asking. The arrival notice is theirs.
+    A blank line on a document going to a broker under Level 1 Transport's
+    name reads as sloppiness rather than honesty, and it tells him nothing he
+    can act on: by the time this sends, the truck is already on the dock.
+
+    Nothing is invented to fill a gap. A missing field is simply absent, and
+    the place to have caught it was the brief.
     """
     lines = [notice.get("title", "ARRIVAL NOTICE"), "",
              notice.get("opening", "Truck arrived on site."), ""]
-    # Every field, whether or not it has a value. An empty field is not a
-    # negative -- it means no entry, and it says so where it can be seen. A
-    # field that disappears when unfilled hides the gap from the one person
-    # who could still close it, and quality control cannot be built on fields
-    # that vanish.
-    #
-    # This is not the same as inventing one. Nothing is filled in for the sake
-    # of looking complete: the label appears and the space after it stays
-    # empty.
+    # Only what is known. The gaps belong on the brief, where he can still do
+    # something about them; on a customer's copy they are just blank lines.
     for field in notice.get("fields") or []:
         value = str(field.get("value") or "").strip()
-        lines.append("%s: %s" % (field.get("key"), value))
+        if value:
+            lines.append("%s: %s" % (field.get("key"), value))
     lines += ["", notice.get("follows_intro", ""), ""]
     for item in notice.get("follows") or []:
         lines.append("  - %s" % item)

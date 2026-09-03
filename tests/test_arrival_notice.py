@@ -112,20 +112,27 @@ class TestWhatItDoesWithTheNotice:
                         recipient="dispatch@xpo.example")
         assert "ROC-2026-884471" in mail.drafted[0]["subject"]
 
-    def test_every_field_appears_even_when_empty(self):
-        """An empty field is not a negative -- it means no entry, and it says
-        so where it can be seen. A field that disappears when unfilled hides
-        the gap from the one person who could still close it."""
+    def test_only_fields_with_values_appear(self):
+        """The one document a customer reads, and a different rule from the
+        brief. On the brief an empty field is shown so the gap can be closed;
+        here it is a blank line under Level 1 Transport's name on a document
+        that arrives when the truck is already on the dock."""
         text = arrival.notice_text(NOTICE)
-        assert "GPS:" in text
+        assert "GPS" not in text
         assert "Mayo Clinic, San Pablo Rd" in text
 
-    def test_an_empty_field_is_left_empty_not_filled_in(self):
-        """Showing the label is not the same as inventing a value. This goes
-        out under Level 1 Transport's name."""
+    def test_nothing_is_invented_to_fill_a_gap(self):
+        """Absent, never guessed. The place to have caught it was the brief."""
         text = arrival.notice_text(NOTICE)
-        gps = [l for l in text.splitlines() if l.startswith("GPS:")][0]
-        assert gps.strip() == "GPS:"
+        assert "—" not in text and "N/A" not in text
+        assert "unknown" not in text.lower()
+
+    def test_the_brief_still_shows_the_gaps(self):
+        """The two rules coexist because the readers are different."""
+        from portal import brief
+
+        card = brief.card_for({"card_data": {}})
+        assert card["empty_count"] > 0
 
     def test_it_says_the_truck_arrived_safely(self):
         """The operator's word. A customer wanted to know the truck is fine
