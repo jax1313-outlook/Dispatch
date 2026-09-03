@@ -244,7 +244,13 @@ class OutlookCalendarAdapter(CalendarPort):
             appointment.Body = _appointment_body(mission)
             starts = _parse_when(mission.get("pickup_window"))
             if starts:
-                appointment.Start = starts
+                # As a formatted string, never a datetime object. A naive
+                # datetime is handed to Outlook as UTC and comes back shifted
+                # by the local offset: a 06:00 gate time in Savannah was
+                # landing in the calendar at 10:00, four hours after the truck
+                # was supposed to be there. A string is interpreted in local
+                # time, which is the time the driver was told.
+                appointment.Start = starts.strftime("%m/%d/%Y %I:%M %p")
                 appointment.Duration = 60
             else:
                 appointment.AllDayEvent = True

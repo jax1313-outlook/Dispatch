@@ -172,3 +172,46 @@ class TestStatusIsProbedNotRemembered:
     def test_the_adapter_chosen_is_the_real_one_when_it_is_live(self, monkeypatch):
         monkeypatch.setattr(scheduling, "_outlook_is_running", lambda: False)
         assert scheduling.get_adapter().name == "demonstration"
+
+
+class TestAppointmentsLandAtTheTimeHeWasTold:
+    """The defect: a 06:00 gate time in Savannah landed in the calendar at
+    10:00, four hours after the truck was supposed to be there.
+
+    A naive datetime is handed to Outlook as UTC and comes back shifted by the
+    local offset. Written as a formatted string it is read as local time, which
+    is the time on the record and the time the driver was told.
+
+    Checked in the code, because a test that reaches a real calendar is broken
+    whatever it asserts -- and this one would book an appointment to prove it.
+    """
+
+    def test_the_start_is_written_as_a_local_time_string(self):
+        source = open("dispatch/scheduling.py", encoding="utf-8").read()
+        hold = source[source.index("def hold_appointment"):]
+        hold = hold[:hold.index("def _appointment_body")]
+        assert "appointment.Start = starts.strftime(" in hold, (
+            "a naive datetime is treated as UTC and shifts the appointment")
+
+    def test_the_parser_keeps_the_hour_the_record_states(self):
+        from dispatch import scheduling
+
+        parsed = scheduling._parse_when("2026-09-02 06:00 (GATE 6 arrival time)")
+        assert parsed.hour == 6 and parsed.minute == 0
+
+    @pytest.mark.parametrize("window,hour", [
+        ("2026-09-02 06:00", 6),
+        ("2026-09-02 06:00 (GATE 6 arrival time)", 6),
+        ("2026-09-02 14:30 - 16:00", 14),
+    ])
+    def test_the_shapes_a_record_actually_carries(self, window, hour):
+        from dispatch import scheduling
+
+        assert scheduling._parse_when(window).hour == hour
+
+    def test_an_unreadable_window_becomes_an_all_day_block(self):
+        """An appointment at a guessed hour is worse than a day marked spoken
+        for."""
+        from dispatch import scheduling
+
+        assert scheduling._parse_when("sometime Tuesday") is None
