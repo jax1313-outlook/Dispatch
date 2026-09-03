@@ -12,6 +12,10 @@ from pathlib import Path
 
 from portal.models import get_data_dir
 
+# A field update is not among these. ACTION_TYPES are documents Publisher
+# produces and a human approves; changing a phone number on a record is neither.
+# See apply_mission_update below, which makes the change directly and leaves a
+# trail rather than raising a card nobody needs to approve.
 ACTION_TYPES = [
     "Broker Packet Required",
     "Direct Shipper Packet Required",
@@ -113,3 +117,94 @@ def update_action_status(action_id: str, new_status: str) -> dict:
             _save(queue)
             return action
     raise KeyError(f"Publisher action not found: {action_id}")
+
+
+# ---- Mission Record updates ------------------------------------------------
+#
+# JOE hears the driver and hands it over. Publisher makes the change, because
+# Publisher is the production clerk and Dispatch owns the record:
+#
+#     Mike -> JOE -> Publisher -> Dispatch -> Mission Record
+#
+# Giving JOE a write path would quietly make him the owner of mission data,
+# which is the one thing the authority model does not allow. So the write lives
+# here, and `dispatch/joe_update.py` has no way to reach a store at all.
+
+#: Fields Publisher will write from a spoken request. Everything the Mission
+#: Template can capture, plus load control, and nothing else -- a request
+#: naming `committed_at` or `mission_number` is refused rather than obeyed.
+def _writable_keys() -> set:
+    from dispatch import mission_template as mt
+
+    keys = {f.key for f in mt.TEMPLATE}
+    keys |= {"customer_email", "control_email", "amount", "cod",
+             "payment_type", "rate_basis", "pod_required"}
+    return keys
+
+
+#: Never writable, whoever asks. Identity and the commitment gate are not
+#: things a sentence in a cab may move.
+PROTECTED_KEYS = ("id", "load_number", "mission_number", "committed_at",
+                  "accepted_at", "created_at", "events", "card_data",
+                  "intake_source", "intake_taken_by", "rejected_at")
+
+
+def apply_mission_update(sandbox_id: str, field: str, value: str, *,
+                         requested_by: str, sandbox_module,
+                         reason: str = "") -> dict:
+    """Make the change JOE was asked for, and leave a trail of who asked.
+
+    Additive and single-field. It records what was there before, because a
+    number corrected on a phone call is sometimes corrected wrongly, and the
+    previous value is the cheapest way back.
+    """
+    field = str(field or "").strip()
+    value = str(value or "").strip()
+
+    if field in PROTECTED_KEYS:
+        return {"ok": False, "applied": False, "field": field,
+                "note": "That one is not mine to change."}
+    if field not in _writable_keys():
+        return {"ok": False, "applied": False, "field": field,
+                "note": "I do not have a field by that name."}
+    if not str(requested_by or "").strip():
+        return {"ok": False, "applied": False, "field": field,
+                "note": "A change arrives on somebody's word. I need whose."}
+
+    record = sandbox_module.get(sandbox_id)
+    if not record:
+        return {"ok": False, "applied": False, "field": field,
+                "note": "That mission is not on this machine."}
+
+    data = sandbox_module._load()
+    stored = data.get(sandbox_id) or {}
+
+    # Load control lives in its own block on the record, so a change to it goes
+    # where the stop cards read from rather than into a flat field nobody looks
+    # at.
+    if field.startswith("control_"):
+        control = dict(stored.get("load_control") or {})
+        previous = control.get(field, "")
+        control[field] = value
+        stored["load_control"] = control
+    else:
+        previous = stored.get(field, "")
+        stored[field] = value
+
+    now = _utc_now()
+    stored["updated_at"] = now
+    stored.setdefault("events", []).append({
+        "action": "field_updated",
+        "field": field,
+        "from": previous,
+        "to": value,
+        "requested_by": requested_by,
+        "via": "JOE",
+        "reason": reason,
+        "timestamp": now,
+    })
+    data[sandbox_id] = stored
+    sandbox_module._save(data)
+
+    return {"ok": True, "applied": True, "field": field, "value": value,
+            "previous": previous, "at": now}

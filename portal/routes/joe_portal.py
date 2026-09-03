@@ -145,6 +145,54 @@ def portal_home():
     )
 
 
+@joe_bp.route("/joe/update/<path:record_id>", methods=["POST"])
+def joe_update(record_id: str):
+    """Mike tells JOE. JOE tells Publisher. Publisher changes the record.
+
+        Mike -> JOE -> Publisher -> Dispatch -> Mission Record
+
+    JOE never writes. This route is the handover: it asks JOE what he heard,
+    hands that to Publisher, and says back what happened. Giving JOE a write
+    path would quietly make him the owner of mission data.
+    """
+    from dispatch import joe_update as joe
+    from portal import brief as brief_view
+    from portal.models import publisher
+
+    spoken = str(request.form.get("said") or "").strip()
+    said_by = str(request.form.get("by") or "Mike").strip()
+
+    heard = joe.understand(spoken)
+    if not heard["understood"]:
+        return jsonify({"ok": False, "applied": False,
+                        "note": heard["note"], "heard": spoken}), 400
+
+    outcome = publisher.apply_mission_update(
+        record_id, heard["field"], heard["value"],
+        requested_by=said_by, sandbox_module=sandbox,
+        reason="Told to JOE")
+
+    if not outcome.get("ok"):
+        return jsonify({"ok": False, "applied": False,
+                        "note": outcome.get("note", ""),
+                        "heard": spoken}), 400
+
+    record = sandbox.get(record_id) or {}
+    record["numbers"] = mission_svc.display_numbers(record)
+    gaps = brief_view.card_for(record)["empty_count"]
+
+    return jsonify({
+        "ok": True,
+        "applied": True,
+        "field": heard["field"],
+        "label": heard["label"],
+        "value": heard["value"],
+        "previous": outcome.get("previous", ""),
+        "gaps": gaps,
+        "note": joe.confirmation(heard["label"], gaps),
+    })
+
+
 @joe_bp.route("/intake")
 def mission_intake():
     """Open a mission by hand, on the one Mission Template.
