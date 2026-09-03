@@ -1,0 +1,81 @@
+{# Open a mission by hand, on the one Mission Template.
+
+   A broker calling, a courier run phoned in, a shipper emailing direct, a text
+   message, an existing customer -- all of them arrive here and all of them
+   produce the same Mission Record. There is no courier form and no phone-load
+   form: the source is a label on the record, never a different kind of
+   mission.
+
+   One template. Multiple intake methods. One Mission Record. One workflow. #}
+<!doctype html>
+<meta charset="utf-8">
+<title>New Mission — Level 1 Transport</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='mission_brief.css') }}">
+
+<form class="brief" method="post" action="{{ url_for('joe_portal.mission_intake_create') }}">
+
+  <header class="brief-head">
+    <div class="brief-title">
+      <span class="company">LEVEL 1 TRANSPORT</span>
+      <h1>NEW MISSION</h1>
+      <span class="brief-load">Same record, whatever brought it in</span>
+    </div>
+    <nav class="brief-actions">
+      <a class="btn" href="{{ url_for('joe_portal.candidate_queue') }}">&larr; Candidates</a>
+      <button class="btn primary" type="submit">CREATE CANDIDATE</button>
+    </nav>
+  </header>
+
+  {% if problems %}
+    <div class="brief-gaps">
+      <strong>Not created.</strong> Everything you typed is still here.
+      <ul>{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>
+    </div>
+  {% endif %}
+
+  {# How it came in. A label on the record, because "who told us about this
+     load" is a real question later and guessing at it is not possible. #}
+  <section class="card-section">
+    <h2>HOW IT CAME IN</h2>
+    <div class="sources">
+      {% for key, label, hint in sources %}
+        <label class="source {{ 'on' if key == chosen }}">
+          <input type="radio" name="source" value="{{ key }}"
+                 {{ 'checked' if key == chosen }}>
+          <span class="source-label">{{ label }}</span>
+          <span class="source-hint">{{ hint }}</span>
+        </label>
+      {% endfor %}
+    </div>
+    <dl>
+      <dt>Taken by *</dt>
+      <dd><input type="text" name="taken_by" value="{{ taken_by }}"
+                 autocomplete="off" placeholder="A mission arrives on somebody's word"></dd>
+    </dl>
+  </section>
+
+  {% for name, fields in sections %}
+  <section class="card-section">
+    <h2>{{ name }}</h2>
+    <dl>
+      {% for f in fields %}
+        <dt>{{ f.label }}{% if f.required %} *{% endif %}</dt>
+        <dd>
+          {% if f.key in ('cargo_lines', 'notes', 'additional_stops') %}
+            <textarea name="{{ f.key }}" rows="3"
+                      placeholder="{{ f.hint }}">{{ values[f.key] }}</textarea>
+          {% else %}
+            <input type="text" name="{{ f.key }}" value="{{ values[f.key] }}"
+                   autocomplete="off" placeholder="{{ f.hint }}">
+          {% endif %}
+        </dd>
+      {% endfor %}
+    </dl>
+  </section>
+  {% endfor %}
+
+  <footer class="brief-foot">
+    * required. Leave anything you do not know blank &mdash; do not guess.
+    Dispatch assigns the Load Number if nobody else has.
+  </footer>
+</form>

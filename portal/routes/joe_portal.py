@@ -145,6 +145,128 @@ def portal_home():
     )
 
 
+@joe_bp.route("/intake")
+def mission_intake():
+    """Open a mission by hand, on the one Mission Template.
+
+    A broker calling, a courier run phoned in, a shipper emailing direct, a
+    text message, an existing customer -- all of them arrive here and all of
+    them produce the same Mission Record. There is no courier form and no
+    phone-load form: the source is a label on the record, never a different
+    kind of mission.
+    """
+    from dispatch import mission_template as mt
+
+    return render_template(
+        "mission_intake.html",
+        sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
+        sources=mt.MANUAL_SOURCES,
+        chosen=request.args.get("source") or mt.SOURCE_PHONE,
+        problems=[],
+        values=mt.blank_template(),
+        taken_by="",
+    )
+
+
+@joe_bp.route("/intake", methods=["POST"])
+def mission_intake_create():
+    """Create the Candidate. Same record SWEEP would have produced."""
+    from dispatch import mission_template as mt
+
+    values = {key: str(request.form.get(key) or "").strip()
+              for key in mt.TEMPLATE_KEYS}
+    source = str(request.form.get("source") or "").strip().upper()
+    taken_by = str(request.form.get("taken_by") or "").strip()
+
+    problems = mt.validate(values)
+    if not taken_by:
+        problems.append("Who took it is required")
+    if source not in mt.INTAKE_SOURCES:
+        problems.append("Choose how it came in")
+
+    if problems:
+        # Everything he typed comes back with it. Losing a call's worth of
+        # notes to a validation message is how a screen stops being used.
+        return render_template(
+            "mission_intake.html",
+            sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
+            sources=mt.MANUAL_SOURCES, chosen=source or mt.SOURCE_PHONE,
+            problems=problems, values=values, taken_by=taken_by), 400
+
+    record = mt.create_mission(values, source=source, taken_by=taken_by,
+                               sandbox_module=sandbox, mission_module=mission_svc)
+    return redirect(url_for("joe_portal.mission_brief", record_id=record["id"]))
+
+
+@joe_bp.route("/candidates")
+def candidate_queue():
+    """The workbench: everything in Booking, waiting on a decision.
+
+    Candidates only. A committed mission has left Booking and belongs to
+    Dispatch, and a queue that keeps showing it is a queue he stops trusting
+    to mean "these need me".
+    """
+    from dispatch import commitment
+
+    rows = []
+    for record in sandbox.get_all().values():
+        if not isinstance(record, dict) or commitment.is_committed(record):
+            continue
+        if record.get("rejected_at"):
+            continue
+        merged = dict(record)
+        merged["numbers"] = mission_svc.display_numbers(merged)
+        card = record.get("card_data") or {}
+        rows.append({
+            "id": record.get("id"),
+            "load_number": record.get("load_number") or card.get("load_id") or "",
+            "customer": record.get("customer") or card.get("broker") or "",
+            "origin": card.get("origin") or record.get("pickup_location") or "",
+            "destination": card.get("destination") or record.get("delivery_location") or "",
+            "when": record.get("pickup_window") or card.get("pickup_window") or "",
+            "rate": record.get("rate") or card.get("rate") or "",
+            "source": record.get("intake_source") or card.get("source") or "",
+            "gaps": brief_gaps(merged),
+        })
+
+    rows.sort(key=lambda r: (r["when"] or "~", r["customer"]))
+    return render_template("candidates.html", rows=rows)
+
+
+def brief_gaps(record: dict) -> int:
+    """How many fields have no entry. Counted, never scored."""
+    from portal import brief as brief_view
+
+    try:
+        return brief_view.card_for(record)["empty_count"]
+    except Exception:  # noqa: BLE001 - a count must never take the page down
+        return 0
+
+
+@joe_bp.route("/brief/mission/<path:record_id>/reject", methods=["POST"])
+def mission_reject(record_id: str):
+    """Leave it. Recorded rather than deleted.
+
+    A candidate turned down is a fact worth keeping: the same broker rings back
+    with the same lane, and what he offered last time is the useful thing to
+    have. Nothing is removed.
+    """
+    from datetime import datetime, timezone
+
+    if not sandbox.get(record_id):
+        return redirect(url_for("joe_portal.candidate_queue"))
+
+    now = datetime.now(timezone.utc).isoformat()
+    data = sandbox._load()
+    stored = data.get(record_id) or {}
+    stored["rejected_at"] = now
+    stored["rejected_reason"] = str(request.form.get("reason") or "").strip()
+    stored.setdefault("events", []).append({"action": "rejected", "timestamp": now})
+    data[record_id] = stored
+    sandbox._save(data)
+    return redirect(url_for("joe_portal.candidate_queue"))
+
+
 @joe_bp.route("/booking")
 def booking_board():
     """The forward view of the truck: what is booked, held and still sellable.

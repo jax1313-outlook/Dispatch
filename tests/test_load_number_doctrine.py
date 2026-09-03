@@ -181,9 +181,18 @@ class TestOneTemplateForEveryKindOfWork:
         for field in mt.TEMPLATE:
             assert field.section in mt.SECTIONS, field.key
 
-    def test_all_seven_sources_are_supported(self):
+    def test_every_way_work_arrives_is_supported(self):
+        """TEXT joined the list when the operator named a text message among
+        the ways a load turns up. A source is a label on the record, so adding
+        one costs a constant and changes no workflow."""
         assert set(mt.INTAKE_SOURCES) == {
-            "SWEEP", "EMAIL", "JOE", "CUSTOMER", "PHONE", "COURIER", "API"}
+            "SWEEP", "EMAIL", "JOE", "CUSTOMER", "PHONE", "COURIER", "TEXT",
+            "API"}
+
+    def test_the_ones_a_person_picks_exclude_the_machine_paths(self):
+        offered = [key for key, _, _ in mt.MANUAL_SOURCES]
+        assert "SWEEP" not in offered and "API" not in offered
+        assert set(offered) <= set(mt.INTAKE_SOURCES)
 
 
 class TestMultiStopWorkNeedsNoSecondTemplate:

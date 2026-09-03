@@ -63,9 +63,21 @@ SOURCE_JOE = "JOE"
 SOURCE_CUSTOMER = "CUSTOMER"
 SOURCE_PHONE = "PHONE"
 SOURCE_COURIER = "COURIER"
+SOURCE_TEXT = "TEXT"
 SOURCE_API = "API"
 INTAKE_SOURCES = (SOURCE_SWEEP, SOURCE_EMAIL, SOURCE_JOE, SOURCE_CUSTOMER,
-                  SOURCE_PHONE, SOURCE_COURIER, SOURCE_API)
+                  SOURCE_PHONE, SOURCE_COURIER, SOURCE_TEXT, SOURCE_API)
+
+#: The sources a person picks from when opening a mission by hand. SWEEP and
+#: API are how machines bring work in and are never chosen on a screen.
+MANUAL_SOURCES = (
+    (SOURCE_PHONE, "Phone call", "A broker or customer rang"),
+    (SOURCE_CUSTOMER, "Customer direct", "An existing customer, straight to us"),
+    (SOURCE_COURIER, "Courier / medical", "A courier or medical route"),
+    (SOURCE_EMAIL, "Email", "It came in on a completed template or by email"),
+    (SOURCE_TEXT, "Text message", "It arrived as a text"),
+    (SOURCE_JOE, "JOE took it down", "Read to JOE and written down"),
+)
 
 #: Kept so older callers and stored records keep resolving. VOICE and MANUAL
 #: were the earlier names for what is now JOE and CUSTOMER.

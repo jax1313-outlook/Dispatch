@@ -181,3 +181,65 @@ dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
     color: var(--gap-ink); background: var(--gap); border-radius: 4px;
 }
 @media print { .gate .btn { display: none; } }
+
+/* ---- intake: how it came in -------------------------------------------- */
+/* A label on the record, never a different kind of mission. Picking "courier"
+   changes what the record says about its origin and nothing about the form
+   below it -- there is no courier template. */
+.sources {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 8px; margin-bottom: 14px;
+}
+.source {
+    display: block; padding: 10px 12px; cursor: pointer;
+    border: 1px solid var(--rule); border-radius: 5px;
+}
+.source:hover { border-color: var(--key); }
+.source.on { border-color: var(--key); background: #f4f8ff; }
+.source input { margin-right: 6px; }
+.source-label { font-size: 0.9rem; font-weight: 700; }
+.source-hint {
+    display: block; margin-top: 2px; font-size: 0.78rem; color: var(--ink-dim);
+}
+dd textarea {
+    width: 100%; padding: 4px 6px; font: inherit; color: var(--ink);
+    background: #fff; border: 1px solid var(--rule); border-radius: 3px;
+    resize: vertical;
+}
+
+/* ---- the candidate queue ------------------------------------------------ */
+/* The workbench. Everything in Booking waiting on a decision, whatever
+   brought it in. */
+.candidate-row {
+    padding: 14px 16px; margin-bottom: 12px;
+    border: 1px solid var(--rule); border-left: 4px solid #a16207;
+    border-radius: 0 6px 6px 0;
+}
+.cand-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.cand-load {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 1rem; font-weight: 800;
+}
+.cand-customer { font-size: 0.95rem; font-weight: 600; }
+.cand-src {
+    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em;
+    padding: 2px 7px; color: var(--ink-dim);
+    border: 1px solid var(--rule); border-radius: 10px;
+}
+.cand-rate { margin-left: auto; font-size: 0.95rem; font-weight: 800; }
+.cand-lane { font-size: 0.9rem; }
+.cand-when { font-size: 0.82rem; color: var(--ink-dim); }
+.cand-gaps {
+    display: inline-block; margin-top: 8px; padding: 3px 9px;
+    font-size: 0.78rem; color: var(--gap-ink);
+    background: var(--gap); border-radius: 3px;
+}
+.cand-actions {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
+}
+.cand-actions form { margin: 0; }
+.btn.reject { color: var(--ink-dim); }
+.btn.reject:hover { border-color: #9b1c31; color: #9b1c31; }

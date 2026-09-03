@@ -1,0 +1,82 @@
+{# The candidate queue: everything in Booking, waiting on a decision.
+
+   This is the workbench. Sweep found some of these, a broker rang about others,
+   one arrived as a text -- and they are all the same object here, because the
+   source is a label on the record and never a different kind of mission.
+
+   Candidates only. A committed mission has left Booking and belongs to
+   Dispatch; a queue that keeps showing it is a queue he stops trusting to mean
+   "these need me". #}
+<!doctype html>
+<meta charset="utf-8">
+<title>Candidates — Level 1 Transport</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='mission_brief.css') }}">
+
+<div class="brief">
+  <header class="brief-head">
+    <div class="brief-title">
+      <span class="company">LEVEL 1 TRANSPORT</span>
+      <h1>CANDIDATES</h1>
+      <span class="brief-load">{{ rows|length }} waiting on a decision</span>
+    </div>
+    <nav class="brief-actions">
+      <a class="btn" href="{{ url_for('joe_portal.booking_board') }}">Booking</a>
+      <a class="btn primary" href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
+    </nav>
+  </header>
+
+  {% if not rows %}
+    <p class="brief-gaps">Nothing waiting. Sweep something, or open one by hand.</p>
+  {% endif %}
+
+  {% for row in rows %}
+  <section class="card-section candidate-row">
+    <div class="cand-head">
+      <span class="cand-load">{{ row.load_number or 'Unnumbered' }}</span>
+      <span class="cand-customer">{{ row.customer or 'Customer not recorded' }}</span>
+      {% if row.source %}<span class="cand-src">{{ row.source }}</span>{% endif %}
+      {% if row.rate %}<span class="cand-rate">{{ row.rate }}</span>{% endif %}
+    </div>
+
+    <div class="cand-lane">
+      {{ row.origin or 'Origin not recorded' }}
+      &rarr; {{ row.destination or 'Destination not recorded' }}
+    </div>
+    <div class="cand-when">{{ row.when or 'No pickup appointment recorded' }}</div>
+
+    {# Counted, never scored. It is the number of questions worth asking while
+       somebody is on the phone, and nothing reads it to decide anything. #}
+    {% if row.gaps %}
+      <div class="cand-gaps">{{ row.gaps }} field{{ '' if row.gaps == 1 else 's' }}
+        with no entry</div>
+    {% endif %}
+
+    <div class="cand-actions">
+      <a class="btn" href="{{ url_for('joe_portal.mission_brief',
+                                      record_id=row.id) }}">VIEW BRIEF</a>
+      <a class="btn" href="{{ url_for('joe_portal.mission_brief',
+                                      record_id=row.id, edit=1) }}">EDIT</a>
+      <form method="post" action="{{ url_for('joe_portal.mission_commit',
+                                             record_id=row.id) }}">
+        <button class="btn commit" type="submit"
+                onclick="return confirm('Commit this load? Capacity is taken and the mission enters Dispatch.');">
+          COMMIT
+        </button>
+      </form>
+      {# Recorded, never deleted. The same broker rings back with the same lane,
+         and what he offered last time is the useful thing to have. #}
+      <form method="post" action="{{ url_for('joe_portal.mission_reject',
+                                             record_id=row.id) }}">
+        <button class="btn reject" type="submit"
+                onclick="return confirm('Leave this one? It stays on record.');">
+          REJECT
+        </button>
+      </form>
+    </div>
+  </section>
+  {% endfor %}
+
+  <footer class="brief-foot">
+    Candidates are in Booking. COMMIT is where Dispatch begins.
+  </footer>
+</div>
