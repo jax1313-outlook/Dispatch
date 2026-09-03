@@ -1,0 +1,281 @@
+# Joe connector — OpenAPI description of the Dispatch contract.
+#
+# THIS IS AN ADAPTER. The contract it describes lives in
+# portal/routes/joe_api.py and names no vendor. This file exists so an agent
+# platform can build a custom connector against that contract; a different
+# platform would get its own file here and the contract would not change.
+#
+# Reached over an on-premises data gateway to the local Dispatch node. Joe can
+# only reach Dispatch while that node is powered — see Section 11 of the
+# mission document.
+
+openapi: 3.0.1
+info:
+  title: Dispatch — Joe Workstation
+  description: >-
+    The Dispatch workstation for Joe, a Level 4 Operational Co-Driver.
+    Read a mission, report a status, and — after reading it back — change one.
+    Committing a load is reserved to human command and is refused here.
+    Every call carries the driver whose authority it acts on and is logged
+    against that name.
+  version: "1.0"
+
+servers:
+  - url: http://localhost:8080
+    description: Local Dispatch node
+
+security:
+  - driverToken: []
+
+components:
+  securitySchemes:
+    driverToken:
+      type: http
+      scheme: bearer
+      description: >-
+        Shared secret for this Dispatch node, set as DISPATCH_JOE_TOKEN.
+        A node with no token configured refuses every call rather than
+        running open.
+
+  parameters:
+    Driver:
+      name: X-Driver
+      in: header
+      required: true
+      schema: {type: string}
+      description: >-
+        The human whose authority this call acts on. Required on every call:
+        an action with nobody's name on it is an action nobody authorised.
+    Channel:
+      name: X-Channel
+      in: header
+      required: false
+      schema: {type: string}
+      description: >-
+        How the instruction reached Dispatch — CHAT, VOICE, MISSION_SCREEN,
+        PORTAL, API, or any other string. Recorded as data; a new channel is
+        never a schema change.
+
+  schemas:
+    ReadBack:
+      type: object
+      description: >-
+        A Class 2 action that has not been confirmed. Nothing has changed.
+        Read `read_back` to the driver verbatim and call again with
+        confirmed=true only after he confirms.
+      properties:
+        ok: {type: boolean}
+        applied: {type: boolean}
+        needs_confirmation: {type: boolean}
+        read_back: {type: string}
+        field: {type: string}
+        old_value: {type: string}
+        new_value: {type: string}
+
+    Report:
+      type: object
+      description: >-
+        A completed action. `report` is a declarative operational statement,
+        part by part. Partial completion is reported part by part and never
+        rounded to success.
+      properties:
+        ok: {type: boolean}
+        report: {type: string}
+
+    Held:
+      type: object
+      description: >-
+        Class 3. Reserved to human command. Joe has done the staff work and is
+        waiting; this is not an error and not a missing feature.
+      properties:
+        held: {type: boolean}
+        note: {type: string}
+        reasoning: {type: string}
+
+paths:
+  /api/joe/mission-status:
+    get:
+      operationId: getMissionStatus
+      summary: What the truck is doing (Class 1)
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+        - name: mission
+          in: query
+          required: false
+          schema: {type: string}
+          description: Load Number or record id. Omit for the current mission.
+      responses:
+        "200": {description: The mission}
+        "404": {description: No mission on this node}
+
+  /api/joe/driver-status:
+    post:
+      operationId: setDriverStatus
+      summary: Record where the driver is (Class 1)
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ON TIME, DELAYED, AT RISK]
+                  description: >-
+                    The locked vocabulary. A word outside it is refused rather
+                    than stored.
+                mission: {type: string}
+                note: {type: string}
+      responses:
+        "200": {description: Recorded}
+        "400": {description: Status outside the vocabulary}
+
+  /api/joe/facility-intel/{facilityId}:
+    get:
+      operationId: getFacilityIntel
+      summary: What is known about getting into a facility (Class 1)
+      description: >-
+        Reports only what the record holds. Nothing about a gate is inferred:
+        a guessed access instruction is how a truck ends up at the wrong door.
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+        - name: facilityId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: What is on record, which may be nothing}
+
+  /api/joe/schedule-fit:
+    get:
+      operationId: getScheduleFit
+      summary: Whether a day has room (Class 1)
+      description: >-
+        Reports the board and decides nothing. Whether to take a load is
+        Class 3 and belongs to the driver.
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+        - name: date
+          in: query
+          required: false
+          schema: {type: string, format: date}
+      responses:
+        "200": {description: The board}
+
+  /api/joe/mission-record/{missionId}:
+    patch:
+      operationId: updateMissionRecord
+      summary: Correct a field (Class 2 — read back, then execute)
+      description: >-
+        Without confirmed=true this returns a read-back and changes nothing.
+        Read it to the driver verbatim, accept corrections, then call again
+        with confirmed=true. The response carries old and new values for the
+        audit log.
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+        - name: missionId
+          in: path
+          required: true
+          schema: {type: string}
+          description: Load Number or record id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                field: {type: string}
+                value: {type: string}
+                said:
+                  type: string
+                  description: >-
+                    A spoken sentence instead of a field and value, e.g.
+                    "broker email is sally@example.com". Anything that cannot
+                    be placed against a field is returned unplaced rather than
+                    guessed.
+                confirmed:
+                  type: boolean
+                  description: Set only after reading the change back.
+      responses:
+        "200":
+          description: Read-back, or the applied change
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ReadBack'
+                  - $ref: '#/components/schemas/Report'
+        "400": {description: Refused — protected field, or nothing understood}
+
+  /api/joe/send-notice:
+    post:
+      operationId: sendNotice
+      summary: Send an operational notice (Class 2 — read back, then send)
+      description: >-
+        Outbound communication under the company's name. Without
+        confirmed=true it returns what would be sent and sends nothing.
+        Reports part by part; a failure says so rather than going quiet.
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mission, to, subject, message]
+              properties:
+                mission: {type: string}
+                to: {type: string}
+                subject: {type: string}
+                message: {type: string}
+                confirmed: {type: boolean}
+      responses:
+        "200": {description: Read-back, or sent}
+        "502": {description: Not sent — reported, never silent}
+
+  /api/joe/commit/{missionId}:
+    post:
+      operationId: commitMission
+      summary: Reserved to human command (Class 3)
+      description: >-
+        Present so that asking gets a clear answer rather than a 404 that
+        looks like a bug. Committing a load is the driver's decision.
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+        - name: missionId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "403":
+          description: Held
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Held'}
+
+  /api/joe/audit:
+    get:
+      operationId: getAuditTrail
+      summary: What was done, on whose authority
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+        - name: mission
+          in: query
+          required: false
+          schema: {type: string}
+      responses:
+        "200": {description: Append-only entries, oldest first}

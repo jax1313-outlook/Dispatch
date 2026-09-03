@@ -307,3 +307,64 @@ class TestJoeIsARoleNotAMicrosoftFeature:
         source = open("dispatch/audit.py", encoding="utf-8").read()
         assert "CHANNEL_CHAT" in source
         assert "if channel ==" not in source
+
+
+class TestTheAdapterFollowsTheContract:
+    """Contracts first, adapters second -- and the adapter must not drift.
+
+    `adapters/joe_connector.yaml` is one way of reaching the contract, from one
+    stack, certified first. Being first does not make it the definition, so it
+    is checked *against* the routes rather than the routes being built to suit
+    it.
+    """
+
+    def _spec(self):
+        yaml = pytest.importorskip("yaml")
+        with open("adapters/joe_connector.yaml", encoding="utf-8") as handle:
+            return yaml.safe_load(handle)
+
+    def _live_paths(self):
+        from portal.app import create_app
+
+        app = create_app()
+        return {str(r.rule) for r in app.url_map.iter_rules()
+                if "/api/joe" in str(r.rule)}
+
+    @staticmethod
+    def _normalise(path):
+        return (path.replace("{missionId}", "<path:mission_id>")
+                    .replace("{facilityId}", "<path:facility_id>"))
+
+    def test_it_describes_every_endpoint_and_no_others(self):
+        described = {self._normalise(p) for p in self._spec()["paths"]}
+        assert described == self._live_paths()
+
+    def test_the_vendor_name_is_allowed_here_and_only_here(self):
+        """The adapter is where a stack may be named. The contract is not."""
+        readme = open("adapters/README.md", encoding="utf-8").read()
+        assert "vendor" in readme.lower()
+        contract = open("portal/routes/joe_api.py", encoding="utf-8").read()
+        assert "adapter" in contract.lower(), (
+            "the contract should say the connector is one adapter to it")
+
+    def test_the_locked_status_vocabulary_is_carried_across(self):
+        status = self._spec()["paths"]["/api/joe/driver-status"]["post"]
+        schema = status["requestBody"]["content"]["application/json"]["schema"]
+        assert schema["properties"]["status"]["enum"] == list(
+            authority.STATUS_VOCABULARY)
+
+    def test_class_two_endpoints_document_the_confirmation(self):
+        spec = self._spec()
+        for path in ("/api/joe/mission-record/{missionId}",
+                     "/api/joe/send-notice"):
+            operation = spec["paths"][path]
+            body = list(operation.values())[0]["requestBody"]
+            schema = body["content"]["application/json"]["schema"]
+            assert "confirmed" in schema["properties"], path
+
+    def test_class_three_is_described_as_held_not_missing(self):
+        commit = self._spec()["paths"]["/api/joe/commit/{missionId}"]["post"]
+        assert "403" in commit["responses"]
+        prose = (commit.get("summary", "") + " " + commit.get("description", "")).lower()
+        assert "reserved" in prose
+        assert "human command" in prose
