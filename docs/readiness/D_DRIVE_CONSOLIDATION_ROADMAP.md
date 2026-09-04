@@ -54,9 +54,68 @@ Everything below came from the launcher's own status output on Mike's machine on
   **Always pass `--sandbox-root` explicitly** until that default is corrected — it is a
   one-line change and should be made before Phase 1b.
 
-*(Read as `Sandbox`; Mike typed `Sanbox`. Path spelling is exact on Windows — if the folder
-is genuinely spelled without the `d`, say so, because the survey will simply refuse a root
-that does not resolve.)*
+### Observed directly, 2026-09-04 — `D:\Joe Assistant`
+
+Mike supplied two File Explorer screenshots of `D:\Joe Assistant` on the drive
+**Crucial X9 (D:)**, showing all 29 items. This is the **first direct observation of the
+`D:` drive any session has had**, and it corrects two assumptions in this document.
+
+**It is a real git checkout.** There is a `.git` folder, dated 2026-08-26 22:17. Earlier
+drafts of this roadmap treated it as an orphaned working copy in the same category as the
+Dispatch ZIP at `C:\Dispatch\Dispatch2\Dispatch-main`. **It is not.** It can be
+`git status`-ed, pulled and pushed, which removes most of Phase 7's risk for this folder.
+
+**It is behind its remote, and it holds material the remote does not.** Comparing the 29
+items against `jax1313-outlook/Joe-Assistant` at `4a9a6a3`:
+
+| On the remote, absent from `D:` | On `D:`, absent from the remote |
+|---|---|
+| `Screens/` | **`Dispatch Architecture/`** |
+| `# JOE Display Architecture v1.0.md` | `.claude/` *(normally gitignored)* |
+| `Ergonomic Hybrid JOE Display.md` | |
+
+The three absent locally all arrive in the 2026-08-28 commits, and the local `.git` is dated
+2026-08-26 — **the checkout is roughly a week behind.**
+
+**`Dispatch Architecture/` is the finding.** It exists on the drive and in **no repository
+reachable from any session**. That is unpushed work, and it is the same shape as gap G-46,
+where commits `d503eda` and `86ef615` and the files `gateway_health.py` and
+`test_contract_neutrality.py` were searched for across Dispatch (166 commits), Jules,
+Claude-3 and Joe-Assistant (36 commits, full `main`) and found in none of them.
+
+**Three commands settle it**, run in `D:\Joe Assistant`:
+
+```
+git status
+git log --oneline -8
+git log --oneline origin/main..HEAD
+```
+
+Uncommitted work · whether those two commits are local · anything committed and never
+pushed. **This is Phase 1's cheapest and highest-value step and it is not the survey.**
+
+### The sandbox root is still ambiguous
+
+Three candidate folders now exist, and the survey tool's default matches none of them
+exactly:
+
+| Candidate | Seen |
+|---|---|
+| `D:\Sandbox` | Named by Mike, 2026-09-04 |
+| `D:\Joe Assistant\Sandbox` | Screenshot |
+| `D:\Joe Assistant\Play-Pen` | Screenshot — **hyphen**, not a space |
+| `D:\Sandbox\Play Pen` | The tool's hard-coded default. **May not exist.** |
+
+**Resolve before Phase 1b.** A survey pointed at a path that does not resolve refuses, which
+is safe; a survey pointed at the *wrong* existing folder reports confidently on the wrong
+scope, which is not.
+
+### Other candidate roots, unconfirmed
+
+The Explorer sidebar in the same screenshots shows `Level 1 Build Folder`, `Joe Design`,
+`Copilot WorkSpace`, `Microsoft Copilot Chat Files` and `Screenshots`. Whether any of them
+sits on `D:` and holds Dispatch material is `UNKNOWN`. **The survey only looks where it is
+pointed**, so an unnamed root is an unsurveyed root.
 
 **That is the whole of what is known.** Whether these are all of it, whether they overlap,
 what is inside any of them, and how much duplicates what is already in Git — all `UNKNOWN`.
