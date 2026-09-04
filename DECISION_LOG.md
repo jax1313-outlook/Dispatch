@@ -1233,3 +1233,128 @@ correct and the fields are G-21. The bar now carries a number that is real.
 `tests/test_load_identity.py`, 5 in `tests/test_launcher.py`.
 
 ---
+
+## 2026-09-04 — Constitution authority, document hierarchy, and the load number
+
+**PR:** (this change)
+**Capability:** Governance itself. No code changes in this entry.
+**Approved by:** Mike (owner)
+**Recorded by:** Claude Code, at Mike's direction, 2026-09-04.
+
+Three rulings were issued together. They are recorded here because this file is Level 2 of
+the hierarchy the third ruling establishes, and because a ruling that lives only in a chat
+session is not a ruling anyone can find.
+
+### Ruling 1 — Constitution authority
+
+> The Dispatch Constitution is the authoritative source of truth.
+>
+> If any repository, context file, roadmap, doctrine document, handoff file, prompt,
+> specification, implementation note, architecture document, assistant constitution, or
+> repository guidance conflicts with the Dispatch Constitution: **the Dispatch Constitution
+> wins.**
+>
+> No repository may establish doctrine that overrides the Dispatch Constitution. No builder
+> should have to determine which constitution applies. There is one constitutional
+> authority. Everything else is subordinate.
+
+### Ruling 2 — Document hierarchy
+
+| Level | Contains |
+|---|---|
+| **1** | Dispatch Constitution — authoritative |
+| **2** | Approved Decision Logs · Approved Constitutional Amendments |
+| **3** | Architecture Specifications · Boundary Documents · Integration Specifications |
+| **4** | Roadmaps · Build Plans · Implementation Documents |
+| **5** | Session Handoffs · AI Reports · Gap Analyses · Builder Notes · Working Documents |
+
+**Conflict rule.** When a conflict is discovered: do not guess, do not choose, do not invent
+a reconciliation. Report the Constitution statement, the conflicting document, its location
+and the impact, for Mike's ruling.
+
+**Repository rule.** Repositories do not own doctrine; they contain implementations of it.
+A repository whose guidance conflicts with the Constitution is wrong.
+
+**Builder rule.** Every builder must identify which Constitution governs the build, which
+version is authoritative, and whether local documents agree with it. **Any mismatch is a
+drift finding.**
+
+### Ruling 3 — Load numbers
+
+> Operational experience indicates that broker load numbers remain stable throughout the
+> operational life of a load. For Dispatch Build v1: **assume broker load numbers do not
+> change.** Do not introduce architectural complexity for hypothetical broker-number
+> changes. If a real-world case occurs, record the event, evaluate the impact, create a
+> design review, and implement a solution only if operationally justified. Until then, keep
+> the implementation simple. KISS applies. The system should optimize for how loads are
+> actually handled, not for hypothetical edge cases that have not appeared in twelve years
+> of operations.
+
+---
+
+### Drift finding, raised under Ruling 2's Builder Rule and reported rather than resolved
+
+**Constitution statement:** *"There is one constitutional authority: Dispatch Constitution.
+No builder should have to determine which constitution applies."*
+
+**Conflicting state:** no document named *Dispatch Constitution* exists in the Dispatch
+repository, at `main` `3c03ab2` or on any branch. Searched: zero matches for `constitution`
+in the whole tree.
+
+**Location.** Eleven constitution documents exist across the reachable repositories:
+
+| Document | Where | Lines |
+|---|---|---|
+| `DISPATCH_CONSTITUTION_v2.md` | `Joe-Assistant` | 267 |
+| `DISPATCH_CONSTITUTION_v3.md` | `Jules`, `Claude-3` (byte-identical) | 572 |
+| `ASSISTANT_PLUGIN_CONSTITUTION_v1/02_CONSTITUTION_v1.md` | `Joe-Assistant` | 275 |
+| `JOE_CONSTITUTION_v1.md` | `Joe-Assistant/Assistant_Plugin/docs` | 135 |
+| `ASST/1..6/Constitution/CONSTITUTION_v1.md` | `Joe-Assistant` | 88–125 each |
+
+v2 and v3 are **different documents**, not two drafts of one. `DISPATCH_CONFLICT_AND_AUTHORITY_REGISTER.md`
+records the v3 stack as **explicitly NOT ADOPTED**, and that ruling itself lives on an
+unmerged `Claude-3` branch inside a section headed *"NOT AUTHORITATIVE, reference only."*
+
+**Impact.** The Builder Rule requires every builder to identify which Constitution governs
+and which version is authoritative. **From inside the Dispatch repository that cannot be
+done.** Ruling 1 makes a document supreme that a builder in this repository cannot read,
+name, or verify — which is the same shape as the Assistant Plugin Constitution finding
+(`GAP_ANALYSIS` G-50), now at constitutional level.
+
+**Not resolved here.** The Conflict Rule forbids guessing, choosing, or inventing a
+reconciliation. Three things need Mike's ruling: which document is the Dispatch
+Constitution; where it lives; and where `CLAUDE.md` sits in the hierarchy, since it
+currently carries binding doctrine (truth vocabulary, authority model, architectural
+boundaries) and the hierarchy has no level that plainly describes it.
+
+**Until ruled:** `CLAUDE.md` continues to govern this repository in practice, because it is
+the only binding doctrine a builder here can actually read. That is a statement of the
+current condition, not a claim about precedence.
+
+---
+
+### Load number implementation, reassessed against Ruling 3
+
+`129ac63` added `load_number` (Dispatch's own, `L1-0001`) and `broker_load_number`.
+
+**The reasoning recorded for it on 2026-09-04 is SUPERSEDED by Ruling 3.** That entry
+justified two fields with: *"a broker correcting a number would change the identity of a
+load already in motion."* Ruling 3 removes that from scope explicitly. The earlier entry is
+left in place per the rule against editing history; this paragraph is its correction.
+
+**What survives on different, non-hypothetical grounds.** A load is created before its
+broker number is known — Mike takes a call, enters the load, and the broker's number arrives
+with the rate confirmation. Manual entry is currently the *only* creation path, so this is
+the normal case rather than an edge one. The Load Number Doctrine requires an identifier to
+exist *"from mission creation through archival"*, and at creation there may be nothing but
+Dispatch's own.
+
+**No complexity was built for broker-number changes.** There is no version history, no
+reassignment handling, no collision resolution. `broker_load_number` is one nullable column
+with a non-unique index, deliberately unconstrained.
+
+**Open for Mike, and a genuine simplification if he wants it:** whether Dispatch should
+still mint `L1-NNNN` for a load that already has a broker number at creation, or only when
+one is absent. Two columns remain either way; only the generation rule changes.
+
+---
