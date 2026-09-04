@@ -21,7 +21,7 @@ def register_routes(app: Flask) -> None:
     # carries its own /portal and /api/sweep paths.
     app.register_blueprint(joe_bp)
     # The API Joe works through. Registered without a prefix because it carries
-    # its own /api/joe paths, and deliberately named for the role rather than
-    # for whatever brain is rented -- Microsoft is the first certified stack,
-    # not the definition.
+    # its own /api/joe paths, and named for the role rather than for whatever
+    # brain is rented. The first certified stack is one implementation, not the
+    # definition.
     app.register_blueprint(joe_api)

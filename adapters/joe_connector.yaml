@@ -15,7 +15,8 @@ info:
   description: >-
     The Dispatch workstation for Joe, a Level 4 Operational Co-Driver.
     Read a mission, report a status, and — after reading it back — change one.
-    Committing a load is reserved to human command and is refused here.
+    Committing a load is reserved to human command; there is no operation
+    for it.
     Every call carries the driver whose authority it acts on and is logged
     against that name.
   version: "1.0"
@@ -245,37 +246,10 @@ paths:
         "200": {description: Read-back, or sent}
         "502": {description: Not sent — reported, never silent}
 
-  /api/joe/commit/{missionId}:
-    post:
-      operationId: commitMission
-      summary: Reserved to human command (Class 3)
-      description: >-
-        Present so that asking gets a clear answer rather than a 404 that
-        looks like a bug. Committing a load is the driver's decision.
-      parameters:
-        - $ref: '#/components/parameters/Driver'
-        - $ref: '#/components/parameters/Channel'
-        - name: missionId
-          in: path
-          required: true
-          schema: {type: string}
-      responses:
-        "403":
-          description: Held
-          content:
-            application/json:
-              schema: {$ref: '#/components/schemas/Held'}
-
-  /api/joe/audit:
-    get:
-      operationId: getAuditTrail
-      summary: What was done, on whose authority
-      parameters:
-        - $ref: '#/components/parameters/Driver'
-        - $ref: '#/components/parameters/Channel'
-        - name: mission
-          in: query
-          required: false
-          schema: {type: string}
-      responses:
-        "200": {description: Append-only entries, oldest first}
+# There is no commit operation and no audit-read operation.
+#
+# Section 8 specifies six Phase 1 endpoints. Committing a load is Class 3 and
+# reserved to human command; it is enforced by the contract having no such
+# endpoint rather than by one that refuses. The audit log is required by
+# doctrine and is a local file on the node that writes it -- Phase 1 needs no
+# way to read it back over the API.

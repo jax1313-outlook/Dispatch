@@ -444,30 +444,28 @@ def send_notice():
 
 
 # ---------------------------------------------------------------- Class 3 ---
-
-@joe_api.route("/api/joe/commit/<path:mission_id>", methods=["POST"])
-@authenticated
-def commit_is_reserved(mission_id: str):
-    """Committing a load is the driver's decision. Joe does the staff work.
-
-    Present so that a caller asking for it gets a clear answer rather than a
-    404 that looks like a bug. It is not missing; it is reserved.
-    """
-    audit.record(action="commit-load", driver=_driver(), channel=_channel(),
-                 mission_id=mission_id, result=audit.RESULT_FAILURE,
-                 note="Class 3 - reserved to human command")
-    return jsonify(authority.held(
-        "commit-load",
-        "Everything necessary to execute has to exist, and whether it does is "
-        "your call. The brief shows what is still open.")), 403
-
-
+#
+# There is no commit endpoint, and its absence is the enforcement.
+#
+# An earlier version had one that returned 403 and logged the attempt. The
+# argument for it was that a connector asking to commit should get a clear
+# refusal rather than a 404 that looks like a bug. The argument against it won:
+# Section 8 specifies six Phase 1 endpoints, a door with a lock is still a door
+# where doctrine says there should be none, and a provider's convenience is not
+# a reason to widen the contract.
+#
+# Class 3 actions -- committing or accepting a load, signing, spending beyond
+# policy, reopening a locked plan, changing doctrine -- are reserved to human
+# command. Joe does the staff work and presents it. The Brief shows what is
+# still open and the operator presses COMMIT himself.
+#
+# `dispatch/joe_authority.py` still classifies them, so anything routed through
+# the authority model is held rather than run. Nothing here can perform one
+# because nothing here accepts one.
+#
 # ------------------------------------------------------------------ audit ---
-
-@joe_api.route("/api/joe/audit", methods=["GET"])
-@authenticated
-def audit_trail():
-    """What Joe has done, on whose authority. Read only."""
-    mission_id = str(request.args.get("mission") or "").strip()
-    return jsonify({"ok": True,
-                    "entries": audit.entries(mission_id=mission_id, limit=200)})
+#
+# There is no audit-read endpoint either. Section 8 item 3 requires an
+# append-only audit log, which `dispatch/audit.py` is. It does not require a
+# way to read it back over the API, and Phase 1 needs none: the log is a local
+# file on the node that writes it.

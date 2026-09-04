@@ -209,24 +209,34 @@ class TestClassTwoReadsBackFirst:
         assert "NOTHING WAS CHANGED" in body["report"]
 
 
-class TestClassThreeIsReserved:
-    def test_committing_a_load_is_refused(self, client, mission):
-        """Not missing. Reserved."""
-        response = client.post("/api/joe/commit/L1-APITEST", headers=_head())
-        assert response.status_code == 403
-        body = response.get_json()
-        assert body["held"] is True
-        assert "yours" in body["note"]
+class TestClassThreeIsReservedByAbsence:
+    """There is no commit endpoint, and that is the enforcement.
 
-    def test_it_does_the_staff_work_before_holding(self, client, mission):
-        """Limits on authority do not limit awareness or recommendation."""
-        body = client.post("/api/joe/commit/L1-APITEST",
-                           headers=_head()).get_json()
-        assert body["reasoning"]
+    An earlier version had one returning 403, on the argument that a caller
+    asking to commit should get a clear refusal rather than a 404 that looks
+    like a bug. Doctrine specifies six Phase 1 endpoints, and a door with a
+    lock is still a door where doctrine says there should be none. A provider's
+    convenience is not a reason to widen the contract.
+    """
+
+    def test_there_is_no_commit_endpoint(self, client, mission):
+        assert client.post("/api/joe/commit/L1-APITEST",
+                           headers=_head()).status_code == 404
+
+    def test_the_authority_model_still_classifies_it(self):
+        """Nothing routed through the authority model can run one."""
+        assert authority.is_reserved("commit-load") is True
+        assert authority.class_of("commit-load") == authority.CLASS_HOLD
 
     def test_an_unclassified_action_is_held_not_run(self):
         """An action nobody classified is an action nobody thought about."""
         assert authority.class_of("do-something-clever") == authority.CLASS_HOLD
+
+    def test_the_hold_answer_does_the_staff_work_first(self):
+        """Limits on authority do not limit awareness or recommendation."""
+        held = authority.held("commit-load", "the brief shows what is open")
+        assert held["held"] is True
+        assert held["reasoning"]
 
 
 class TestTheAuditLog:
@@ -250,12 +260,6 @@ class TestTheAuditLog:
                      json={"field": "rate", "value": "950"})
         entry = audit.entries()[-1]
         assert entry["result"] == audit.RESULT_PARTIAL
-
-    def test_a_refused_class_three_is_logged(self, client, mission):
-        client.post("/api/joe/commit/L1-APITEST", headers=_head())
-        entry = audit.entries()[-1]
-        assert entry["action"] == "commit-load"
-        assert entry["result"] == audit.RESULT_FAILURE
 
     def test_the_channel_is_recorded_not_inferred(self, client, mission):
         client.get("/api/joe/mission-status", headers=_head(channel="CHAT"))
@@ -362,9 +366,17 @@ class TestTheAdapterFollowsTheContract:
             schema = body["content"]["application/json"]["schema"]
             assert "confirmed" in schema["properties"], path
 
-    def test_class_three_is_described_as_held_not_missing(self):
-        commit = self._spec()["paths"]["/api/joe/commit/{missionId}"]["post"]
-        assert "403" in commit["responses"]
-        prose = (commit.get("summary", "") + " " + commit.get("description", "")).lower()
-        assert "reserved" in prose
-        assert "human command" in prose
+    def test_it_describes_no_operation_the_contract_does_not_have(self):
+        """The adapter followed the contract when two endpoints were removed.
+        An adapter describing an operation that does not exist is a connector
+        that fails at the moment it is used."""
+        described = set(self._spec()["paths"])
+        assert not any("commit" in p for p in described)
+        assert not any("audit" in p for p in described)
+
+    def test_it_says_why_class_three_is_absent(self):
+        """So that whoever builds the connector knows it is reserved rather
+        than forgotten."""
+        text = open("adapters/joe_connector.yaml", encoding="utf-8").read().lower()
+        assert "reserved to human command" in text
+        assert "no commit operation" in text
