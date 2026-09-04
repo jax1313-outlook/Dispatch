@@ -1260,6 +1260,120 @@ class TestAScanThatReadsNothingIsUnavailable:
         assert found is not None and [f.pid for f in found] == [4242]
 
 
+# ── a started child is observed once it has an identity ────────────────
+
+
+class TestTheStartedChildIsObservedAfterExec:
+    """`Popen` returns between fork and exec, and the identity is not there yet.
+
+    In that window the process exists and `/proc/<pid>/cmdline` reads *empty*.
+    Observing there wrote a PidRecord with no `command_line`, and the ownership
+    check only compares command lines when both sides have one -- so the check
+    that answers "is the process on port 8080 mine?" quietly dropped from two
+    facts to one and said nothing. That is acceptance item 14's control, and a
+    safety check that weakens itself in silence is the CLAUDE.md 3 failure shape.
+
+    The window is short and load-dependent: measured at 72 of 300 immediate
+    observations on one run and 11 of 300 on another. A test cannot depend on
+    hitting it, so these drive the helper directly.
+    """
+
+    class _FakeChild:
+        def __init__(self, pid=4242, exits_after=None):
+            self.pid = pid
+            self._polls = 0
+            self._exits_after = exits_after
+
+        def poll(self):
+            self._polls += 1
+            if self._exits_after is not None and self._polls > self._exits_after:
+                return 1
+            return None
+
+    def test_a_readable_identity_is_returned_without_waiting(self, monkeypatch):
+        calls = []
+
+        def _facts(pid):
+            calls.append(pid)
+            return processes.ProcessFacts(
+                pid=pid, alive=True, command_line="python portal/app.py", source="proc"
+            )
+
+        monkeypatch.setattr(control.processes, "process_facts", _facts)
+        monkeypatch.setattr(control.time, "sleep", lambda _: pytest.fail("did not need to wait"))
+
+        observed = control._observe_started_child(self._FakeChild())
+
+        assert observed.command_line == "python portal/app.py"
+        assert calls == [4242], "one observation is enough when the identity is there"
+
+    def test_it_waits_through_the_fork_exec_window(self, monkeypatch):
+        """The defect, reproduced: empty first, readable a moment later."""
+        answers = [
+            processes.ProcessFacts(pid=4242, alive=True, command_line=None, source="proc"),
+            processes.ProcessFacts(pid=4242, alive=True, command_line="", source="proc"),
+            processes.ProcessFacts(
+                pid=4242, alive=True, command_line="python portal/app.py", source="proc"
+            ),
+        ]
+        monkeypatch.setattr(control.processes, "process_facts", lambda pid: answers.pop(0))
+        monkeypatch.setattr(control.time, "sleep", lambda _: None)
+
+        observed = control._observe_started_child(self._FakeChild())
+
+        assert observed.command_line == "python portal/app.py"
+        assert not answers, "it should have consumed every observation until one was usable"
+
+    def test_it_stops_waiting_when_the_child_dies(self, monkeypatch):
+        """A process that exited before exec has no identity to wait for.
+
+        `_wait_for_settle()` reports that failure properly a moment later, so this
+        must not spend its whole timeout first.
+        """
+        monkeypatch.setattr(
+            control.processes,
+            "process_facts",
+            lambda pid: processes.ProcessFacts(pid=pid, alive=False, source="proc"),
+        )
+        monkeypatch.setattr(control.time, "sleep", lambda _: None)
+
+        observed = control._observe_started_child(self._FakeChild(exits_after=1))
+
+        assert observed.command_line is None
+
+    def test_it_gives_up_and_returns_what_it_has(self, monkeypatch):
+        """Degradation is permitted; incapacity is not.
+
+        A machine that never publishes a command line still gets a started
+        Dispatch. What it must not get is an unbounded wait.
+        """
+        monkeypatch.setattr(
+            control.processes,
+            "process_facts",
+            lambda pid: processes.ProcessFacts(
+                pid=pid, alive=True, command_line=None, created_token="tok", source="proc"
+            ),
+        )
+        monkeypatch.setattr(control.time, "sleep", lambda _: None)
+
+        observed = control._observe_started_child(self._FakeChild(), timeout=0.05)
+
+        assert observed.command_line is None
+        assert observed.created_token == "tok", "the rest of the identity still survives"
+
+    def test_start_records_a_command_line_for_a_real_child(self, facts, stand_in, reap):
+        """The invariant that matters, end to end, against a real process."""
+        result = control.start(facts=facts)
+        reap(result.pid)
+
+        record = pidfile.read_record()
+        assert record is not None
+        assert record.command_line, (
+            "an empty command_line silently weakens the ownership check at "
+            "control.py inspect_pidfile()"
+        )
+
+
 # ── Stop tells the truth about the port ────────────────────────────────
 
 

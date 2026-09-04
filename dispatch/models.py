@@ -145,6 +145,29 @@ def _validate_choice(value: str, choices: list[str], field_name: str) -> None:
         raise ValueError(f"Invalid {field_name}: {value!r}. Must be one of {choices}")
 
 
+def operational_number(load: "Load | dict") -> str:
+    """The number a human uses for this load -- the broker's when there is one.
+
+    Load Number Doctrine, Rules 1 and 2: *"If a broker provides a load number, use
+    the broker number... If no external number exists, Dispatch generates one."*
+    Both rules are satisfied **at the display layer**, which is where "operational
+    number" is a question anyone asks.
+
+    Identity is a separate matter and is always `load_number`. That split is
+    deliberate: the directive also requires the identifier to *"exist from mission
+    creation through archival"* and to be *"the mission identity field"*, and a
+    third party's number cannot carry that -- a broker who corrects a number would
+    otherwise change the identity of a load already in motion. So Dispatch always
+    mints its own, and shows the broker's.
+
+    **Open for Mike** (directive questions 1-7, unruled): whether the broker's
+    number should be primary for identity too. If it should, this function stays and
+    the identity rule changes -- both fields already exist either way.
+    """
+    get = load.get if isinstance(load, dict) else lambda k, d="": getattr(load, k, d)
+    return (get("broker_load_number", "") or get("load_number", "") or "").strip()
+
+
 @dataclass
 class Load:
     load_id: str = ""
@@ -161,6 +184,15 @@ class Load:
     status: str = "created"
     source: str = ""
     notes: str = ""
+    #: Dispatch's own operational identity for this load: `L1-0001`, assigned once
+    #: at creation, unique by construction, never reissued and never absent. It is
+    #: the number a driver reads over the phone -- `load_id` is a UUID-derived key
+    #: and fails the 70 MPH test by construction (G-02).
+    load_number: str = ""
+    #: What the broker calls this load: `TQL-458721`, `CHR-778192`. Optional and
+    #: unconstrained -- a broker may reuse, correct or reissue it, and none of that
+    #: is Dispatch's to police (G-03). Never used as identity.
+    broker_load_number: str = ""
     created_at: str = ""
     updated_at: str = ""
 

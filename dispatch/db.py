@@ -28,11 +28,35 @@ CREATE TABLE IF NOT EXISTS loads (
     status          TEXT NOT NULL DEFAULT 'created',
     source          TEXT NOT NULL DEFAULT '',
     notes           TEXT NOT NULL DEFAULT '',
+    load_number     TEXT NOT NULL DEFAULT '',
+    broker_load_number TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_loads_source ON loads(source);
+
+-- load_number is the operational identity: unique by construction, assigned once,
+-- never reissued. UNIQUE rather than PRIMARY KEY because load_id already holds
+-- that role and rows predating this column carry ''; a partial index skips those.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_loads_load_number
+    ON loads(load_number) WHERE load_number != '';
+
+-- broker_load_number is deliberately NOT unique. A broker may reuse a number,
+-- correct one, or issue the same one to two carriers, and none of that is
+-- Dispatch's to police -- see DISPATCH_GAP_ANALYSIS G-03.
+CREATE INDEX IF NOT EXISTS idx_loads_broker_load_number ON loads(broker_load_number);
+
+-- The load-number counter, kept apart from the loads themselves on purpose.
+-- Deriving the next number from MAX(load_number) looks equivalent and is not: it
+-- reissues the highest number as soon as that load is deleted, and a number that
+-- comes back means two different loads share an identity in someone's records --
+-- the broker's, the shipper's, the accountant's. A counter that only ever goes up
+-- cannot do that. One row, id 1.
+CREATE TABLE IF NOT EXISTS load_number_sequence (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    last_issued INTEGER NOT NULL DEFAULT 0
+);
 
 CREATE TABLE IF NOT EXISTS visibility (
     load_id                TEXT PRIMARY KEY REFERENCES loads(load_id),
@@ -488,6 +512,48 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     # column per tagged table, empty for operational records -- see
     # dispatch/rehearsal.py for why a column rather than a join table. The
     # guarded ALTERs live in that module beside the tables they belong to.
+    # Load identity (DISPATCH_GAP_ANALYSIS G-02 / G-03). Two separate fields on
+    # purpose: `load_number` is Dispatch's own, unique by construction and never
+    # absent, and `broker_load_number` is whatever the broker calls it -- optional,
+    # unconstrained, and correctable by them without touching identity. Existing
+    # rows get '' and are backfilled by dispatch.services.backfill_load_numbers().
+    for column in ("load_number", "broker_load_number"):
+        try:
+            conn.execute(
+                f"ALTER TABLE loads ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
+            )
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_loads_load_number "
+        "ON loads(load_number) WHERE load_number != ''"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_loads_broker_load_number "
+        "ON loads(broker_load_number)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS load_number_sequence ("
+        "id INTEGER PRIMARY KEY CHECK (id = 1), "
+        "last_issued INTEGER NOT NULL DEFAULT 0)"
+    )
+    # Seed from the highest number already in the table, so a database that was
+    # numbered before this counter existed does not restart at 1.
+    row = conn.execute(
+        "SELECT load_number FROM loads WHERE load_number LIKE 'L1-%' "
+        "ORDER BY LENGTH(load_number) DESC, load_number DESC LIMIT 1"
+    ).fetchone()
+    highest = 0
+    if row and row[0]:
+        tail = str(row[0]).split("-", 1)[-1]
+        if tail.isdigit():
+            highest = int(tail)
+    conn.execute(
+        "INSERT INTO load_number_sequence (id, last_issued) VALUES (1, ?) "
+        "ON CONFLICT(id) DO UPDATE SET last_issued = MAX(last_issued, excluded.last_issued)",
+        (highest,),
+    )
+
     from dispatch.rehearsal import init_rehearsal_schema
 
     init_rehearsal_schema(conn)

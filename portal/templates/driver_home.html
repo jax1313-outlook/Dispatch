@@ -24,7 +24,13 @@
 
     /* Reference Number Bar (Dock Glance) */
     .ref-bar { background: rgba(0,0,0,0.25); border-radius: 6px; padding: 10px 14px; margin: 10px 0; display: flex; flex-wrap: wrap; gap: 12px; font-size: 15px; font-weight: 700; }
-    .ref-item { background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 4px; }
+    .ref-primary {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            user-select: all;
+        }
+        .ref-item { background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 4px; }
 
     /* Touch Target Buttons (>56px height) */
     .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
@@ -92,12 +98,23 @@
         {{ rehearsal_badge(active_card.load) }}
     </div>
 
-    <!-- Dock Reference Number Bar -->
+    <!-- Dock Reference Number Bar.
+         The number the driver says out loud comes first and largest: it is the
+         answer to the most-asked question on the phone, and a reference he has to
+         hunt for fails the 70 MPH test whatever else the screen does well.
+         po_number / pu_number / rate_con_id are referenced here and do not exist on
+         the Load model -- they render nothing. Left in place rather than deleted so
+         the intent survives; see GAP_ANALYSIS G-03 and G-21. -->
     <div class="ref-bar">
+        {% if active_card.load.broker_load_number %}
+            <div class="ref-item ref-primary">Load #: {{ active_card.load.broker_load_number }}</div>
+            <div class="ref-item">Dispatch #: {{ active_card.load.load_number }}</div>
+        {% elif active_card.load.load_number %}
+            <div class="ref-item ref-primary">Load #: {{ active_card.load.load_number }}</div>
+        {% endif %}
         {% if active_card.load.po_number %}<div class="ref-item">PO#: {{ active_card.load.po_number }}</div>{% endif %}
         {% if active_card.load.pu_number %}<div class="ref-item">PU#: {{ active_card.load.pu_number }}</div>{% endif %}
         {% if active_card.load.rate_con_id %}<div class="ref-item">RateCon#: {{ active_card.load.rate_con_id }}</div>{% endif %}
-        {% if active_card.load.load_id %}<div class="ref-item">Load ID: {{ active_card.load.load_id }}</div>{% endif %}
     </div>
 
     <table>

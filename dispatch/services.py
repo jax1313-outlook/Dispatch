@@ -127,6 +127,7 @@ def create_load(
     equipment_id: str = "",
     source: str = "",
     notes: str = "",
+    broker_load_number: str = "",
 ) -> dict:
     if driver_id:
         _validate_driver_assignment(driver_id)
@@ -146,6 +147,7 @@ def create_load(
         equipment_id=equipment_id,
         source=source,
         notes=notes,
+        broker_load_number=broker_load_number.strip(),
     )
     result = store.create_load(load)
     vis = LoadVisibilityRecord(
@@ -155,6 +157,36 @@ def create_load(
     )
     store.upsert_visibility(vis)
     return result
+
+
+def backfill_load_numbers() -> int:
+    """Give an operational number to every load created before they existed.
+
+    Returns the count assigned. Idempotent: a load that already has a number keeps
+    it, so this is safe to run repeatedly and safe to run on a database that needs
+    nothing done.
+
+    Ordered by `created_at` so the numbers follow the order the loads were actually
+    taken, not the order SQLite happens to return rows in. That matters because the
+    number is the one a broker will be told, and a set of historical loads numbered
+    in arbitrary order is worse than useless for anyone reconciling paperwork.
+    """
+    from dispatch.db import get_connection
+
+    assigned = 0
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT load_id FROM loads WHERE load_number = '' "
+            "ORDER BY created_at ASC, load_id ASC"
+        ).fetchall()
+        for row in rows:
+            number = store._next_load_number(conn)
+            conn.execute(
+                "UPDATE loads SET load_number = ? WHERE load_id = ?",
+                (number, row[0]),
+            )
+            assigned += 1
+    return assigned
 
 
 def get_load(load_id: str) -> dict | None:

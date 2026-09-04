@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import sqlite3
 
 from dispatch import rehearsal
 from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
@@ -68,21 +69,60 @@ def _paginate(
 
 # ── Load ──────────────────────────────────────────────────────────────
 
+#: Operational load numbers are `L1-0001`. The prefix is Level 1 Transport and the
+#: width is four digits -- ten thousand loads before it grows a digit, which it does
+#: gracefully because the format is a zero-padded minimum rather than a fixed width.
+LOAD_NUMBER_PREFIX = "L1"
+LOAD_NUMBER_WIDTH = 4
+
+
+def _next_load_number(conn: sqlite3.Connection) -> str:
+    """The next operational number, allocated inside the caller's transaction.
+
+    Advances a counter that only ever goes up, and returns what it landed on.
+
+    **Not** `MAX(load_number) + 1`. That was the first implementation and a test
+    caught it: deleting the highest-numbered load hands its number to the next one,
+    and a number that comes back means two different loads share an identity in
+    someone's records -- the broker's, the shipper's, the accountant's. A number is
+    issued once and stays spent whatever happens to the load that got it.
+
+    Running inside the caller's connection makes the read-and-increment one
+    transaction with the insert, so two loads created at the same moment cannot both
+    take the same value. The UNIQUE index on `load_number` is the backstop if that
+    reasoning is ever wrong: a collision raises rather than silently issuing a
+    duplicate identity.
+    """
+    conn.execute(
+        "INSERT INTO load_number_sequence (id, last_issued) VALUES (1, 0) "
+        "ON CONFLICT(id) DO NOTHING"
+    )
+    conn.execute("UPDATE load_number_sequence SET last_issued = last_issued + 1 WHERE id = 1")
+    issued = conn.execute(
+        "SELECT last_issued FROM load_number_sequence WHERE id = 1"
+    ).fetchone()[0]
+    return f"{LOAD_NUMBER_PREFIX}-{issued:0{LOAD_NUMBER_WIDTH}d}"
+
+
 def create_load(load: Load) -> dict:
     with get_connection() as conn:
+        if not load.load_number:
+            load.load_number = _next_load_number(conn)
         conn.execute(
             """INSERT INTO loads
                (load_id, customer, broker_shipper, pickup_location,
                 delivery_location, pickup_datetime, delivery_datetime,
                 equipment, driver, driver_id, equipment_id,
-                status, source, notes, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                status, source, notes, load_number, broker_load_number,
+                created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (load.load_id, load.customer, load.broker_shipper,
              load.pickup_location, load.delivery_location,
              load.pickup_datetime, load.delivery_datetime,
              load.equipment, load.driver, load.driver_id,
              load.equipment_id, load.status, load.source,
-             load.notes, load.created_at, load.updated_at),
+             load.notes, load.load_number, load.broker_load_number,
+             load.created_at, load.updated_at),
         )
         rehearsal.tag_in(conn, "loads", load.load_id)
     return load.to_dict()

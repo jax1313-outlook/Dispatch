@@ -1154,3 +1154,82 @@ unanswerable from any screen. That is the same question behind the seven-hour fa
 behind this one, and it is recorded here as still open rather than fixed.
 
 ---
+
+## 2026-09-04 — Load identity, and an ownership check that was weakening itself
+
+**PR:** (this change)
+**Capability:** `dispatch_launcher/control.py`; `Load` identity across `models`, `db`,
+`store`, `services` and the driver card.
+**Source:** `docs/readiness/GAP_ANALYSIS_2026-09-04.md` items G-41, G-02 and G-03, built on
+Mike's instruction of 2026-09-04: *"fix the identity race and give loads a real number"*.
+
+### The identity race (G-41)
+
+`control.start()` observed the child it had just spawned on the line after `Popen` — which
+returns between fork and exec. In that window the process exists and
+`/proc/<pid>/cmdline` reads **empty**. Measured across two runs on the same machine: **72
+of 300** and **11 of 300** immediate observations came back empty. The rate is
+load-dependent; the defect is not.
+
+An empty `command_line` was written into the PID record, and `inspect_pidfile()` only
+compares command lines when both sides have one:
+
+```python
+if record.command_line and facts.command_line:
+```
+
+So the check that answers *"is the process holding port 8080 actually mine?"* silently
+dropped from two facts to one. That check is the control behind first-start acceptance item
+14. **A safety check that weakens itself without saying so is the `CLAUDE.md` §3 failure
+shape**, and this is the second time that shape has appeared in the launcher.
+
+`_observe_started_child()` now polls until the identity is readable, the child dies, or two
+seconds pass. Measured after the fix: **0 of 300** empty. Degradation is still permitted —
+a timeout returns the best observation available and Dispatch still starts — but the record
+is now written from the best observation rather than the earliest.
+
+### Load identity (G-02, G-03)
+
+Two fields, deliberately separate:
+
+- **`load_number`** — Dispatch's own. `L1-0001`. Assigned at creation, unique by
+  construction, never reissued, never absent. This is identity.
+- **`broker_load_number`** — whatever the broker calls it. Optional, unconstrained, may
+  duplicate, may be corrected or reissued by the broker without consequence.
+
+`operational_number()` implements Load Number Doctrine Rules 1 and 2 **at the display
+layer**: the broker's number when there is one, Dispatch's when there is not. The driver
+card shows it at 22px as the first thing on the reference bar.
+
+**Why identity is not the broker's number**, when Rule 1 prefers it operationally: the
+directive also requires the identifier to *"exist from mission creation through archival"*
+and to be *"the mission identity field"*. A third party's number cannot carry that — a
+broker correcting a number would change the identity of a load already in motion. So
+Dispatch always mints its own and displays theirs. **This is an interpretation, not a
+ruling.** Directive questions 1–7 remain open; if Mike rules the broker's number primary
+for identity too, both fields already exist and only the precedence changes.
+
+### A defect this work introduced and its own test caught
+
+The first allocator derived the next number from `MAX(load_number) + 1`. A test asserting
+*"a deleted load does not return its number"* failed against it: deleting the
+highest-numbered load hands its number to the next load created. A number that comes back
+means two different loads share an identity in someone's records — the broker's, the
+shipper's, the accountant's — and the docstring had already promised numbers are never
+reused while the code did the opposite.
+
+Replaced with a `load_number_sequence` counter that only ever goes up, seeded on migration
+from the highest number already present so an existing database does not restart at 1.
+Recorded here rather than quietly corrected, per §7.
+
+### Also found, not fixed
+
+`driver_home.html` renders `po_number`, `pu_number` and `rate_con_id` in its "Dock
+Reference Number Bar". **None of the three exists on the `Load` model**, so that bar has
+been rendering empty since it was written. Left in place rather than deleted: the intent is
+correct and the fields are G-21. The bar now carries a number that is real.
+
+**Suite:** unchanged at 0 failed / 0 skipped / 0 warnings. 18 new tests in
+`tests/test_load_identity.py`, 5 in `tests/test_launcher.py`.
+
+---

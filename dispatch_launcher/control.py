@@ -352,6 +352,57 @@ def _creation_flags() -> int:
     return detached | new_group
 
 
+#: How long to wait for a freshly spawned child to become identifiable. This is a
+#: fork/exec window measured in milliseconds, not a startup wait -- Dispatch's own
+#: startup wait is SETTLE_SECONDS and happens after this.
+OBSERVE_TIMEOUT_SECONDS = 2.0
+OBSERVE_INTERVAL_SECONDS = 0.02
+
+
+def _observe_started_child(
+    child: "subprocess.Popen",
+    *,
+    timeout: float = OBSERVE_TIMEOUT_SECONDS,
+    interval: float = OBSERVE_INTERVAL_SECONDS,
+) -> processes.ProcessFacts:
+    """Read a just-spawned child's identity, once it has one.
+
+    **This is the repair for a race that silently weakened an ownership check.**
+    `Popen` returns after the fork and before the exec. In that window the process
+    exists and `/proc/<pid>/cmdline` is readable and *empty* -- measured at 72 of 300
+    immediate observations on Linux. Observing there recorded a PidRecord with no
+    `command_line`, and `inspect_pidfile()` only compares command lines when both
+    sides have one:
+
+        if record.command_line and facts.command_line:
+
+    So the identity check quietly dropped from two facts to one, with nothing said.
+    That check is what answers "is the process holding port 8080 actually mine?", and
+    it is the control behind first-start acceptance item 14. A safety check that
+    weakens itself without reporting it is the failure shape `CLAUDE.md` §3 names.
+
+    Polling rather than a fixed sleep, because the window is short and variable: a
+    typical exec completes in a millisecond or two, and a loaded machine may take
+    longer than any constant worth hard-coding. Returns as soon as the identity is
+    readable, gives up at `timeout`, and stops early if the child dies -- a process
+    that exited before exec has no identity to wait for, and `_wait_for_settle()`
+    reports that failure properly a moment later.
+
+    Degradation is permitted: on timeout this returns whatever the last observation
+    held. The caller still writes a record and Dispatch still starts. What it must
+    not do is *hide* that the identity is thin -- and it no longer does, because the
+    record is written from the best observation available rather than the earliest.
+    """
+    deadline = time.monotonic() + timeout
+    observed = processes.process_facts(child.pid)
+    while not observed.command_line and time.monotonic() < deadline:
+        if child.poll() is not None:
+            break
+        time.sleep(interval)
+        observed = processes.process_facts(child.pid)
+    return observed
+
+
 def start(
     *,
     facts: RuntimeFacts | None = None,
@@ -474,7 +525,7 @@ def start(
             write_failure("start", message)
             return ControlResult(action="start", ok=False, message=message, details=details)
 
-    observed = processes.process_facts(child.pid)
+    observed = _observe_started_child(child)
     pidfile.write_record(PidRecord(
         pid=child.pid,
         recorded_at=pidfile.utc_now(),
