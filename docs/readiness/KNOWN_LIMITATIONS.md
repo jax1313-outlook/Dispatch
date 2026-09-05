@@ -36,6 +36,56 @@ identical page, and only the log distinguished them. The log existed from the fi
 
 Detail: `docs/readiness/OPERATIONAL_PROOF.md`.
 
+## 0b. Second operating session — 2026-09-05
+
+Dispatch was started and stopped nine times from `D:\Dispatch` at commit `d831b7e`, on Mike's
+machine, to record acceptance evidence. Nine of the fifteen items in
+`LAUNCHER_PROOF_TEMPLATE.md` now carry real output: **2, 3, 4, 5, 6, 7, 11, 12, 13**.
+
+### The open defect this session found: graceful shutdown never succeeds
+
+Every stop — all nine — reported the same thing:
+
+> `The operating system refused the request to close the process.`
+> `Process ID NNNNN did not close within 10 seconds, so the launcher escalated to a forced stop.`
+
+The outcome is correct every time. The process does die, `tasklist` confirms it, and the launcher
+states plainly what it did rather than claiming a clean stop. **But a ten-second wait and a forced
+kill on every single stop is not the intended path.** No test can see this: the suite never spawns
+a real Windows process, so the graceful path has never been exercised anywhere but here.
+
+Not yet diagnosed. Recorded so the next reader does not rediscover it.
+
+### Two test-method traps, recorded because both looked like defects
+
+**A hand-written PID record is not a stale record.** A synthetic `dispatch-portal.pid` carrying only
+`pid`, `recorded_at`, `command`, `host` and `port` was **ignored** and Dispatch started normally —
+no stale-record message at all. That is correct behaviour: an unparseable record is not a stale one.
+But from outside it is indistinguishable from the feature being broken. A synthetic record must
+carry `created_token`, `command_line` and `log_path`. With a genuine record whose `pid` was rewritten
+to `999999`, the launcher said exactly what it should: *"The stale record was cleared."*
+
+**Blanking a secret is not unsetting it.** `PORTAL_SECRET_KEY=""` did not reach the refusal path —
+start proceeded normally. The variable had to be genuinely removed (`env -u`) before the launcher
+said *"Dispatch cannot start because PORTAL_SECRET_KEY is not set."*
+
+Both traps produce a false negative that reads as a false defect. Anyone re-running these items
+should know.
+
+### What was confirmed working
+
+- **Orphan detection.** With the PID record deleted, start refused with `port 8080 is already in use`,
+  **named the unclaimed process**, created no second server, and told the operator what to do.
+- **Failure reporting.** A non-Dispatch process on 8080 produced one sentence, no traceback, and
+  `status` then showed it under `Last start failure` with a timestamp.
+- **Secret redaction.** Every `SECRET`/`KEY`/`PASSWORD`/`TOKEN`/`PIN` hit in the launcher log is a
+  setting **name** followed by `[REDACTED]`. No value appears. The log directory is outside the
+  repository and is not tracked.
+- **Launcher and portal agree.** Started independently, both print the same address, the same
+  database path and the same three storage roots.
+
+---
+
 ## 1. What used to govern all the others
 
 Section 1 below was written when nothing had ever run on Mike's machine. That changed today
@@ -173,9 +223,16 @@ decided.
 
 ## 7. The exact next operational blocker
 
-> **Record the fifteen first-start acceptance items in the form
-> `docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` asks for — the named command run, and its real
-> output written beside the item.**
+> **Record the SIX REMAINING first-start acceptance items.** Nine of fifteen were recorded
+> 2026-09-05 (items 2, 3, 4, 5, 6, 7, 11, 12, 13). **Every item reachable without Mike is done.**
+>
+> The six that remain each need something only Mike can supply:
+> **items 1, 9, 10** — double-click the launcher and read the window;
+> **items 14 and 15** — choose `[7]` and confirm the portal afterwards. Item 14 is the one that
+> matters most and is still untouched;
+> **item 8** — the external drive. The backup mechanism itself was proven end to end on
+> 2026-09-05 (capture, hash-verify, restore, restored database identical to source), so this is
+> now hardware, not software.
 
 Updated 2026-08-25. Everything that came before this is cleared. Dispatch launches, signs in
 and renders on the target machine.
