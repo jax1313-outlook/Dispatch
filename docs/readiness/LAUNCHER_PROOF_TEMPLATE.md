@@ -133,7 +133,7 @@ python -m dispatch_launcher status
 python portal\app.py          (read the storage map it prints, then close it with Ctrl+C)
 ```
 
-| **Cross-check result** | `UNVERIFIED` |
+| **Cross-check result** | `LIVE` — run 2026-09-05. `py -3 -m dispatch_launcher status` and `py -3 portal\app.py` printed **identical** values: address `http://127.0.0.1:8080`; database `D:\Dispatch Operations\Current Workspace\PortalData\dispatch.db`; portal data, Operations root `D:\Dispatch Operations`, Archive root `D:\Archive`, Memory root `D:\Memory`. The portal additionally resolved `Evidence uploads D:\Memory\Evidence`, `Contract archive D:\Archive\CIN`, `Email outbox D:\Archive\CIN\Outbox`. **They agree.** |
 
 ---
 
@@ -228,8 +228,8 @@ leftover `python.exe` running `portal\app.py` in Task Manager.
 | **Requirement** | §3.3 — the most recent launch failure in plain language, stack trace kept in the log. §3.4 — logs preserved outside version control, secrets redacted. |
 | **Command Mike runs** | 1. `python -m dispatch_launcher start`<br>2. In a **second** window: `set PORTAL_PORT=8080` then `python -m dispatch_launcher start` |
 | **Expected** | The second window prints one sentence: `Dispatch could not start because port 8080 is already in use.` — no traceback on screen. `python -m dispatch_launcher status` then shows it under `Last start failure`. |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste the output)_ |
+| **Result** | `LIVE` |
+| **Observed** | Run 2026-09-05. A **non-Dispatch** process was bound to 127.0.0.1:8080, then start was attempted. Output was exactly one sentence, with no traceback:<br>`Dispatch could not start because port 8080 is already in use.`<br>`py -3 -m dispatch_launcher status` then showed it under `Last start failure`:<br>`2026-09-05T17:49:46Z` / `Dispatch could not start because port 8080 is already in use.`<br>**Requirement met.** |
 
 Missing-secret failure, which must name the setting and never its value:
 
@@ -237,8 +237,8 @@ Missing-secret failure, which must name the setting and never its value:
 |---|---|
 | **Command Mike runs** | In a new window with no `PORTAL_SECRET_KEY` set: `python -m dispatch_launcher start` |
 | **Expected** | `Dispatch cannot start because PORTAL_SECRET_KEY ... is not set` — the **name only**. No key value appears anywhere on screen or in the logs. |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste the output)_ |
+| **Result** | `LIVE` |
+| **Observed** | `env -u PORTAL_SECRET_KEY py -3 -m dispatch_launcher start`:<br>`Dispatch cannot start because PORTAL_SECRET_KEY is not set, and Dispatch is in operational mode. Set a real value for it and start again.`<br>`The launcher reports the name of the setting only, never its value.`<br>`Dispatch itself refuses to start on the published default from this repository, which anyone who can read the source already knows.`<br>**The setting is named; no value appears. Requirement met.**<br><br>**Method note:** setting the variable to an *empty string* was not sufficient — the start proceeded normally. The variable had to be genuinely **removed** from the environment (`env -u`) to reach the refusal path. A test that blanks the value measures nothing here. |
 
 Log location and redaction check:
 
