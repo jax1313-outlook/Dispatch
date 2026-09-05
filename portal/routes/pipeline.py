@@ -98,20 +98,26 @@ def queue(route_name: str):
 @pipeline_bp.route("/archive", methods=["GET"])
 def archive_list():
     """List all DISPATCH archived contracts."""
-    contracts = archive.list_contracts()
+    try:
+        contracts = archive.list_contracts()
+    except archive.ArchiveIntegrityError as exc:
+        return jsonify({"error": str(exc)}), 500
     return jsonify({"status": "ok", "contracts": contracts, "count": len(contracts)})
 
 
 @pipeline_bp.route("/archive/<contract_id>", methods=["GET"])
 def archive_detail(contract_id: str):
     """Load all artifacts for a single archived contract."""
-    metadata = archive.load_artifact("Processed", contract_id)
-    if metadata is None:
-        return jsonify({"error": f"Contract {contract_id} not found in archive"}), 404
-    return jsonify({
-        "status": "ok",
-        "metadata": metadata.get("metadata", metadata),
-        "intelligence": archive.load_artifact("Intelligence", contract_id),
-        "summary": archive.load_artifact("Summaries", contract_id),
-        "routing": archive.load_artifact("Routing", contract_id),
-    })
+    try:
+        metadata = archive.load_artifact("Processed", contract_id)
+        if metadata is None:
+            return jsonify({"error": f"Contract {contract_id} not found in archive"}), 404
+        return jsonify({
+            "status": "ok",
+            "metadata": metadata.get("metadata", metadata),
+            "intelligence": archive.load_artifact("Intelligence", contract_id),
+            "summary": archive.load_artifact("Summaries", contract_id),
+            "routing": archive.load_artifact("Routing", contract_id),
+        })
+    except archive.ArchiveIntegrityError as exc:
+        return jsonify({"error": str(exc)}), 500

@@ -1,3 +1,3 @@
-"""L2-COS Operations Portal v1 — local-first operations cockpit."""
+"""Dispatch — the local-first operations portal."""
 
 __version__ = "0.1.0"

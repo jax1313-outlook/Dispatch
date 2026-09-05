@@ -21,6 +21,16 @@ def index():
     return redirect(url_for("pages.home"))
 
 
+@pages_bp.route("/operations")
+def operations():
+    """Consequence-sorted decision feed -- one screen for everything open
+    across Publisher/Conflicts/Pipeline/Exceptions/Settlements/Stalled
+    Loads/Queues/Library gaps. See portal/models/operations_feed.py."""
+    from portal.models import operations_feed
+    feed = operations_feed.build_feed()
+    return render_template("operations.html", **feed)
+
+
 @pages_bp.route("/home")
 def home():
     from dispatch import services as dispatch_svc
@@ -47,11 +57,13 @@ def home():
     from dispatch import store as dispatch_store
     recent_activity = dispatch_store.get_recent_activity(limit=15)
     chart_data = dispatch_svc.get_chart_data()
+    attention_needed = helpers.attention_needed()
 
     return render_template(
         "home.html",
         sam_cards=sam_sorted,
         dispatch_cards=dispatch_sorted,
+        simulated_count=sandbox.simulated_count(),
         conflict_count=len(unresolved),
         publisher_count=len(pub_queue),
         archive_count=arc_model.total_count(),
@@ -63,6 +75,7 @@ def home():
         stalled_loads=stalled,
         recent_activity=recent_activity,
         chart_data=chart_data,
+        attention_needed=attention_needed,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
@@ -176,11 +189,20 @@ def dispatch_detail(load_id):
         EXPENSE_CATEGORIES, RATE_TYPES, SETTLEMENT_STATUSES, PAYMENT_METHODS,
     )
 
+    from portal.models import completion_packet as cp_model
+    from portal.models import email_helper
+    from dispatch import notifications
+
     bundle = dispatch_svc.get_load_bundle(load_id)
     if not bundle:
         return redirect(url_for("pages.dispatch"))
+    stakeholder_token = notifications.make_stakeholder_token(load_id)
+    stakeholder_url = url_for(
+        "stakeholder.stakeholder_view", load_id=load_id, token=stakeholder_token, _external=True
+    )
     return render_template(
         "dispatch_detail.html",
+        stakeholder_url=stakeholder_url,
         load_statuses=LOAD_STATUSES,
         milestone_types=MILESTONE_TYPES,
         milestone_sources=MILESTONE_SOURCES,
@@ -192,6 +214,8 @@ def dispatch_detail(load_id):
         rate_types=RATE_TYPES,
         settlement_statuses=SETTLEMENT_STATUSES,
         payment_methods=PAYMENT_METHODS,
+        completion_packet=cp_model.get_packet(load_id),
+        email_package=email_helper.get_package(load_id),
         **bundle,
     )
 
@@ -227,6 +251,18 @@ def rate_confirmation_print(load_id):
         assigned_driver=bundle.get("assigned_driver"),
         assigned_equipment=bundle.get("assigned_equipment"),
     )
+
+
+@pages_bp.route("/clear-sample-data", methods=["POST"])
+def clear_sample_data():
+    """Remove the bundled sample loads. BLOCK-01.
+
+    Only records marked SIMULATED are removed. A live record is never deleted
+    by this, whatever else is true of it -- a clear that could take real
+    freight with it is a clear nobody would dare press.
+    """
+    sandbox.clear_simulated()
+    return redirect(url_for("pages.home"))
 
 
 @pages_bp.route("/brokers")
@@ -332,15 +368,26 @@ def ifta():
 
     vehicle_id = request.args.get("vehicle_id", "")
 
-    if view_mode == "month":
-        report = dispatch_svc.get_ifta_monthly_report(year, month, vehicle_id)
-    else:
-        report = dispatch_svc.get_ifta_quarterly_report(year, quarter, vehicle_id)
+    report = None
+    error = None
+    try:
+        if view_mode == "month":
+            report = dispatch_svc.get_ifta_monthly_report(year, month, vehicle_id)
+        else:
+            report = dispatch_svc.get_ifta_quarterly_report(year, quarter, vehicle_id)
+    except ValueError as exc:
+        error = str(exc)
 
     equipment = dispatch_svc.list_equipment(status="active")
+
+    approval = None
+    if view_mode != "month" and report is not None:
+        approval = dispatch_svc.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+
     return render_template(
         "ifta.html",
         report=report,
+        error=error,
         jurisdictions=IFTA_JURISDICTIONS,
         equipment=equipment,
         sel_year=year,
@@ -348,6 +395,41 @@ def ifta():
         sel_month=month,
         sel_vehicle=vehicle_id,
         view_mode=view_mode,
+        approval=approval,
+    )
+
+
+@pages_bp.route("/ifta/review")
+def ifta_review():
+    from dispatch import services as dispatch_svc
+    from datetime import date
+
+    today = date.today()
+    try:
+        year = int(request.args.get("year", today.year))
+        quarter = int(request.args.get("quarter", (today.month - 1) // 3 + 1))
+    except (ValueError, TypeError):
+        year = today.year
+        quarter = (today.month - 1) // 3 + 1
+
+    vehicle_id = request.args.get("vehicle_id", "")
+    equipment = dispatch_svc.list_equipment(status="active")
+
+    error = None
+    try:
+        dashboard = dispatch_svc.build_ifta_review_dashboard(year, quarter, vehicle_id)
+    except ValueError as exc:
+        dashboard = None
+        error = str(exc)
+
+    return render_template(
+        "ifta_review.html",
+        dashboard=dashboard,
+        error=error,
+        equipment=equipment,
+        sel_year=year,
+        sel_quarter=quarter,
+        sel_vehicle=vehicle_id,
     )
 
 
@@ -640,6 +722,34 @@ def search():
     )
 
 
+@pages_bp.route("/search/loads/<load_id>")
+def search_load_detail(load_id):
+    """Read-only load lookup (Driver-First Doctrine D6/D9).
+
+    Reachable only from Load Search results. Reuses the same
+    get_load_bundle() data assembly as dispatch_detail, but renders it
+    through a template with no create/modify/delete/archive/complete/
+    dispatch/send affordances -- pure text/tables, so a driver looking
+    up a load from search can never accidentally trigger an action.
+    The full editable page (dispatch_detail) remains reachable from the
+    main Dispatch list, unchanged.
+    """
+    from dispatch import services as dispatch_svc
+
+    from portal.models import completion_packet as cp_model
+    from portal.models import email_helper
+
+    bundle = dispatch_svc.get_load_bundle(load_id)
+    if not bundle:
+        return redirect(url_for("pages.search"))
+    return render_template(
+        "load_readonly_detail.html",
+        completion_packet=cp_model.get_packet(load_id),
+        email_package=email_helper.get_package(load_id),
+        **bundle,
+    )
+
+
 @pages_bp.route("/brief/<sandbox_id>")
 def brief(sandbox_id: str):
     entry = sandbox.get(sandbox_id)
@@ -691,7 +801,25 @@ def library():
          "description": "Approved intelligence products, market data, and analytical references.",
          "records": all_records.get("intelligence", [])},
     ]
-    return render_template("library.html", sections=sections)
+
+    from dispatch import services as dispatch_svc
+    from portal.models import driver_pin_registry as driver_pin_model
+
+    all_drivers = {d["driver_id"]: d for d in dispatch_svc.list_drivers()}
+    pin_cards = driver_pin_model.list_pin_cards()
+    for card in pin_cards:
+        driver = all_drivers.get(card["driver_id"])
+        card["driver_name"] = driver.get("name", card["driver_id"]) if driver else "(deleted driver)"
+        card["driver_phone"] = driver.get("phone", "") if driver else ""
+    drivers_without_cards = [
+        d for d in all_drivers.values()
+        if d["driver_id"] not in {c["driver_id"] for c in pin_cards}
+    ]
+
+    return render_template(
+        "library.html", sections=sections,
+        driver_pin_cards=pin_cards, drivers_without_cards=drivers_without_cards,
+    )
 
 
 @pages_bp.route("/archive")
@@ -710,16 +838,35 @@ def archive_view():
             "key": key,
             "records": all_archive.get(key, []),
         })
-    pipeline_archived = cin_archive.list_contracts()
+    pipeline_archived = []
+    pipeline_archive_error = None
+    try:
+        pipeline_archived = cin_archive.list_contracts()
+    except cin_archive.ArchiveIntegrityError as exc:
+        pipeline_archive_error = str(exc)
 
-    from dispatch import services as dispatch_svc
+    from dispatch import notifications, services as dispatch_svc
+    from portal.models import completion_packet as cp_model
+
     dispatch_archived = dispatch_svc.list_retentions()
+    for ret in dispatch_archived:
+        packet = cp_model.get_packet(ret["load_id"])
+        ret["email_cluster_doc_count"] = (
+            len(packet["email_cluster"]["documents"])
+            if packet and packet.get("email_cluster")
+            else 0
+        )
+        ret["stakeholder_url"] = url_for(
+            "stakeholder.stakeholder_view", load_id=ret["load_id"],
+            token=notifications.make_stakeholder_token(ret["load_id"]), _external=True,
+        )
 
     return render_template(
         "archive.html",
         sections=sections,
         sandbox_archived=sandbox_archived,
         pipeline_archived=pipeline_archived,
+        pipeline_archive_error=pipeline_archive_error,
         dispatch_archived=dispatch_archived,
     )
 
@@ -815,13 +962,14 @@ def settings():
     from cin_lite import archive as cin_archive
     from dispatch.db import get_db_path
     from dispatch.services import _STALL_THRESHOLDS_HOURS, _get_upload_dir
-    from portal.models import get_memory_dir, get_archive_dir
+    from portal.models import get_data_dir, get_memory_dir, get_archive_dir
+    from portal.models import integrations_registry
 
     storage_paths = {
         "ops_root": os.environ.get("DISPATCH_OPERATIONS_ROOT", ""),
         "archive_root": os.environ.get("DISPATCH_ARCHIVE_ROOT", ""),
         "memory_root": os.environ.get("DISPATCH_MEMORY_ROOT", ""),
-        "portal_data": str(Path(Config.DATA_DIR).resolve()),
+        "portal_data": str(get_data_dir().resolve()),
         "database": str(get_db_path().resolve()),
         "uploads": str(_get_upload_dir().resolve()),
         "archive": str(cin_archive.ARCHIVE_ROOT.resolve()),
@@ -836,6 +984,7 @@ def settings():
         cin_config=cin_config,
         stall_thresholds=_STALL_THRESHOLDS_HOURS,
         storage_paths=storage_paths,
+        integration_entries=integrations_registry.list_entries(),
     )
 
 

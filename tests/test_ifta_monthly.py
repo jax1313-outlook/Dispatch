@@ -230,12 +230,28 @@ class TestTaxComputation:
             assert "tax_owed" in j
             assert "total_due" in j
 
-    def test_unknown_jurisdiction_gets_zero_rates(self):
-        from dispatch.services import _ifta_aggregate
+    def test_missing_rate_jurisdiction_refuses_to_aggregate(self, monkeypatch):
+        """A jurisdiction with no rate on file must refuse the report, not
+        silently compute a $0.00 fallback -- a missing-data zero is forbidden,
+        even though the jurisdiction itself is a valid IFTA_JURISDICTIONS entry."""
         from dispatch.models import IFTA_TAX_RATES
-        rates = IFTA_TAX_RATES.get("ZZ", {"rate": 0.0, "surcharge": 0.0})
-        assert rates["rate"] == 0.0
-        assert rates["surcharge"] == 0.0
+        services.add_ifta_trip_leg(jurisdiction="TX", miles=500, date="2025-01-15")
+        monkeypatch.delitem(IFTA_TAX_RATES, "TX")
+        with pytest.raises(ValueError, match="TX"):
+            services.get_ifta_monthly_report(2025, 1)
+
+    def test_genuine_zero_rate_still_computes_a_real_zero(self, monkeypatch):
+        """A jurisdiction whose real, stored rate is exactly 0.0 must continue
+        to compute normally -- a calculated zero is valid and must never be
+        confused with a missing-data refusal."""
+        from dispatch.models import IFTA_TAX_RATES
+        monkeypatch.setitem(IFTA_TAX_RATES, "TX", {"rate": 0.0, "surcharge": 0.0})
+        services.add_ifta_trip_leg(jurisdiction="TX", miles=500, date="2025-01-15")
+        services.add_ifta_fuel_purchase(jurisdiction="TX", gallons=80, amount=280, date="2025-01-16")
+        report = services.get_ifta_monthly_report(2025, 1)
+        tx = next(j for j in report["jurisdictions"] if j["jurisdiction"] == "TX")
+        assert tx["tax_rate"] == 0.0
+        assert tx["tax_owed"] == 0.0
 
 
 # ── CSV export tests ──────────────────────────────────────────────

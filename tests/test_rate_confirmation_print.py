@@ -269,7 +269,12 @@ class TestRateConfirmationPrintLayout:
         resp = client.get(f"/dispatch/{load['load_id']}/rate-confirmation/print")
         html = resp.data.decode()
         assert "sidebar" not in html
-        assert "L2-COS Portal" not in html
+        # The print view must not inherit the portal chrome. The sidebar
+        # heading is the chrome's signature; the superseded program name is
+        # kept as a second guard so this test still fails if the old base
+        # template is ever reintroduced.
+        assert "<h2>Dispatch</h2>" not in html
+        assert "L2-COS" not in html
 
 
 # ── Dispatch detail print link test ─────────────────────────────────

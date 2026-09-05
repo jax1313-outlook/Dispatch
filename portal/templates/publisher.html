@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Publisher — L2-COS Portal{% endblock %}
+{% block title %}Publisher — Dispatch{% endblock %}
 {% block page_title %}Publisher Queue{% endblock %}
 
 {% block body %}
@@ -18,6 +18,8 @@
         </div>
         <div class="publisher-fields">
             <div><strong>Related:</strong> {{ action.sandbox_id }}</div>
+            {% if action.contract_id %}<div><strong>Contract:</strong> {{ action.contract_id }}</div>{% endif %}
+            {% if action.proposal_reference_id %}<div><strong>Proposal:</strong> {{ action.proposal_reference_id }}</div>{% endif %}
             <div><strong>Trigger:</strong> {{ action.trigger_reason }}</div>
             <div><strong>Recommended Product:</strong> {{ action.recommended_product }}</div>
             <div><strong>Available Data:</strong> {{ action.available_data|join(', ') if action.available_data else 'None' }}</div>
@@ -58,6 +60,8 @@
         </div>
         <div class="publisher-fields">
             <div><strong>Related:</strong> {{ action.sandbox_id }}</div>
+            {% if action.contract_id %}<div><strong>Contract:</strong> {{ action.contract_id }}</div>{% endif %}
+            {% if action.proposal_reference_id %}<div><strong>Proposal:</strong> {{ action.proposal_reference_id }}</div>{% endif %}
             <div><strong>Trigger:</strong> {{ action.trigger_reason }}</div>
         </div>
         <div class="card-actions">
@@ -84,6 +88,8 @@
         </div>
         <div class="publisher-fields">
             <div><strong>Related:</strong> {{ action.sandbox_id }}</div>
+            {% if action.contract_id %}<div><strong>Contract:</strong> {{ action.contract_id }}</div>{% endif %}
+            {% if action.proposal_reference_id %}<div><strong>Proposal:</strong> {{ action.proposal_reference_id }}</div>{% endif %}
             <div><strong>Completed:</strong> {{ action.updated_at }}</div>
         </div>
     </div>

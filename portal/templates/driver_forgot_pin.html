@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset PIN — Level 1 Transport</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f4f5f7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .login-box {
+            background: #fff;
+            border: 1px solid #d9dce1;
+            border-radius: 8px;
+            padding: 32px;
+            width: 320px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        .login-box h1 { font-size: 1.2rem; margin: 0 0 4px 0; }
+        .login-box p.subtitle { color: #6b7280; font-size: 0.85rem; margin: 0 0 20px 0; }
+        .login-box input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid #ccd0d6;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+        .login-box input[type="password"] { letter-spacing: 0.2em; }
+        .login-box button {
+            width: 100%;
+            padding: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            background: #1f2937;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .login-box button:hover { background: #111827; }
+        .error-message {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+        .success-message {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+        .back-link { display: block; text-align: center; margin-top: 14px; font-size: 0.85rem; color: #4b5563; }
+    </style>
+</head>
+<body>
+{% if rehearsal_active %}<div class="rehearsal-banner" role="status" style="background:#b91c1c;color:#fff;padding:10px 16px;font-weight:900;letter-spacing:1px;text-align:center;font-size:15px;border-bottom:3px solid #fca5a5;">
+  {{ rehearsal_label }} MODE — THIS IS NOT A LIVE MISSION.
+  <span style="font-weight:600;letter-spacing:0;">Session {{ rehearsal_session_id }}{% if rehearsal_session_label %} &middot; {{ rehearsal_session_label }}{% endif %}. Every record created now is tagged {{ rehearsal_label }}.</span>
+</div>{% endif %}
+    <div class="login-box">
+        <h1>Reset Your PIN</h1>
+        <p class="subtitle">Enter your phone number and recovery word</p>
+        {% if error %}
+        <div class="error-message">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="success-message">PIN updated. You can sign in with your new PIN now.</div>
+        {% else %}
+        <form method="POST" action="{{ url_for('driver_portal.driver_forgot_pin') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="tel" name="phone" inputmode="tel" autocomplete="tel"
+                   placeholder="Phone number" autofocus required>
+            <input type="text" name="recovery_word" autocomplete="off"
+                   placeholder="Recovery word" required>
+            <input type="password" name="new_pin" inputmode="numeric" autocomplete="off"
+                   placeholder="New PIN" required>
+            <button type="submit">Reset PIN</button>
+        </form>
+        {% endif %}
+        <a class="back-link" href="{{ url_for('driver_portal.driver_login') }}">Back to sign in</a>
+    </div>
+</body>
+</html>

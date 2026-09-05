@@ -294,7 +294,10 @@ class TestEngine:
         engine = self._make_engine(sample_config, tmp_dirs)
         engine.run()
 
-        _write_vps_record(tmp_dirs["vps"], "loads", "L002")
+        time.sleep(0.01)
+        p = _write_vps_record(tmp_dirs["vps"], "loads", "L002")
+        future_time = time.time() + 2.0
+        os.utime(p, (future_time, future_time))
         engine2 = self._make_engine(sample_config, tmp_dirs)
         engine2.run()
         assert (tmp_dirs["primary"] / "loads" / "L001.json").exists()

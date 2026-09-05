@@ -512,7 +512,9 @@ class TestFinancialsInArchive:
         dispatch_svc.confirm_rate(lid, rate_amount=625.0)
         dispatch_svc.add_expense(lid, category="fuel", amount=150)
 
-        dispatch_svc.add_milestone(lid, "dispatched")
+        for _evt in ("dispatched", "en_route_pickup", "arrived_pickup", "loaded",
+                     "departed_pickup", "arrived_delivery"):
+            dispatch_svc.add_milestone(lid, _evt)
         dispatch_svc.add_milestone(lid, "delivered", location="Savannah, GA")
 
         ret = dispatch_svc.archive_load(lid)

@@ -1,4 +1,4 @@
-"""L2-COS Operations Portal v1 — app.py entry point.
+"""Dispatch — the portal application entry point.
 
 Run locally:
     python portal/app.py
@@ -17,9 +17,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from flask import Flask
+from flask import Flask, redirect, request, session, url_for
 
-from portal.config import Config, check_secret_key
+from portal.config import Config, check_secrets, development_host
+from portal.csrf import init_csrf
+from portal import errors
 from portal.routes import register_routes
 
 
@@ -32,9 +34,134 @@ def create_app(config: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if config:
         app.config.update(config)
+
+    # Before anything else that can fail: a crash must produce a page that says what
+    # broke and where the log is, not Flask's bare "Internal Server Error". See
+    # portal/errors.py for why this exists.
+    errors.register(app)
     if not app.config.get("TESTING"):
-        check_secret_key()
+        # Raises InsecureConfigurationError in operational mode, so a
+        # misconfigured deployment never reaches a route at all.
+        check_secrets()
     register_routes(app)
+    init_csrf(app)
+
+    @app.before_request
+    def _require_authority_login():
+        """DISPATCH_PIN login gate (governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md). Fails closed in real (non-TESTING) use: a missing/unbootstrapped identity does
+        NOT bypass this gate -- it just means /login correctly reports there's nothing to log
+        into yet, rather than the rest of Portal silently staying open.
+
+        LOGIN_DISABLED (Flask-Login's own config-key convention, reused here) defaults to
+        TESTING's value, checked live on every request rather than snapshotted once at
+        create_app() time -- most of the ~67 pre-existing test files in this repo call
+        create_app() with no config dict at all and set app.config["TESTING"] = True on the
+        returned app afterward, which a creation-time default would miss entirely. Checking
+        live means none of those files need individual changes. A config dict that explicitly
+        passes LOGIN_DISABLED (True or False) at creation time still wins, since that sets
+        app.config directly -- see TestDispatchPinAuthentication in tests/test_portal.py,
+        which passes False to exercise the real gate under TESTING.
+
+        The `decisions` blueprint (cin_lite's HMAC-token email action links) is excluded on
+        purpose: those links must work without a browser session, and already carry their own,
+        separate token-based authentication -- see portal/routes/decisions.py. The freight
+        equivalent, dispatch_api.dispatch_decision (portal/routes/dispatch_api.py), is exempted
+        the same way and for the same reason -- it has its own notifications.verify_token() HMAC
+        check -- but only that one endpoint, not the whole dispatch_api blueprint, since every
+        other route in that blueprint should stay behind login.
+
+        The `stakeholder` blueprint (portal/routes/stakeholder.py) is exempted the same way, for
+        the same reason: it's the external broker/shipper/customer read-only portal link, must
+        work for a recipient with no Dispatch login at all, and carries its own, separate
+        notifications.verify_stakeholder_token() HMAC check. Unlike dispatch_api, every route in
+        this blueprint is meant to be reachable this way, so the whole blueprint is exempted
+        (there is currently only the one route, stakeholder.stakeholder_view).
+
+        The `driver_portal` blueprint (portal/routes/driver_portal.py) is exempted the same
+        way, for a related but distinct reason: it's a real login surface (Phone Number + PIN,
+        portal/models/driver_pin_registry.py), not a token link, so it needs its OWN gate --
+        which it has, as its own @driver_portal_bp.before_request checking session["driver_id"]
+        (a different session key than this gate's session["user_id"], so an Authority session
+        and a Driver session can never satisfy each other's gate). Without this exemption, the
+        Authority gate below would redirect every driver_portal request to /login (Authority's
+        login) before driver_portal's own before_request ever ran, since Flask calls app-level
+        before_request handlers before blueprint-level ones.
+        """
+        login_disabled = app.config.get("LOGIN_DISABLED")
+        if login_disabled is None:
+            login_disabled = app.config.get("TESTING", False)
+        if login_disabled:
+            return None
+        if request.endpoint is None or request.endpoint == "static":
+            return None
+        if request.blueprint == "decisions":
+            return None
+        if request.blueprint == "stakeholder":
+            return None
+        if request.blueprint == "driver_portal":
+            return None
+        if request.endpoint == "dispatch_api.dispatch_decision":
+            return None
+        if request.endpoint in ("auth.login", "auth.logout"):
+            return None
+        if not session.get("user_id"):
+            return redirect(url_for("auth.login"))
+        return None
+
+    @app.context_processor
+    def _rehearsal_banner():
+        """Rehearsal labelling for every template, without any of them asking.
+
+        Mission Section 4.2: "No rehearsal record may ever display as an
+        unlabeled live mission." A context processor is the only way to make
+        that true for templates that have not been written yet -- a per-view
+        variable would have been correct on the day it was added and wrong the
+        first time someone added a view and forgot.
+
+        Returns rehearsal_active=False in the operational default, so the
+        banner block renders nothing at all when no rehearsal is running.
+        """
+        from dispatch.rehearsal import banner_context
+
+        try:
+            return banner_context()
+        except Exception:  # pragma: no cover - a banner must never 500 a page
+            return {
+                "rehearsal_active": False,
+                "rehearsal_label": "REHEARSAL",
+                "rehearsal_session_id": "",
+                "rehearsal_session_label": "",
+            }
+
+    @app.template_global("rehearsal_badge")
+    def _rehearsal_badge(record) -> "Markup":
+        """The per-RECORD label, as opposed to the per-SESSION banner above.
+
+        The banner says "a rehearsal is running now". This says "this specific
+        record was created during one" -- which still has to be visible months
+        later, with rehearsal mode long since off, when Mike opens an old load
+        and needs to know in one glance that it was never real freight. Without
+        it, a rehearsal record viewed outside its session would display as an
+        unlabeled live mission, which Section 4.2 forbids outright.
+
+        Reads the stored column, so the label comes from the record rather than
+        from anything the view was asked to remember to pass in.
+        """
+        from markupsafe import Markup, escape
+
+        from dispatch.rehearsal import label_for
+
+        label = label_for(record if isinstance(record, dict) else None)
+        if not label:
+            return Markup("")
+        session_id = escape((record or {}).get("rehearsal_session", ""))
+        return Markup(
+            '<span class="rehearsal-badge" title="Created during rehearsal session '
+            f'{session_id} — not a live mission" '
+            'style="display:inline-block;background:#b91c1c;color:#fff;padding:2px 8px;'
+            'border-radius:4px;font-size:12px;font-weight:900;letter-spacing:1px;'
+            f'margin-left:8px;vertical-align:middle;">{escape(label)}</span>'
+        )
 
     @app.template_filter("time_ago")
     def _time_ago(iso_str: str) -> str:
@@ -91,6 +218,13 @@ def _ensure_storage_dirs() -> None:
             Path(memory_root, sub).mkdir(parents=True, exist_ok=True)
 
 
+def _debug_enabled() -> bool:
+    """Werkzeug's debug mode ships an interactive in-browser Python console on any
+    unhandled 500 -- must default off and require an explicit local-dev opt-in, never
+    be unconditionally on for the only documented way to run this app."""
+    return os.environ.get("PORTAL_DEBUG", "0") == "1"
+
+
 def _print_storage_map() -> None:
     from cin_lite import archive as cin_archive
     from dispatch.db import get_db_path
@@ -107,7 +241,8 @@ def _print_storage_map() -> None:
     print()
     print("  Resolved Paths:")
     print(f"    Database         {get_db_path().resolve()}")
-    print(f"    Portal data      {Path(Config.DATA_DIR).resolve()}")
+    from portal.models import get_data_dir
+    print(f"    Portal data      {get_data_dir().resolve()}")
     print(f"    Evidence uploads {_get_upload_dir().resolve()}")
     print(f"    Contract archive {cin_archive.ARCHIVE_ROOT.resolve()}")
     print(f"    Email outbox     {(cin_archive.ARCHIVE_ROOT / 'Outbox').resolve()}")
@@ -119,9 +254,9 @@ def _print_storage_map() -> None:
 if __name__ == "__main__":
     _ensure_storage_dirs()
     app = create_app()
-    host = Config.HOST
+    host = development_host(Config.HOST)
     port = Config.PORT
-    print(f"\n  L2-COS Operations Portal v1")
+    print(f"\n  Dispatch")
     print(f"  http://{host}:{port}\n")
     _print_storage_map()
-    app.run(host=host, port=port, debug=True)
+    app.run(host=host, port=port, debug=_debug_enabled())

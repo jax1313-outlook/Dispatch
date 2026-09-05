@@ -21,9 +21,13 @@ from dispatch.models import (
     EvidenceItem,
     ExceptionNotice,
     Expense,
+    IFTAException,
+    IFTAFuelEvidence,
     IFTAFuelPurchase,
+    IFTAReportApproval,
     IFTATripLeg,
     Load,
+    LoadActivity,
     LoadVisibilityRecord,
     MilestoneEvent,
     PODPackage,
@@ -33,6 +37,25 @@ from dispatch.models import (
     _utc_now,
 )
 from dispatch import notifications, store
+
+import sys
+
+
+def _notify_safe(send) -> None:
+    """Run a notifications.notify_* call without letting an SMTP failure
+    turn an already-completed write into a false failure response.
+
+    Every notify_* call site here runs strictly after the DB write it's
+    reporting on has already committed. An SMTP timeout/auth failure raised
+    from smtplib (cin_lite/email_delivery.py's transport, reused by
+    dispatch/notifications.py) is not the caller's problem to see as a 500 --
+    the load *was* archived/delivered/invoiced; only the notification email
+    failed. Log and continue rather than propagate.
+    """
+    try:
+        send()
+    except Exception as exc:  # noqa: BLE001 - deliberately broad: any transport failure, not just SMTP
+        print(f"[dispatch.notifications] notify failed, continuing: {exc}", file=sys.stderr)
 
 
 _MILESTONE_TO_STATUS = {
@@ -60,7 +83,7 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
     "delivered": {"completed", "archived"},
     "completed": {"archived"},
     "archived": set(),
-    "cancelled": set(),
+    "cancelled": {"archived"},
 }
 
 
@@ -143,15 +166,69 @@ def list_loads(
     customer: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    driver_id: str | None = None,
     *,
     page: int | None = None,
     per_page: int | None = None,
+    include_rehearsal: bool = True,
 ) -> list[dict] | dict:
     return store.list_loads(
         status=status, customer=customer,
-        date_from=date_from, date_to=date_to,
-        page=page, per_page=per_page,
+        date_from=date_from, date_to=date_to, driver_id=driver_id,
+        page=page, per_page=per_page, include_rehearsal=include_rehearsal,
     )
+
+
+def _record_status_change(
+    load_id: str,
+    previous_state: str,
+    new_state: str,
+    operation: str,
+    actor: str = "",
+) -> None:
+    """Write the one audit event for an accepted status change.
+
+    Mission C3. Four service paths change a load's status -- update_load(),
+    add_milestone(), _try_auto_dispatch() and archive_load() -- and before C3
+    only the first wrote a status_change activity. The other three moved a load
+    between states leaving no audit trail at all.
+
+    This is the narrowest point that can satisfy the audit requirement, and it
+    has to live in the service layer rather than in store.update_load(): the
+    store layer cannot know *which operation* moved the status, and recording
+    the originating operation is required. store.update_load() therefore stays
+    the raw, unvalidated, unaudited write it was designed to be (see
+    tests/test_milestone_transition_gate.py, which asserts exactly that).
+
+    Fields recorded, against the existing `activities` shape:
+
+        load identifier   -> load_id
+        previous / new    -> message, in the format this repository already used
+        originating op    -> message suffix, "(via ...)"
+        timestamp         -> created_at, via the repository's _utc_now()
+        actor             -> author, and source="user" when an actor is known
+
+    Actor is never fabricated. Only add_milestone() carries one (`entered_by`);
+    the other three paths pass nothing and the event records source="system"
+    with an empty author, which is what the audited path already did.
+
+    Whether a no-op (previous_state == new_state) is worth an event is decided
+    by the CALLER, deliberately -- this helper does not filter. update_load()
+    has always written one and keeps doing so; the three paths added by C3 fire
+    only on a real change. See the C3 walkthrough report: the divergence is
+    reported for Mike rather than resolved here, because changing update_load()
+    would alter existing repository policy.
+    """
+    store.create_activity(LoadActivity(
+        load_id=load_id,
+        activity_type="status_change",
+        message=(
+            f"Status changed from {previous_state} to {new_state} "
+            f"(via {operation})"
+        ),
+        author=actor,
+        source="user" if actor else "system",
+    ))
 
 
 def update_load(load_id: str, **fields) -> dict | None:
@@ -170,13 +247,12 @@ def update_load(load_id: str, **fields) -> dict | None:
             validate_status_transition(old_status, fields["status"])
     result = store.update_load(load_id, **fields)
     if result and old_status and "status" in fields:
-        from dispatch.models import LoadActivity
-        store.create_activity(LoadActivity(
-            load_id=load_id,
-            activity_type="status_change",
-            message=f"Status changed from {old_status} to {fields['status']}",
-            source="system",
-        ))
+        # Trigger condition deliberately unchanged from before C3, including
+        # for a no-op write where old_status == fields["status"]. Preserving
+        # existing repository policy; see _record_status_change().
+        _record_status_change(
+            load_id, old_status, fields["status"], operation="load update",
+        )
     return result
 
 
@@ -259,6 +335,10 @@ def _try_auto_dispatch(load_id: str) -> None:
     if not load.get("driver_id") or not load.get("equipment_id"):
         return
     store.update_load(load_id, status="dispatched")
+    # C3: previous state is "created" by the guard above, not a re-read.
+    _record_status_change(
+        load_id, "created", "dispatched", operation="auto-dispatch",
+    )
     ms = MilestoneEvent(
         load_id=load_id,
         event_type="dispatched",
@@ -276,11 +356,110 @@ def _try_auto_dispatch(load_id: str) -> None:
     store.upsert_visibility(vis)
     updated = store.get_load(load_id)
     if updated:
-        notifications.notify_dispatched(updated)
+        _notify_safe(lambda: notifications.notify_dispatched(updated))
+
+
+def record_route_risk_event(
+    load_id: str,
+    condition_summary: str,
+    consequence_level: int = 1,
+    estimated_delay_minutes: int = 0,
+    source_type: str = "manual_entry",
+    source_label: str = "Internal Dispatcher Entry",
+    affected_area: str = "",
+    affected_corridor: str = "",
+    delivery_commitment_status: str = "achievable",
+    has_map_visual: bool = True,
+) -> dict:
+    from dispatch import route_risk
+    return route_risk.record_route_risk_event(
+        load_id=load_id,
+        condition_summary=condition_summary,
+        consequence_level=consequence_level,
+        estimated_delay_minutes=estimated_delay_minutes,
+        source_type=source_type,
+        source_label=source_label,
+        affected_area=affected_area,
+        affected_corridor=affected_corridor,
+        delivery_commitment_status=delivery_commitment_status,
+        has_map_visual=has_map_visual,
+    )
+
+
+def get_route_risk(load_id: str) -> dict:
+    from dispatch import route_risk
+    return route_risk.get_route_risk(load_id)
 
 
 def get_visibility(load_id: str) -> dict | None:
     return store.get_visibility(load_id)
+
+
+def get_mission_visibility(load_id: str) -> dict:
+    """Unified, externally-safe visibility snapshot for a load.
+
+    Wraps store.get_visibility() and deliberately EXCLUDES internal_note
+    (internal-only content -- matches the precedent set by
+    build_stakeholder_view(), which also withholds internal_note from
+    external-facing payloads). Always returns the same dict shape, even
+    when no visibility record exists yet, so callers never need a
+    None-check before accessing fields.
+    """
+    visibility = store.get_visibility(load_id)
+    if not visibility:
+        return {
+            "current_status": None,
+            "last_milestone": None,
+            "next_expected_milestone": None,
+            "customer_note": "",
+            "updated_at": None,
+        }
+    return {
+        "current_status": visibility.get("current_status"),
+        "last_milestone": visibility.get("last_milestone"),
+        "next_expected_milestone": visibility.get("next_expected_milestone"),
+        "customer_note": visibility.get("customer_note", ""),
+        "updated_at": visibility.get("updated_at"),
+    }
+
+
+def _raise_transition_refusal_card(load_id: str, current: str, target: str, reason: str) -> None:
+    """Surface a refused status transition as a Conflict Notice.
+
+    M-08 / Constitution v3 §19: a refusal is raised as a card, never silently
+    swallowed. The notice store is the repository's existing card mechanism
+    (portal/models/conflict.py) -- reused rather than duplicated, and keyed by
+    the same "LOAD-{load_id}" scope get_publisher_status() and the End Load
+    route already use.
+
+    The import is deliberately soft, matching get_publisher_status()'s existing
+    pattern: the load engine must keep working when the portal package is not
+    importable (a plain `python -c "from dispatch import services"` in an
+    engine-only deployment). A missing portal is a missing *card surface*, not a
+    reason to lose the refusal -- so the fallback still writes to stderr.
+    """
+    explanation = (
+        f"Refused status transition for load {load_id}: "
+        f"{current} -> {target}. {reason}"
+    )
+    try:
+        from portal.models import conflict as conflict_model
+    except ImportError:
+        print(f"[dispatch.services] {explanation}", file=sys.stderr)
+        return
+    try:
+        conflict_model.create_notice(
+            conflict_type="invalid_status_transition",
+            severity="warning",
+            sandbox_id=f"LOAD-{load_id}",
+            explanation=explanation,
+            recommended_action=(
+                f"Record the intervening milestone(s) in order, or correct the load's "
+                f"status, before recording a '{target}' event."
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - a card-surface failure must not lose the milestone
+        print(f"[dispatch.services] {explanation} (card not raised: {exc})", file=sys.stderr)
 
 
 def add_milestone(
@@ -292,6 +471,23 @@ def add_milestone(
     entered_by: str = "",
     event_time: str = "",
 ) -> dict:
+    """Record a milestone, and advance the load's status only if the resulting
+    transition is legal.
+
+    The status cascade is gated by validate_status_transition() -- the same
+    table archive_load() already enforces. Previously this path wrote the
+    derived status straight through store.update_load(), which performs no
+    validation, so a load could move between any two statuses (created ->
+    delivered in one call, skipping five states).
+
+    The milestone itself is always recorded. A milestone is a record that
+    something was reported to have happened; refusing to store it would
+    discard evidence, which is the opposite of what the gate is for. What the
+    gate refuses is the *transition* -- the load's status is left exactly as it
+    was, a Conflict Notice is raised, and the returned dict carries a
+    non-persisted "status_transition_refused" key so the caller can surface it
+    immediately rather than waiting for someone to read the card.
+    """
     load = store.get_load(load_id)
     if not load:
         raise ValueError(f"Load not found: {load_id}")
@@ -307,24 +503,64 @@ def add_milestone(
     )
     result = store.create_milestone(ms)
 
-    new_status = _MILESTONE_TO_STATUS.get(event_type)
-    if new_status and new_status in LOAD_STATUSES:
-        store.update_load(load_id, status=new_status)
+    current_status = load["status"]
+    target_status = _MILESTONE_TO_STATUS.get(event_type)
+    refusal: dict | None = None
+    effective_status = current_status
+
+    if target_status and target_status in LOAD_STATUSES:
+        try:
+            validate_status_transition(current_status, target_status)
+        except ValueError as exc:
+            refusal = {
+                "from_status": current_status,
+                "to_status": target_status,
+                "event_type": event_type,
+                "reason": str(exc),
+            }
+            _raise_transition_refusal_card(
+                load_id, current_status, target_status, str(exc)
+            )
+        else:
+            store.update_load(load_id, status=target_status)
+            effective_status = target_status
+            # C3: audit the accepted transition. Guarded on a real change --
+            # several milestone types map to the status the load already holds
+            # (departed_pickup and in_transit both -> in_transit; delivered and
+            # pod_received both -> delivered), and recording "changed from
+            # in_transit to in_transit" would put a false statement in the
+            # audit log on a routine, correct operation.
+            if target_status != current_status:
+                _record_status_change(
+                    load_id,
+                    current_status,
+                    target_status,
+                    operation=f"milestone '{event_type}' from {source}",
+                    actor=entered_by,
+                )
 
     has_open = bool(store.list_exceptions(load_id=load_id, status="open"))
 
     vis = LoadVisibilityRecord(
         load_id=load_id,
-        current_status=new_status or load["status"],
+        current_status=effective_status,
         last_milestone=event_type,
         next_expected_milestone=_MILESTONE_NEXT.get(event_type),
         exception_flag=has_open,
     )
     store.upsert_visibility(vis)
 
-    if event_type == "delivered":
+    # Only notify on a delivery the load actually reached. Announcing a
+    # delivery for a load whose transition was just refused would report a
+    # state the load is not in -- and this notification is one step from
+    # being broker-facing.
+    if event_type == "delivered" and effective_status == "delivered":
         updated_load = store.get_load(load_id) or load
-        notifications.notify_delivered(updated_load, result)
+        _notify_safe(lambda: notifications.notify_delivered(updated_load, result))
+
+    if refusal:
+        result = dict(result)
+        result["status_transition_refused"] = refusal
 
     return result
 
@@ -491,7 +727,7 @@ def open_exception(
         store.upsert_visibility(updated)
 
     if severity in ("high", "critical"):
-        notifications.notify_exception(load, result)
+        _notify_safe(lambda: notifications.notify_exception(load, result))
 
     return result
 
@@ -585,7 +821,7 @@ def generate_pod(
             note=f"POD generated: {pod.pod_id}",
         )
 
-    notifications.notify_pod_generated(load, result)
+    _notify_safe(lambda: notifications.notify_pod_generated(load, result))
 
     return result
 
@@ -598,6 +834,43 @@ def list_pods(load_id: str) -> list[dict]:
     return store.list_pods(load_id)
 
 
+def get_comi_status(load_id: str) -> dict:
+    """Shared COMI (Freight Closeout Communications) status lookup, so every
+    surface -- Driver Portal, Stakeholder Portal, Operations Feed, and any
+    future consumer -- reads the same DRAFT/REVIEWED/SUBMITTED signal from
+    dispatch.email_helper instead of re-deriving it independently."""
+    from dispatch import email_helper
+
+    pkg = email_helper.get_package(load_id)
+    if not pkg:
+        return {"exists": False, "status": None}
+    return {"exists": True, "status": pkg["status"]}
+
+
+def evaluate_comi_routing(
+    load_id: str,
+    trigger_type: str,
+    consequence_level: int = 1,
+    source_refs: dict | None = None,
+    custom_notes: dict | None = None,
+) -> dict:
+    """COMI routing helper evaluating triggers and recipient role visibility."""
+    from dispatch import comi_routing
+    return comi_routing.evaluate_comi_routing(
+        load_id=load_id,
+        trigger_type=trigger_type,
+        consequence_level=consequence_level,
+        source_refs=source_refs,
+        custom_notes=custom_notes,
+    )
+
+
+def sanitize_payload_for_role(payload: dict, role: str) -> dict:
+    """Role-based payload sanitization ensuring internal-only information is excluded for external recipients."""
+    from dispatch import comi_routing
+    return comi_routing.sanitize_payload_for_role(payload, role)
+
+
 def archive_load(load_id: str) -> dict:
     load = store.get_load(load_id)
     if not load:
@@ -606,6 +879,8 @@ def archive_load(load_id: str) -> dict:
     existing = store.get_retention_by_load(load_id)
     if existing:
         raise ValueError(f"Load {load_id} is already archived")
+
+    validate_status_transition(load["status"], "archived")
 
     all_ev = store.list_evidence(load_id)
     evidence_ids = [e["evidence_id"] for e in all_ev]
@@ -633,6 +908,15 @@ def archive_load(load_id: str) -> dict:
     result = store.create_retention(ret)
 
     store.update_load(load_id, status="archived")
+    # C3: `load` was read at the top of archive_load() and nothing between
+    # there and here changes status, so load["status"] is the true previous
+    # state. Guarded on a real change for consistency with the other C3 sites,
+    # though validate_status_transition() above already refuses archived ->
+    # archived by way of the "already archived" retention check.
+    if load["status"] != "archived":
+        _record_status_change(
+            load_id, load["status"], "archived", operation="archive",
+        )
     vis = store.get_visibility(load_id)
     if vis:
         updated = LoadVisibilityRecord(
@@ -643,7 +927,7 @@ def archive_load(load_id: str) -> dict:
         )
         store.upsert_visibility(updated)
 
-    notifications.notify_archived(load, result)
+    _notify_safe(lambda: notifications.notify_archived(load, result))
 
     return result
 
@@ -654,6 +938,59 @@ def get_retention(load_id: str) -> dict | None:
 
 def list_retentions() -> list[dict]:
     return store.list_retentions()
+
+
+_CLOSEOUT_ELIGIBLE_STATUSES = {"delivered", "completed"}
+
+
+def build_completion_packet(load_id: str) -> dict:
+    """Assemble the End Load closeout bundle from artifacts that already exist for this load.
+
+    Pulls together rate confirmation, POD, settlement/invoice, evidence, and broker contact --
+    generates nothing new. Callers use `available`/`missing` to know what's ready to route
+    toward Publisher/Email Helper and what still needs to be gathered first.
+    """
+    bundle = get_load_bundle(load_id)
+    if not bundle:
+        raise ValueError(f"Load not found: {load_id}")
+
+    load = bundle["load"]
+    if load["status"] not in _CLOSEOUT_ELIGIBLE_STATUSES:
+        raise ValueError(
+            f"Load must be delivered or completed before End Load (current: {load['status']})"
+        )
+
+    broker_contact = None
+    if load.get("broker_shipper"):
+        matches = store.list_broker_contacts(search=load["broker_shipper"])
+        broker_contact = matches[0] if matches else None
+
+    rate_confirmation = bundle["financials"]["rate_confirmation"] if bundle["financials"] else None
+    financial_summary = bundle["financials"]["summary"] if bundle["financials"] else None
+
+    available: list[str] = []
+    missing: list[str] = []
+    for label, present in (
+        ("Rate Confirmation", bool(rate_confirmation)),
+        ("POD", bool(bundle["pods"])),
+        ("Invoice / Settlement", bool(bundle["settlement"])),
+        ("Broker Contact", bool(broker_contact)),
+        ("Evidence", bool(bundle["evidence"])),
+    ):
+        (available if present else missing).append(label)
+
+    return {
+        "load_id": load_id,
+        "load": load,
+        "rate_confirmation": rate_confirmation,
+        "financial_summary": financial_summary,
+        "settlement": bundle["settlement"],
+        "pods": bundle["pods"],
+        "evidence": bundle["evidence"],
+        "broker_contact": broker_contact,
+        "available": available,
+        "missing": missing,
+    }
 
 
 def confirm_rate(
@@ -839,7 +1176,7 @@ def create_settlement(
         notes=notes,
     )
     result = store.create_settlement(stl)
-    notifications.notify_invoice_created(load, result)
+    _notify_safe(lambda: notifications.notify_invoice_created(load, result))
     return result
 
 
@@ -870,7 +1207,7 @@ def record_payment(
 
     load = store.get_load(load_id)
     if load and result:
-        notifications.notify_payment_received(load, result)
+        _notify_safe(lambda: notifications.notify_payment_received(load, result))
 
     return result
 
@@ -912,11 +1249,19 @@ def get_financial_dashboard() -> dict:
     for load in all_loads:
         rate = store.get_rate_confirmation(load["load_id"])
         if rate:
-            total_revenue += rate["revenue"]
+            # Round per-load before accumulating, matching
+            # store.get_load_profitability_data()'s convention -- summing raw
+            # unrounded floats here and store.get_load_profitability_data()
+            # rounding per-row before its own sum previously gave two
+            # financial reports different totals for the same underlying
+            # data (a real, demonstrable penny-level discrepancy, not
+            # hypothetical). Round-then-sum everywhere revenue/expenses are
+            # aggregated is the one convention to keep.
+            total_revenue += round(rate["revenue"], 2)
             loads_with_rate += 1
 
         expenses = store.list_expenses(load["load_id"])
-        total_expenses += sum(e["amount"] for e in expenses)
+        total_expenses += round(sum(e["amount"] for e in expenses), 2)
 
     for stl in settlements:
         if stl["payment_status"] == "paid":
@@ -998,7 +1343,7 @@ def check_overdue_settlements() -> list[dict]:
         if updated:
             load = store.get_load(stl["load_id"])
             if load:
-                notifications.notify_payment_overdue(load, updated)
+                _notify_safe(lambda: notifications.notify_payment_overdue(load, updated))
             newly_overdue.append(updated)
 
     return newly_overdue
@@ -1023,7 +1368,7 @@ def dispute_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        notifications.notify_settlement_disputed(load, result, reason)
+        _notify_safe(lambda: notifications.notify_settlement_disputed(load, result, reason))
     return result
 
 
@@ -1046,7 +1391,7 @@ def write_off_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        notifications.notify_settlement_written_off(load, result, reason)
+        _notify_safe(lambda: notifications.notify_settlement_written_off(load, result, reason))
     return result
 
 
@@ -1102,7 +1447,7 @@ def notify_stalled_loads(thresholds: dict[str, int] | None = None) -> list[dict]
     """
     stalled = check_stalled_loads(thresholds)
     for load in stalled:
-        notifications.notify_stalled(load)
+        _notify_safe(lambda: notifications.notify_stalled(load))
     return stalled
 
 
@@ -1132,6 +1477,43 @@ def create_driver(
 
 def get_driver(driver_id: str) -> dict | None:
     return store.get_driver(driver_id)
+
+
+def get_driver_by_phone(phone: str) -> dict | None:
+    return store.get_driver_by_phone(phone)
+
+
+def reviewer_contact_email() -> str:
+    """Level 1 Transport's own dispatch contact address, for the Driver Portal's
+    contact-retrieval capability. Email only -- no SMS/phone channel is configured
+    anywhere in this codebase (Email API is Dispatch's only communication channel
+    per CLAUDE.md's tech stack), so surfacing a phone number here would be invented,
+    not retrieved."""
+    from cin_lite import email_delivery
+    return email_delivery.reviewer_address()
+
+
+def get_load_contacts(load_id: str) -> dict:
+    """Who to reach about this load: Level 1 Transport's own dispatch address,
+    plus the first broker contact on file matching the load's broker_shipper
+    (same substring lookup the Driver Portal has always used). Shared by the
+    Driver Portal and the Stakeholder Portal so both surfaces resolve "who do
+    I call" identically instead of drifting.
+
+    An unknown load_id still returns a dict with dispatch_email populated
+    (fail-open on contact info, not a crash) with broker_contact: None.
+    """
+    dispatch_email = reviewer_contact_email()
+    load = store.get_load(load_id)
+    if not load:
+        return {"dispatch_email": dispatch_email, "broker_contact": None}
+
+    broker_contact = None
+    if load.get("broker_shipper"):
+        matches = store.list_broker_contacts(search=load["broker_shipper"])
+        broker_contact = matches[0] if matches else None
+
+    return {"dispatch_email": dispatch_email, "broker_contact": broker_contact}
 
 
 def list_drivers(
@@ -1344,6 +1726,162 @@ def get_load_bundle(load_id: str) -> dict | None:
         "active_equipment": store.list_equipment(status="active"),
         "lane_history": get_lane_history(load_id),
         "detentions": store.list_detentions(load_id=load_id),
+    }
+
+
+def _sanitize_retention_for_stakeholder(retention: dict | None) -> dict | None:
+    """Strip server-internal fields before a retention record reaches the
+    external stakeholder portal: `archive_location` is a filesystem path,
+    and `financial_summary` is exactly get_financials()['summary'] --
+    Level 1 Transport's own profit/margin_pct on the load, not a
+    rate/fee/cost figure covered by D11's disclosure rule."""
+    if not retention:
+        return None
+    return {
+        "final_status": retention.get("final_status", ""),
+        "retention_status": retention.get("retention_status", ""),
+        "archived_at": retention.get("archived_at", ""),
+        "evidence_count": len(retention.get("evidence_index") or []),
+    }
+
+
+def get_publisher_status(load_id: str) -> dict:
+    """Look up Publisher packet status for a freight load.
+
+    Publisher's queue is keyed by sandbox_id. Safely checks portal.models.publisher
+    if available, otherwise falls back gracefully to a decoupled local representation.
+    """
+    try:
+        from portal.models import publisher
+        queue = publisher.get_queue()
+    except ImportError:
+        queue = []
+
+    sandbox_id = f"LOAD-{load_id}"
+    matches = [a for a in queue if a.get("sandbox_id") == sandbox_id]
+    if not matches:
+        return {"has_packet": False, "status": None, "action_type": None}
+
+    matches.sort(key=lambda a: a.get("updated_at", ""), reverse=True)
+    latest = matches[0]
+    return {
+        "has_packet": True,
+        "status": latest["status"],
+        "action_type": latest["action_type"],
+    }
+
+
+def build_stakeholder_view(load_id: str) -> dict | None:
+    """Assemble the read-only payload shown to an external stakeholder
+    (broker/shipper/customer -- per D11 these are genuinely distinct
+    parties in a Manufacturer -> Shipper -> Broker -> Level 1 Transport
+    chain, not synonyms) via the HMAC-token-secured stakeholder portal.
+
+    Deliberately narrower than get_load_bundle():
+      - rate/fee/cost figures (rate confirmation, settlement/invoice) ARE
+        included -- D11 establishes an open-disclosure rule for these
+        parties, so there is no "curtain" to build here.
+      - Level 1 Transport's own internal economics (expense breakdown,
+        profit, margin_pct from get_financials()) are EXCLUDED -- D11
+        covers disclosure of rate/fee/cost to the parties in the chain,
+        not disclosure of Level 1 Transport's own P&L on the load.
+      - the internal activity/comment thread, driver personal contact
+        info (phone/email/license), and internal_note are EXCLUDED
+        regardless of D11, since none of those are rate/fee/cost figures
+        in the first place.
+      - this view itself still returns evidence as metadata only (type/
+        description/capture_time, no file_path, no download link) -- the
+        file itself is served separately by the token-scoped download
+        route, portal/routes/stakeholder.py::stakeholder_evidence_download
+        (GET /portal/loads/<load_id>/evidence/<evidence_id>?token=...),
+        which re-verifies the same stakeholder token and additionally
+        confirms the evidence record's own load_id matches the load_id in
+        the URL before serving anything (a stakeholder token is scoped to
+        one load; without that check a valid token for load A could be
+        used to enumerate and download evidence belonging to load B).
+    """
+    load = store.get_load(load_id)
+    if not load:
+        return None
+
+    mission_visibility = get_mission_visibility(load_id)
+    rate = store.get_rate_confirmation(load_id)
+    settlement = store.get_settlement(load_id)
+
+    assigned_driver = None
+    if load.get("driver_id"):
+        driver = store.get_driver(load["driver_id"])
+        if driver:
+            assigned_driver = {"name": driver.get("name", "")}
+
+    assigned_equipment = None
+    if load.get("equipment_id"):
+        equipment = store.get_equipment(load["equipment_id"])
+        if equipment:
+            assigned_equipment = {
+                "unit_number": equipment.get("unit_number", ""),
+                "equipment_type": equipment.get("equipment_type", ""),
+            }
+
+    return {
+        "load": {
+            "load_id": load["load_id"],
+            "customer": load.get("customer", ""),
+            "broker_shipper": load.get("broker_shipper", ""),
+            "pickup_location": load.get("pickup_location", ""),
+            "delivery_location": load.get("delivery_location", ""),
+            "pickup_datetime": load.get("pickup_datetime", ""),
+            "delivery_datetime": load.get("delivery_datetime", ""),
+            "status": load.get("status", ""),
+        },
+        "customer_note": mission_visibility["customer_note"],
+        "next_expected_milestone": mission_visibility["next_expected_milestone"],
+        "milestones": [
+            {
+                "event_type": m.get("event_type", ""),
+                "event_time": m.get("event_time", ""),
+                "location": m.get("location", ""),
+                "note": m.get("note", ""),
+            }
+            for m in store.list_milestones(load_id)
+        ],
+        "evidence": [
+            {
+                "evidence_type": e.get("evidence_type", ""),
+                "description": e.get("description", ""),
+                "capture_time": e.get("capture_time", ""),
+            }
+            for e in store.list_evidence(load_id)
+        ],
+        "exceptions": [
+            {
+                "exception_type": x.get("exception_type", ""),
+                "severity": x.get("severity", ""),
+                "description": x.get("description", ""),
+                "status": x.get("status", ""),
+                "first_reported": x.get("first_reported", ""),
+                "resolution_note": x.get("resolution_note", ""),
+                "resolved_at": x.get("resolved_at", ""),
+            }
+            for x in store.list_exceptions(load_id=load_id)
+        ],
+        "pods": [
+            {
+                "generated_at": p.get("generated_at", ""),
+                "status": p.get("status", ""),
+                "recipient": p.get("recipient", ""),
+                "evidence_count": len(p.get("evidence_ids") or []),
+            }
+            for p in store.list_pods(load_id)
+        ],
+        "retention": _sanitize_retention_for_stakeholder(store.get_retention_by_load(load_id)),
+        "rate_confirmation": rate,
+        "settlement": settlement,
+        "assigned_driver": assigned_driver,
+        "assigned_equipment": assigned_equipment,
+        "comi_status": get_comi_status(load_id),
+        "contacts": get_load_contacts(load_id),
+        "publisher_status": get_publisher_status(load_id),
     }
 
 
@@ -1607,6 +2145,40 @@ def duplicate_load(load_id: str) -> dict:
 # ── IFTA Mileage & Fuel ─────────────────────────────────────────────
 
 
+# Starting point only, copied from Hold's proven fleet_mpg_out_of_band pattern
+# (tuned against Hold's own synthetic data) -- not yet reviewed against
+# Dispatch's real equipment profile. Purely informational; never blocks an entry.
+DEFAULT_MPG_BAND = (4.0, 9.5)
+
+
+def _quarter_containing_date(date_str: str) -> tuple[int, int] | None:
+    if not date_str:
+        return None
+    try:
+        year = int(date_str[:4])
+        month = int(date_str[5:7])
+    except (ValueError, IndexError):
+        return None
+    return year, (month - 1) // 3 + 1
+
+
+def _fleet_mpg_estimate(date_from: str, date_to: str, vehicle_id: str = "") -> float | None:
+    """Independent of IFTA_TAX_RATES and of _ifta_aggregate() -- built from
+    the same list_ifta_trip_legs()/list_ifta_fuel_purchases() primitives so
+    it keeps working even when _ifta_aggregate() would refuse on a missing
+    rate. Returns None on insufficient data rather than raising or guessing."""
+    leg_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    fuel_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if vehicle_id:
+        leg_kwargs["vehicle_id"] = vehicle_id
+        fuel_kwargs["vehicle_id"] = vehicle_id
+    total_miles = sum(leg["miles"] for leg in store.list_ifta_trip_legs(**leg_kwargs))
+    total_gallons = sum(p["gallons"] for p in store.list_ifta_fuel_purchases(**fuel_kwargs))
+    if total_miles <= 0 or total_gallons <= 0:
+        return None
+    return total_miles / total_gallons
+
+
 def add_ifta_trip_leg(
     jurisdiction: str,
     miles: float,
@@ -1627,7 +2199,20 @@ def add_ifta_trip_leg(
         load_id=load_id,
         notes=notes,
     )
-    return store.create_ifta_trip_leg(leg)
+    result = store.create_ifta_trip_leg(leg)
+
+    period = _quarter_containing_date(result["date"])
+    if period:
+        date_from, date_to = _quarter_date_range(*period)
+        mpg = _fleet_mpg_estimate(date_from, date_to, vehicle_id)
+        if mpg is not None:
+            low, high = DEFAULT_MPG_BAND
+            if not (low <= mpg <= high):
+                result["plausibility_warning"] = (
+                    f"fleet_mpg {mpg:.2f} outside plausible range "
+                    f"[{low}, {high}] for this period — mileage or fuel entry may be off"
+                )
+    return result
 
 
 def update_ifta_trip_leg(leg_id: str, **kwargs) -> dict:
@@ -1665,6 +2250,7 @@ def add_ifta_fuel_purchase(
     vehicle_id: str = "",
     vendor: str = "",
     notes: str = "",
+    extraction_confidence: float | None = None,
 ) -> dict:
     if jurisdiction not in IFTA_JURISDICTIONS:
         raise ValueError(f"Invalid jurisdiction: {jurisdiction}")
@@ -1680,6 +2266,7 @@ def add_ifta_fuel_purchase(
         vehicle_id=vehicle_id,
         vendor=vendor,
         notes=notes,
+        extraction_confidence=extraction_confidence,
     )
     return store.create_ifta_fuel_purchase(purchase)
 
@@ -1709,6 +2296,109 @@ def list_ifta_fuel_purchases(**kwargs) -> list[dict]:
     return store.list_ifta_fuel_purchases(**kwargs)
 
 
+DEFAULT_SUSPECT_CONFIDENCE_THRESHOLD = 0.75  # Hold's own placeholder (validators.py) -- not yet calibrated
+
+
+def list_suspect_ifta_fuel_purchases(
+    year: int, quarter: int, vehicle_id: str = "",
+    threshold: float = DEFAULT_SUSPECT_CONFIDENCE_THRESHOLD,
+) -> list[dict]:
+    """Read-only: fuel purchases in this quarter whose scan-time
+    extraction_confidence is below threshold. No recomputation -- that
+    number was already produced once, at scan time (Phase 6b), and is
+    simply read back here, direct port of Hold's own _suspect_entries()
+    contract. A manually-entered purchase (extraction_confidence is
+    None) never qualifies -- there was no OCR to be uncertain about."""
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+    date_from, date_to = _quarter_date_range(year, quarter)
+    kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if vehicle_id:
+        kwargs["vehicle_id"] = vehicle_id
+    purchases = store.list_ifta_fuel_purchases(**kwargs)
+    return [
+        p for p in purchases
+        if p.get("extraction_confidence") is not None and p["extraction_confidence"] < threshold
+    ]
+
+
+def attach_ifta_fuel_evidence(
+    purchase_id: str,
+    file_data: bytes,
+    original_filename: str,
+    description: str = "",
+    uploaded_by: str = "",
+) -> dict:
+    """Attaches a checksummed receipt upload to an existing fuel purchase.
+
+    Mirrors attach_evidence()'s upload handling (checksum, mime-type
+    guess, _save_upload()) but writes to ifta_fuel_evidence / IFTAFuelEvidence
+    instead of the load-scoped evidence table -- see IFTAFuelEvidence's
+    docstring for why those can't be shared. A purchase must already
+    exist (two-step flow: create the purchase, then attach its receipt --
+    matching the existing load-evidence UI's own create-then-attach
+    pattern rather than a combined form)."""
+    purchase = store.get_ifta_fuel_purchase(purchase_id)
+    if not purchase:
+        raise ValueError(f"Fuel purchase not found: {purchase_id}")
+
+    ev = IFTAFuelEvidence(
+        purchase_id=purchase_id,
+        description=description,
+        uploaded_by=uploaded_by,
+        original_filename=original_filename,
+    )
+    ev.compute_checksum(file_data)
+    ev.file_size = len(file_data)
+    import mimetypes
+    ev.mime_type = mimetypes.guess_type(original_filename or "file.pdf")[0] or "application/octet-stream"
+    saved = _save_upload(ev.evidence_id, original_filename or "file.pdf", file_data)
+    ev.file_path = str(saved)
+
+    created = store.create_ifta_fuel_evidence(ev)
+    store.update_ifta_fuel_purchase(purchase_id, {"evidence_id": ev.evidence_id})
+    return created
+
+
+def get_ifta_fuel_evidence_file(evidence_id: str) -> tuple[Path, str] | None:
+    ev = store.get_ifta_fuel_evidence(evidence_id)
+    if not ev or not ev.get("file_path"):
+        return None
+    p = Path(ev["file_path"])
+    if not p.is_file():
+        return None
+    return p, ev.get("original_filename") or p.name
+
+
+def list_ifta_fuel_evidence(purchase_id: str) -> list[dict]:
+    return store.list_ifta_fuel_evidence(purchase_id)
+
+
+def resolve_ifta_evidence_for_snapshot(snapshot: dict) -> list[dict]:
+    """Resolves each jurisdiction line's contributing fuel purchases to
+    their linked receipt, if any. Direct port of Hold's
+    _resolve_line_evidence() spirit: a purchase with no evidence link is
+    included with evidence=None rather than raising -- evidence bundling
+    must never block a report that was already computed or already
+    approved."""
+    resolved = []
+    for jur_line in snapshot.get("jurisdictions", []):
+        purchases_resolved = []
+        for purchase_id in jur_line.get("purchase_ids", []):
+            purchase = store.get_ifta_fuel_purchase(purchase_id)
+            if not purchase:
+                continue
+            evidence = None
+            if purchase.get("evidence_id"):
+                evidence = store.get_ifta_fuel_evidence(purchase["evidence_id"])
+            purchases_resolved.append({"purchase": purchase, "evidence": evidence})
+        resolved.append({
+            "jurisdiction": jur_line["jurisdiction"],
+            "purchases": purchases_resolved,
+        })
+    return resolved
+
+
 def _quarter_date_range(year: int, quarter: int) -> tuple[str, str]:
     starts = {1: "01-01", 2: "04-01", 3: "07-01", 4: "10-01"}
     ends = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
@@ -1728,23 +2418,36 @@ def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
     purchases = store.list_ifta_fuel_purchases(**fuel_kwargs)
 
     miles_by_jur: dict[str, float] = {}
+    legs_by_jur: dict[str, list[str]] = {}
     for leg in legs:
         j = leg["jurisdiction"]
         miles_by_jur[j] = miles_by_jur.get(j, 0) + leg["miles"]
+        legs_by_jur.setdefault(j, []).append(leg["leg_id"])
 
     fuel_by_jur: dict[str, dict] = {}
+    purchases_by_jur: dict[str, list[str]] = {}
     for p in purchases:
         j = p["jurisdiction"]
         if j not in fuel_by_jur:
             fuel_by_jur[j] = {"gallons": 0.0, "amount": 0.0}
         fuel_by_jur[j]["gallons"] += p["gallons"]
         fuel_by_jur[j]["amount"] += p["amount"]
+        purchases_by_jur.setdefault(j, []).append(p["purchase_id"])
 
     total_miles = sum(miles_by_jur.values())
     total_gallons = sum(f["gallons"] for f in fuel_by_jur.values())
     fleet_mpg = round(total_miles / total_gallons, 4) if total_gallons > 0 else 0.0
 
     all_jurs = sorted(set(list(miles_by_jur.keys()) + list(fuel_by_jur.keys())))
+
+    missing_rate_jurs = sorted(j for j in all_jurs if j not in IFTA_TAX_RATES)
+    if missing_rate_jurs:
+        raise ValueError(
+            f"No IFTA tax rate on file for jurisdiction(s) {missing_rate_jurs} "
+            f"— refusing to report a fabricated $0.00 rate. Add the missing "
+            f"rate(s) to IFTA_TAX_RATES before generating this report."
+        )
+
     jurisdictions = []
     total_tax_owed = 0.0
     total_surcharge = 0.0
@@ -1753,7 +2456,7 @@ def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
         fuel = fuel_by_jur.get(j, {"gallons": 0.0, "amount": 0.0})
         taxable_gallons = round(miles / fleet_mpg, 4) if fleet_mpg > 0 else 0.0
         net_taxable = round(taxable_gallons - fuel["gallons"], 4)
-        rates = IFTA_TAX_RATES.get(j, {"rate": 0.0, "surcharge": 0.0})
+        rates = IFTA_TAX_RATES[j]
         tax_rate = rates["rate"]
         surcharge_rate = rates["surcharge"]
         tax_owed = round(net_taxable * tax_rate, 2)
@@ -1772,6 +2475,8 @@ def _ifta_aggregate(date_from: str, date_to: str, vehicle_id: str = "") -> dict:
             "tax_owed": tax_owed,
             "surcharge": surcharge,
             "total_due": round(tax_owed + surcharge, 2),
+            "leg_ids": legs_by_jur.get(j, []),
+            "purchase_ids": purchases_by_jur.get(j, []),
         })
 
     return {
@@ -1854,6 +2559,466 @@ def export_ifta_csv(report: dict) -> str:
                       report["total_surcharge"], report["total_due"]])
 
     return output.getvalue()
+
+
+# ── IFTA Report Approvals (Phase 4 finalization gate) ────────────────
+#
+# Direct port of Hold's proven draft/sealed pipeline
+# (src/dispatch/ifta_clerk/prepare.py, src/dispatch/ifta/package.py,
+# src/dispatch/ifta_clerk/recommend.py), adapted to Dispatch's own
+# architecture: Dispatch has no Queue, so "submitted for approval" is
+# gated by an emailed, HMAC-signed link (reusing cin_lite.email_delivery's
+# existing generic token functions) instead of a Queue item; Dispatch has
+# no persisted worksheet table, so the report snapshot is frozen into a
+# new IFTAReportApproval row at submission time instead of being read from
+# one that already existed. QuickBooks/accounting integration is
+# deliberately not implemented -- see compute_ifta_payment_recommendation()
+# below, ported verbatim in spirit from Hold's compute_payment_recommendation().
+
+
+class IFTAApprovalError(ValueError):
+    """Base class for IFTA report-approval failures."""
+
+
+class AlreadySubmittedError(IFTAApprovalError):
+    pass
+
+
+class InvalidApprovalTokenError(IFTAApprovalError):
+    pass
+
+
+def _resolve_compliance_root() -> Path:
+    """Sibling of cin_lite.archive's CIN root, not nested under it --
+    Phase 3 found cin_lite/archive.py's ARCHIVE_ROOT resolves to
+    <root>/CIN specifically (the federal-contract-intelligence domain);
+    IFTA compliance records belong in their own top-level folder under
+    the same DISPATCH_ARCHIVE_ROOT, not inside a folder named for an
+    unrelated domain."""
+    import os
+
+    archive_root = os.environ.get("DISPATCH_ARCHIVE_ROOT")
+    if archive_root:
+        root = Path(archive_root) / "Compliance"
+    else:
+        root = Path(__file__).resolve().parent.parent / "cin_lite" / "Compliance"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _write_compliance_record(record_type: str, record_id: str, payload: dict) -> Path:
+    """Writes one JSON artifact plus a SHA-256 sidecar, the same
+    write-and-hash technique Phase 3 proved in cin_lite/archive.py,
+    reimplemented locally (not cross-imported) to keep this package's
+    archival separate from cin_lite's, per Phase 3's own two-archives
+    finding."""
+    import hashlib
+    import json
+
+    subdir = _resolve_compliance_root() / record_type
+    subdir.mkdir(parents=True, exist_ok=True)
+    path = subdir / f"{record_id}.json"
+    content = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)
+    path.write_text(content, encoding="utf-8")
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    sidecar = path.with_name(path.name + ".sha256")
+    sidecar.write_text(
+        json.dumps({"sha256": digest, "written_at": _utc_now()}), encoding="utf-8"
+    )
+    return path
+
+
+def compute_ifta_payment_recommendation(snapshot: dict) -> dict:
+    """Pure -- no file I/O, no database access, no network access.
+    Direct port of Hold's compute_payment_recommendation(): wraps an
+    already-computed, already-approved total_due in a recommendation
+    label, inventing no new number. A negative total_due (a net credit)
+    is reported as a positive "credit" amount, never a negative figure."""
+    total_due = snapshot["total_due"]
+    if total_due > 0:
+        recommendation, amount = "remit", total_due
+    elif total_due < 0:
+        recommendation, amount = "credit", abs(total_due)
+    else:
+        recommendation, amount = "no_payment_due", 0.0
+    return {
+        "status": "recommendation",
+        "recommendation": recommendation,
+        "amount": amount,
+        "total_due": total_due,
+        "generated_at": _utc_now(),
+    }
+
+
+DEFAULT_CORNER_CLIP_MILES = 5.0
+
+
+def _exc(exception_type: str, detail: str, related_record_ids: list | None = None) -> dict:
+    return {
+        "exception_type": exception_type,
+        "detail": detail,
+        "related_record_ids": related_record_ids or [],
+    }
+
+
+def _detect_fuel_no_miles(snapshot: dict) -> list[dict]:
+    return [
+        _exc(
+            "fuel_no_miles",
+            f"{j['jurisdiction']}: {j['fuel_gallons']:.2f} gallons purchased, 0 miles recorded",
+            j.get("purchase_ids", []),
+        )
+        for j in snapshot.get("jurisdictions", [])
+        if j["fuel_gallons"] > 0 and j["miles"] == 0
+    ]
+
+
+def _detect_miles_no_fuel_gap(snapshot: dict, *, miles_threshold: float = 50.0) -> list[dict]:
+    return [
+        _exc(
+            "miles_no_fuel_gap",
+            f"{j['jurisdiction']}: {j['miles']:.1f} miles recorded, 0 gallons purchased there",
+            j.get("leg_ids", []),
+        )
+        for j in snapshot.get("jurisdictions", [])
+        if j["miles"] > miles_threshold and j["fuel_gallons"] == 0
+    ]
+
+
+def _detect_fleet_mpg_out_of_band(snapshot: dict, *, band: tuple[float, float] = DEFAULT_MPG_BAND) -> list[dict]:
+    low, high = band
+    mpg = snapshot.get("fleet_mpg") or 0.0
+    if mpg and not (low <= mpg <= high):
+        return [_exc("fleet_mpg_out_of_band", f"fleet_mpg {mpg:.2f} outside plausible range [{low}, {high}]")]
+    return []
+
+
+def _detect_broken_evidence_linkage(snapshot: dict) -> list[dict]:
+    """Re-verifies each linked fuel-purchase receipt's checksum against
+    what was recorded at attach time -- same fail-closed technique Phase
+    3 proved for the archive layer, applied here to fuel-purchase
+    evidence."""
+    import hashlib
+
+    findings = []
+    for j in snapshot.get("jurisdictions", []):
+        for purchase_id in j.get("purchase_ids", []):
+            purchase = store.get_ifta_fuel_purchase(purchase_id)
+            if not purchase or not purchase.get("evidence_id"):
+                continue
+            ev = store.get_ifta_fuel_evidence(purchase["evidence_id"])
+            if not ev:
+                findings.append(_exc(
+                    "broken_evidence_linkage",
+                    f"fuel purchase {purchase_id}: linked evidence {purchase['evidence_id']} no longer exists",
+                    [purchase_id],
+                ))
+                continue
+            file_path = ev.get("file_path")
+            if not file_path or not Path(file_path).is_file():
+                findings.append(_exc(
+                    "broken_evidence_linkage",
+                    f"fuel purchase {purchase_id}: receipt file is missing on disk",
+                    [purchase_id, ev["evidence_id"]],
+                ))
+                continue
+            actual = hashlib.sha256(Path(file_path).read_bytes()).hexdigest()
+            if actual != ev.get("checksum"):
+                findings.append(_exc(
+                    "broken_evidence_linkage",
+                    f"fuel purchase {purchase_id}: receipt file content no longer matches its recorded checksum",
+                    [purchase_id, ev["evidence_id"]],
+                ))
+    return findings
+
+
+def _detect_late_arrival_closed_quarter(year: int, quarter: int, vehicle_id: str = "") -> list[dict]:
+    """A trip leg or fuel purchase dated inside this period exists but
+    isn't among the record IDs frozen into the already-sealed approval's
+    snapshot -- it arrived after the quarter closed and was never part of
+    what was reviewed and sealed. Direct port of Hold's
+    late_arrival_closed_quarter, adapted to Dispatch's provenance
+    tracking (Phase 5) instead of a fuel_type-scoped worksheet table."""
+    approval = store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    if approval is None or approval["status"] != "sealed":
+        return []
+
+    snapshot = approval["snapshot_json"]
+    sealed_leg_ids: set = set()
+    sealed_purchase_ids: set = set()
+    for j in snapshot.get("jurisdictions", []):
+        sealed_leg_ids.update(j.get("leg_ids", []))
+        sealed_purchase_ids.update(j.get("purchase_ids", []))
+
+    date_from, date_to = _quarter_date_range(year, quarter)
+    leg_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    fuel_kwargs: dict = {"date_from": date_from, "date_to": date_to}
+    if vehicle_id:
+        leg_kwargs["vehicle_id"] = vehicle_id
+        fuel_kwargs["vehicle_id"] = vehicle_id
+
+    label = snapshot.get("quarter_label") or f"Q{quarter} {year}"
+    findings = []
+    for leg in store.list_ifta_trip_legs(**leg_kwargs):
+        if leg["leg_id"] not in sealed_leg_ids:
+            findings.append(_exc(
+                "late_arrival_closed_quarter",
+                f"trip leg {leg['leg_id']} ({leg['jurisdiction']}, {leg['date']}) falls in "
+                f"already-sealed {label} — never silently absorbed",
+                [leg["leg_id"]],
+            ))
+    for p in store.list_ifta_fuel_purchases(**fuel_kwargs):
+        if p["purchase_id"] not in sealed_purchase_ids:
+            findings.append(_exc(
+                "late_arrival_closed_quarter",
+                f"fuel purchase {p['purchase_id']} ({p['jurisdiction']}, {p['date']}) falls in "
+                f"already-sealed {label} — never silently absorbed",
+                [p["purchase_id"]],
+            ))
+    return findings
+
+
+def _detect_corner_clipping(snapshot: dict, *, threshold: float = DEFAULT_CORNER_CLIP_MILES) -> list[dict]:
+    return [
+        _exc(
+            "corner_clipping",
+            f"{j['jurisdiction']}: only {j['miles']:.2f} miles — annotated, not suppressed",
+            j.get("leg_ids", []),
+        )
+        for j in snapshot.get("jurisdictions", [])
+        if 0 < j["miles"] < threshold
+    ]
+
+
+def _run_ifta_exception_detectors_on_snapshot(
+    snapshot: dict, year: int, quarter: int, vehicle_id: str = ""
+) -> list[dict]:
+    findings: list[dict] = []
+    findings += _detect_fuel_no_miles(snapshot)
+    findings += _detect_miles_no_fuel_gap(snapshot)
+    findings += _detect_fleet_mpg_out_of_band(snapshot)
+    findings += _detect_broken_evidence_linkage(snapshot)
+    findings += _detect_late_arrival_closed_quarter(year, quarter, vehicle_id)
+    findings += _detect_corner_clipping(snapshot)
+    return findings
+
+
+def run_ifta_exception_detectors(year: int, quarter: int, vehicle_id: str = "") -> list[dict]:
+    """Public, read-only entrypoint: resolves the live-or-sealed snapshot
+    for this quarter, then runs the six ported detectors against it (of
+    Hold's ten -- the other four need infrastructure Dispatch doesn't
+    have; see DISPATCH_IFTA_PHASE6A_EXCEPTION_DETECTORS_LAUNCH_PACKAGE_v1
+    Section 2). Advisory only -- nothing here blocks submission or
+    sealing, matching Hold's own 'never auto-resolves' principle."""
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+    approval = get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    if approval is not None and approval["status"] == "sealed":
+        snapshot = approval["snapshot_json"]
+    else:
+        snapshot = get_ifta_quarterly_report(year, quarter, vehicle_id)
+    return _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
+
+
+def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = "") -> dict:
+    """Freezes the current computed report for this period into a new
+    IFTAReportApproval (status='draft') and emails the reviewer an
+    approval link. Refuses if this exact period was already submitted --
+    once, ever, mirroring Hold's AlreadySubmittedError: there is no path
+    to resubmit a period, only to approve the one submission it got."""
+    import os
+
+    from cin_lite import email_delivery
+
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+
+    existing = store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    if existing is not None:
+        raise AlreadySubmittedError(
+            f"{year} Q{quarter} was already submitted for approval "
+            f"(approval {existing['approval_id']}, status {existing['status']!r})"
+        )
+
+    snapshot = get_ifta_quarterly_report(year, quarter, vehicle_id)
+
+    approval = IFTAReportApproval(
+        year=year, quarter=quarter, vehicle_id=vehicle_id,
+        status="draft", snapshot=snapshot,
+    )
+    created = store.create_ifta_report_approval(approval)
+
+    findings = _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
+    for finding in findings:
+        store.create_ifta_exception(IFTAException(
+            approval_id=created["approval_id"],
+            exception_type=finding["exception_type"],
+            detail=finding["detail"],
+            related_record_ids=finding["related_record_ids"],
+        ))
+
+    token = email_delivery.make_token(created["approval_id"], "approve")
+    base = os.environ.get("DISPATCH_PORTAL_URL", "http://127.0.0.1:8080").rstrip("/")
+    approve_url = f"{base}/api/dispatch/ifta/report-approvals/{created['approval_id']}/approve?token={token}"
+    email_delivery.send(
+        subject=f"[DISPATCH] IFTA Q{quarter} {year} approval requested",
+        body=(
+            f"An IFTA quarterly report is ready for your approval.\n\n"
+            f"Period: Q{quarter} {year}\n"
+            f"Total due: ${snapshot['total_due']:.2f}\n\n"
+            f"Approve: {approve_url}\n"
+        ),
+        to=[email_delivery.reviewer_address()],
+        fallback_id=f"ifta-approval-{created['approval_id']}",
+    )
+    return created
+
+
+def approve_ifta_quarter(approval_id: str, token: str) -> dict:
+    """Verifies the emailed token, then seals: archives the frozen
+    snapshot and the computed payment recommendation, flips status to
+    'sealed'. Idempotent on an already-sealed approval (a repeat click on
+    the same email link is a no-op success, matching Hold's
+    attempt_seal()) -- the token is only re-checked when there is
+    something left to do."""
+    from cin_lite import email_delivery
+
+    approval = store.get_ifta_report_approval(approval_id)
+    if approval is None:
+        raise ValueError(f"No such IFTA report approval: {approval_id}")
+    if approval["status"] == "sealed":
+        return approval
+
+    if not email_delivery.verify_token(approval_id, "approve", token):
+        raise InvalidApprovalTokenError("Invalid or expired approval token.")
+
+    snapshot = approval["snapshot_json"]
+    recommendation = compute_ifta_payment_recommendation(snapshot)
+    approved_by = email_delivery.reviewer_address()
+    sealed_at = _utc_now()
+
+    _write_compliance_record(
+        "ifta_sealed_report", approval_id,
+        {
+            "approval_id": approval_id,
+            "year": approval["year"],
+            "quarter": approval["quarter"],
+            "vehicle_id": approval["vehicle_id"],
+            "snapshot": snapshot,
+            "resolved_evidence": resolve_ifta_evidence_for_snapshot(snapshot),
+            "approved_by": approved_by,
+            "sealed_at": sealed_at,
+        },
+    )
+    _write_compliance_record(
+        "ifta_payment_recommendation", approval_id,
+        {**recommendation, "approval_id": approval_id, "sealed_at": sealed_at},
+    )
+
+    return store.update_ifta_report_approval(approval_id, {
+        "status": "sealed",
+        "sealed_at": sealed_at,
+        "approved_by": approved_by,
+        "recommendation_json": recommendation,
+    })
+
+
+def list_ifta_report_approvals() -> list[dict]:
+    return store.list_ifta_report_approvals()
+
+
+def get_ifta_report_approval(approval_id: str) -> dict | None:
+    return store.get_ifta_report_approval(approval_id)
+
+
+def get_latest_ifta_report_approval(year: int, quarter: int, vehicle_id: str = "") -> dict | None:
+    return store.get_latest_ifta_report_approval(year, quarter, vehicle_id)
+
+
+def list_ifta_exceptions(approval_id: str) -> list[dict]:
+    return store.list_ifta_exceptions(approval_id)
+
+
+def build_ifta_review_dashboard(year: int, quarter: int, vehicle_id: str = "") -> dict:
+    """Read-only, Dispatch-native review screen for one IFTA quarter,
+    assembled entirely from data Dispatch already computes elsewhere --
+    no new I/O, no writes. As of Phase 6a, the Exceptions panel is a
+    formal port of six of Hold's ten detectors, replacing Phase 5's ad
+    hoc "Plausibility Warnings" panel (fleet_mpg_out_of_band is now one
+    of the six, not a separate mechanism). As of Phase 7, a Suspect
+    Entries panel surfaces scanned fuel purchases below the confidence
+    threshold -- always computed live from the stored field (matching
+    Hold's own choice), never persisted, never factored into
+    readiness_status: it's informational, not a governed exception."""
+    if quarter not in (1, 2, 3, 4):
+        raise ValueError(f"Invalid quarter: {quarter}")
+
+    approval = get_latest_ifta_report_approval(year, quarter, vehicle_id)
+    sealed = approval is not None and approval["status"] == "sealed"
+    suspect_entries = list_suspect_ifta_fuel_purchases(year, quarter, vehicle_id)
+
+    if sealed:
+        snapshot = approval["snapshot_json"]
+        tax_position_source = "sealed"
+    else:
+        try:
+            snapshot = get_ifta_quarterly_report(year, quarter, vehicle_id)
+        except ValueError as exc:
+            return {
+                "year": year,
+                "quarter": quarter,
+                "vehicle_id": vehicle_id,
+                "tax_position": None,
+                "tax_position_source": "unavailable",
+                "tax_position_error": str(exc),
+                "evidence": [],
+                "unlinked_purchase_count": 0,
+                "total_purchase_count": 0,
+                "exceptions": [{"exception_type": "blocked", "detail": str(exc)}],
+                "suspect_entries": suspect_entries,
+                "readiness_status": "blocked — " + str(exc),
+                "approval_status": approval["status"] if approval else None,
+                "approval": approval,
+            }
+        tax_position_source = "live_preview"
+
+    evidence = resolve_ifta_evidence_for_snapshot(snapshot)
+    total_purchase_count = sum(len(jur["purchases"]) for jur in evidence)
+    unlinked_count = sum(
+        1 for jur in evidence for entry in jur["purchases"] if entry["evidence"] is None
+    )
+
+    if sealed:
+        exceptions = store.list_ifta_exceptions(approval["approval_id"])
+    else:
+        exceptions = _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
+
+    if sealed:
+        readiness_status = "sealed"
+    elif unlinked_count > 0:
+        readiness_status = f"{unlinked_count} of {total_purchase_count} fuel purchase(s) have no receipt attached"
+    elif exceptions:
+        readiness_status = f"{len(exceptions)} exception(s) noted"
+    elif snapshot.get("trip_leg_count", 0) == 0 and snapshot.get("fuel_purchase_count", 0) == 0:
+        readiness_status = "no data recorded yet this quarter"
+    else:
+        readiness_status = "ready to submit"
+
+    return {
+        "year": year,
+        "quarter": quarter,
+        "vehicle_id": vehicle_id,
+        "tax_position": snapshot,
+        "tax_position_source": tax_position_source,
+        "evidence": evidence,
+        "unlinked_purchase_count": unlinked_count,
+        "total_purchase_count": total_purchase_count,
+        "exceptions": exceptions,
+        "suspect_entries": suspect_entries,
+        "readiness_status": readiness_status,
+        "approval_status": approval["status"] if approval else None,
+        "approval": approval,
+    }
 
 
 # ── Broker Contact Directory ─────────────────────────────────────────

@@ -5,13 +5,15 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 
 from portal import helpers
 from portal.models import sandbox, publisher, conflict
 from portal.models import library as lib_model
 from portal.models import archive as arc_model
 from portal.models import intelligence as intel_model
+from portal.models import integrations_registry as integrations_model
+from portal.models import driver_pin_registry as driver_pin_model
 
 api_bp = Blueprint("api", __name__)
 
@@ -120,8 +122,26 @@ def create_publisher_action():
     data = request.get_json(force=True)
     sandbox_id = data.get("sandbox_id")
     action_type = data.get("action_type")
+    contract_id = data.get("contract_id")
 
-    if not sandbox_id or not action_type:
+    if not action_type:
+        return jsonify({"error": "action_type required"}), 400
+
+    if contract_id:
+        # Stage 2 of DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md (Claude-3 repo): GovCon Proposal
+        # Draft Required actions are cin_lite-contract-triggered, not sandbox-triggered -- there
+        # is no real sandbox entry to look up or update. Mirrors the "LIBRARY-<id>" marker
+        # convention Stage 1 established for non-sandbox-originated Publisher actions.
+        sandbox_id = sandbox_id or f"GOVCON-{contract_id}"
+        action = publisher.create_action(
+            action_type=action_type,
+            sandbox_id=sandbox_id,
+            trigger_reason=f"GovCon proposal requested for contract {contract_id}",
+            contract_id=contract_id,
+        )
+        return jsonify({"status": "ok", "action": action})
+
+    if not sandbox_id:
         return jsonify({"error": "sandbox_id and action_type required"}), 400
 
     entry = sandbox.get(sandbox_id)
@@ -147,12 +167,13 @@ def update_publisher_action():
     data = request.get_json(force=True)
     action_id = data.get("action_id")
     new_status = data.get("status")
+    approved_by = data.get("approved_by")
 
     if not action_id or not new_status:
         return jsonify({"error": "action_id and status required"}), 400
 
     try:
-        action = publisher.update_action_status(action_id, new_status)
+        action = publisher.update_action_status(action_id, new_status, approved_by=approved_by)
         if new_status == "ARCHIVED":
             arc_model.archive_publisher_action(action)
         return jsonify({"status": "ok", "action": action})
@@ -263,9 +284,31 @@ def library_add():
             name=name,
             content=data.get("content", ""),
             metadata=data.get("metadata"),
+            submitted_by=data.get("submitted_by", "human"),
         )
         return jsonify({"status": "ok", "record": record})
     except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/library/review", methods=["POST"])
+def library_review():
+    """Promote or reject a machine-submitted (pending_review) Library candidate.
+
+    No caller in Dispatch submits a machine candidate yet (see library.py module docstring),
+    so this route has no live traffic today -- it exists so review_candidate() is reachable
+    once a future automated nomination path (e.g. a Publisher content worker) is wired up.
+    """
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    approve = data.get("approve")
+    reviewed_by = data.get("reviewed_by")
+    if not record_id or approve is None:
+        return jsonify({"error": "record_id and approve required"}), 400
+    try:
+        record = lib_model.review_candidate(record_id, approve=bool(approve), reviewed_by=reviewed_by)
+        return jsonify({"status": "ok", "record": record})
+    except (KeyError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
 
 
@@ -298,6 +341,92 @@ def library_delete():
         return jsonify({"status": "ok", "record": record})
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
+
+
+# ---- Driver PIN Registry API (Library-managed; Authority-only, same as every
+#      other route in this blueprint -- see portal/models/driver_pin_registry.py) ----
+
+@api_bp.route("/driver-pin/create", methods=["POST"])
+def driver_pin_create():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    pin = data.get("pin")
+    recovery_word = data.get("recovery_word")
+    if not driver_id or not pin or not recovery_word:
+        return jsonify({"error": "driver_id, pin, and recovery_word required"}), 400
+    try:
+        record = driver_pin_model.create_pin_card(
+            driver_id, pin, recovery_word,
+            created_by=data.get("created_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/reset", methods=["POST"])
+def driver_pin_reset():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    new_pin = data.get("new_pin")
+    if not driver_id or not new_pin:
+        return jsonify({"error": "driver_id and new_pin required"}), 400
+    try:
+        record = driver_pin_model.reset_pin(
+            driver_id, new_pin,
+            reset_by=data.get("reset_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/recovery-word", methods=["POST"])
+def driver_pin_recovery_word():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    recovery_word = data.get("recovery_word")
+    if not driver_id or not recovery_word:
+        return jsonify({"error": "driver_id and recovery_word required"}), 400
+    try:
+        record = driver_pin_model.set_recovery_word(
+            driver_id, recovery_word,
+            set_by=data.get("set_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/status", methods=["POST"])
+def driver_pin_status():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    status = data.get("status")
+    if not driver_id or not status:
+        return jsonify({"error": "driver_id and status required"}), 400
+    try:
+        record = driver_pin_model.set_status(
+            driver_id, status,
+            changed_by=data.get("changed_by") or session.get("user_id", "authority"),
+        )
+        return jsonify({"status": "ok", "record": record})
+    except driver_pin_model.DriverPinError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/driver-pin/delete", methods=["POST"])
+def driver_pin_delete():
+    data = request.get_json(force=True)
+    driver_id = data.get("driver_id")
+    if not driver_id:
+        return jsonify({"error": "driver_id required"}), 400
+    deleted = driver_pin_model.delete_pin_card(
+        driver_id, deleted_by=data.get("deleted_by") or session.get("user_id", "authority"),
+    )
+    if not deleted:
+        return jsonify({"error": f"No PIN card for driver: {driver_id}"}), 404
+    return jsonify({"status": "ok"})
 
 
 # ---- Archive API ----
@@ -337,6 +466,29 @@ def intelligence_add():
         return jsonify({"error": str(exc)}), 400
 
 
+@api_bp.route("/intelligence/promote", methods=["POST"])
+def intelligence_promote():
+    """Promote a broker-type Intelligence record into a Library candidate.
+
+    Wires the already-built, already-tested intel_model.promote_to_candidate() ->
+    library.add_record(submitted_by="machine") -> review_candidate() ->
+    _trigger_publisher_on_approval() chain to a real route (Intelligence Final Integration
+    Launch Package v1, Claude-3 repo). This route grants no approval itself -- the resulting
+    candidate starts pending_review, same as any other machine-submitted Library candidate.
+    """
+    data = request.get_json(force=True)
+    record_id = data.get("record_id")
+    if not record_id:
+        return jsonify({"error": "record_id required"}), 400
+    try:
+        candidate = intel_model.promote_to_candidate(record_id)
+        return jsonify({"status": "ok", "candidate": candidate})
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
 @api_bp.route("/intelligence/update", methods=["POST"])
 def intelligence_update():
     data = request.get_json(force=True)
@@ -348,10 +500,13 @@ def intelligence_update():
             record_id=record_id,
             content=data.get("content"),
             metadata=data.get("metadata"),
+            verification_status=data.get("verification_status"),
         )
         return jsonify({"status": "ok", "record": record})
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 # ---- Engine Sync API ----
@@ -375,6 +530,47 @@ def sync_engine_status():
             sandbox.update_engine_status(sid, load["status"])
             synced.append({"sandbox_id": sid, "engine_status": load["status"]})
     return jsonify({"status": "ok", "synced": synced, "count": len(synced)})
+
+
+# ---- System Keys / Integrations Registry API (D4) ----
+
+@api_bp.route("/integrations", methods=["GET"])
+def integrations_list():
+    return jsonify({"status": "ok", "entries": integrations_model.list_entries()})
+
+
+@api_bp.route("/integrations/<integration_type>", methods=["GET"])
+def integrations_get(integration_type):
+    try:
+        entry = integrations_model.get_entry(integration_type)
+        return jsonify({"status": "ok", "entry": entry})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/integrations/<integration_type>", methods=["POST", "PATCH"])
+def integrations_upsert(integration_type):
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        entry = integrations_model.upsert_entry(
+            integration_type,
+            api_key=data.get("api_key"),
+            credentials=data.get("credentials"),
+            token=data.get("token"),
+            configuration=data.get("configuration"),
+        )
+        return jsonify({"status": "ok", "entry": entry})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/integrations/<integration_type>/clear", methods=["POST"])
+def integrations_clear(integration_type):
+    try:
+        entry = integrations_model.clear_entry(integration_type)
+        return jsonify({"status": "ok", "entry": entry})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 # ---- Helpers ----

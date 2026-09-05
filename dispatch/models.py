@@ -264,6 +264,43 @@ class EvidenceItem:
 
 
 @dataclass
+class IFTAFuelEvidence:
+    """A checksummed receipt upload linked to one IFTA fuel purchase.
+
+    Deliberately not `EvidenceItem` reused with an empty `load_id`: the
+    `evidence` table's `load_id` column is a NOT NULL foreign key into
+    `loads` (enforced -- `PRAGMA foreign_keys=ON`), so an evidence row with
+    no real load can't be inserted there. Fuel purchases aren't scoped to
+    a load, so this is a small, separately-scoped mirror of the same
+    checksummed-upload shape instead.
+    """
+
+    evidence_id: str = ""
+    purchase_id: str = ""
+    original_filename: str = ""
+    file_path: str | None = None
+    file_size: int = 0
+    mime_type: str = ""
+    checksum: str | None = None
+    description: str = ""
+    uploaded_by: str = ""
+    capture_time: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.evidence_id:
+            self.evidence_id = _gen_id("FUELEV")
+        if not self.capture_time:
+            self.capture_time = _utc_now()
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def compute_checksum(self, data: bytes) -> str:
+        self.checksum = hashlib.sha256(data).hexdigest()
+        return self.checksum
+
+
+@dataclass
 class ExceptionNotice:
     exception_id: str = ""
     load_id: str = ""
@@ -802,6 +839,8 @@ class IFTAFuelPurchase:
     vendor: str = ""
     notes: str = ""
     created_at: str = ""
+    evidence_id: str | None = None
+    extraction_confidence: float | None = None
 
     def __post_init__(self) -> None:
         if not self.purchase_id:
@@ -823,6 +862,83 @@ class IFTAFuelPurchase:
         d = asdict(self)
         d["price_per_gallon"] = self.price_per_gallon
         return d
+
+
+IFTA_REPORT_APPROVAL_STATUSES = ["draft", "sealed"]
+IFTA_PAYMENT_RECOMMENDATIONS = ["remit", "credit", "no_payment_due"]
+
+
+@dataclass
+class IFTAReportApproval:
+    """A frozen, submitted-for-approval snapshot of one quarter's IFTA
+    report. Mirrors Hold's proven ifta_worksheets draft/sealed lifecycle
+    (src/dispatch/ifta/package.py) -- 'draft' from submission until the
+    reviewer's approval link is verified, then 'sealed' once, never
+    reverted. The snapshot is frozen at submission time so later edits to
+    trip legs/fuel purchases can never silently change what's under
+    review or what gets sealed."""
+    approval_id: str = ""
+    year: int = 0
+    quarter: int = 0
+    vehicle_id: str = ""
+    status: str = "draft"
+    snapshot: dict = field(default_factory=dict)
+    recommendation: dict | None = None
+    submitted_at: str = ""
+    sealed_at: str | None = None
+    approved_by: str = ""
+    created_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.approval_id:
+            self.approval_id = _gen_id("IFTAAPR")
+        if not self.created_at:
+            self.created_at = _utc_now()
+        if not self.submitted_at:
+            self.submitted_at = _utc_now()
+        _validate_choice(self.status, IFTA_REPORT_APPROVAL_STATUSES, "status")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+IFTA_EXCEPTION_TYPES = [
+    "fuel_no_miles",
+    "miles_no_fuel_gap",
+    "fleet_mpg_out_of_band",
+    "broken_evidence_linkage",
+    "late_arrival_closed_quarter",
+    "corner_clipping",
+]
+
+
+@dataclass
+class IFTAException:
+    """One detector finding for one submitted quarter -- six of Hold's
+    ten exception types (src/dispatch/ifta/exceptions.py), the ones that
+    port to data Dispatch actually has. Advisory only: nothing in this
+    codebase reads an exception as a reason to block a submission or a
+    seal. Persisted once, at submission time, alongside the frozen
+    IFTAReportApproval snapshot it was computed from -- never updated or
+    deleted after that, matching Hold's insert-only ifta_exceptions
+    convention."""
+    exception_id: str = ""
+    approval_id: str = ""
+    exception_type: str = ""
+    detail: str = ""
+    related_record_ids: list = field(default_factory=list)
+    detected_at: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.exception_id:
+            self.exception_id = _gen_id("IFTAEXC")
+        if not self.detected_at:
+            self.detected_at = _utc_now()
+        if self.exception_type:
+            _validate_choice(self.exception_type, IFTA_EXCEPTION_TYPES, "exception_type")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass

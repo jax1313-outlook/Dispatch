@@ -277,6 +277,7 @@ class TestEngineSync:
 
         from dispatch import services
         services.add_milestone(engine_load_id, "dispatched")
+        services.add_milestone(engine_load_id, "en_route_pickup")
         services.add_milestone(engine_load_id, "arrived_pickup")
         services.add_milestone(engine_load_id, "loaded")
         services.add_milestone(engine_load_id, "departed_pickup")

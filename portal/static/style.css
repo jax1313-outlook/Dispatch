@@ -256,6 +256,9 @@ body {
 .status-expired { background: #f5f5f5; color: #aaa; }
 .status-closed { background: #eee; color: #888; }
 .status-placeholder { background: #fff3cd; color: #856404; }
+.status-unverified { background: #f5f5f5; color: #888; }
+.status-partially_verified { background: #fef9e7; color: #b7950b; }
+.status-verified { background: #d5f5e3; color: #1e8449; }
 
 /* ---------- Dispatch Engine Statuses ---------- */
 .dispatch-created { background: #e8f4fd; color: #2471a3; }
@@ -729,4 +732,32 @@ body {
     .card-fields.two-col { grid-template-columns: 1fr; }
     .brief-fields { grid-template-columns: 1fr; }
     .dashboard-summary { flex-direction: column; }
+}
+
+/* BLOCK-01 -- sample data must never read as real freight.
+   Deliberately loud: a marker that blends in is a marker nobody sees. */
+.origin-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.origin-simulated {
+    background: #7d3c98;
+    color: #fff;
+}
+.sample-data-banner {
+    margin: 0 0 18px;
+    padding: 12px 16px;
+    border-left: 5px solid #7d3c98;
+    background: #f4ecf7;
+    color: #4a235a;
+    border-radius: 4px;
+    line-height: 1.5;
+}
+.sample-data-banner .btn {
+    margin-left: 10px;
 }

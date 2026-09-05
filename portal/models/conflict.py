@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir
+from portal.models import get_data_dir, atomic_write_json
 
 CONFLICT_TYPES = [
     "missing_broker_email",
@@ -25,6 +25,13 @@ CONFLICT_TYPES = [
     "publisher_missing_document",
     "library_missing_asset",
     "corrupt_sandbox_data",
+    # Raised by dispatch/services.py::add_milestone() when a milestone would
+    # move a load between two statuses the transition table does not allow.
+    # The milestone is still recorded; only the status change is refused.
+    # Appended rather than grouped with the other scheduling types so the
+    # existing order-sensitive assertion in tests/test_portal.py stays a
+    # meaningful check on the list rather than being rewritten around.
+    "invalid_status_transition",
 ]
 
 SEVERITIES = ["info", "warning", "critical"]
@@ -49,7 +56,7 @@ def _load() -> list[dict]:
 
 def _save(data: list[dict]) -> None:
     path = _conflicts_path()
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, data)
 
 
 def get_all() -> list[dict]:
@@ -69,6 +76,15 @@ def create_notice(
     human_decision_required: bool = True,
 ) -> dict:
     notices = _load()
+    for existing in notices:
+        if (
+            not existing.get("resolved")
+            and existing["conflict_type"] == conflict_type
+            and existing["sandbox_id"] == sandbox_id
+            and existing["explanation"] == explanation
+        ):
+            return existing
+
     now = _utc_now()
     notice = {
         "id": f"CN-{len(notices) + 1:04d}",

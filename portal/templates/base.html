@@ -2,14 +2,44 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+    // Every mutating fetch() in this app -- 35 call sites across a dozen
+    // templates -- has to carry the CSRF token. Wrapping fetch once here is
+    // what makes that true for all of them, including any added later, rather
+    // than depending on each author remembering. Same-origin only: the header
+    // must never be attached to a request leaving this site.
+    (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        var token = meta ? meta.getAttribute('content') : '';
+        var MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
+        var nativeFetch = window.fetch.bind(window);
+        window.fetch = function (input, init) {
+            init = init || {};
+            var method = (init.method || (typeof input === 'object' && input.method) || 'GET').toUpperCase();
+            var url = typeof input === 'string' ? input : (input && input.url) || '';
+            var sameOrigin = !/^https?:\/\//i.test(url) || url.indexOf(window.location.origin) === 0;
+            if (MUTATING.indexOf(method) !== -1 && sameOrigin && token) {
+                var headers = new Headers(init.headers || (typeof input === 'object' && input.headers) || {});
+                if (!headers.has('X-CSRF-Token')) { headers.set('X-CSRF-Token', token); }
+                init.headers = headers;
+            }
+            return nativeFetch(input, init);
+        };
+    })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}L2-COS Operations Portal{% endblock %}</title>
+    <title>{% block title %}Dispatch{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+{% if rehearsal_active %}<div class="rehearsal-banner" role="status" style="background:#b91c1c;color:#fff;padding:10px 16px;font-weight:900;letter-spacing:1px;text-align:center;font-size:15px;border-bottom:3px solid #fca5a5;">
+  {{ rehearsal_label }} MODE — THIS IS NOT A LIVE MISSION.
+  <span style="font-weight:600;letter-spacing:0;">Session {{ rehearsal_session_id }}{% if rehearsal_session_label %} &middot; {{ rehearsal_session_label }}{% endif %}. Every record created now is tagged {{ rehearsal_label }}.</span>
+</div>{% endif %}
     <nav class="sidebar">
         <div class="sidebar-header">
-            <h2>L2-COS Portal</h2>
+            <h2>Dispatch</h2>
             <span class="sidebar-subtitle">Operations Cockpit</span>
         </div>
         <ul class="nav-links">
@@ -17,14 +47,16 @@
                one used from a cab, and the rest of this cockpit is desk work. #}
             <li><a href="{{ url_for('joe_portal.portal_home') }}" class="{% if request.blueprint == 'joe_portal' %}active{% endif %}">JOE Portal</a></li>
             <li><a href="{{ url_for('pages.home') }}" class="{% if request.endpoint == 'pages.home' %}active{% endif %}">Home</a></li>
-
             {# Booking: everything before COMMIT. Candidates first because it
                is the workbench -- what is waiting on a decision -- and Booking
                is the answer to how far out he is covered. #}
             <li><a href="{{ url_for('joe_portal.candidate_queue') }}" class="{% if request.endpoint == 'joe_portal.candidate_queue' %}active{% endif %}">Candidates</a></li>
             <li><a href="{{ url_for('joe_portal.booking_board') }}" class="{% if request.endpoint == 'joe_portal.booking_board' %}active{% endif %}">Booking</a></li>
             <li><a href="{{ url_for('joe_portal.mission_intake') }}" class="{% if request.endpoint == 'joe_portal.mission_intake' %}active{% endif %}">New Mission</a></li>
-            <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Search</a></li>
+            <li><a href="{{ url_for('pages.operations') }}" class="{% if request.endpoint == 'pages.operations' %}active{% endif %}">Operations</a></li>
+            {# One Search link, not two. Labelled "Load Search" because that is
+               the name decision D6 gave the capability. #}
+            <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Load Search</a></li>
             <li><a href="{{ url_for('pages.sam') }}" class="{% if request.endpoint == 'pages.sam' %}active{% endif %}">SAM</a></li>
             <li><a href="{{ url_for('pages.dispatch') }}" class="{% if request.endpoint == 'pages.dispatch' %}active{% endif %}">Dispatch</a></li>
             <li><a href="{{ url_for('pages.load_calendar') }}" class="{% if request.endpoint == 'pages.load_calendar' %}active{% endif %}">Calendar</a></li>
@@ -113,7 +145,13 @@
     }
 
     function updatePublisherStatus(actionId, status) {
-        apiPost('/api/publisher/update', {action_id: actionId, status: status})
+        var payload = {action_id: actionId, status: status};
+        if (status === 'APPROVED') {
+            var approvedBy = prompt('Approving identity (your name):');
+            if (!approvedBy) return;
+            payload.approved_by = approvedBy;
+        }
+        apiPost('/api/publisher/update', payload)
             .then(data => {
                 if (data.error) { alert(data.error); return; }
                 location.reload();
@@ -158,6 +196,55 @@
             });
     }
 
+    function driverPinCreate(driverId, driverName) {
+        var pin = prompt('New PIN for ' + driverName + ' (at least 4 characters):');
+        if (!pin) return;
+        var recoveryWord = prompt('Recovery word for ' + driverName + ' (at least 3 characters -- used for self-service PIN reset):');
+        if (!recoveryWord) return;
+        apiPost('/api/driver-pin/create', {driver_id: driverId, pin: pin, recovery_word: recoveryWord})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function driverPinReset(driverId) {
+        var pin = prompt('New PIN (at least 4 characters):');
+        if (!pin) return;
+        apiPost('/api/driver-pin/reset', {driver_id: driverId, new_pin: pin})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                alert('PIN reset.');
+            });
+    }
+
+    function driverPinRecoveryWord(driverId) {
+        var word = prompt('New recovery word (at least 3 characters):');
+        if (!word) return;
+        apiPost('/api/driver-pin/recovery-word', {driver_id: driverId, recovery_word: word})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                alert('Recovery word updated.');
+            });
+    }
+
+    function driverPinSetStatus(driverId, status) {
+        apiPost('/api/driver-pin/status', {driver_id: driverId, status: status})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function driverPinDelete(driverId) {
+        if (!confirm('Remove this Driver PIN Card? The driver will no longer be able to sign in to the Driver Portal.')) return;
+        apiPost('/api/driver-pin/delete', {driver_id: driverId})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
     function archiveEntry(sandboxId) {
         apiPost('/api/archive/create', {sandbox_id: sandboxId})
             .then(data => {
@@ -171,6 +258,15 @@
         if (!subject) return;
         var content = prompt('Content:');
         apiPost('/api/intelligence/add', {intel_type: intelType, subject: subject, content: content || ''})
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                location.reload();
+            });
+    }
+
+    function promoteToLibrary(recordId) {
+        if (!confirm('Promote this record to a Library candidate? It will need review before becoming Library truth.')) return;
+        apiPost('/api/intelligence/promote', {record_id: recordId})
             .then(data => {
                 if (data.error) { alert(data.error); return; }
                 location.reload();

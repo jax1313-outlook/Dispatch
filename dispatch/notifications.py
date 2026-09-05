@@ -19,12 +19,17 @@ import html as _html
 import os
 from typing import Callable
 
+from dispatch import tokens
+
 from cin_lite.email_delivery import (
     _build,
     _send_or_write,
     from_address,
     reviewer_address,
 )
+
+_LOAD_DECISION = "load_decision"
+_STAKEHOLDER = "stakeholder_view"
 
 DISPATCH_ACTIONS: dict[str, tuple[str, str]] = {
     "acknowledge": ("Acknowledge", "#2e7d32"),
@@ -38,15 +43,86 @@ def _secret() -> bytes:
     return os.environ.get("DISPATCH_EMAIL_SECRET", "dispatch-dev-secret").encode()
 
 
-def make_token(load_id: str, action: str) -> str:
-    return hmac.new(
-        _secret(), f"dispatch:{load_id}:{action}".encode(), hashlib.sha256
-    ).hexdigest()
+def _legacy_digest(namespace: str, *parts: str) -> str:
+    """The pre-lifecycle token shape, kept for one purpose only: recognising a
+    link that was mailed out before tokens could expire, so `tokens.verify()`
+    can decide whether the operator's grace window still admits it. Nothing
+    issues these any more."""
+    material = ":".join((namespace, *parts))
+    return hmac.new(_secret(), material.encode(), hashlib.sha256).hexdigest()
+
+
+def make_token(load_id: str, action: str, *, issued_by: str = "") -> str:
+    """Decision-link token for one action on one load.
+
+    Was a bare digest of "dispatch:<load>:<action>" -- permanent, unrevocable,
+    and identical every time it was generated. Now issued through
+    dispatch.tokens with an expiry, a nonce and a revocation record. The
+    signature is unchanged so the ~30 existing call sites did not have to move.
+    """
+    return tokens.issue(
+        _LOAD_DECISION, f"{load_id}:{action}", issued_by=issued_by
+    )
 
 
 def verify_token(load_id: str, action: str, token: str) -> bool:
-    expected = make_token(load_id, action)
-    return hmac.compare_digest(expected, token)
+    return bool(
+        tokens.verify(
+            _LOAD_DECISION,
+            f"{load_id}:{action}",
+            token,
+            legacy_digest=_legacy_digest("dispatch", load_id, action),
+        )
+    )
+
+
+def explain_token(load_id: str, action: str, token: str) -> tokens.TokenVerdict:
+    """The same check as verify_token(), with the reason attached -- for a
+    caller that needs to tell an expired link apart from a revoked one."""
+    return tokens.verify(
+        _LOAD_DECISION,
+        f"{load_id}:{action}",
+        token,
+        legacy_digest=_legacy_digest("dispatch", load_id, action),
+    )
+
+
+def make_stakeholder_token(load_id: str, *, issued_by: str = "") -> str:
+    """Token for the external, non-PIN-gated stakeholder view of one load.
+
+    Its own purpose namespace, so a stakeholder token can never be replayed
+    against a decision endpoint or the reverse -- the property the old
+    prefixed-digest design had, kept, and now backed by a signed `purpose`
+    claim rather than a string prefix.
+    """
+    return tokens.issue(_STAKEHOLDER, load_id, issued_by=issued_by)
+
+
+def verify_stakeholder_token(load_id: str, token: str) -> bool:
+    return bool(
+        tokens.verify(
+            _STAKEHOLDER,
+            load_id,
+            token,
+            legacy_digest=_legacy_digest("dispatch-stakeholder", load_id),
+        )
+    )
+
+
+def explain_stakeholder_token(load_id: str, token: str) -> tokens.TokenVerdict:
+    return tokens.verify(
+        _STAKEHOLDER,
+        load_id,
+        token,
+        legacy_digest=_legacy_digest("dispatch-stakeholder", load_id),
+    )
+
+
+def revoke_stakeholder_access(load_id: str, *, reason: str = "", actor: str = "") -> int:
+    """Kill every live stakeholder link for a load. The control that did not
+    exist before: previously the only way to stop a forwarded link was to
+    rotate the global signing secret, which killed every other link too."""
+    return tokens.revoke_for_object(_STAKEHOLDER, load_id, reason=reason, actor=actor)
 
 
 def _action_url_base() -> str:

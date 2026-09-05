@@ -158,15 +158,30 @@ class TestRouteRisk:
         result = compute_route_risk(load)
         assert "outside operating radius" in result.lower()
 
-    def test_high_detention(self):
-        load = {**SAMPLE_LOAD_GOOD, "detention_history": "High - avg 3 hours"}
-        result = compute_route_risk(load)
-        assert "detention" in result.lower()
+    def test_high_detention_is_not_a_risk(self):
+        """Rewritten, not weakened: this asserted a rule the operator overruled.
 
-    def test_unknown_broker(self):
+        Detention used to be a hazard and a 3-point deduction. His accessorial
+        policy prices it to make waiting worth its lost capacity, so a load
+        likely to sit is not a worse load. It survives as a capacity flag -- see
+        test_detention_is_not_a_penalty.py -- and the assertion here is inverted
+        so the behaviour is still pinned, to the opposite answer.
+        """
+        load = {**SAMPLE_LOAD_GOOD, "detention_history": "High - avg 3 hours"}
+        assert "detention" not in compute_route_risk(load).lower()
+        assert compute_route_risk(load) == compute_route_risk(SAMPLE_LOAD_GOOD)
+
+    def test_an_unknown_broker_is_not_a_risk(self):
+        """Rewritten, not weakened: this asserted a rule the operator overruled.
+
+        An unfamiliar broker used to be flagged as a hazard. Trust is assumed
+        until broken and is not a program variable, so the assertion is inverted
+        rather than removed -- the behaviour is still pinned, to the opposite
+        answer. See docs/DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md section 3.
+        """
         load = {**SAMPLE_LOAD_GOOD, "broker_intelligence": "Unknown broker"}
-        result = compute_route_risk(load)
-        assert "unknown broker" in result.lower()
+        assert "broker" not in compute_route_risk(load).lower()
+        assert compute_route_risk(load) == compute_route_risk(SAMPLE_LOAD_GOOD)
 
 
 class TestEconomicOpportunity:
@@ -217,8 +232,15 @@ class TestDeadheadAndFuel:
 
 class TestOverallScore:
     def test_good_load_scores_high(self):
-        score = compute_score(SAMPLE_LOAD_GOOD)
-        assert score >= 80
+        """80% of what is achievable -- the same bar, expressed so it cannot drift.
+
+        This read `>= 80` against an implicit maximum of 100. Removing broker
+        confidence lowered the ceiling to 90, which would have silently made this
+        a 89% bar. Naming the share keeps it honest through future weight changes.
+        """
+        from dispatch.scoring import MAX_SCORE
+
+        assert compute_score(SAMPLE_LOAD_GOOD) >= 0.80 * MAX_SCORE
 
     def test_risky_load_scores_lower(self):
         score = compute_score(SAMPLE_LOAD_RISKY)
@@ -261,7 +283,9 @@ class TestScoreLoad:
         assert result["economic_opportunity_flag"] != "Unknown"
         assert result["deadhead_miles"] is not None
         assert result["fuel_estimate"] is not None
-        assert result["score"] >= 80
+        from dispatch.scoring import MAX_SCORE
+
+        assert result["score"] >= 0.80 * MAX_SCORE
 
     def test_risky_load_values(self):
         result = score_load(SAMPLE_LOAD_RISKY)
@@ -317,7 +341,9 @@ class TestSandboxScoring:
         loads = helpers.load_dispatch_data()
         assert len(loads) == 1
         load = loads[0]
-        assert load["score"] >= 80
+        from dispatch.scoring import MAX_SCORE
+
+        assert load["score"] >= 0.80 * MAX_SCORE
         assert load["deadhead_miles"] is not None
         assert load["fuel_estimate"] is not None
         assert "_scoring" in load

@@ -16,3 +16,32 @@ dev = ["pytest>=8.0"]
 dispatch = "cin_lite.run:main"
 cin-portal = "portal.app:create_app"
 cin-sync = "sync.cli:main"
+cin-portal-init-admin = "portal.cli:init_admin"
+dispatch-launcher = "dispatch_launcher.cli:main"
+
+# Explicit package discovery. Without this, setuptools refuses to build at all:
+# the repository is a flat layout with six top-level packages, and auto-discovery
+# bails out with "Multiple top-level packages discovered in a flat-layout" rather
+# than guess. That failure made the documented Quick Start (`pip install -e .` in
+# DEPLOY_LOCAL.md) unusable, which in turn made `cin-portal-init-admin` -- the
+# one-time Authority bootstrap -- impossible to install, and DEPLOY_LOCAL.md
+# notes that without that step nothing past the login page is reachable.
+#
+# `find` with `include` rather than a flat `packages = [...]` list on purpose:
+# six of the twelve packages here are subpackages (cin_lite.agents,
+# cin_lite.rules, cin_lite.workflows, portal.models, portal.routes,
+# reconciliation.adapters). A literal list omits subpackages silently -- the
+# install succeeds and `import portal.routes` then fails from the installed
+# distribution. The `*` patterns below pick them up, and keep picking up new
+# ones without this file needing an edit.
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "cin_lite*",
+    "dispatch*",
+    "dispatch_launcher*",
+    "portal*",
+    "reconciliation*",
+    "route_risk*",
+    "sync*",
+]

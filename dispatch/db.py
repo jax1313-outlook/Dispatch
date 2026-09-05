@@ -252,12 +252,55 @@ CREATE TABLE IF NOT EXISTS ifta_fuel_purchases (
     vehicle_id      TEXT NOT NULL DEFAULT '',
     vendor          TEXT NOT NULL DEFAULT '',
     notes           TEXT NOT NULL DEFAULT '',
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    evidence_id     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_date ON ifta_fuel_purchases(date);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_jurisdiction ON ifta_fuel_purchases(jurisdiction);
 CREATE INDEX IF NOT EXISTS idx_ifta_fuel_vehicle ON ifta_fuel_purchases(vehicle_id);
+
+CREATE TABLE IF NOT EXISTS ifta_fuel_evidence (
+    evidence_id       TEXT PRIMARY KEY,
+    purchase_id       TEXT NOT NULL REFERENCES ifta_fuel_purchases(purchase_id),
+    original_filename TEXT NOT NULL DEFAULT '',
+    file_path         TEXT,
+    file_size         INTEGER NOT NULL DEFAULT 0,
+    mime_type         TEXT NOT NULL DEFAULT '',
+    checksum          TEXT,
+    description       TEXT NOT NULL DEFAULT '',
+    uploaded_by       TEXT NOT NULL DEFAULT '',
+    capture_time      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_fuel_evidence_purchase ON ifta_fuel_evidence(purchase_id);
+
+CREATE TABLE IF NOT EXISTS ifta_report_approvals (
+    approval_id         TEXT PRIMARY KEY,
+    year                INTEGER NOT NULL,
+    quarter             INTEGER NOT NULL,
+    vehicle_id          TEXT NOT NULL DEFAULT '',
+    status              TEXT NOT NULL DEFAULT 'draft',
+    snapshot_json       TEXT NOT NULL,
+    recommendation_json TEXT,
+    submitted_at        TEXT NOT NULL,
+    sealed_at           TEXT,
+    approved_by         TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_approvals_period ON ifta_report_approvals(year, quarter, vehicle_id);
+
+CREATE TABLE IF NOT EXISTS ifta_exceptions (
+    exception_id        TEXT PRIMARY KEY,
+    approval_id         TEXT NOT NULL REFERENCES ifta_report_approvals(approval_id),
+    exception_type      TEXT NOT NULL,
+    detail              TEXT NOT NULL DEFAULT '',
+    related_record_ids  TEXT NOT NULL DEFAULT '[]',
+    detected_at         TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ifta_exceptions_approval ON ifta_exceptions(approval_id);
 
 CREATE TABLE IF NOT EXISTS broker_contacts (
     broker_id       TEXT PRIMARY KEY,
@@ -296,6 +339,28 @@ CREATE TABLE IF NOT EXISTS driver_pay (
     notes       TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS route_risk_events (
+    route_risk_event_id TEXT PRIMARY KEY,
+    load_id TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    source_label TEXT NOT NULL,
+    affected_area TEXT,
+    affected_corridor TEXT,
+    condition_summary TEXT NOT NULL,
+    estimated_delay_minutes INTEGER DEFAULT 0,
+    delivery_commitment_status TEXT DEFAULT 'achievable',
+    route_risk_level TEXT NOT NULL,
+    consequence_level INTEGER DEFAULT 1,
+    driver_notification_required INTEGER DEFAULT 0,
+    stakeholder_notification_required INTEGER DEFAULT 0,
+    mission_visibility_update_required INTEGER DEFAULT 0,
+    comi_required INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    has_map_visual INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_route_risk_load ON route_risk_events(load_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_driver ON driver_pay(driver_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_load ON driver_pay(load_id);
 CREATE INDEX IF NOT EXISTS idx_driver_pay_status ON driver_pay(status);
@@ -375,6 +440,57 @@ def get_db_path() -> Path:
 
 def _init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
+    _apply_migrations(conn)
+    # Dispatch Spine owns the work-item lifecycle in its own six tables, in
+    # this same database file. CF-04, adjudicated 2026-08-23: "Dispatch Spine
+    # shall become the authoritative lifecycle engine and single source of
+    # lifecycle truth." The branch this was recovered from also initialised a
+    # `dispatch.security` schema here; that stack is superseded by the Portal
+    # PIN gate already on main (CF-03) and was deliberately not recovered.
+    from dispatch.connectors.audit import init_connector_schema
+    from dispatch.spine.db import init_spine_schema
+    from dispatch.tokens import init_token_schema
+
+    init_connector_schema(conn)
+    init_spine_schema(conn)
+    init_token_schema(conn)
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Idempotent ALTER TABLEs for columns added to tables that may
+    already exist from before the column was introduced. `CREATE TABLE
+    IF NOT EXISTS` in `_SCHEMA` above is a no-op against an existing
+    table, so a new column on an existing table needs its own statement
+    here -- guarded so re-running it against a database that already has
+    the column is a harmless no-op.
+    """
+    try:
+        conn.execute("ALTER TABLE ifta_fuel_purchases ADD COLUMN evidence_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE ifta_fuel_purchases ADD COLUMN extraction_confidence REAL")
+    except sqlite3.OperationalError:
+        pass
+    # route_risk_events has existed in _SCHEMA since it was written but was
+    # never written to -- Route Risk events lived only in a module-level dict
+    # (route_risk/engine.py), so a process restart destroyed them. M3
+    # (DISPATCH_BUILD_MATRIX_v1) starts writing this table, and needs the one
+    # column the in-memory event carried that the table did not.
+    try:
+        conn.execute(
+            "ALTER TABLE route_risk_events ADD COLUMN has_map_visual INTEGER NOT NULL DEFAULT 1"
+        )
+    except sqlite3.OperationalError:
+        pass
+    # Rehearsal mode (Operational Readiness Mission Section 4.2) tags records so
+    # a proof run can never display as an unlabeled live mission. One TEXT
+    # column per tagged table, empty for operational records -- see
+    # dispatch/rehearsal.py for why a column rather than a join table. The
+    # guarded ALTERs live in that module beside the tables they belong to.
+    from dispatch.rehearsal import init_rehearsal_schema
+
+    init_rehearsal_schema(conn)
 
 
 @contextmanager
