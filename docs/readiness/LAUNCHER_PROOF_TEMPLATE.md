@@ -33,6 +33,18 @@ Nothing in this document is, or may become, a record of approval, acceptance or
 verification by Mike Zachary. It records only whether a command was run and what
 it printed.
 
+
+> **Command substitution, recorded:** every command in this document says `python`.
+> On this machine `python` resolves to the Microsoft Store alias stub
+> (`C:\Users\jax13\AppData\Local\Microsoft\WindowsApps\python.exe`) and answers
+> *"Python was not found."* **`py -3` was used instead**, which is what the launcher's own
+> `dispatch.bat` already prefers. This closes Known Windows-only unknown #1: `py -3` resolves to
+> `C:\Users\jax13\AppData\Local\Python\pythoncore-3.14-64\python.exe`, which has Flask 3.1.3 --
+> the same interpreter the 2026-08-25 launcher log recorded.
+> Recorded 2026-09-05 from `D:\Dispatch` at commit `d831b7e`.
+
+---
+
 ## How to record a result
 
 For each item: run the command in the **Command Mike runs** column from a
@@ -65,8 +77,53 @@ Alternate entry point, if PowerShell is preferred:
 | **Requirement** | §3.3 — status, version, commit, address, database, roots, mode, secrets, backup, last failure; each read from the actual runtime configuration, never hard-coded. |
 | **Command Mike runs** | `python -m dispatch_launcher status` |
 | **Expected** | Every line shows a real path or value from this machine — the `D:` paths if the storage roots are set, `UNCONFIGURED - using defaults` if they are not. Commit shows a 40-character hash, or `UNVERIFIED` if git is not installed. |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste the whole status block here)_ |
+| **Result** | `LIVE` |
+| **Observed** | Run 2026-09-05, `py -3 -m dispatch_launcher status` from `D:\Dispatch` — see the block and the finding below. |
+
+```
+  DISPATCH - Operations Control
+
+    Dispatch              STOPPED
+                          Something is already answering on port 8080, but this launcher did not start it.
+
+    Version               0.1.0 (portal.__version__)
+    Commit                d831b7e801846d549e6c7f5a8632c01847a5ae94
+    Portal address        http://127.0.0.1:8080
+    Mode                  operational
+                          DISPATCH_MODE is not set; Dispatch defaults to operational.
+    Security settings     CONFIGURED - required settings have real values
+
+    Database              D:\Dispatch Operations\Current Workspace\PortalData\dispatch.db
+    Portal data           D:\Dispatch Operations\Current Workspace\PortalData
+    Operations root       D:\Dispatch Operations
+    Archive root          D:\Archive
+    Memory root           D:\Memory
+    Contract archive      D:\Archive\CIN
+
+    Backup                UNCONFIGURED
+                          No backup location is configured. Set DISPATCH_BACKUP_DIR to the folder scripts/dispatch_backup.py writes to.
+
+    Logs                  D:\Dispatch Operations\Logs
+    Last start failure    2026-08-29T19:25:24Z
+                          Dispatch could not start because port 8080 is already in use.
+```
+
+Every path is a real `D:` value read from this machine, and the commit is the 40-character hash
+of the code actually checked out. **Requirement met.**
+
+**Finding, recorded rather than cleaned up.** The status block reported *"Something is already
+answering on port 8080, but this launcher did not start it."* That was true. Three orphaned
+processes were found running:
+
+| PID | Command | Started |
+|---|---|---|
+| 65568 | `python -m portal.app` — holding port 8080 | 2026-09-03 20:33:48 |
+| 60636 | `python -m portal.app` — same second, its reloader | 2026-09-03 20:33:48 |
+| 46152 | `python -m l1_cos.app` | 2026-08-30 11:42:09 |
+
+No `.db-wal` or `.db-shm` files existed anywhere on `D:`, so no database held an open connection.
+**This is requirement 6 — orphan detection — observed in the wild rather than staged.** The
+processes were left running pending Mike's decision.
 
 Cross-check that the launcher and the portal agree, which is the point of the
 requirement — these two must print the same database path and the same address:
@@ -306,14 +363,54 @@ state, so only the third needs acceptance evidence of its own.
 |---|---|---|---|
 | 9 | The menu shows all eight controls in the specified order, with icons | Double-click `dispatch.bat` | `UNVERIFIED` |
 | 10 | The icons render, or are cleanly absent on a legacy code page | Same. If the console is not UTF-8 the rows show `[1] Start` with no icon — that is correct, not a fault | `UNVERIFIED` |
-| 11 | Settings names every setting and never prints a secret value | `python -m dispatch_launcher settings` | `UNVERIFIED` |
-| 12 | Settings exits non-zero while a setting is blocking a start | `python -m dispatch_launcher settings` then `echo %ERRORLEVEL%` | `UNVERIFIED` |
-| 13 | Version reports the commit of the code actually running | `python -m dispatch_launcher version` | `UNVERIFIED` |
+| 11 | Settings names every setting and never prints a secret value | `py -3 -m dispatch_launcher settings` | `LIVE` |
+| 12 | Settings exits non-zero while a setting is blocking a start | `py -3 -m dispatch_launcher settings` then `echo %ERRORLEVEL%` | `LIVE` |
+| 13 | Version reports the commit of the code actually running | `py -3 -m dispatch_launcher version` | `LIVE` |
 | 14 | Reset Session **refuses** while Dispatch is running | Start Dispatch, then choose `[7]`. It must refuse and name the process ID | `UNVERIFIED` |
 | 15 | Reset Session clears a stale record and nothing else | Stop Dispatch, choose `[7]`, then confirm in the portal that every load, milestone and evidence file is still there | `UNVERIFIED` |
 
 **Observed** — paste the real output beside each item, and replace `UNVERIFIED`
 with `LIVE` or `UNAVAILABLE`. No other word.
+
+### Items 11, 12 and 13 — observed 2026-09-05, `D:\Dispatch` @ `d831b7e`
+
+**Item 13 — `py -3 -m dispatch_launcher version`:**
+
+```
+  DISPATCH - Version
+    Dispatch version    0.1.0 (portal.__version__)
+    Commit              d831b7e801846d549e6c7f5a8632c01847a5ae94
+    Python              3.14.5
+    Interpreter         C:\Users\jax13\AppData\Local\Python\pythoncore-3.14-64\python.exe
+    Windows / OS        Windows 11
+    Repository          D:\Dispatch
+    Installed packages Dispatch depends on:
+      flask             3.1.3
+      paramiko          ABSENT
+      anthropic         1.1.0
+```
+
+The commit matches the code checked out in `D:\Dispatch`. **Requirement met.**
+
+**Item 11 — `py -3 -m dispatch_launcher settings`:** enumerated all eleven settings.
+`PORTAL_SECRET_KEY` and `DISPATCH_EMAIL_SECRET` both reported
+`status CONFIGURED / value set (value not shown)` — **the name and state, never the value.**
+`DISPATCH_OPERATIONS_ROOT`, `DISPATCH_ARCHIVE_ROOT` and `DISPATCH_MEMORY_ROOT` showed their real
+`D:` paths. `DISPATCH_BACKUP_DIR`, `PORTAL_HOST`, `PORTAL_PORT`, `DISPATCH_MODE`,
+`DISPATCH_REHEARSAL_SESSION` and `DISPATCH_LAUNCHER_LOG_DIR` each showed
+`UNCONFIGURED <-- not set` with the default it falls back to. It closed with *"Nothing in this
+list is preventing Dispatch from starting."* **Requirement met — no secret value appeared.**
+
+**Item 12 — exit code, both halves:**
+
+| Condition | `ERRORLEVEL` |
+|---|---|
+| Nothing blocking | `0` |
+| `PORTAL_SECRET_KEY` cleared **in a child process only** | `1` |
+
+Under the blocking condition it printed `status UNCONFIGURED <-- not set` and
+`Dispatch will refuse to start until these are set: PORTAL_SECRET_KEY` — **naming the setting,
+never a value.** Mike's saved environment was not altered. **Requirement met.**
 
 Item 14 is the one that matters most. Clearing the record of a live server is how
 an orphan is created: the process keeps holding the port and can no longer be
