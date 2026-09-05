@@ -72,6 +72,53 @@ said *"Dispatch cannot start because PORTAL_SECRET_KEY is not set."*
 Both traps produce a false negative that reads as a false defect. Anyone re-running these items
 should know.
 
+### Reported from use, 2026-09-05: the document checklist cannot be ticked
+
+**Mike's report:** the check mark in Document Status in the Driver Portal does not work.
+**Confirmed.** It is wider than the arrival notice, and it blocks the delivery completion chain.
+
+**What does work.** The Arrival Notice line ticks correctly. It is driven by `arrived_at`, and on
+`SBX-DISPATCH-LOAD-20260729-001` that field is set — Mike pressed ARRIVE on 2026-09-02 at 20:39:41,
+`arrival_notice_drafted_at` was written, and no error was recorded. Rendering that real record
+produces `[X] Arrival Notice`.
+
+**What does not.** Every other item on both checklists ticks only when `artifacts_held` contains its
+name. **Nothing in the running application ever writes that field.**
+
+| `artifacts_held` | Where |
+|---|---|
+| Read | `portal/cockpit.py:428` — one site |
+| Written | `tests/test_driver_cockpit.py` — lines 119, 124, 128, 262, 297, 367 |
+| Written in application code | **nowhere** |
+
+The checklist rows in `portal/templates/joe_portal.html` are plain `<li>` elements carrying a
+`<span class="box">`. There is no `<input>`, no `<button>` and no click handler, so a tap on the box
+does nothing. `UPLOAD DOCUMENTS - PHOTOS` carries `data-action="upload"` with **no JavaScript
+handler and no route behind it** — a dead control.
+
+**Consequences, in order of seriousness:**
+
+1. `document_status(...)["complete"]` requires every item done, so it **can never be `True`** in the
+   running application. The tick beside `DOCUMENT STATUS:` can never appear, and neither checklist
+   can ever read `COMPLETE`.
+2. `completion_effect()` — Publisher packet → JOE review → Outlook draft — fires only on completion.
+   **That chain is unreachable from the user interface.**
+3. A driver reading the screen is shown four or five boxes he has no way to satisfy.
+
+**Why the suite does not see it.** `TestDocumentStatus` builds `artifacts_held` by hand and then
+asserts on the result. The logic it proves is correct; what no test asserts is that any code path
+can *produce* that state. This is the third defect of this shape found in two sessions, after the
+graceful-shutdown escalation and the two test-method traps above. **A test that constructs its own
+precondition cannot tell you the precondition is reachable.**
+
+**Not yet fixed.** The repair depends on a decision only Mike can make: whether ticking a document
+means *"I have it in hand"* (a tap, recorded on the Mission Record) or *"a photo or scan is stored"*
+(which makes UPLOAD the real work — file storage, naming, location on `D:`, retention). The two
+build differently and the second cannot be reached without a working camera and signal at the dock.
+Recorded here so the choice is made deliberately rather than inherited from whichever gets built.
+
+---
+
 ### What was confirmed working
 
 - **Orphan detection.** With the PID record deleted, start refused with `port 8080 is already in use`,
@@ -233,6 +280,14 @@ decided.
 > **item 8** — the external drive. The backup mechanism itself was proven end to end on
 > 2026-09-05 (capture, hash-verify, restore, restored database identical to source), so this is
 > now hardware, not software.
+
+> **And a second blocker, reported from use 2026-09-05:** the document checklist cannot be
+> ticked. `artifacts_held` is written by no application code, there is no tap handler on the
+> checklist rows, and `UPLOAD DOCUMENTS - PHOTOS` has no route behind it. Because
+> `completion_effect()` fires only when the checklist completes, **the Publisher packet ->
+> JOE review -> Outlook draft chain cannot be reached from the screen.** PILOT-01 carries a
+> load end to end, so this blocks the completion gate as surely as the six items above do.
+> Full detail in section 0b. Awaiting Mike's ruling on what a tick means.
 
 Updated 2026-08-25. Everything that came before this is cleared. Dispatch launches, signs in
 and renders on the target machine.
