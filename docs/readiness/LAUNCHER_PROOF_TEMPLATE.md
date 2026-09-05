@@ -144,8 +144,8 @@ python portal\app.py          (read the storage map it prints, then close it wit
 | **Requirement** | §3.4 — Start creates exactly one server process and records its PID; a second Start while running does nothing except report "already running". |
 | **Command Mike runs** | `python -m dispatch_launcher start` then `python -m dispatch_launcher start` again |
 | **Expected** | The first prints `Dispatch is running (process ID NNNN) at http://127.0.0.1:8080`. The second prints `Dispatch is already running (process ID NNNN). Nothing was started.` — **the same process ID**. |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste both outputs)_ |
+| **Result** | `LIVE` |
+| **Observed** | Run 2026-09-05 from `D:\Dispatch` @ `d831b7e` (`py -3`). First start: `Dispatch is running (process ID 96532) at http://127.0.0.1:8080`. Second start: `Dispatch is already running (process ID 96532). Nothing was started.` — **the same process ID**, plus `Process ID 96532 is the Dispatch server this launcher started (confirmed by process start time and command line).` **Requirement met.** |
 
 Confirm exactly one server exists, using Windows' own view rather than the
 launcher's:
@@ -156,7 +156,7 @@ powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name lik
 
 Exactly one line should mention `portal\app.py`.
 
-| **One-process check** | `UNVERIFIED` |
+| **One-process check** | `LIVE` — `Get-CimInstance Win32_Process` returned exactly one match: `PID 96532  …\python.exe D:\Dispatch\portal\app.py`. One server, running from the canonical copy. |
 
 The recorded PID file is `dispatch-portal.pid` in the log directory printed by
 `python -m dispatch_launcher --logs`.
@@ -170,8 +170,8 @@ The recorded PID file is `dispatch-portal.pid` in the log directory printed by
 | **Requirement** | §3.4 — Stop terminates the actual server process and confirms it is gone. |
 | **Command Mike runs** | `python -m dispatch_launcher stop` |
 | **Expected** | `Dispatch has stopped. Process ID NNNN is gone.` |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste the output, and the PID that was reported in item 3)_ |
+| **Result** | `LIVE` |
+| **Observed** | `Dispatch has stopped. Process ID 96532 had to be forced, and is gone.` — the PID from item 3. **Requirement met, with a defect observed:** the launcher reported `The operating system refused the request to close the process.` and `Process ID 96532 did not close within 10 seconds, so the launcher escalated to a forced stop.` **Every stop in this session behaved the same way** (96532, 69188, 74684). Graceful shutdown is not working; the forced escalation is, and it reports itself honestly. See the note below item 5. |
 
 Confirm with Windows itself that the PID is gone:
 
@@ -181,7 +181,7 @@ tasklist /FI "PID eq NNNN"
 
 Expected: `INFO: No tasks are running which match the specified criteria.`
 
-| **Gone-confirmed check** | `UNVERIFIED` |
+| **Gone-confirmed check** | `LIVE` — `tasklist /FI "PID eq 96532"` returned `INFO: No tasks are running which match the specified criteria.` |
 
 ---
 
@@ -192,8 +192,8 @@ Expected: `INFO: No tasks are running which match the specified criteria.`
 | **Requirement** | §3.4 — Restart proves the original process is dead before launching the new one. |
 | **Command Mike runs** | `python -m dispatch_launcher start` (note the PID), then `python -m dispatch_launcher restart` |
 | **Expected** | `Stopped process ID <old>. Dispatch is running (process ID <new>) at http://...` with **old ≠ new**, and `tasklist /FI "PID eq <old>"` reporting no such task. |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste the output and both PIDs)_ |
+| **Result** | `LIVE` |
+| **Observed** | `Stopped process ID 69188. Dispatch is running (process ID 74684) at http://127.0.0.1:8080` — **old ≠ new**, and the old process was proven dead before the new one launched. **Requirement met.**<br><br>**DEFECT OBSERVED ACROSS ITEMS 4 AND 5 — graceful shutdown never succeeds.** All three stops (96532, 69188, 74684) reported the OS refusing the close request, waited the full 10 seconds, then escalated to a forced stop. The outcome is correct every time and the launcher states plainly what it did — but a 10-second wait and a forced kill on every stop is not the intended path, and it is invisible to the test suite because no test spawns a real Windows process. Candidate entry for `docs/readiness/KNOWN_LIMITATIONS.md`. |
 
 ---
 
@@ -204,8 +204,8 @@ Expected: `INFO: No tasks are running which match the specified criteria.`
 | **Requirement** | §3.4 — detect and report orphaned processes from a prior crash rather than starting a duplicate; handle a stale PID file. |
 | **Command Mike runs** | 1. `python -m dispatch_launcher start`<br>2. Delete the PID file: `del "<log dir>\dispatch-portal.pid"` (get `<log dir>` from `python -m dispatch_launcher --logs`)<br>3. `python -m dispatch_launcher start` |
 | **Expected** | Step 3 refuses: `Dispatch could not start because port 8080 is already in use.` and names the unclaimed process ID it found. No second server is created. |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste the output)_ |
+| **Result** | `LIVE` |
+| **Observed** | Run 2026-09-05 from `D:\Dispatch`. Started as PID 91688, deleted `dispatch-portal.pid`, started again. Refused:<br>`Dispatch could not start because port 8080 is already in use.`<br>`A Dispatch-looking process is running that this launcher did not start: process ID 91688.`<br>`This is most likely a server left over from a previous session whose window was closed. Stop it in Task Manager, then start Dispatch again.`<br>**Named the unclaimed process, created no second server, and gave a remedy. Requirement met.** |
 
 Stale-PID-file half of the same requirement:
 
@@ -213,8 +213,8 @@ Stale-PID-file half of the same requirement:
 |---|---|
 | **Command Mike runs** | With Dispatch stopped, open the PID file in Notepad, change `"pid"` to a number that is not running (e.g. `999999`), save, then `python -m dispatch_launcher start` |
 | **Expected** | It reports the record as a leftover, says `The stale record was cleared.`, and starts normally. |
-| **Result** | `UNVERIFIED` |
-| **Observed** | _(paste the output)_ |
+| **Result** | `LIVE` |
+| **Observed** | A **genuine** record was captured while running, Dispatch stopped, and the record restored with `pid` rewritten to `999999` (all other fields — `created_token`, `command_line`, `log_path` — left intact). Start reported:<br>`The launcher's record names process ID 999999, which is no longer running. Dispatch stopped without the record being cleared, which usually means the window was closed or the machine lost power.`<br>`The stale record was cleared.`<br>…and started normally as PID 95856. **Requirement met.**<br><br>**Method note, recorded because it matters:** a first attempt used a hand-written record containing only `pid`, `recorded_at`, `command`, `host` and `port`. The launcher **ignored it silently and started normally** — correct behaviour, since an unparseable record is not a stale one, but it looks identical to a defect from outside. A synthetic record must carry `created_token`, `command_line` and `log_path` or the test measures nothing. |
 
 Clean up after this item: `python -m dispatch_launcher stop`, and end any
 leftover `python.exe` running `portal\app.py` in Task Manager.
@@ -251,7 +251,7 @@ Expected: every hit shows the setting **name** followed by `[REDACTED]`, and no
 real value. The log directory must not be inside a folder git tracks — confirm
 with `git status` showing no launcher log files.
 
-| **Redaction check** | `UNVERIFIED` |
+| **Redaction check** | `LIVE` — `dispatch-launcher.log` scanned for `SECRET KEY PASSWORD TOKEN PIN`. Every hit is a setting **name** followed by `[REDACTED]`: `SECRET": "[REDACTED]` and `SECRET_KEY": "[REDACTED]`. **No secret value appears anywhere in the log.** The log directory `D:\Dispatch Operations\Logs` is outside the repository and is not git-tracked. |
 
 ---
 
