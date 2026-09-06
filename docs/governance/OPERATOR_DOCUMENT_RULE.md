@@ -12,6 +12,17 @@
 > **Historical analysis, recovery records, research, and planning** documents belong in
 > `D:\MD Files`.
 
+**The two categories, as he set them out on 2026-09-06:**
+
+| REPOSITORY | `D:\MD Files` |
+|---|---|
+| Code | Research |
+| Doctrine | Forensics |
+| Specifications | Recovery |
+| Operator Guides | Analysis |
+| Walkthroughs | Historical Records |
+| | Planning |
+
 ---
 
 ## WHY
