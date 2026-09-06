@@ -78,7 +78,14 @@ class SettingRow:
         """
         example = "<value>" if not self.secret else "<a long random value you generate>"
         if self.session_scoped:
-            return f"set {self.name}=<value>       (this window only -- NOT setx)"
+            # Both shells, because the wrong one fails quietly. In PowerShell
+            # `set` is an alias for Set-Variable: it sets nothing Dispatch can
+            # read, says nothing, and the records come out untagged.
+            return (
+                f'PowerShell:  $env:{self.name} = "<value>"'
+                f"\n{' ' * 17}cmd:         set {self.name}=<value>"
+                f"\n{' ' * 17}This window only. Never setx."
+            )
         return f'setx {self.name} "{example}"'
 
 
@@ -285,9 +292,13 @@ def render_settings(view: SettingsView) -> str:
     lines.append(f"{_INDENT}changing anything here.")
     if any(r.session_scoped for r in view.rows):
         lines.append("")
-        lines.append(f"{_INDENT}One exception: DISPATCH_REHEARSAL_SESSION uses set, not setx.")
+        lines.append(f"{_INDENT}One exception: DISPATCH_REHEARSAL_SESSION is never made permanent.")
         lines.append(f"{_INDENT}Rehearsal mode belongs to one window and one afternoon. Made")
         lines.append(f"{_INDENT}permanent it would tag your first real load as a test.")
+        lines.append("")
+        lines.append(f"{_INDENT}Its command differs by shell. A PowerShell prompt reads PS D:\\...>")
+        lines.append(f"{_INDENT}and needs $env:NAME = \"value\". Using cmd's `set` there sets nothing")
+        lines.append(f"{_INDENT}Dispatch can read, and says nothing about it.")
     return "\n".join(lines)
 
 

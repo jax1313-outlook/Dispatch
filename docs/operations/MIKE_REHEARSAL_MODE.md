@@ -8,20 +8,39 @@ With it off, records are live.
 
 ---
 
-## THE ONE THING THAT WILL BITE YOU
+## FIRST — WHICH WINDOW ARE YOU IN?
 
-**Use `set`, never `setx`.**
+**The command is different in PowerShell and Command Prompt, and the wrong one fails quietly.**
+Look at your prompt:
+
+| Prompt looks like | You are in | Use |
+|---|---|---|
+| `PS D:\Dispatch>` | **PowerShell** | `$env:NAME = "value"` |
+| `D:\Dispatch>` | **Command Prompt** | `set NAME=value` |
+
+Windows Terminal, VS Code and the Start-menu default all open **PowerShell**, so that is probably
+you. Every step below gives both.
+
+**Why it matters:** in PowerShell, `set` is an alias for `Set-Variable` and does something entirely
+different. It does not set an environment variable, Dispatch never sees it, and **nothing tells you**
+— records are created untagged and look fine until you go looking for them.
+
+---
+
+## THE OTHER THING THAT WILL BITE YOU
+
+**Never make this one permanent — no `setx`, no System Properties.**
 
 | | |
 |---|---|
-| **`set`** | Lasts until you close that window. **This is what you want.** |
+| **`$env:` / `set`** | Lasts until you close that window. **This is what you want.** |
 | **`setx`** | **Permanent.** Every future start of Dispatch is in rehearsal mode — including PILOT-01 |
 
 `setx` is right for the backup folder, which never changes. It is wrong here. Rehearsal mode is
 something you switch on for an afternoon of testing and off again, and a permanent setting would
 tag your real first load as a rehearsal — the exact opposite of the reason you asked for it.
 
-**If you only remember one line from this page: `set`, not `setx`.**
+**If you only remember one line from this page: this setting belongs to one window, not to the machine.**
 
 ---
 
@@ -29,8 +48,8 @@ tag your real first load as a rehearsal — the exact opposite of the reason you
 
 ### Step 1 — create a session
 
-Open **Command Prompt** in `D:\Dispatch` and run this, changing the label to whatever you are about
-to test:
+Open a terminal in `D:\Dispatch` — PowerShell or Command Prompt, either works for this step — and run
+this, changing the label to whatever you are about to test:
 
 ```
 py -3 -c "from dispatch import rehearsal; s = rehearsal.start_session(label='Tab walk testing', actor_id='mike'); print(s['session_id'])"
@@ -48,11 +67,17 @@ REH-20260906-1568E597
 
 **In the same window**, paste your id in place of the example:
 
+**PowerShell** — quotes required:
+
+```
+$env:DISPATCH_REHEARSAL_SESSION = "REH-20260906-1568E597"
+```
+
+**Command Prompt** — no quotes, no spaces around the `=`:
+
 ```
 set DISPATCH_REHEARSAL_SESSION=REH-20260906-1568E597
 ```
-
-No quotes. No spaces around the `=`.
 
 ### Step 3 — check it before you start
 
@@ -100,12 +125,20 @@ to a conclusion.
 
 ### Step 3 — clear the variable
 
+**PowerShell:**
+
+```
+$env:DISPATCH_REHEARSAL_SESSION = ""
+```
+
+**Command Prompt** — nothing after the `=`:
+
 ```
 set DISPATCH_REHEARSAL_SESSION=
 ```
 
-Nothing after the `=`. Or simply **close the window** — with `set`, that is enough, which is the
-whole reason for using it.
+Or simply **close the window.** Set this way it belongs to that window alone, which is the whole
+reason for doing it this way.
 
 ### Step 4 — confirm you are back on live
 
@@ -159,14 +192,15 @@ test loads from before today were tagged by hand afterwards, and that is a separ
 
 ```
 py -3 -c "from dispatch import rehearsal; s = rehearsal.start_session(label='testing', actor_id='mike'); print(s['session_id'])"
-set DISPATCH_REHEARSAL_SESSION=<the id it printed>
+$env:DISPATCH_REHEARSAL_SESSION = "<the id it printed>"    # PowerShell
+set DISPATCH_REHEARSAL_SESSION=<the id it printed>         # Command Prompt
 py -3 -m dispatch_launcher settings          <-- no PROBLEM block
 py -3 -m dispatch_launcher start             <-- red band on every page
 
 ...test...
 
 py -3 -m dispatch_launcher stop
-set DISPATCH_REHEARSAL_SESSION=
+$env:DISPATCH_REHEARSAL_SESSION = ""      # or just close the window
 ```
 
-**`set`, not `setx`.**
+**Match the command to your window, and never make it permanent.**

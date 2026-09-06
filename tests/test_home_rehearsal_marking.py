@@ -213,16 +213,29 @@ class TestTheSettingsScreenPrintsTheRightCommand:
         view = settings.collect_settings()
         return next(r for r in view.rows if r.name == name)
 
-    def test_rehearsal_is_offered_as_set_not_setx(self):
+    def test_rehearsal_gives_both_shells_and_never_setx(self):
+        r"""Mike ran the session command at a `PS D:\Dispatch>` prompt on
+        2026-09-06 and the walkthrough had handed him cmd syntax. In PowerShell
+        `set` is an alias for Set-Variable: it sets nothing Dispatch can read,
+        reports no error, and the records come out untagged looking fine."""
         command = self._row("DISPATCH_REHEARSAL_SESSION").change_command()
-        assert command.startswith("set DISPATCH_REHEARSAL_SESSION=")
+        assert '$env:DISPATCH_REHEARSAL_SESSION = "<value>"' in command
+        assert "set DISPATCH_REHEARSAL_SESSION=<value>" in command
         assert not command.startswith("setx")
-        assert "NOT setx" in command
+        assert "Never setx" in command
 
     def test_every_other_setting_still_uses_setx(self):
         """Everything else describes the machine and belongs on it permanently."""
         for name in ("DISPATCH_BACKUP_DIR", "PORTAL_PORT", "DISPATCH_MODE"):
             assert self._row(name).change_command().startswith(f'setx {name} ')
+
+    def test_the_footer_warns_about_the_shell(self):
+        """A quiet failure needs saying out loud; a loud one does not."""
+        from dispatch_launcher import settings
+
+        rendered = settings.render_settings(settings.collect_settings())
+        assert "differs by shell" in rendered
+        assert "sets nothing" in rendered
 
     def test_the_footer_names_the_exception(self):
         """A footer that says 'setx' with no exception contradicts the row above
@@ -230,7 +243,7 @@ class TestTheSettingsScreenPrintsTheRightCommand:
         from dispatch_launcher import settings
 
         rendered = settings.render_settings(settings.collect_settings())
-        assert "One exception: DISPATCH_REHEARSAL_SESSION uses set, not setx" in rendered
+        assert "DISPATCH_REHEARSAL_SESSION is never made permanent" in rendered
 
     def test_the_reason_is_given_not_just_the_rule(self):
         from dispatch_launcher import settings
