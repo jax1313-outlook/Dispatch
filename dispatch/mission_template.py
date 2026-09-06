@@ -148,18 +148,9 @@ class Field:
 #:
 #: Picked from, never typed. A field meant to be counted has to be, or
 #: "Medical" and "medical route" become two categories that should be one.
-#: **Where this list gets its values in practice, Mike 2026-09-06:** *"this info
-#: will come from the load board."*
-#:
-#: So the dropdown below is the manual path, and the boards are the other one.
-#: **DAT, Truckstop, 123Loadboard and Truck Smarter do not use these twelve
-#: words.** Whatever the load_board connector eventually reads has to be mapped
-#: onto this list, and a board category that maps to nothing must land on
-#: "Other" **with the board's own wording kept alongside it** -- discarding what
-#: the board actually said, to force a fit, is how a category becomes a lie.
-#:
-#: Not built here. It is connector work and belongs with the provider, not with
-#: this form.
+#: **Manual entry only.** Mike ruled 2026-09-06 that nothing sources this from
+#: a load board. The boards do not use these words, and mapping their
+#: categories onto this list would build a tidy-looking lie. Leave it alone.
 SERVICE_TYPES = (
     "LTL Freight",
     "Courier",
