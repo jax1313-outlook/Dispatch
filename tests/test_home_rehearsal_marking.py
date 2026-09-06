@@ -135,3 +135,63 @@ class TestTheScreenSaysSo:
         assert services.rehearsal_share()["total"] == 1
         # Marked, and still counted -- both halves of the ruling.
         assert "rehearsal-data-note" in body
+
+
+class TestTheSettingsScreenCatchesABadSessionId:
+    """`active_session_id()` reads the environment variable and does not
+    validate it -- it is called on every write and must stay silent and fast.
+
+    So a typo, or a plausible-looking value like `yes`, would tag every record
+    created afterwards with a string that leads nowhere. `rehearsal.py` states
+    why that is worse than no tag: *"an orphan tag is worse than no tag, because
+    purge cannot find it and the banner cannot explain it."*
+
+    The check lives on the settings screen because that is where Mike looks
+    before starting, and a warning he reads once beats a refusal that stops a
+    start he meant to make.
+    """
+
+    def test_silence_when_the_variable_is_not_set(self, monkeypatch):
+        from dispatch_launcher import settings
+
+        monkeypatch.delenv("DISPATCH_REHEARSAL_SESSION", raising=False)
+        assert settings.rehearsal_warning() == ""
+
+    def test_silence_when_it_names_a_real_open_session(self, monkeypatch):
+        from dispatch import rehearsal
+        from dispatch_launcher import settings
+
+        session = rehearsal.start_session(label="live one", actor_id="tester")
+        monkeypatch.setenv("DISPATCH_REHEARSAL_SESSION", session["session_id"])
+        assert settings.rehearsal_warning() == ""
+
+    def test_a_value_that_names_nothing_is_caught(self, monkeypatch):
+        from dispatch_launcher import settings
+
+        monkeypatch.setenv("DISPATCH_REHEARSAL_SESSION", "yes")
+        warning = settings.rehearsal_warning()
+        assert "no rehearsal session by that name exists" in warning
+        # It must say what to type, not merely that something is wrong.
+        assert "set DISPATCH_REHEARSAL_SESSION=" in warning
+
+    def test_a_closed_session_is_caught(self, monkeypatch):
+        """Adding records to a rehearsal that was already closed out puts them
+        in a session whose result has been recorded."""
+        from dispatch import rehearsal
+        from dispatch_launcher import settings
+
+        session = rehearsal.start_session(label="finished", actor_id="tester")
+        rehearsal.close_session(session["session_id"], result="PASSED", actor_id="tester")
+        monkeypatch.setenv("DISPATCH_REHEARSAL_SESSION", session["session_id"])
+        warning = settings.rehearsal_warning()
+        assert "PASSED, not OPEN" in warning
+
+    def test_the_warning_never_breaks_the_screen(self, monkeypatch):
+        """A status screen that crashes is worse than one that says nothing.
+        The check swallows its own failures on purpose."""
+        from dispatch_launcher import settings
+
+        monkeypatch.setenv("DISPATCH_REHEARSAL_SESSION", "REH-anything")
+        monkeypatch.setattr("dispatch.rehearsal.get_session",
+                            lambda _sid: (_ for _ in ()).throw(RuntimeError("db gone")))
+        assert settings.rehearsal_warning() == ""

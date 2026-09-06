@@ -180,12 +180,67 @@ def collect_settings(*, facts: RuntimeFacts | None = None) -> SettingsView:
     return SettingsView(rows=rows, facts=facts, resolved=resolved)
 
 
+def rehearsal_warning() -> str:
+    """Whether `DISPATCH_REHEARSAL_SESSION` names a session that actually exists.
+
+    `active_session_id()` reads this variable and does not validate it, because
+    it is called on every write and must stay silent and fast. So a typo -- or
+    a plausible-looking value like `yes` -- tags every record created afterwards
+    with a string that leads nowhere. `rehearsal.py` says why that is worse than
+    no tag at all: *"an orphan tag is worse than no tag, because purge cannot
+    find it and the banner cannot explain it."*
+
+    The check belongs here rather than in the write path: this screen is where
+    Mike looks before starting, and a warning he reads once beats a refusal that
+    stops a start he meant to make.
+
+    Returns "" when there is nothing to say.
+    """
+    import os
+
+    value = (os.environ.get("DISPATCH_REHEARSAL_SESSION") or "").strip()
+    if not value:
+        return ""
+    try:
+        from dispatch import rehearsal
+    except Exception:  # noqa: BLE001 - a warning must never stop a status screen
+        return ""
+    try:
+        session = rehearsal.get_session(value)
+    except Exception:  # noqa: BLE001
+        return ""
+
+    if session is None:
+        return (
+            f"DISPATCH_REHEARSAL_SESSION is set to {value!r}, and no rehearsal session "
+            f"by that name exists.\n"
+            "Every load, milestone and evidence record created from now on will be tagged "
+            "with that \ntext, and nothing will be able to explain or purge them later. "
+            "Start a real session first,\nor clear the variable:  set DISPATCH_REHEARSAL_SESSION="
+        )
+    if session.get("status") != "OPEN":
+        return (
+            f"DISPATCH_REHEARSAL_SESSION points at {value}, which is "
+            f"{session.get('status')}, not OPEN.\n"
+            "New records would be added to a rehearsal that has already been closed out. "
+            "Start a new \nsession rather than reopening a finished one."
+        )
+    return ""
+
+
 def render_settings(view: SettingsView) -> str:
     lines = ["  DISPATCH - Settings", ""]
     lines.append(f"{_INDENT}These are read from this machine right now. Dispatch stores no")
     lines.append(f"{_INDENT}settings of its own -- every value below comes from an environment")
     lines.append(f"{_INDENT}variable, and the command to change one is printed beside it.")
     lines.append("")
+
+    warning = rehearsal_warning()
+    if warning:
+        lines.append(f"{_INDENT}*** REHEARSAL SETTING PROBLEM ***")
+        for line in warning.splitlines():
+            lines.append(f"{_INDENT}{line}")
+        lines.append("")
 
     for row in view.rows:
         marker = "" if row.status == CONFIGURED else "   <-- not set"
