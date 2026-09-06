@@ -46,17 +46,10 @@
   {# How it came in. A label on the record, because "who told us about this
      load" is a real question later and guessing at it is not possible. #}
   <section class="card-section">
-    <h2>HOW IT CAME IN</h2>
-    <div class="sources">
-      {% for key, label, hint in sources %}
-        <label class="source {{ 'on' if key == chosen }}">
-          <input type="radio" name="source" value="{{ key }}"
-                 {{ 'checked' if key == chosen }}>
-          <span class="source-label">{{ label }}</span>
-          <span class="source-hint">{{ hint }}</span>
-        </label>
-      {% endfor %}
-    </div>
+    {# "How it came in" is no longer asked. A person at this screen is always
+       the direct door; a machine sets SWEEP. A field with one reachable value
+       is a field that should not be asked. Mike, 2026-09-06. #}
+    <h2>WHO TOOK IT</h2>
     <dl>
       <dt>Taken by *</dt>
       <dd><input type="text" name="taken_by" value="{{ taken_by }}"

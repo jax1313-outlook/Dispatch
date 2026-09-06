@@ -68,16 +68,30 @@ SOURCE_API = "API"
 INTAKE_SOURCES = (SOURCE_SWEEP, SOURCE_EMAIL, SOURCE_JOE, SOURCE_CUSTOMER,
                   SOURCE_PHONE, SOURCE_COURIER, SOURCE_TEXT, SOURCE_API)
 
-#: The sources a person picks from when opening a mission by hand. SWEEP and
-#: API are how machines bring work in and are never chosen on a screen.
-MANUAL_SOURCES = (
-    (SOURCE_PHONE, "Phone call", "A broker or customer rang"),
-    (SOURCE_CUSTOMER, "Customer direct", "An existing customer, straight to us"),
-    (SOURCE_COURIER, "Courier / medical", "A courier or medical route"),
-    (SOURCE_EMAIL, "Email", "It came in on a completed template or by email"),
-    (SOURCE_TEXT, "Text message", "It arrived as a text"),
-    (SOURCE_JOE, "JOE took it down", "Read to JOE and written down"),
-)
+#: **No longer offered on a screen. Mike's analysis, 2026-09-06.**
+#:
+#: Six options were rendered, validated and stored, and nothing in the program
+#: ever branched on one. Mike took the list apart and it did not survive:
+#:
+#:   - Phone, Email and Text are **methods of communication**, not sources. How
+#:     a customer's voice reached him does not change the load.
+#:   - JOE is a **capture method** -- dictation instead of typing -- and has no
+#:     contact with the outside world other than Mike, so it cannot be a source.
+#:   - Courier and medical are **freight types**, not sources. They belong on
+#:     the `service` field, which already exists and is empty.
+#:
+#: What is left is the distinction that matters: **did a machine find this load,
+#: or did a customer bring it to me?** And a person sitting at the intake form
+#: can only ever be the second one. **A field with one reachable value is a
+#: field that should not be asked**, so the form no longer asks and the record
+#: sets its own.
+#:
+#: Kept as a name for callers and for records already stored.
+MANUAL_SOURCES = ()
+
+#: What a hand-opened mission is, always. The other half of the pair is
+#: SOURCE_SWEEP, which a machine sets and a screen never offers.
+SOURCE_DIRECT = SOURCE_CUSTOMER
 
 #: Kept so older callers and stored records keep resolving. VOICE and MANUAL
 #: were the earlier names for what is now JOE and CUSTOMER.

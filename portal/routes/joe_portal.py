@@ -208,8 +208,6 @@ def mission_intake():
     return render_template(
         "mission_intake.html",
         sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
-        sources=mt.MANUAL_SOURCES,
-        chosen=request.args.get("source") or mt.SOURCE_PHONE,
         problems=[],
         values=mt.blank_template(),
         taken_by="",
@@ -223,14 +221,14 @@ def mission_intake_create():
 
     values = {key: str(request.form.get(key) or "").strip()
               for key in mt.TEMPLATE_KEYS}
-    source = str(request.form.get("source") or "").strip().upper()
+    # The form no longer asks how it came in, because a person sitting at it is
+    # always the direct door. A machine sets SWEEP; a screen never offers it.
+    source = mt.SOURCE_DIRECT
     taken_by = str(request.form.get("taken_by") or "").strip()
 
     problems = mt.validate(values)
     if not taken_by:
         problems.append("Who took it is required")
-    if source not in mt.INTAKE_SOURCES:
-        problems.append("Choose how it came in")
 
     if problems:
         # Everything he typed comes back with it. Losing a call's worth of
@@ -238,7 +236,6 @@ def mission_intake_create():
         return render_template(
             "mission_intake.html",
             sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
-            sources=mt.MANUAL_SOURCES, chosen=source or mt.SOURCE_PHONE,
             problems=problems, values=values, taken_by=taken_by), 400
 
     record = mt.create_mission(values, source=source, taken_by=taken_by,

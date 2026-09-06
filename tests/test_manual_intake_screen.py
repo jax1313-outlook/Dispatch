@@ -55,48 +55,60 @@ def _create(client, source="PHONE", taken_by="Mike", **over):
     return client.post("/intake", data=data, follow_redirects=False)
 
 
-class TestOneWayInForEverySource:
-    @pytest.mark.parametrize("source", ["PHONE", "CUSTOMER", "COURIER",
-                                        "EMAIL", "TEXT", "JOE"])
-    def test_every_manual_source_produces_a_candidate(self, client, source):
-        assert _create(client, source=source).status_code == 302
-        records = [r for r in sandbox.get_all().values()
-                   if r.get("intake_source") == source]
+class TestTheFormNoLongerAsksHowItCameIn:
+    """**Mike's analysis, 2026-09-06.** Six sources were rendered, validated and
+    stored, and nothing in the program ever branched on one. He took the list
+    apart: phone, email and text are methods of communication; JOE is a capture
+    method with no contact with the outside world; courier and medical are
+    freight types belonging on `service`.
+
+    What survives is *did a machine find this, or did a customer bring it to
+    me* -- and a person at this screen can only ever be the second. **A field
+    with one reachable value is a field that should not be asked.**
+    """
+
+    def test_a_mission_opens_with_no_source_on_the_form(self, client):
+        assert _create(client).status_code == 302
+        records = list(sandbox.get_all().values())
         assert len(records) == 1
         assert commitment.state_of(records[0]) == commitment.CANDIDATE
 
-    def test_the_records_are_identical_but_for_the_label(self, client):
-        """A courier run and a phone load are the same object. If they were
-        not, there would be two kinds of load and two sets of rules."""
-        _create(client, source="PHONE")
-        _create(client, source="COURIER")
-        by_source = {r["intake_source"]: r for r in sandbox.get_all().values()
-                     if r.get("intake_source")}
-        ignore = {"id", "created_at", "updated_at", "events", "source_id",
-                  "mission_number", "intake_source", "summary", "load_number",
-                  "card_data"}
-        phone = {k: v for k, v in by_source["PHONE"].items() if k not in ignore}
-        courier = {k: v for k, v in by_source["COURIER"].items() if k not in ignore}
-        assert phone == courier
+    def test_the_record_sets_its_own_source(self, client):
+        _create(client)
+        record = list(sandbox.get_all().values())[0]
+        assert record["card_data"]["source"] == mt.SOURCE_DIRECT.lower()
 
-    def test_the_source_is_recorded_because_it_is_a_real_question_later(self, client):
-        _create(client, source="TEXT")
-        record = [r for r in sandbox.get_all().values()
-                  if r.get("intake_source") == "TEXT"][0]
-        assert record["card_data"]["source"] == "text"
+    def test_a_source_posted_by_hand_is_ignored_not_obeyed(self, client):
+        """The field is gone from the screen. Anything still posting one --
+        an old bookmark, a stale form, a script -- must not be able to label a
+        hand-opened mission as a sweep."""
+        _create(client, source="SWEEP")
+        record = list(sandbox.get_all().values())[0]
+        assert record["card_data"]["source"] == mt.SOURCE_DIRECT.lower()
+
+    def test_the_chooser_is_gone_from_the_page(self, client):
+        html = client.get("/intake").get_data(as_text=True)
+        assert 'name="source"' not in html
+        assert "HOW IT CAME IN" not in html
+        # Who took it is a different question and is still asked.
+        assert 'name="taken_by"' in html
 
     def test_a_supplied_load_number_is_kept_exactly(self, client):
         _create(client, load_number="CVS-44912")
-        record = [r for r in sandbox.get_all().values()
-                  if r.get("intake_source") == "PHONE"][0]
+        record = list(sandbox.get_all().values())[0]
         assert record["load_number"] == "CVS-44912"
 
     def test_dispatch_numbers_work_nobody_else_numbered(self, client):
         _create(client)
-        record = [r for r in sandbox.get_all().values()
-                  if r.get("intake_source") == "PHONE"][0]
+        record = list(sandbox.get_all().values())[0]
         assert record["load_number"].startswith("L1-")
         assert record["card_data"]["load_id"] == ""
+
+    def test_the_old_source_values_still_resolve(self, client):
+        """Records stored before 2026-09-06 carry PHONE, TEXT, COURIER and the
+        rest. They stay valid -- nothing was migrated and nothing was deleted."""
+        for old_value in ("PHONE", "CUSTOMER", "COURIER", "EMAIL", "TEXT", "JOE"):
+            assert old_value in mt.INTAKE_SOURCES
 
 
 class TestItRefusesRatherThanLosingTheCall:
@@ -129,9 +141,11 @@ class TestItRefusesRatherThanLosingTheCall:
         assert response.status_code == 400
         assert "Who took it" in response.get_data(as_text=True)
 
-    def test_an_unknown_source_is_refused(self, client):
-        response = _create(client, source="TELEPATHY")
-        assert response.status_code == 400
+    def test_an_unknown_source_cannot_get_in(self):
+        """It used to be refused at the door. Now there is no door -- the form
+        does not accept a source at all, so an unknown one cannot arrive.
+        Checked at the model, since the route no longer reads the field."""
+        assert "TELEPATHY" not in mt.INTAKE_SOURCES
 
 
 class TestTheCandidateQueue:
