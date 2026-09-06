@@ -762,10 +762,12 @@ body {
     margin-left: 10px;
 }
 
-/* Rehearsal marking. Mike's ruling 2026-09-06: show both, mark the rehearsal
-   ones. Amber rather than red -- a rehearsal record is not an error, and a red
+/* The AGGREGATE note. Per-record marking is `rehearsal_badge()` in portal/app.py,
+   which already existed; this covers only what a badge cannot reach -- a total.
+   `.rehearsal-banner` belongs to base.html and means a session is running NOW.
+   Mike's ruling 2026-09-06: show both, mark the rehearsal ones. Amber rather than red -- a rehearsal record is not an error, and a red
    badge on legitimate test data trains the eye to ignore red. */
-.rehearsal-tag {
+.rehearsal-data-chip {
     display: inline-block;
     padding: 2px 7px;
     margin-left: 6px;
@@ -778,7 +780,7 @@ body {
     vertical-align: 1px;
     white-space: nowrap;
 }
-.rehearsal-banner {
+.rehearsal-data-note {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -790,4 +792,4 @@ body {
     color: #7e5109;
     font-size: 13px;
 }
-.rehearsal-banner .rehearsal-tag { margin-left: 0; }
+.rehearsal-banner .rehearsal-data-chip { margin-left: 0; }

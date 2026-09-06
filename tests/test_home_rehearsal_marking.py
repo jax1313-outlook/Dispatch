@@ -87,12 +87,12 @@ class TestTheScreenSaysSo:
     def test_a_clean_board_carries_no_rehearsal_banner(self, client):
         services.create_load(customer="Real Co")
         body = client.get("/home").get_data(as_text=True)
-        assert "rehearsal-banner" not in body
+        assert "rehearsal-data-note" not in body
 
     def test_an_all_rehearsal_board_says_every_load(self, client):
         _tagged_load()
         body = client.get("/home").get_data(as_text=True)
-        assert "rehearsal-banner" in body
+        assert "rehearsal-data-note" in body
         assert "Every load on this screen is rehearsal data" in body
 
     def test_a_mixed_board_gives_the_count(self, client):
@@ -134,4 +134,4 @@ class TestTheScreenSaysSo:
         assert "Active Loads" in body
         assert services.rehearsal_share()["total"] == 1
         # Marked, and still counted -- both halves of the ruling.
-        assert "rehearsal-banner" in body
+        assert "rehearsal-data-note" in body
