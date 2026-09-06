@@ -54,3 +54,6 @@ proof/
 .dispatch/
 dispatch_launcher_logs/
 run/
+
+# Local test-run scratch, never committed
+.suite_run.txt
