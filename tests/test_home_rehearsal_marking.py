@@ -195,3 +195,45 @@ class TestTheSettingsScreenCatchesABadSessionId:
         monkeypatch.setattr("dispatch.rehearsal.get_session",
                             lambda _sid: (_ for _ in ()).throw(RuntimeError("db gone")))
         assert settings.rehearsal_warning() == ""
+
+
+class TestTheSettingsScreenPrintsTheRightCommand:
+    """The screen told Mike to use `setx` for every setting, including this one.
+
+    He pasted the output on 2026-09-06 and the contradiction was visible: the
+    walkthrough said *set, never setx*, and the product said `setx` beside the
+    variable. The product was wrong, and it was wrong in the direction that
+    costs the most -- `setx DISPATCH_REHEARSAL_SESSION` puts every future start
+    in rehearsal mode, so PILOT-01's one real load would be recorded as a test.
+    """
+
+    def _row(self, name):
+        from dispatch_launcher import settings
+
+        view = settings.collect_settings()
+        return next(r for r in view.rows if r.name == name)
+
+    def test_rehearsal_is_offered_as_set_not_setx(self):
+        command = self._row("DISPATCH_REHEARSAL_SESSION").change_command()
+        assert command.startswith("set DISPATCH_REHEARSAL_SESSION=")
+        assert not command.startswith("setx")
+        assert "NOT setx" in command
+
+    def test_every_other_setting_still_uses_setx(self):
+        """Everything else describes the machine and belongs on it permanently."""
+        for name in ("DISPATCH_BACKUP_DIR", "PORTAL_PORT", "DISPATCH_MODE"):
+            assert self._row(name).change_command().startswith(f'setx {name} ')
+
+    def test_the_footer_names_the_exception(self):
+        """A footer that says 'setx' with no exception contradicts the row above
+        it, and the reader believes whichever they read second."""
+        from dispatch_launcher import settings
+
+        rendered = settings.render_settings(settings.collect_settings())
+        assert "One exception: DISPATCH_REHEARSAL_SESSION uses set, not setx" in rendered
+
+    def test_the_reason_is_given_not_just_the_rule(self):
+        from dispatch_launcher import settings
+
+        rendered = settings.render_settings(settings.collect_settings())
+        assert "tag your first real load as a test" in rendered

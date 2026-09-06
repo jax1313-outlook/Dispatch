@@ -55,6 +55,8 @@ class SettingRow:
     fallback: str = ""
     secret: bool = False
     blocks_start: bool = False
+    #: Belongs to one window, not to the machine. See `change_command`.
+    session_scoped: bool = False
 
     @property
     def displayed_value(self) -> str:
@@ -64,7 +66,19 @@ class SettingRow:
         return self.value or ""
 
     def change_command(self) -> str:
+        """The command to change this setting -- and `set` is not a typo.
+
+        Almost everything here describes the machine and belongs on it
+        permanently, so `setx` is right. **Rehearsal mode does not.** It is
+        switched on for an afternoon of testing and off again, and `setx` would
+        put every future start in rehearsal mode -- including PILOT-01, whose
+        one real load would then be recorded as a test. That is the exact
+        failure rehearsal tagging exists to prevent, so this screen must not
+        print the command that causes it.
+        """
         example = "<value>" if not self.secret else "<a long random value you generate>"
+        if self.session_scoped:
+            return f"set {self.name}=<value>       (this window only -- NOT setx)"
         return f'setx {self.name} "{example}"'
 
 
@@ -158,6 +172,7 @@ def collect_settings(*, facts: RuntimeFacts | None = None) -> SettingsView:
                 value=value,
                 purpose=purpose,
                 fallback=fallback,
+                session_scoped=(name == "DISPATCH_REHEARSAL_SESSION"),
             )
         )
 
@@ -268,6 +283,11 @@ def render_settings(view: SettingsView) -> str:
     lines.append(f"{_INDENT}setx writes the value permanently, but a NEW value only reaches")
     lines.append(f"{_INDENT}windows opened afterwards. Close this window and reopen it after")
     lines.append(f"{_INDENT}changing anything here.")
+    if any(r.session_scoped for r in view.rows):
+        lines.append("")
+        lines.append(f"{_INDENT}One exception: DISPATCH_REHEARSAL_SESSION uses set, not setx.")
+        lines.append(f"{_INDENT}Rehearsal mode belongs to one window and one afternoon. Made")
+        lines.append(f"{_INDENT}permanent it would tag your first real load as a test.")
     return "\n".join(lines)
 
 
