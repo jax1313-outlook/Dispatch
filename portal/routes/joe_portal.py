@@ -517,12 +517,16 @@ def portal_arrive(record_id: str):
 
     outcome = arrival.deliver(
         merged, notice, records=data, mail=_mail_connector(),
-        recipient=_notice_recipient(merged))
+        recipient=_notice_recipients(merged))
 
     for key in ("arrival_notice_sent_at", "arrival_notice_drafted_at",
                 "arrival_notice_error"):
         if outcome.get(key):
             stored[key] = outcome[key]
+    # Who was actually told, kept on the record. A driver who cannot see this
+    # without opening Outlook is a driver guessing about his own evidence.
+    if outcome.get("recipients"):
+        stored["arrival_notice_recipients"] = outcome["recipients"]
     # A later success clears an earlier failure. A record carrying both a
     # draft and a stale "nothing was sent" is a record that argues with
     # itself, and the screen believed the older half.
@@ -534,6 +538,7 @@ def portal_arrive(record_id: str):
     return jsonify({"ok": bool(outcome.get("ok")),
                     "sent": bool(outcome.get("sent")),
                     "drafted": bool(outcome.get("drafted")),
+                    "recipients": outcome.get("recipients") or [],
                     "note": outcome.get("note", ""),
                     "arrived_at": stored["arrived_at"]})
 
@@ -547,23 +552,41 @@ def _mail_connector():
         return None
 
 
-def _notice_recipient(record: dict) -> str:
-    """Who the arrival notice is addressed to.
+def _notice_recipients(record: dict) -> list:
+    """Every contact on the record, because Mike cannot tell which is which.
 
-    Load control first: on a run where authority varies by stop, the party who
-    holds the freight is the party the evidence matters to. Falls back to the
-    broker contact, and returns empty rather than guessing -- an arrival notice
-    to the wrong company is worse than one nobody received.
+    **His ruling, 2026-09-06:** *"Send to both broker and shipper. I use
+    Shipper/Broker synonymously, they are interchangeable, because I have no
+    idea which is booking the load."*
+
+    That is the load talking. From the driver's seat the party who booked the
+    freight is one party with one job, and which column Dispatch filed their
+    address in is Dispatch's problem, not his. So this collects **all** of them
+    rather than picking a winner: an arrival notice that reached one of two
+    parties, silently, is the failure this replaced.
+
+    Deduplicated case-insensitively -- the same address in two fields is one
+    person -- and ordered so the party holding the freight on this stop leads.
+    Returns an empty list rather than guessing. A notice to the wrong company is
+    worse than one nobody received.
     """
     control = (record.get("load_control") or {})
-    for candidate in (control.get("control_email"),
-                      record.get("customer_email"),
-                      record.get("broker_email"),
-                      (record.get("card_data") or {}).get("broker_email")):
+    candidates = (
+        control.get("control_email"),
+        record.get("customer_email"),
+        record.get("shipper_email"),
+        record.get("broker_email"),
+        (record.get("card_data") or {}).get("broker_email"),
+        (record.get("card_data") or {}).get("shipper_email"),
+    )
+    out, seen = [], set()
+    for candidate in candidates:
         value = str(candidate or "").strip()
-        if "@" in value:
-            return value
-    return ""
+        if "@" not in value or value.lower() in seen:
+            continue
+        seen.add(value.lower())
+        out.append(value)
+    return out
 
 
 @joe_bp.route("/portal/mission/<path:record_id>/artifact", methods=["POST"])

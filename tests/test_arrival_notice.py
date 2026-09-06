@@ -59,15 +59,30 @@ RECORD = {"card_data": {"load_id": "ROC-2026-884471"},
 
 
 class TestTheVettingPeriod:
-    @pytest.mark.parametrize("produced,drafts", [(0, True), (1, True),
-                                                 (2, True), (3, True),
+    """**Zero since Mike's ruling of 2026-09-06.** Nothing is composed in the
+    notice -- the wording is fixed and the variable parts are machine-filled
+    from the load card and the GPS fix -- so there is nothing for a human to
+    catch, and a gate only delays the evidence.
+
+    The mechanism is kept and still proved, because a changed template would
+    need it back."""
+
+    @pytest.mark.parametrize("produced", [0, 1, 2, 4, 9])
+    def test_nothing_is_drafted_any_more(self, produced):
+        assert arrival.should_draft(_records(produced)) is False
+
+    @pytest.mark.parametrize("produced,drafts", [(0, True), (3, True),
                                                  (4, False), (9, False)])
-    def test_the_first_four_are_drafted_and_the_rest_are_sent(self, produced, drafts):
+    def test_the_mechanism_still_works_if_it_is_raised(self, produced, drafts,
+                                                       monkeypatch):
+        """Raise the number and the next N go to Drafts again."""
+        monkeypatch.setattr(arrival, "VETTING_NOTICES", 4)
         assert arrival.should_draft(_records(produced)) is drafts
 
-    def test_it_counts_notices_rather_than_keeping_a_counter(self):
+    def test_it_counts_notices_rather_than_keeping_a_counter(self, monkeypatch):
         """A counter is a second source of truth that can disagree with what
         actually happened. Counting the notices that exist cannot."""
+        monkeypatch.setattr(arrival, "VETTING_NOTICES", 4)
         store = {"A": {"arrival_notice_sent_at": "x"},
                  "B": {"arrival_notice_drafted_at": "y"},
                  "C": {"arrived_at": "z"}}  # arrived, no notice produced
@@ -81,22 +96,22 @@ class TestTheVettingPeriod:
 
 
 class TestWhatItDoesWithTheNotice:
-    def test_the_first_one_is_drafted_never_sent(self):
+    def test_the_very_first_one_sends(self):
+        """No gate. The notice goes when he presses ARRIVE."""
         mail = FakeMail()
         out = arrival.deliver(RECORD, NOTICE, records={}, mail=mail,
                               recipient="dispatch@xpo.example")
-        assert out["drafted"] is True
-        assert out["sent"] is False
-        assert mail.sent == []
-        assert len(mail.drafted) == 1
-
-    def test_the_fifth_one_sends(self):
-        mail = FakeMail()
-        out = arrival.deliver(RECORD, NOTICE, records=_records(4), mail=mail,
-                              recipient="dispatch@xpo.example")
         assert out["sent"] is True
         assert out["drafted"] is False
+        assert mail.drafted == []
         assert len(mail.sent) == 1
+
+    def test_it_drafts_again_if_the_gate_is_raised(self, monkeypatch):
+        monkeypatch.setattr(arrival, "VETTING_NOTICES", 4)
+        mail = FakeMail()
+        out = arrival.deliver(RECORD, NOTICE, records={}, mail=mail,
+                              recipient="dispatch@xpo.example")
+        assert out["drafted"] is True and out["sent"] is False
 
     def test_every_notice_is_blind_copied_to_the_office(self):
         """The office holds the evidence whether or not the driver is
@@ -104,13 +119,13 @@ class TestWhatItDoesWithTheNotice:
         mail = FakeMail()
         arrival.deliver(RECORD, NOTICE, records={}, mail=mail,
                         recipient="dispatch@xpo.example")
-        assert mail.drafted[0]["bcc"] == arrival.NOTICE_BCC == "Ops@l1truck.com"
+        assert mail.sent[0]["bcc"] == arrival.NOTICE_BCC == "Ops@l1truck.com"
 
     def test_the_load_number_is_on_the_subject(self):
         mail = FakeMail()
         arrival.deliver(RECORD, NOTICE, records={}, mail=mail,
                         recipient="dispatch@xpo.example")
-        assert "ROC-2026-884471" in mail.drafted[0]["subject"]
+        assert "ROC-2026-884471" in mail.sent[0]["subject"]
 
     def test_only_fields_with_values_appear(self):
         """The one document a customer reads, and a different rule from the
@@ -290,10 +305,10 @@ class TestArriveUsesTheModeHeIsLookingAt:
 
         mail = FakeMail()
         monkeypatch.setattr(joe_portal, "_mail_connector", lambda: mail)
-        monkeypatch.setattr(joe_portal, "_notice_recipient",
-                            lambda record: "someone@example.test")
+        monkeypatch.setattr(joe_portal, "_notice_recipients",
+                            lambda record: ["someone@example.test"])
         client.post(f"/portal/mission/{mission}/arrive", data={"view": "DELIVERY"})
-        assert "DELIVERY" in mail.drafted[0]["subject"]
+        assert "DELIVERY" in mail.sent[0]["subject"]
 
     def test_arriving_on_pickup_produces_a_pickup_notice(self, client, mission,
                                                          monkeypatch):
@@ -301,10 +316,10 @@ class TestArriveUsesTheModeHeIsLookingAt:
 
         mail = FakeMail()
         monkeypatch.setattr(joe_portal, "_mail_connector", lambda: mail)
-        monkeypatch.setattr(joe_portal, "_notice_recipient",
-                            lambda record: "someone@example.test")
+        monkeypatch.setattr(joe_portal, "_notice_recipients",
+                            lambda record: ["someone@example.test"])
         client.post(f"/portal/mission/{mission}/arrive", data={"view": "PICKUP"})
-        assert "PICKUP" in mail.drafted[0]["subject"]
+        assert "PICKUP" in mail.sent[0]["subject"]
 
     def test_the_draft_goes_to_the_mailbox_it_sends_from(self):
         """Checked in the code rather than against Outlook: a test must never
@@ -325,7 +340,7 @@ class TestArriveUsesTheModeHeIsLookingAt:
         assert "except" in move[:200]
 
 
-class TestADraftedNoticeReadsAsSuccess:
+class TestASuccessfulNoticeClearsAStaleFailure:
     """The defect the operator saw on the screen.
 
     The notice had been drafted exactly as intended -- the vetting period
@@ -398,8 +413,8 @@ class TestADraftedNoticeReadsAsSuccess:
         sandbox._save(data)
 
         monkeypatch.setattr(joe_portal, "_mail_connector", lambda: FakeMail())
-        monkeypatch.setattr(joe_portal, "_notice_recipient",
-                            lambda record: "a@b.example")
+        monkeypatch.setattr(joe_portal, "_notice_recipients",
+                            lambda record: ["a@b.example"])
 
         app = create_app()
         app.config["TESTING"] = True
@@ -408,5 +423,9 @@ class TestADraftedNoticeReadsAsSuccess:
                         data={"view": "DELIVERY"})
 
         record = sandbox.get(entry["id"])
-        assert record.get("arrival_notice_drafted_at")
+        # A send now, not a draft -- the gate is zero. The point of the test is
+        # unchanged: a record carrying both a success and a stale "nothing was
+        # sent" is a record that argues with itself, and the screen believed
+        # the older half.
+        assert record.get("arrival_notice_sent_at")
         assert "arrival_notice_error" not in record

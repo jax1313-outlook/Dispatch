@@ -30,7 +30,20 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 #: How many notices are drafted for review before the template is trusted.
-VETTING_NOTICES = 4
+#:
+#: **Zero, by Mike's ruling of 2026-09-06:** *"no need to review at all, it is
+#: template format, the API GPS is entered along with the other location info
+#: from the load card."*
+#:
+#: He is right about what the template is. Nothing in it is composed -- the
+#: wording is fixed, and the only parts that vary are machine-filled from the
+#: load card and the GPS fix. There is nothing in it for a human to catch, so a
+#: review gate only puts a step between an arrival and the evidence of it, and
+#: an arrival notice that is not contemporaneous is worth nothing.
+#:
+#: **The mechanism is kept, not deleted.** Raise this number and the next N
+#: notices go to Drafts again -- which is what a changed template would need.
+VETTING_NOTICES = 0
 
 #: Every arrival notice is blind-copied here. The office holds the evidence
 #: whether or not the driver is reachable later.
@@ -111,7 +124,7 @@ def notice_text(notice: dict) -> str:
 
 
 def deliver(record: dict, notice: dict, *, records=None, mail=None,
-            recipient: str = "") -> dict:
+            recipient=None) -> dict:
     """Draft or send the notice, and say which happened.
 
     Returns what the record should carry. It never claims a send it did not
@@ -119,7 +132,13 @@ def deliver(record: dict, notice: dict, *, records=None, mail=None,
     does not chase it.
     """
     now = datetime.now(timezone.utc).isoformat()
-    recipient = str(recipient or "").strip()
+    # One address or many. Mike ruled on 2026-09-06 that broker and shipper are
+    # the same party as far as the truck is concerned, so the caller hands over
+    # every contact on the record and they are all told at once.
+    if isinstance(recipient, str) or recipient is None:
+        recipients = [str(recipient or "").strip()] if recipient else []
+    else:
+        recipients = [str(r).strip() for r in recipient if str(r).strip()]
     drafting = should_draft(records)
 
     if mail is None:
@@ -127,7 +146,7 @@ def deliver(record: dict, notice: dict, *, records=None, mail=None,
                 "arrival_notice_error": "no mail connector",
                 "note": "Dispatch has your arrival on record with the time."}
 
-    if not recipient:
+    if not recipients:
         return {"ok": False, "sent": False, "drafted": False,
                 "arrival_notice_error": "no recipient on the record",
                 "note": ("Dispatch has your arrival on record. There is no "
@@ -140,21 +159,24 @@ def deliver(record: dict, notice: dict, *, records=None, mail=None,
     body = notice_text(notice)
 
     operation = mail.draft if drafting else mail.send
-    result = operation(recipient, subject, body, bcc=NOTICE_BCC)
+    result = operation(recipients, subject, body, bcc=NOTICE_BCC)
 
     if not result.get("ok"):
         return {"ok": False, "sent": False, "drafted": False,
                 "arrival_notice_error": result.get("blocker", ""),
                 "note": "Dispatch has your arrival on record with the time."}
 
+    told = ", ".join(recipients)
     if drafting:
         return {"ok": True, "sent": False, "drafted": True,
                 "arrival_notice_drafted_at": now,
+                "recipients": recipients,
                 "vetting_remaining": max(0, vetting_remaining(records) - 1),
-                "note": ("Arrival notice is in your Drafts. Read it, then send "
-                         "it. %d more to check before it goes on its own."
-                         % max(0, vetting_remaining(records) - 1))}
+                "note": ("Arrival notice to %s is in your Drafts. Read it, "
+                         "then send it. %d more to check before it goes on its "
+                         "own." % (told,
+                                   max(0, vetting_remaining(records) - 1)))}
 
     return {"ok": True, "sent": True, "drafted": False,
-            "arrival_notice_sent_at": now,
-            "note": "Arrival notice sent."}
+            "arrival_notice_sent_at": now, "recipients": recipients,
+            "note": "Arrival notice sent to %s." % told}
