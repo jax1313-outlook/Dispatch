@@ -65,8 +65,24 @@ SOURCE_PHONE = "PHONE"
 SOURCE_COURIER = "COURIER"
 SOURCE_TEXT = "TEXT"
 SOURCE_API = "API"
-INTAKE_SOURCES = (SOURCE_SWEEP, SOURCE_EMAIL, SOURCE_JOE, SOURCE_CUSTOMER,
-                  SOURCE_PHONE, SOURCE_COURIER, SOURCE_TEXT, SOURCE_API)
+
+#: A hand-opened mission. **Spelled to match `models.LOAD_SOURCES`**, which is
+#: the vocabulary that actually reaches a load record and the reports built on
+#: one: direct, dat, truckstop, broker_call, email, referral, website, other.
+#:
+#: The two lists never matched before 2026-09-06. `mission.py` copies the card's
+#: source onto the load only when it names something `LOAD_SOURCES` recognises,
+#: so five of the six values a person could pick -- phone, customer, courier,
+#: text, joe -- were **silently dropped**, and the load booked with no source at
+#: all. Only `email` happened to appear in both lists.
+#:
+#: `direct` was already a valid load source. Nothing needed inventing; the two
+#: halves needed to agree.
+SOURCE_DIRECT = "DIRECT"
+
+INTAKE_SOURCES = (SOURCE_SWEEP, SOURCE_DIRECT, SOURCE_EMAIL, SOURCE_JOE,
+                  SOURCE_CUSTOMER, SOURCE_PHONE, SOURCE_COURIER, SOURCE_TEXT,
+                  SOURCE_API)
 
 #: **No longer offered on a screen. Mike's analysis, 2026-09-06.**
 #:
@@ -89,9 +105,9 @@ INTAKE_SOURCES = (SOURCE_SWEEP, SOURCE_EMAIL, SOURCE_JOE, SOURCE_CUSTOMER,
 #: Kept as a name for callers and for records already stored.
 MANUAL_SOURCES = ()
 
-#: What a hand-opened mission is, always. The other half of the pair is
-#: SOURCE_SWEEP, which a machine sets and a screen never offers.
-SOURCE_DIRECT = SOURCE_CUSTOMER
+#: Kept so records stored before 2026-09-06 keep resolving. CUSTOMER was what a
+#: hand-opened mission used to be called; DIRECT is what it is now, and unlike
+#: CUSTOMER it survives into the load record.
 
 #: Kept so older callers and stored records keep resolving. VOICE and MANUAL
 #: were the earlier names for what is now JOE and CUSTOMER.

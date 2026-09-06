@@ -264,3 +264,57 @@ class TestNoScreenIsADeadEnd:
         """The brief is carried to a phone call. Navigation on paper is noise."""
         css = open("portal/static/booking.css", encoding="utf-8").read()
         assert "@media print { .ops-nav { display: none; } }" in css
+
+
+class TestTheSourceSurvivesIntoTheLoadRecord:
+    """**The analytics field, end to end.** Mike, 2026-09-06:
+
+        *"which load_board would be a need to know i had not considered. this
+        could be a report field that could help me with internal analytics."*
+
+    It already could. `models.LOAD_SOURCES` names the boards -- `dat`,
+    `truckstop`, `referral`, `direct` -- and `mission.py` copies the card's
+    source onto the load when it recognises one.
+
+    **It recognised almost nothing.** Of the six values the intake form offered,
+    five were not in `LOAD_SOURCES`, so booking silently blanked the field. A
+    report on where freight comes from would have shown one category: empty.
+    """
+
+    def test_direct_is_a_value_the_load_record_accepts(self):
+        from dispatch.models import LOAD_SOURCES
+
+        assert mt.SOURCE_DIRECT.lower() in LOAD_SOURCES
+
+    def test_the_boards_mike_would_report_on_are_all_there(self):
+        from dispatch.models import LOAD_SOURCES
+
+        for board in ("direct", "dat", "truckstop", "referral"):
+            assert board in LOAD_SOURCES
+
+    def test_the_old_values_are_the_ones_that_were_dropped(self):
+        """Kept as the record of what went wrong, so it is not reintroduced."""
+        from dispatch.models import LOAD_SOURCES
+
+        for dropped in ("customer", "phone", "courier", "text", "joe"):
+            assert dropped not in LOAD_SOURCES
+
+    def test_a_hand_opened_mission_books_as_direct(self, client):
+        """The whole point: open one on the form, book it, and the load record
+        says where it came from."""
+        from dispatch import mission as mission_svc
+        from dispatch import services as dispatch_svc
+        from dispatch import store as dispatch_store
+
+        _create(client)
+        record = list(sandbox.get_all().values())[0]
+        assert record["card_data"]["source"] == "direct"
+
+        mission_svc.accept_load(record["id"], sandbox_module=sandbox,
+                                dispatch_services=dispatch_svc,
+                                store_module=dispatch_store)
+        load = dispatch_svc.get_load(record["id"])
+        assert load is not None, "booking did not create a load record"
+        assert load["source"] == "direct", (
+            "the source was dropped on the way into the load record"
+        )
