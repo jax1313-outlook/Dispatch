@@ -386,10 +386,22 @@
     {% elif d.checklist is defined and d.checklist %}
       <ul class="checklist">
         {% for item in d.checklist %}
+          {# The Arrival Notice is stamped by ARRIVE, not tapped. It renders as
+             a plain row so there is nothing to press and nothing to undo. #}
           <li class="{{ 'done' if item.done else 'todo' }}">
+            {% if item.tickable %}
+            <button type="button" class="tick-row" data-artifact="{{ item.label }}"
+                    data-held="{{ '1' if item.done else '0' }}"
+                    aria-pressed="{{ 'true' if item.done else 'false' }}">
+              <span class="box">{% if item.done %}&#10003;{% else %}&#9744;{% endif %}</span>
+              <span class="item">{{ item.label }}{% if item.note %}
+                <span class="item-note">{{ item.note }}</span>{% endif %}</span>
+            </button>
+            {% else %}
             <span class="box">{% if item.done %}&#10003;{% else %}&#9744;{% endif %}</span>
             <span class="item">{{ item.label }}{% if item.note %}
               <span class="item-note">{{ item.note }}</span>{% endif %}</span>
+            {% endif %}
           </li>
         {% endfor %}
       </ul>
@@ -466,6 +478,59 @@ document.querySelectorAll('[data-action="arrive"]').forEach(function (b) {
         function () { send(''); },
         {timeout: 8000});
     } else { send(''); }
+  });
+});
+
+// The document checklist. Mike's ruling: a tick means I have it in hand.
+// Optimistic -- the box flips the moment it is pressed, because a driver at a
+// dock should not wait on a round trip to know his tap registered. If the
+// server refuses, it flips back and says so rather than leaving a tick that
+// was never recorded.
+document.querySelectorAll('.tick-row').forEach(function (row) {
+  row.addEventListener('click', function () {
+    if (row.dataset.busy === '1') { return; }
+    row.dataset.busy = '1';
+
+    var was = row.dataset.held === '1';
+    var now = !was;
+    var box = row.querySelector('.box');
+    var li = row.closest('li');
+    var paint = function (held) {
+      if (box) { box.innerHTML = held ? '&#10003;' : '&#9744;'; }
+      row.dataset.held = held ? '1' : '0';
+      row.setAttribute('aria-pressed', held ? 'true' : 'false');
+      if (li) { li.className = held ? 'done' : 'todo'; }
+    };
+    paint(now);
+
+    var body = new URLSearchParams();
+    body.set('view', document.body.dataset.view || '');
+    body.set('label', row.dataset.artifact);
+    body.set('held', now ? '1' : '0');
+
+    fetch(window.location.pathname + '/artifact', {method: 'POST', body: body})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        row.dataset.busy = '';
+        if (!d.ok) { paint(was); }
+        var line = document.getElementById('joe-line');
+        if (!d.ok && line) { line.textContent = d.note || 'That did not record.'; }
+        // The header and the drawer both carry the phase status, so both move.
+        document.querySelectorAll('.checklist-status').forEach(function (el) {
+          el.textContent = 'STATUS: ' + d.state;
+        });
+        var head = document.querySelector('.doc-status .doc-state');
+        if (head && d.label_line) {
+          head.innerHTML = d.label_line +
+            (d.complete ? ' <span class="tick">&#10003;</span>' : '');
+        }
+      })
+      .catch(function () {
+        row.dataset.busy = '';
+        paint(was);
+        var line = document.getElementById('joe-line');
+        if (line) { line.textContent = 'That did not record. Nothing was saved.'; }
+      });
   });
 });
 

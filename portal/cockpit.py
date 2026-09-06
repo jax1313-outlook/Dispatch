@@ -441,10 +441,11 @@ def document_checklist(record: dict, mode: str) -> list:
     items = []
     for name in _artifact_list(mode):
         if name == ARRIVAL_NOTICE:
-            items.append({"label": name, "done": arrived,
+            items.append({"label": name, "done": arrived, "tickable": False,
                           "note": "Dispatch generated and auto-sent"})
         else:
-            items.append({"label": name, "done": name.lower() in held, "note": ""})
+            items.append({"label": name, "done": name.lower() in held,
+                          "tickable": True, "note": ""})
 
     # The one thing that differs operationally on a C.O.D. load: do not pull
     # away from the dock without the check. Not a workflow and not a branch --
@@ -457,8 +458,45 @@ def document_checklist(record: dict, mode: str) -> list:
         cod = cod_for(record)
         if cod["is_cod"]:
             items.append({"label": cod["label"], "done": cod["collected"],
-                          "note": cod["note"]})
+                          "tickable": True, "note": cod["note"]})
     return items
+
+
+def tickable(label: str) -> bool:
+    """Whether the driver may tick this line himself.
+
+    **Everything except the Arrival Notice.** That one is not a claim the driver
+    makes -- it is evidence that Dispatch generated and sent a document, stamped
+    from `arrived_at` when he pressed ARRIVE. A hand-tickable arrival notice
+    would let the screen say a broker was notified when nobody was, which is the
+    one lie this checklist must never tell.
+
+    Everything else is exactly what Mike ruled on 2026-09-05: a tick means
+    **I have it in hand.** No upload, no photo, no camera, no signal -- his word,
+    recorded, at a dock, with gloves on.
+    """
+    return str(label).strip() != ARRIVAL_NOTICE
+
+
+def canonical_artifact(record: dict, mode: str, label: str) -> str:
+    """The stored spelling of an artifact the driver just ticked, or "".
+
+    Matching is case-insensitive because the label arrives from a screen, but
+    what gets written is the checklist's own spelling. Two spellings of "Bill of
+    Lading" in one record is a record that cannot answer whether it is complete.
+
+    Returns "" for anything not on this mode's list, and for the Arrival Notice.
+    An unknown label is refused rather than stored: a checklist that accepts any
+    string is not a checklist.
+    """
+    wanted = str(label).strip().lower()
+    if not wanted:
+        return ""
+    for item in document_checklist(record, mode):
+        name = item["label"]
+        if name.lower() == wanted and tickable(name):
+            return name
+    return ""
 
 
 def cod_for(record: dict) -> dict:

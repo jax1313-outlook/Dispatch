@@ -566,6 +566,66 @@ def _notice_recipient(record: dict) -> str:
     return ""
 
 
+@joe_bp.route("/portal/mission/<path:record_id>/artifact", methods=["POST"])
+def portal_mark_artifact(record_id: str):
+    """Tick or untick one line of the document checklist.
+
+    **Mike's ruling, 2026-09-05:** a tick means *I have it in hand*, or it was
+    created by the arrival notice when he pressed ARRIVE. So this records his
+    word and nothing else -- no upload, no photo, no camera, no signal. A driver
+    at a dock with gloves on can work the list.
+
+    The Arrival Notice is refused here on purpose. It is stamped from
+    `arrived_at`, because it is evidence Dispatch sent something rather than a
+    claim the driver makes. `cockpit.canonical_artifact` returns "" for it, and
+    for any label that is not on this mode's list.
+
+    Unticking is allowed. A driver who taps the wrong line at a dock must be
+    able to take it back, and a checklist he cannot correct is one he will stop
+    trusting.
+    """
+    record = sandbox.get(record_id)
+    if not record:
+        return jsonify({"ok": False,
+                        "note": "That mission is not on this machine."}), 404
+
+    mode = cockpit.normalise_mode(request.form.get("view"), record)
+    label = cockpit.canonical_artifact(record, mode, request.form.get("label"))
+    if not label:
+        return jsonify({"ok": False,
+                        "note": "That is not a line this checklist can tick."}), 400
+
+    held_now = str(request.form.get("held") or "").strip() not in ("0", "false", "")
+
+    data = sandbox._load()
+    stored = data.get(record_id) or {}
+
+    # C.O.D. is money, not paper, so it is stored where the money already lives
+    # rather than being pushed into the artifact list beside a bill of lading.
+    if label.startswith("C.O.D."):
+        if held_now:
+            stored["payment_collected_at"] = datetime.now().isoformat()
+        else:
+            stored.pop("payment_collected_at", None)
+    else:
+        existing = [str(a) for a in (stored.get("artifacts_held") or [])]
+        kept = [a for a in existing if a.strip().lower() != label.lower()]
+        if held_now:
+            kept.append(label)
+        stored["artifacts_held"] = kept
+
+    data[record_id] = stored
+    sandbox._save(data)
+
+    merged = dict(stored)
+    merged["numbers"] = mission_svc.display_numbers(merged)
+    status = cockpit.document_status(merged, mode)
+    return jsonify({"ok": True, "label": label, "held": held_now,
+                    "state": status["state"], "complete": status["complete"],
+                    "label_line": status["label"],
+                    "checklist": cockpit.document_checklist(merged, mode)})
+
+
 @joe_bp.route("/portal/mission/<path:record_id>/arrangement", methods=["POST"])
 def portal_save_arrangement(record_id: str):
     """Record where the driver put the freight. Six boxes, stored as typed.

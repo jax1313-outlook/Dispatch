@@ -292,6 +292,23 @@
 .checklist li.todo .box { color: var(--ink-faint); }
 .checklist li.todo .item { color: var(--ink-dim); }
 
+/* A tickable line is a button, but it must not look like one -- it is the row.
+   52px minimum was already the rule here; it is also the target size a gloved
+   thumb can hit on a moving tablet, so the whole row is the target, not the box. */
+.checklist .tick-row {
+    display: flex; align-items: center; gap: 12px;
+    flex: 1; width: 100%; min-height: 52px;
+    margin: 0; padding: 0; border: 0; background: none;
+    font: inherit; color: inherit; text-align: left; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.checklist .tick-row:active { background: #13202e; }
+.checklist .tick-row:focus-visible {
+    outline: 2px solid var(--edge-lit); outline-offset: -2px; border-radius: 6px;
+}
+/* Nothing to press on the Arrival Notice: it is stamped by ARRIVE. */
+.checklist li.done .tick-row .box { color: var(--go); }
+
 .checklist-status {
     margin-top: 14px; padding: 10px 12px;
     font-weight: 700; letter-spacing: 0.06em;

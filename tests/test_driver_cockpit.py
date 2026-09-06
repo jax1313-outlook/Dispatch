@@ -954,3 +954,157 @@ class TestSpecialInstructionsAreOnTheGlass:
         panel = panel[:panel.index("</div>")]
         assert "end-special" in panel, "special instructions left off the glass"
         assert "side[1].special" in panel
+
+
+class TestTheChecklistCanActuallyBeTicked:
+    """The defect Mike found on 2026-09-05.
+
+    `artifacts_held` was read in one place and written only by tests, so the
+    checklist could never complete and the Publisher packet -> JOE review ->
+    Outlook draft chain could not be reached from the screen. The old tests
+    passed because each one built `artifacts_held` by hand and then asserted on
+    it. **None of them asked whether anything could produce that state.**
+
+    These do. `test_the_state_is_reachable_from_the_route` is the one that would
+    have failed before the fix.
+    """
+
+    def _client(self):
+        from portal.app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        return app.test_client()
+
+    def test_the_arrival_notice_cannot_be_ticked_by_hand(self):
+        """It is evidence Dispatch sent something, not a claim the driver makes."""
+        assert cockpit.tickable(cockpit.ARRIVAL_NOTICE) is False
+        assert cockpit.canonical_artifact(RECORD, cockpit.MODE_PICKUP,
+                                          cockpit.ARRIVAL_NOTICE) == ""
+
+    def test_every_other_line_can_be(self):
+        for item in cockpit.document_checklist(RECORD, cockpit.MODE_PICKUP):
+            if item["label"] != cockpit.ARRIVAL_NOTICE:
+                assert item["tickable"] is True
+
+    def test_a_label_that_is_not_on_the_list_is_refused(self):
+        """A checklist that accepts any string is not a checklist."""
+        assert cockpit.canonical_artifact(RECORD, cockpit.MODE_PICKUP, "beer") == ""
+        assert cockpit.canonical_artifact(RECORD, cockpit.MODE_PICKUP, "") == ""
+
+    def test_the_stored_spelling_is_the_checklists_own(self):
+        """Two spellings of one document is a record that cannot answer itself."""
+        got = cockpit.canonical_artifact(RECORD, cockpit.MODE_PICKUP,
+                                         "bill of lading (bol)")
+        assert got == "Bill of Lading (BOL)"
+
+    def test_the_state_is_reachable_from_the_route(self, tmp_path, monkeypatch):
+        """**The test that was missing.**
+
+        Tick every pickup artifact through the HTTP route the screen uses, and
+        the checklist must reach COMPLETE. Nothing here writes `artifacts_held`
+        by hand.
+        """
+        from portal.models import sandbox
+
+        store = tmp_path / "sandbox.json"
+        monkeypatch.setattr(sandbox, "_sandbox_path", lambda: store)
+
+        rid = "SBX-TICK-TEST-0001"
+        sandbox._save({rid: dict(RECORD, arrived_at="2026-09-05T10:00:00")})
+
+        client = self._client()
+        last = None
+        for name in cockpit.PICKUP_ARTIFACTS:
+            if name == cockpit.ARRIVAL_NOTICE:
+                continue
+            last = client.post(f"/portal/mission/{rid}/artifact",
+                               data={"view": "PICKUP", "label": name, "held": "1"})
+            assert last.status_code == 200, last.data
+            assert last.get_json()["ok"] is True
+
+        assert last.get_json()["state"] == "COMPLETE"
+        assert last.get_json()["complete"] is True
+
+        stored = sandbox._load()[rid]
+        assert cockpit.document_status(stored, cockpit.MODE_PICKUP)["state"] == "COMPLETE"
+
+    def test_a_tick_can_be_taken_back(self, tmp_path, monkeypatch):
+        """A driver who taps the wrong line at a dock must be able to undo it."""
+        from portal.models import sandbox
+
+        store = tmp_path / "sandbox.json"
+        monkeypatch.setattr(sandbox, "_sandbox_path", lambda: store)
+        rid = "SBX-TICK-TEST-0002"
+        sandbox._save({rid: dict(RECORD, arrived_at="2026-09-05T10:00:00")})
+
+        client = self._client()
+        name = "Packing List"
+        client.post(f"/portal/mission/{rid}/artifact",
+                    data={"view": "PICKUP", "label": name, "held": "1"})
+        assert name in sandbox._load()[rid]["artifacts_held"]
+
+        client.post(f"/portal/mission/{rid}/artifact",
+                    data={"view": "PICKUP", "label": name, "held": "0"})
+        assert name not in sandbox._load()[rid]["artifacts_held"]
+
+    def test_ticking_twice_does_not_store_it_twice(self, tmp_path, monkeypatch):
+        from portal.models import sandbox
+
+        store = tmp_path / "sandbox.json"
+        monkeypatch.setattr(sandbox, "_sandbox_path", lambda: store)
+        rid = "SBX-TICK-TEST-0003"
+        sandbox._save({rid: dict(RECORD, arrived_at="2026-09-05T10:00:00")})
+
+        client = self._client()
+        for _ in range(3):
+            client.post(f"/portal/mission/{rid}/artifact",
+                        data={"view": "PICKUP", "label": "Packing List", "held": "1"})
+        held = sandbox._load()[rid]["artifacts_held"]
+        assert held.count("Packing List") == 1
+
+    def test_the_route_refuses_the_arrival_notice(self, tmp_path, monkeypatch):
+        from portal.models import sandbox
+
+        store = tmp_path / "sandbox.json"
+        monkeypatch.setattr(sandbox, "_sandbox_path", lambda: store)
+        rid = "SBX-TICK-TEST-0004"
+        sandbox._save({rid: dict(RECORD)})
+
+        r = self._client().post(f"/portal/mission/{rid}/artifact",
+                                data={"view": "PICKUP",
+                                      "label": cockpit.ARRIVAL_NOTICE, "held": "1"})
+        assert r.status_code == 400
+        assert r.get_json()["ok"] is False
+        assert "artifacts_held" not in sandbox._load()[rid]
+
+    def test_an_unknown_mission_is_not_created_by_ticking(self, tmp_path, monkeypatch):
+        from portal.models import sandbox
+
+        store = tmp_path / "sandbox.json"
+        monkeypatch.setattr(sandbox, "_sandbox_path", lambda: store)
+        sandbox._save({})
+
+        r = self._client().post("/portal/mission/NOT-A-MISSION/artifact",
+                                data={"view": "PICKUP", "label": "Packing List"})
+        assert r.status_code == 404
+        assert sandbox._load() == {}
+
+    def test_cod_is_stored_as_money_not_as_paper(self, tmp_path, monkeypatch):
+        """A collected check is not a document. It lands where the money lives."""
+        from portal.models import sandbox
+
+        store = tmp_path / "sandbox.json"
+        monkeypatch.setattr(sandbox, "_sandbox_path", lambda: store)
+        rid = "SBX-TICK-TEST-0005"
+        sandbox._save({rid: dict(RECORD, arrived_at="2026-09-05T10:00:00",
+                                 payment_type="C.O.D.", payor="Acme")})
+
+        cod = cockpit.cod_for(sandbox._load()[rid])
+        r = self._client().post(f"/portal/mission/{rid}/artifact",
+                                data={"view": "DELIVERY", "label": cod["label"],
+                                      "held": "1"})
+        assert r.status_code == 200 and r.get_json()["ok"] is True
+        stored = sandbox._load()[rid]
+        assert stored.get("payment_collected_at")
+        assert "C.O.D." not in " ".join(stored.get("artifacts_held") or [])
