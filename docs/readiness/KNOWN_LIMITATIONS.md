@@ -72,7 +72,7 @@ said *"Dispatch cannot start because PORTAL_SECRET_KEY is not set."*
 Both traps produce a false negative that reads as a false defect. Anyone re-running these items
 should know.
 
-### Reported from use, 2026-09-05: the document checklist cannot be ticked
+### Reported from use 2026-09-05, FIXED 2026-09-06: the document checklist could not be ticked
 
 **Mike's report:** the check mark in Document Status in the Driver Portal does not work.
 **Confirmed.** It is wider than the arrival notice, and it blocks the delivery completion chain.
@@ -111,7 +111,30 @@ can *produce* that state. This is the third defect of this shape found in two se
 graceful-shutdown escalation and the two test-method traps above. **A test that constructs its own
 precondition cannot tell you the precondition is reachable.**
 
-**Not yet fixed.** The repair depends on a decision only Mike can make: whether ticking a document
+**FIXED 2026-09-06, commit `f7d5304`.** Mike ruled: *a tick means I have it in hand, or it was
+created by the arrival notice when I hit arrived.* Built to that ruling —
+
+- `POST /portal/mission/<id>/artifact` writes `artifacts_held`, so the field now has a writer
+  outside the tests and `document_status(...)["complete"]` is reachable.
+- The checklist rows are buttons where they may be ticked. The **whole 52px row** is the target,
+  not the box — a gloved thumb on a moving tablet.
+- **The Arrival Notice is refused by the route**, `400`. It is stamped from `arrived_at` because it
+  is evidence Dispatch sent something, not a claim the driver makes.
+- Unticking is allowed; a wrong tap at a dock must be reversible.
+- C.O.D. writes `payment_collected_at`, not the artifact list. A collected check is money, not paper.
+- An unknown label is refused rather than stored.
+
+`TestTheChecklistCanActuallyBeTicked` adds eleven tests. **`test_the_state_is_reachable_from_the_route`
+is the one that was missing** — it ticks every artifact through the HTTP route the screen uses and
+asserts the checklist reaches `COMPLETE`, writing `artifacts_held` nowhere by hand.
+
+**The lesson, recorded because it has now cost three defects:** a test that builds its own
+precondition proves the logic and says nothing about whether the application can reach it. Where a
+state matters, one test must arrive at it the way the screen does.
+
+**Superseded text follows, kept as the record of what was found.**
+
+The repair depended on a decision only Mike could make: whether ticking a document
 means *"I have it in hand"* (a tap, recorded on the Mission Record) or *"a photo or scan is stored"*
 (which makes UPLOAD the real work — file storage, naming, location on `D:`, retention). The two
 build differently and the second cannot be reached without a working camera and signal at the dock.
@@ -281,13 +304,10 @@ decided.
 > 2026-09-05 (capture, hash-verify, restore, restored database identical to source), so this is
 > now hardware, not software.
 
-> **And a second blocker, reported from use 2026-09-05:** the document checklist cannot be
-> ticked. `artifacts_held` is written by no application code, there is no tap handler on the
-> checklist rows, and `UPLOAD DOCUMENTS - PHOTOS` has no route behind it. Because
-> `completion_effect()` fires only when the checklist completes, **the Publisher packet ->
-> JOE review -> Outlook draft chain cannot be reached from the screen.** PILOT-01 carries a
-> load end to end, so this blocks the completion gate as surely as the six items above do.
-> Full detail in section 0b. Awaiting Mike's ruling on what a tick means.
+> **The second blocker is cleared.** The document checklist could not be ticked; Mike ruled
+> on 2026-09-05 and it was built on 2026-09-06 (`f7d5304`). The Publisher packet -> JOE
+> review -> Outlook draft chain is now reachable from the screen. **PILOT-01 is no longer
+> blocked by software** — it is blocked only by the six acceptance items above.
 
 Updated 2026-08-25. Everything that came before this is cleared. Dispatch launches, signs in
 and renders on the target machine.
