@@ -1236,6 +1236,33 @@ def list_settlements(
     )
 
 
+def rehearsal_share() -> dict:
+    """How much of what a screen is about to show is rehearsal data.
+
+    **Mike's ruling, 2026-09-06: show both, with rehearsal records marked.**
+
+    A row can carry a badge. A total cannot -- so a screen showing one number
+    over mixed data has to say so in words, or it states rehearsal revenue with
+    the same confidence it would state real revenue. That is the same failure as
+    reporting a 100% margin against zero recorded expenses: arithmetically true
+    and operationally a lie.
+
+    Counts only. Nothing here filters anything out; the filter Mike did not ask
+    for stays unwritten.
+    """
+    loads = list_loads()
+    rehearsal = [l for l in loads if str(l.get("rehearsal_session") or "").strip()]
+    sessions = sorted({str(l["rehearsal_session"]).strip() for l in rehearsal})
+    return {
+        "total": len(loads),
+        "rehearsal": len(rehearsal),
+        "operational": len(loads) - len(rehearsal),
+        "sessions": sessions,
+        "any": bool(rehearsal),
+        "all": bool(loads) and len(rehearsal) == len(loads),
+    }
+
+
 def get_financial_dashboard() -> dict:
     all_loads = store.list_loads()
     settlements = store.list_settlements()

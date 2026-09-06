@@ -58,6 +58,9 @@ def home():
     recent_activity = dispatch_store.get_recent_activity(limit=15)
     chart_data = dispatch_svc.get_chart_data()
     attention_needed = helpers.attention_needed()
+    # How much of what this page is about to show is rehearsal data. A row can
+    # carry a badge; a total cannot, so the page has to say it in words.
+    rehearsal = dispatch_svc.rehearsal_share()
 
     return render_template(
         "home.html",
@@ -76,6 +79,7 @@ def home():
         recent_activity=recent_activity,
         chart_data=chart_data,
         attention_needed=attention_needed,
+        rehearsal=rehearsal,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )

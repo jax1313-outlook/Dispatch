@@ -761,3 +761,33 @@ body {
 .sample-data-banner .btn {
     margin-left: 10px;
 }
+
+/* Rehearsal marking. Mike's ruling 2026-09-06: show both, mark the rehearsal
+   ones. Amber rather than red -- a rehearsal record is not an error, and a red
+   badge on legitimate test data trains the eye to ignore red. */
+.rehearsal-tag {
+    display: inline-block;
+    padding: 2px 7px;
+    margin-left: 6px;
+    border-radius: 3px;
+    background: #f39c12;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    vertical-align: 1px;
+    white-space: nowrap;
+}
+.rehearsal-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 18px;
+    padding: 10px 14px;
+    border-left: 4px solid #f39c12;
+    border-radius: 4px;
+    background: #fef5e7;
+    color: #7e5109;
+    font-size: 13px;
+}
+.rehearsal-banner .rehearsal-tag { margin-left: 0; }
