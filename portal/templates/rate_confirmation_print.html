@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rate Confirmation — {{ load.load_id[:12] }}</title>
+    <title>{% if load.rehearsal_session %}REHEARSAL - NOT VALID - {% endif %}Rate Confirmation — {{ load.load_id[:12] }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #222; padding: 24px; max-width: 800px; margin: 0 auto; }
@@ -42,16 +42,53 @@
 
         .footer-line { text-align: center; font-size: 11px; color: #999; margin-top: 16px; padding-top: 8px; border-top: 1px solid #eee; }
 
+        /* REHEARSAL MARKING on a document that leaves the building.
+           Doctrine: docs/DISPATCH_REHEARSAL_DATA_DOCTRINE.md rules 2 and 3.
+           Built for paper, not for a screen -- heavy borders and near-black text
+           so it survives a grayscale print and a photocopy, and
+           print-color-adjust so the browser cannot helpfully strip it. */
+        .reh-banner {
+            border: 3px solid #000; background: #fde68a;
+            padding: 10px 14px; margin-bottom: 16px;
+            font-weight: 900; letter-spacing: 0.06em; color: #000;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        }
+        .reh-banner .reh-sub { display: block; font-weight: 600; letter-spacing: 0; font-size: 12px; margin-top: 4px; }
+        .reh-watermark {
+            position: fixed; top: 42%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-28deg);
+            font-size: 92px; font-weight: 900; letter-spacing: 0.1em;
+            color: rgba(0, 0, 0, 0.13); white-space: nowrap;
+            pointer-events: none; z-index: 999;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        }
+        .reh-void { border: 2px dashed #000; padding: 8px 10px; margin-top: 10px; font-weight: 800; font-size: 12px; }
+
         @media print {
             body { padding: 0; }
             .print-controls { display: none; }
             .doc-header { border-bottom-color: #000; }
             .section-title { background: #eee; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .rate-box { border-color: #000; }
+            /* The marking is the whole point on paper. It prints. */
+            .reh-banner, .reh-watermark, .reh-void { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .reh-watermark { position: fixed; }
         }
     </style>
 </head>
 <body>
+    {% if load.rehearsal_session %}
+    <div class="reh-watermark">REHEARSAL</div>
+    <div class="reh-banner">
+        REHEARSAL — THIS IS NOT A RATE CONFIRMATION
+        <span class="reh-sub">
+            This document was generated from a rehearsal record and does not describe real freight.
+            It is not an agreement, it creates no obligation on any party, and it must not be sent,
+            signed or filed. Session {{ load.rehearsal_session }}.
+        </span>
+    </div>
+    {% endif %}
+
     <div class="print-controls">
         <button class="primary" onclick="window.print()">Print</button>
         <button onclick="window.history.back()">Back</button>
@@ -133,8 +170,19 @@
             <div class="sig-line">Shipper/Broker Signature / Date</div>
         </div>
     </div>
+    {% if load.rehearsal_session %}
+    {# The signature lines are left visible -- Mike ruled show both, marked, not
+       hide. But this is the line where a document becomes an agreement, so the
+       refusal is stated here as well as at the top. #}
+    <div class="reh-void">
+        VOID — NOT FOR SIGNATURE. A signature on this page binds no one. This is a rehearsal
+        record ({{ load.rehearsal_session }}), not a live mission.
+    </div>
+    {% endif %}
 
     <div class="terms">
+        {% if load.rehearsal_session %}<strong>The following terms do not apply. This is a rehearsal
+        record and no agreement exists.</strong><br>{% endif %}
         This rate confirmation serves as an agreement between the carrier and shipper/broker for the transportation of freight as described above.
         Payment terms are net 30 days from receipt of signed proof of delivery unless otherwise agreed in writing.
         Carrier agrees to maintain proper insurance coverage for the duration of the shipment.

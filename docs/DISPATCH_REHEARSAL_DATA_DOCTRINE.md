@@ -37,7 +37,7 @@ the audit below shows is that the mechanisms were built and then not called.
 | Rule | State | Evidence |
 |---|---|---|
 | **1. Tagged at creation** | **PARTIAL — the switch is off** | `tag_if_active()` is called from the `dispatch.store` create functions for all five record types, so a record created while a session is active *cannot* be untagged. But `DISPATCH_REHEARSAL_SESSION` reports `UNCONFIGURED` and `DISPATCH_MODE` is unset, so **nothing tags itself today** |
-| **2. Visibly marked wherever displayed** | **NOT MET — 6 of 20 screens** | See the table below |
+| **2. Visibly marked wherever displayed** | **7 of 20 screens** — `rate_confirmation_print` fixed 2026-09-06 | See the table below |
 | **3. Never represented as live operational truth** | **NOT MET** | Follows from rule 2. On 14 screens a rehearsal load renders identically to real freight |
 | **4. Must not silently contaminate financial reporting** | **PARTIAL** | Home now states it. `billing`, `profitability`, `ifta`, `driver_pay`, `fuel_estimator` compute over mixed data and say nothing |
 | **5. May be viewed through a mode or filter** | **Permitted, partly built** | `banner_context()` drives a full-width banner on every page while a session runs. `purge_session()` exists and **nothing calls it** — deliberately, because Section 8 item 9 makes running one Mike's decision. No *display* filter exists, and none was asked for |
@@ -52,11 +52,28 @@ the audit below shows is that the mechanisms were built and then not called.
 
 `archive` · `billing` · `brief` · `calendar` · `dispatch_decision` · `driver_detail` ·
 `driver_pay` · `equipment_detail` · `exceptions` · `fleet` · `ifta` · `profitability` ·
-`rate_confirmation_print` · `search`
+`search`
 
-**`rate_confirmation_print` is the one to fix first.** It is the only screen in that list whose
-output leaves the building. A rehearsal rate confirmation printed and handed to a customer is rule 3
-failing in the worst available way.
+**`rate_confirmation_print` was fixed first, 2026-09-06** — the only screen in that list whose
+output leaves the building. It is now marked in four places, because a reader who misses one may
+still act on the page:
+
+- **The `<title>`**, which becomes the filename when printed to PDF. A `Rate Confirmation.pdf` in
+  someone's downloads folder was the failure worth preventing.
+- **A bordered banner above the document**, naming the session.
+- **A diagonal watermark** across the page.
+- **A refusal at the signature block** — *"VOID — NOT FOR SIGNATURE. A signature on this page binds
+  no one."* The signature lines are left visible, because Mike ruled *show both, marked*, not hide.
+  That is where a page stops being information and becomes an agreement.
+
+The terms paragraph asserts that an agreement exists; on a rehearsal page that sentence is answered
+where it is printed rather than only at the top.
+
+**Built for paper, not for a screen.** Heavy borders and near-black text so it survives a grayscale
+print and a photocopy, with `print-color-adjust: exact` so the browser cannot strip the marking on
+the way to the printer. A watermark that vanishes on paper is worse than none, because the screen
+looked marked. Ten tests, including one asserting the marking appears inside the `@media print`
+block, and three asserting **no marking of any kind** reaches a live document.
 
 ---
 
