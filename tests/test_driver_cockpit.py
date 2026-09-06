@@ -391,14 +391,16 @@ class TestTheArrivalNotice:
         act on it, and the facility contact is who the broker rings to confirm
         it from the other end."""
         keys = [f["key"] for f in cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)["fields"]]
-        assert "Broker" in keys
-        assert "Broker POC" in keys
+        # "Customer", not "Broker" -- Mike's ruling of 2026-09-06. One party
+        # controls the load and the driver does not care which kind they are.
+        assert "Customer" in keys
+        assert "Customer POC" in keys
         assert "Facility POC" in keys
 
     def test_a_contact_joins_a_name_and_a_number(self):
         record = dict(RECORD, broker_poc="D. Reyes")
         notice = cockpit.arrival_notice_for(record, cockpit.MODE_PICKUP)
-        value = {f["key"]: f["value"] for f in notice["fields"]}["Broker POC"]
+        value = {f["key"]: f["value"] for f in notice["fields"]}["Customer POC"]
         assert "D. Reyes" in value
         assert "555-0199" in value
 
@@ -409,7 +411,7 @@ class TestTheArrivalNotice:
         values = {f["key"]: f["value"] for f in notice["fields"]}
         assert values["Date"] == ""
         assert values["GPS"] == ""
-        assert values["Broker POC"] == ""
+        assert values["Customer POC"] == ""
 
     def test_screen_placeholders_never_reach_the_notice(self):
         """The cockpit shows an em dash so the driver sees an unanswered field.
@@ -809,7 +811,7 @@ class TestTheDetailDrawersCarryExecutionInformation:
                 == self._drawer("pickup", 2)["detail"]["address"])
 
 
-class TestBrokerIdentityLivesInOnePlace:
+class TestCustomerIdentityLivesInOnePlace:
     """Two names on one screen means working out which is current."""
 
     def test_the_cargo_drawer_carries_no_broker(self):
@@ -818,15 +820,15 @@ class TestBrokerIdentityLivesInOnePlace:
                           if d["key"] == "cargo"][0]["rows"]]
         assert not any("broker" in k for k in keys)
 
-    def test_the_broker_drawer_does(self):
+    def test_the_customer_drawer_does(self):
         rows = [d for d in cockpit.drawers_for(RECORD, cockpit.MODE_PICKUP)
                 if d["key"] == "broker"][0]["rows"]
-        assert any("broker" in r["key"].lower() for r in rows)
+        assert any("customer" in r["key"].lower() for r in rows)
 
-    def test_the_arrival_notice_may_name_the_broker(self):
+    def test_the_arrival_notice_may_name_the_customer(self):
         """It is addressed to them. That is not a duplicate identity."""
         keys = [f["key"] for f in cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)["fields"]]
-        assert "Broker" in keys
+        assert "Customer" in keys
 
 
 class TestTheStopSelectorScales:

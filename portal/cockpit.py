@@ -718,9 +718,15 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
             {"key": "Load Number", "value": (record.get("numbers") or {}).get("load_label") or ""},
             {"key": "Description",
              "value": _blank_if_placeholder(cargo_for(record)["description"])},
-            {"key": "Broker", "value": broker_for(record)["name"]},
-            {"key": "Broker POC", "value": _contact(record, "broker_poc", "broker_contact",
-                                                    "broker_phone")},
+    # "Customer", not "Broker" or "Shipper". Mike's ruling, 2026-09-06:
+    # *"using Customer as generic label would be better. The onboarding process
+    # is the same regardless of who controls the load."* From the truck there is
+    # one party who controls the freight, and whether they are a broker or the
+    # shipper themselves changes nothing the driver does. The stored field names
+    # still say broker; only what a human reads has changed here.
+            {"key": "Customer", "value": broker_for(record)["name"]},
+            {"key": "Customer POC", "value": _contact(record, "broker_poc", "broker_contact",
+                                                      "broker_phone")},
             {"key": "Facility POC", "value": _contact(record, f"{end}_poc",
                                                       f"{end}_contact", f"{end}_phone")},
         ],
@@ -979,8 +985,8 @@ def drawers_for(record: dict, mode: str, route_risk: str = "",
         {"key": "arrival", "side": "right", "title": "Arrival notice",
          "notice": arrival_notice_for(record, mode)},
 
-        {"key": "broker", "side": "left", "title": "Broker",
-         "rows": rows(("Broker", broker["name"] or "—"),
+        {"key": "broker", "side": "left", "title": "Customer",
+         "rows": rows(("Customer", broker["name"] or "—"),
                       ("Their load number", broker["reference"]),
                       ("Phone", broker["phone"] or "—"))},
 
