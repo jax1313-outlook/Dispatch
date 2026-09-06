@@ -67,6 +67,16 @@
           {% if f.key in ('cargo_lines', 'notes', 'additional_stops') %}
             <textarea name="{{ f.key }}" rows="3"
                       placeholder="{{ f.hint }}">{{ values[f.key] }}</textarea>
+          {% elif f.choices %}
+            {# Picked, never typed. A field meant to be counted has to be, or
+               "Medical" and "medical route" become two categories that should
+               be one. Twelve options is past where radio buttons help. #}
+            <select name="{{ f.key }}">
+              <option value="">{{ f.hint or 'Choose one' }}</option>
+              {% for c in f.choices %}
+                <option value="{{ c }}" {{ 'selected' if values[f.key] == c }}>{{ c }}</option>
+              {% endfor %}
+            </select>
           {% else %}
             <input type="text" name="{{ f.key }}" value="{{ values[f.key] }}"
                    autocomplete="off" placeholder="{{ f.hint }}">

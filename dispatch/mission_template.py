@@ -129,9 +129,51 @@ class Field:
     #: What JOE says when taking this field down by voice. A template read
     #: aloud badly is a template nobody finishes.
     spoken: str = ""
+    #: A fixed list to pick from, or empty for free text. **A field meant to be
+    #: counted must be picked from.** "Medical" typed once and "medical route"
+    #: the next time are two categories that should be one, and nothing notices
+    #: until a report is finally built and shows both.
+    choices: tuple = ()
 
     def prompt(self) -> str:
         return self.spoken or f"{self.label}?"
+
+
+#: The kinds of run Level 1 Transport takes. **Mike's list, 2026-09-06.**
+#:
+#: This is where Courier and Medical belong. They were sitting in the intake
+#: source list, where they were a category error -- a courier run is a kind of
+#: freight, not a way a load reached the office -- and where nothing could ever
+#: report on them.
+#:
+#: Picked from, never typed. A field meant to be counted has to be, or
+#: "Medical" and "medical route" become two categories that should be one.
+#: **Where this list gets its values in practice, Mike 2026-09-06:** *"this info
+#: will come from the load board."*
+#:
+#: So the dropdown below is the manual path, and the boards are the other one.
+#: **DAT, Truckstop, 123Loadboard and Truck Smarter do not use these twelve
+#: words.** Whatever the load_board connector eventually reads has to be mapped
+#: onto this list, and a board category that maps to nothing must land on
+#: "Other" **with the board's own wording kept alongside it** -- discarding what
+#: the board actually said, to force a fit, is how a category becomes a lie.
+#:
+#: Not built here. It is connector work and belongs with the provider, not with
+#: this form.
+SERVICE_TYPES = (
+    "LTL Freight",
+    "Courier",
+    "Medical",
+    "Retail",
+    "Food & Beverage",
+    "Industrial",
+    "Port / Container",
+    "Dedicated",
+    "Government",
+    "Emergency / Expedited",
+    "Final Mile",
+    "Other",
+)
 
 
 #: The template. Field for field, this is what the Driver Cockpit displays --
@@ -167,7 +209,8 @@ TEMPLATE: tuple[Field, ...] = (
     Field("control_phone", "Load control phone", "LOAD CONTROL",
           spoken="What is their number?"),
     Field("service", "Service type", "LOAD CONTROL",
-          hint="Truckload, courier, medical, expedite",
+          hint="What kind of run",
+          choices=SERVICE_TYPES,
           spoken="What kind of run is it?"),
     Field("rate", "Rate", "LOAD CONTROL", hint="Linehaul, before accessorials",
           spoken="What does it pay?"),

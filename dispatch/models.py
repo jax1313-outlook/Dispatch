@@ -36,10 +36,22 @@ LOAD_STATUSES = [
     "cancelled",
 ]
 
+#: Where the freight came from. **Picked from, never typed** -- this is what a
+#: report on "where does my work come from" groups by, and a free-text field
+#: would give two spellings of one board.
+#:
+#: `mission.py` copies a card's source onto the load **only** when it names
+#: something in this list, and drops it silently otherwise. So a board missing
+#: from here is a board whose loads book with no source at all.
+#:
+#: The four boards are Mike's, named 2026-09-06. `123loadboard` and
+#: `trucksmarter` were absent, so half his boards would have been dropped.
 LOAD_SOURCES = [
     "direct",
     "dat",
     "truckstop",
+    "123loadboard",
+    "trucksmarter",
     "broker_call",
     "email",
     "referral",

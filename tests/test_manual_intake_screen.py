@@ -318,3 +318,94 @@ class TestTheSourceSurvivesIntoTheLoadRecord:
         assert load["source"] == "direct", (
             "the source was dropped on the way into the load record"
         )
+
+
+class TestServiceTypeIsPickedNotTyped:
+    """**Mike's list, 2026-09-06.** Twelve kinds of run.
+
+    This is where Courier and Medical belong. They were sitting in the intake
+    source list, which was a category error -- a courier run is a kind of
+    freight, not a way a load reached the office -- and where nothing could ever
+    report on them.
+
+    Picked, never typed, because the whole point is counting them later.
+    "Medical" once and "medical route" the next time are two categories that
+    should be one, and nothing notices until a report is finally built.
+    """
+
+    def test_the_list_is_mikes_list(self):
+        assert mt.SERVICE_TYPES == (
+            "LTL Freight", "Courier", "Medical", "Retail", "Food & Beverage",
+            "Industrial", "Port / Container", "Dedicated", "Government",
+            "Emergency / Expedited", "Final Mile", "Other")
+
+    def test_the_two_that_moved_here_from_the_source_list(self):
+        """Courier and medical were intake sources until 2026-09-06."""
+        assert "Courier" in mt.SERVICE_TYPES
+        assert "Medical" in mt.SERVICE_TYPES
+
+    def test_the_field_carries_them(self):
+        field = next(f for f in mt.TEMPLATE if f.key == "service")
+        assert field.choices == mt.SERVICE_TYPES
+
+    def test_the_screen_offers_a_picker_not_a_text_box(self, client):
+        html = client.get("/intake").get_data(as_text=True)
+        assert "<select" in html
+        assert "LTL Freight" in html
+        assert "Emergency / Expedited" in html
+
+    def test_twelve_options_is_a_dropdown_not_radio_buttons(self, client):
+        """Mike ruled radio buttons for the source list because they reduce
+        cognitive load at three options. Twelve is past where that holds --
+        the control follows the count, not the other way round."""
+        html = client.get("/intake").get_data(as_text=True)
+        assert len(mt.SERVICE_TYPES) == 12
+        assert 'type="radio"' not in html
+
+    def test_a_chosen_service_reaches_the_record(self, client):
+        """It lands at the top level of the record, **not on the card.** The
+        card is what the Driver Cockpit reads, so today the service type is
+        stored and reportable but not shown to the driver. Recorded here rather
+        than changed, because whether he needs to see it is Mike's call."""
+        _create(client, service="Medical")
+        record = list(sandbox.get_all().values())[0]
+        assert record.get("service") == "Medical"
+
+    def test_it_is_optional_and_a_blank_is_not_invented(self, client):
+        """Leave anything you do not know blank -- do not guess. The footer of
+        the form says so, and it has to be true."""
+        assert _create(client).status_code == 302
+        record = list(sandbox.get_all().values())[0]
+        assert record.get("service", "") == ""
+
+
+class TestEveryBoardMikeUsesIsAccepted:
+    """`mission.py` copies a card's source onto the load **only** when it names
+    something `LOAD_SOURCES` recognises, and drops it silently otherwise. So a
+    board missing from that list is a board whose loads book with no source at
+    all -- and a report on where his work comes from would simply not see them.
+
+    Mike named his four on 2026-09-06: DAT, Truckstop, 123Loadboard, Truck
+    Smarter. **Two were absent.**
+    """
+
+    @pytest.mark.parametrize("board", ["dat", "truckstop",
+                                       "123loadboard", "trucksmarter"])
+    def test_the_board_reaches_the_load_record(self, board):
+        from dispatch.models import LOAD_SOURCES
+
+        assert board in LOAD_SOURCES
+
+    def test_direct_sits_alongside_them(self):
+        """A hand-opened mission and a swept one land in one vocabulary, so a
+        single report can compare them."""
+        from dispatch.models import LOAD_SOURCES
+
+        assert mt.SOURCE_DIRECT.lower() in LOAD_SOURCES
+
+    def test_an_unknown_board_is_still_refused(self):
+        """The list stays fixed. Adding a board is a deliberate act, because a
+        list that accepts anything cannot be grouped."""
+        from dispatch.models import LOAD_SOURCES
+
+        assert "loadboard_we_never_signed_up_for" not in LOAD_SOURCES
