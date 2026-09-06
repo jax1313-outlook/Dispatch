@@ -92,6 +92,37 @@ only close call — it tells Mike what to do, but what it holds are *decisions a
 not instructions for operating a feature. A code change does not make it wrong. It stays, and points
 at the walkthrough for the parts that are operator steps.
 
+## APPLIED IN REVERSE, 2026-09-06
+
+The rule cuts both ways, and had only been run one direction. All 57 repository documents were
+checked against the `MD Files` categories. **Six fitted them. Mike moved two.**
+
+**Moved out to `D:\MD Files`:**
+
+| Was | Now | Why |
+|---|---|---|
+| `docs/readiness/RECON.md` | `RECON_2026-08-24.md` | Reconnaissance from 2026-08-24 against a branch that no longer leads the work. **Referenced by nothing** |
+| `docs/readiness/STATUS_2026-08-26.md` | `STATUS_2026-08-26.md` | A dated status report, and stale — it says zero loads and the database has held loads since |
+
+Both carry a banner recording where they came from and why. Nothing was altered below it.
+
+**Two citations were repointed, and they were wrong in substance, not only in path.** `CLAUDE.md`
+and `DISPATCH_ARCHITECTURE.md` both described `STATUS_2026-08-26.md` as *"where things stand
+today"* — of a document eleven days stale. Both now point at
+`D:\MD Files\DISPATCH_CURRENT_STATE.md`. **That is the argument for the rule in one example:** a status
+record kept beside the code gets cited as if it were current, and nothing in a repository makes a
+date go stale loudly.
+
+**Left in place, with reasons:**
+
+| Document | Why it stays |
+|---|---|
+| `DISPATCH_GOLD_RECOVERY_FINDINGS.md` · `DISPATCH_COMPONENT_RECOVERY_REGISTER.md` · `DISPATCH_SCORING_LINEAGE_AND_RECOVERY.md` | They read as forensics, but they are cited **as the reasoning behind current specifications** — closer to specification support than to history. `SCORING_LINEAGE` alone is cited by six repository documents |
+| `readiness/COMPLETION_REPORT.md` | Referenced by `tests/test_repository_doctrine.py`. Moving it breaks a test, which makes it a code change rather than a filing change. **Decide it on its own** |
+| `DISPATCH_POLICY_FOUNDATION_PR_SUMMARY.md` | Genuinely borderline. The name says historical, the content calls itself a specification package. The **title** is the misleading part — one for the rename mission |
+
+---
+
 ---
 
 ## A NOTE FOR THE RENAME MISSION
