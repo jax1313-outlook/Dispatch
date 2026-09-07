@@ -197,6 +197,34 @@ container; they are not attached to it.
 
 ---
 
+## 1A. The backup is real, and it is not offsite — 2026-09-07
+
+**`DISPATCH_BACKUP_DIR` = `C:\DispatchBackups`.** Set as an **interim placeholder** while the
+external drive is bought.
+
+**Proven, not assumed.** Backup, hash verification, restore, and a read of the restored database:
+36 tables, `integrity_check` ok, row counts identical to live. `Backup VERIFIED` on the status
+screen, and the `restore-verification.json` that earns that word was written by Code and says so —
+it is **not** a Mike attribution.
+
+**What it protects against:** the `D:` drive failing. That is the Crucial X9 and it holds Dispatch,
+the database, `D:\Archive` and `D:\Memory` — everything. If it dies, the data is on the internal
+M.2 and is provably restorable.
+
+**What it does not protect against:** losing the laptop. Fire, theft, a bad day on I-10. **Both
+copies are in the same machine, in the same case, in the same truck.** A second copy on the same
+computer is a device backup, not a disaster backup, and calling it more than that would be the kind
+of claim this document exists to prevent.
+
+**What closes it:** CONOPS v1.1 R8 — nightly encrypted backup **off-node to the home NAS**, with the
+audit shipped more often. The route there is the 4 TB external, pinned to a fixed drive letter so
+Windows cannot reassign it and leave the launcher reporting `ABSENT` while the drive is plugged in.
+
+**When the drive arrives:** `setx DISPATCH_BACKUP_DIR "T:\DispatchBackups"`, then run the same four
+steps against it. The mechanism is identical; only the destination changes.
+
+---
+
 ## 2. Not connected
 
 **Every external system is `UNCONFIGURED`.** No ELD, GPS, telematics, traffic, weather, load
