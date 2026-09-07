@@ -516,6 +516,55 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     init_rehearsal_schema(conn)
 
 
+def schema_drift(conn) -> dict:
+    """Columns the schema declares that a live database does not have.
+
+    **`CREATE TABLE IF NOT EXISTS` creates a missing table and does nothing
+    whatsoever to a table that already exists.** So adding a column to `_SCHEMA`
+    reaches a fresh database and silently misses every existing one, with no
+    error and no warning anywhere.
+
+    That is not hypothetical. On 2026-09-07 a `rehearsal_session` column was
+    added to `opportunities`; the file changed, the running database did not,
+    and the next capture wrote a record that could not be tagged as rehearsal
+    data -- reintroducing finding F-4 one day after it was closed. It was found
+    by reading a `PRAGMA table_info`, not by anything that watches.
+
+    This watches. It reports drift and **repairs nothing** -- adding a column to
+    a database holding real freight is a migration, and a migration is Mike's
+    decision (Class 2), not something a start-up path performs on its own.
+
+    Returns `{table: [missing columns]}`, empty when the database matches.
+    """
+    import re
+
+    declared = {}
+    for block in re.finditer(
+            r"CREATE TABLE IF NOT EXISTS (\w+) \((.*?)\n\);", _SCHEMA, re.S):
+        table, body = block.group(1), block.group(2)
+        names = []
+        for line in body.splitlines():
+            line = line.strip().rstrip(",")
+            if not line or line.upper().startswith(
+                    ("PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK", "CONSTRAINT")):
+                continue
+            names.append(line.split()[0])
+        declared[table] = names
+
+    drift = {}
+    for table, names in declared.items():
+        try:
+            live = {r[1] for r in conn.execute("PRAGMA table_info(%s)" % table)}
+        except Exception:  # noqa: BLE001 - a table that is not there yet is not drift
+            continue
+        if not live:
+            continue
+        missing = [n for n in names if n not in live]
+        if missing:
+            drift[table] = missing
+    return drift
+
+
 @contextmanager
 def get_connection():
     path = get_db_path()

@@ -337,3 +337,64 @@ class TestCaptureObeysTheRehearsalDoctrine:
         from dispatch import rehearsal
 
         assert "opportunities" in rehearsal.REHEARSAL_TABLES
+
+
+class TestSchemaDriftIsDetectable:
+    """`CREATE TABLE IF NOT EXISTS` creates a missing table and does nothing at
+    all to one that already exists.
+
+    On 2026-09-07 a `rehearsal_session` column was added to `opportunities`. The
+    file changed; the running database did not. The next capture wrote a record
+    that could not be tagged as rehearsal data, reintroducing finding F-4 one day
+    after it was closed. Nothing warned, because nothing was watching.
+
+    This watches. It **reports** and repairs nothing -- adding a column to a
+    database holding real freight is a migration, and a migration is Mike's
+    decision.
+    """
+
+    def test_a_fresh_database_has_no_drift(self, tmp_path):
+        import sqlite3
+
+        from dispatch import db
+
+        path = tmp_path / "fresh.db"
+        with sqlite3.connect(path) as conn:
+            conn.executescript(db._SCHEMA)
+            assert db.schema_drift(conn) == {}
+
+    def test_a_missing_column_is_found(self, tmp_path):
+        """The exact shape of the 2026-09-07 failure: a table created before a
+        column was declared."""
+        import sqlite3
+
+        from dispatch import db
+
+        path = tmp_path / "stale.db"
+        with sqlite3.connect(path) as conn:
+            conn.execute("CREATE TABLE opportunities (opportunity_id TEXT PRIMARY KEY)")
+            drift = db.schema_drift(conn)
+        assert "opportunities" in drift
+        assert "rehearsal_session" in drift["opportunities"]
+
+    def test_a_table_that_does_not_exist_yet_is_not_drift(self, tmp_path):
+        """An absent table is created correctly on the next connection. Only a
+        table that exists in the wrong shape is a problem."""
+        import sqlite3
+
+        from dispatch import db
+
+        with sqlite3.connect(tmp_path / "empty.db") as conn:
+            assert db.schema_drift(conn) == {}
+
+    def test_it_repairs_nothing(self, tmp_path):
+        import sqlite3
+
+        from dispatch import db
+
+        path = tmp_path / "stale.db"
+        with sqlite3.connect(path) as conn:
+            conn.execute("CREATE TABLE opportunities (opportunity_id TEXT PRIMARY KEY)")
+            db.schema_drift(conn)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(opportunities)")}
+        assert cols == {"opportunity_id"}, "schema_drift altered a table; it must only report"

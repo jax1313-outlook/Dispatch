@@ -36,6 +36,7 @@ graduation on "book it" is a promotion, not a field mapping.
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -351,6 +352,217 @@ def capture(payload: dict, *, driver: str, channel: str = "") -> dict:
     stored["filled"] = []
     stored["unrecognised_channel"] = unrecognised
     return stored
+
+
+# ------------------------------------------------------------ the capture call
+
+#: What the Owner says to start a capture. Matched loosely -- speech-to-text
+#: drops commas and mishears names, and a capture lost to a strict prefix is the
+#: exact failure OPP-CAPTURE was written to prevent.
+OPENERS = ("log this one", "log this", "capture this", "log a load", "new opportunity")
+
+#: Words that end one field and begin the next. **Anchors, not grammar.** The
+#: canonical order is the fast path, not a straitjacket (plan section 6), so the
+#: parser looks for landmarks rather than requiring a sentence shape.
+_ANCHORS = (
+    ("delivery_date", ("deliver by", "delivering", "deliver", "delivery", "drop off", "drops")),
+    ("pickup_date", ("picking up", "pick up", "pickup", "pu ", "loads", "loading")),
+    ("contact", ("broker is", "broker", "contact is", "contact", "shipper is", "customer is")),
+    ("notes", ("notes", "note that", "note:")),
+)
+
+#: Equipment the Owner actually runs or is offered. Recognised so it does not end
+#: up inside the weight, never validated against -- an unknown trailer type is
+#: still a real load and goes to notes rather than being dropped.
+_EQUIPMENT = ("dry van", "van", "reefer", "flatbed", "step deck", "stepdeck",
+              "box truck", "hotshot", "cargo van", "sprinter", "power only",
+              "conestoga", "curtain side", "trailer")
+
+
+#: The spoken-rate shape, in one place so that reading a rate and removing it
+#: from the sentence can never drift apart.
+_TENS = ("one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+         "thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|"
+         "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety")
+_SPOKEN_RATE_RE = r"\b(?:%s)\s+(?:hundred|%s)\b" % (_TENS, _TENS)
+
+
+def _spoken_number(text: str):
+    """A rate, however it was said. Returns a float or None -- **never zero as a
+    stand-in for silence.**
+
+    Handles `$750`, `750`, `750 dollars`, `seven fifty`, `1,850`. A number it
+    cannot read is left for the caller to ask about, because section 6 allows
+    exactly one question and this is what it is for.
+    """
+    import re
+
+    t = text.lower().replace(",", "")
+    m = re.search(r"\$\s*(\d+(?:\.\d+)?)", t)
+    if m:
+        return float(m.group(1))
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:dollars|bucks|usd)\b", t)
+    if m:
+        return float(m.group(1))
+    # "seven fifty" and friends -- common in speech, and a rate is the one field
+    # worth reaching for, because a capture without it costs a question.
+    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+             "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+             "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+             "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
+             "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+             "seventy": 70, "eighty": 80, "ninety": 90}
+    m = re.search(r"\b(%s)\s+(%s|hundred)\b" % ("|".join(words), "|".join(words)), t)
+    if m:
+        first, second = m.group(1), m.group(2)
+        if second == "hundred":
+            return float(words[first] * 100)
+        if words[first] <= 20 and words[second] >= 20:
+            return float(words[first] * 100 + words[second])
+    return None
+
+
+def parse_dictation(text: str) -> dict:
+    """Turn a spoken capture into the contract's fields.
+
+    **Pure. No microphone, no network, no database** -- so it is testable
+    without hardware, which is the only way a voice feature ever gets tested
+    honestly.
+
+    Plan section 6: *"Parsing is tolerant of natural speech (order deviations,
+    filler); the canonical order is the fast path, not a straitjacket."*
+
+    Three rules it will not break:
+
+    1. **Nothing is invented.** A field the Owner did not say comes back absent,
+       not guessed. Sparse capture is valid capture.
+    2. **Nothing he said is discarded.** Text the parser cannot place goes to
+       `notes` rather than the floor. A capture that quietly loses half a
+       sentence is worse than one that admits it did not understand.
+    3. **At most one question, and only about the rate.** `missing` names what a
+       caller may ask for; the rate is the only entry that ever justifies asking,
+       per section 6.
+
+    Returns `{"fields": {...}, "missing": [...], "heard": "..."}`.
+    """
+    import re
+
+    heard = " ".join(str(text or "").split())
+    body = heard
+    low = body.lower()
+
+    # Strip the wake phrase and any name in front of it.
+    for opener in OPENERS:
+        i = low.find(opener)
+        if i >= 0:
+            body = body[i + len(opener):]
+            break
+    body = body.lstrip(" :,.-")
+
+    fields, low = {}, body.lower()
+
+    # --- notes first: everything after "notes" is his, verbatim, untouched ---
+    for word in ("notes:", "notes", "note that", "note:"):
+        i = low.find(word)
+        if i >= 0:
+            fields["notes"] = body[i + len(word):].strip(" :,.")
+            body = body[:i]
+            low = body.lower()
+            break
+
+    # --- rate ---
+    rate = _spoken_number(body)
+    if rate is not None:
+        fields["rate"] = rate
+        body = re.sub(r"\$\s*[\d,]+(?:\.\d+)?|\b[\d,]+(?:\.\d+)?\s*(?:dollars|bucks|usd)\b",
+                      " ", body, flags=re.I)
+        # Spoken numbers too -- "seven fifty" left in place ends up inside
+        # the destination, which is how "Savannah seven fifty" happens.
+        body = re.sub(_SPOKEN_RATE_RE, " ", body, count=1, flags=re.I)
+        low = body.lower()
+
+    # --- anchored segments, taken from the end backwards so each one only ever
+    #     claims the text after its own landmark ---
+    found = []
+    for key, words in _ANCHORS:
+        for word in words:
+            i = low.find(word)
+            if i >= 0:
+                found.append((i, key, len(word)))
+                break
+    for start, key, width in sorted(found, reverse=True):
+        if key in fields:
+            continue
+        value = body[start + width:].strip(" :,.-")
+        if value:
+            fields[key] = value
+        body = body[:start]
+        low = body.lower()
+
+    # --- equipment, before the lane, so "dry van" never lands in a city ---
+    for kind in sorted(_EQUIPMENT, key=len, reverse=True):
+        # **Word boundaries, always.** "van" lives inside "Savannah", and a
+        # substring match here once turned a destination into "Sa nah". A parser
+        # that quietly mangles a city is worse than one that misses equipment.
+        m = re.search(r"\b%s\b" % re.escape(kind), low)
+        if m:
+            fields["equipment"] = body[m.start():m.end()].strip()
+            body = body[:m.start()] + " " + body[m.end():]
+            low = body.lower()
+            break
+
+    # --- the lane: "X to Y", the one shape every board listing shares ---
+    m = re.search(r"\bto\b", low)
+    if m:
+        left, right = body[:m.start()], body[m.end():]
+        # The destination ends where the sentence does. "Tampa. One pallet" is
+        # two facts and only the first is a city; the rest is cargo and is kept.
+        halves = re.split(r"[.,;]", right, maxsplit=1)
+        destination = halves[0].strip(" :,.-")
+        tail = halves[1].strip(" :,.-") if len(halves) > 1 else ""
+        # The board is whatever leads, before the origin. "DAT. Jacksonville"
+        parts = [p.strip(" :,.-") for p in re.split(r"[.,;]| - ", left) if p.strip(" :,.-")]
+        if len(parts) >= 2:
+            fields["source_board"] = parts[0]
+            fields["origin"] = " ".join(parts[1:]).strip()
+        elif parts:
+            fields["origin"] = parts[0]
+        if destination:
+            fields["destination"] = destination
+        # Whatever followed the destination is still his. Pieces and weight ride
+        # here most often, and the contract takes them freeform.
+        body = tail
+
+    # --- whatever is left is still his. It goes to notes, never to the floor ---
+    leftover = " ".join(body.split()).strip(" :,.-")
+    if leftover:
+        fields["notes"] = (fields.get("notes", "") + " | " + leftover).strip(" |")
+
+    # Pieces and weight ride inside whatever segment carried them; the contract
+    # takes them freeform and the plan says so.
+    for key in ("pieces_weight",):
+        fields.setdefault(key, "")
+
+    missing = [k for k in REQUIRED if not str(fields.get(k) or "").strip()]
+    if fields.get("rate") is not None:
+        missing = [m for m in missing if m != "rate"]
+
+    return {"fields": {k: v for k, v in fields.items() if v not in ("", None)},
+            "missing": missing,
+            "heard": heard}
+
+
+def one_question(missing: list) -> str:
+    """The single question a capture may ask, and only about the rate.
+
+    Section 6: *"Joe asks at most one question, and only for the rate. Missing
+    rate -> 'RATE?' -- Owner answers or says 'skip'; Joe logs either way. Never
+    more than one question per capture; speed outranks completeness."*
+
+    Anything else missing is logged missing. Returns "" when there is nothing
+    worth asking.
+    """
+    return "RATE?" if "rate" in (missing or []) else ""
 
 
 def echo(record: dict) -> str:
