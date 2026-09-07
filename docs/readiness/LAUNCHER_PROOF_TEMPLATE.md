@@ -63,7 +63,62 @@ Use no other words.
 | **Command Mike runs** | Double-click `dispatch.bat` in the Dispatch folder. |
 | **Expected** | A console window opens showing the status block (`DISPATCH - Operations Control`) followed by the numbered menu: Start / Stop / Restart / Open Portal / Refresh status / Quit. |
 | **Result** | `LIVE` |
-| **Observed** | _(paste the first 25 lines of the window here)_ |
+| **Observed** | see below |
+
+**Observed — 2026-09-07, by Mike Zachary, double-clicking `dispatch.bat` in File Explorer.**
+Windows' own file association, not a subprocess. Commit `20e452d` — the code as it stands.
+
+```
+  DISPATCH - Operations Control
+
+    Dispatch              STOPPED
+
+    Version               0.1.0 (portal.__version__)
+    Commit                20e452d208a8e2a2f44bdd9cda738477b0df0739
+    Portal address        http://127.0.0.1:8080
+    Mode                  operational
+                          DISPATCH_MODE is not set; Dispatch defaults to operational.
+    Security settings     CONFIGURED - required settings have real values
+
+    Database              D:\Dispatch Operations\Current Workspace\PortalData\dispatch.db
+    Portal data           D:\Dispatch Operations\Current Workspace\PortalData
+    Operations root       D:\Dispatch Operations
+    Archive root          D:\Archive
+    Memory root           D:\Memory
+    Contract archive      D:\Archive\CIN
+
+    Backup                UNCONFIGURED
+                          No backup location is configured. Set DISPATCH_BACKUP_DIR to the
+                          folder scripts/dispatch_backup.py writes to.
+
+    Logs                  D:\Dispatch Operations\Logs
+    Last start failure    ABSENT - no failure recorded
+
+  [1] > Start            [5] i Version          [Q] Quit
+  [2] @ Open Dispatch    [6] o Restart
+  [3] o Refresh Status   [7] < Reset Session
+  [4] * Settings         [8] # Stop Dispatch    [P] k Reset PIN
+```
+
+*(The menu above is transcribed with plain markers so this file stays readable in any editor. On
+Mike's screen every row carried its real icon — a play triangle, a globe, arrows, a gear, an
+info glyph, an undo mark, a stop square and a key. `dispatch.bat` runs `chcp 65001`, which is why.)*
+
+**Item 1 — `LIVE`.** He typed nothing. The window opened, read the machine, and offered the menu.
+
+**Item 9 — `LIVE`.** Eight controls, `[1]` through `[8]`, in the specified order, each with an icon.
+
+**Item 10 — `LIVE`, and both branches are now proven.** The icons **render** under
+`chcp 65001`, which is what Mike saw. In a legacy `cp1252` console they are **cleanly absent** with
+no replacement characters and no garbage — verified separately, where printing the glyph raised
+`UnicodeEncodeError` and the launcher still produced `[1] Start` intact. The item accepts either;
+Dispatch does both correctly.
+
+**Also confirmed by this one screen:** the status block reads real values off this machine — the
+`D:` storage roots, the real database path, `Security settings CONFIGURED`, `Backup UNCONFIGURED`
+stated honestly rather than hidden, and `Last start failure ABSENT`.
+
+
 
 Alternate entry point, if PowerShell is preferred:
 `powershell -ExecutionPolicy Bypass -File .\Dispatch.ps1`
