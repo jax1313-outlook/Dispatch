@@ -625,9 +625,22 @@ class TestRepositoryCanBriefAColdStartBuilder:
         )
 
     def test_the_cold_start_brief_carries_every_load_bearing_rule(self):
+        """The rules a cold-start builder must meet in the first file they read.
+
+        **`"General Contractor"` was removed from this list on 2026-09-07.** The
+        Owner archived that doctrine -- *"a failed idea, meant all of it to go"*
+        -- so it is no longer a load-bearing rule. The string still appears in
+        `CLAUDE.md`, in the archived-concepts box, which is why this test kept
+        passing while asserting something that had stopped being true. **A test
+        that passes for the wrong reason is worse than one that fails**, so the
+        list follows the doctrine rather than the doctrine following the list.
+
+        The rules people associated with it -- Single Source of Truth,
+        degradation, use-the-provider -- were never its property and are asserted
+        on their own below.
+        """
         brief = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
         for clause in (
-            "General Contractor",
             "System of Record",
             "70 MPH Test",
             "final authority",
@@ -635,11 +648,32 @@ class TestRepositoryCanBriefAColdStartBuilder:
             "Degradation is permitted",
             "OPERATIONALLY PROVEN",
             "Outlook",
+            # Ruled since 2026-09-05 and load-bearing from the first reading.
+            "node and tablet",
+            "TEST REALITY RULE",
         ):
             assert clause in brief, (
                 f"CLAUDE.md no longer states {clause!r}. It is the first file a cold-start "
                 "builder reads; a rule missing from it is a rule that will be broken."
             )
+
+    def test_archived_concepts_are_not_asserted_as_live_doctrine(self):
+        """The other half. An archived concept must stay *named* -- deleting it
+        is how it gets reinvented -- but it must not be listed among the rules a
+        builder is required to follow.
+
+        This is the guard that would have caught the 2026-09-07 tension: the
+        General Contractor string sitting in the load-bearing list while the
+        doctrine behind it had been archived.
+        """
+        brief = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+        box = brief[brief.index("Archived concepts"):]
+        for concept in ("General Contractor", "Manager component"):
+            assert concept in box, (
+                f"{concept!r} left the archived-concepts box. An archived concept that is "
+                "deleted rather than recorded is one somebody reinvents."
+            )
+            assert "ARCHIVED" in box
 
 
 # ── The visible interface ────────────────────────────────────────────────────

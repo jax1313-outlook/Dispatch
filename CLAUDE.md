@@ -104,25 +104,19 @@ a reviewer — the decision-maker. Software, automation and AI in this repositor
 
 ### Dispatch's standing in its own ecosystem
 
-> **Dispatch is the General Contractor, System of Record, and Operational Authority.**
->
-> Dispatch coordinates core operational work and uses external wheels or optional plug-ins
-> where appropriate.
->
-> **Dispatch remains complete and operational without optional plug-ins.**
+**Dispatch is the System of Record and the Operational Authority.** Operational truth lives in
+Dispatch; a plug-in's copy is a copy. Authority is over *operations*, never over Mike's decisions
+(§4).
 
-*(General Contractor Doctrine, `DECISION_LOG.md` 2026-08-25.)*
+The physical shape of the program — what runs where, and what may assume connectivity — is
+**§5A, the node and tablet architecture.** That is the current model and it is where a builder
+should look first.
 
-Three things follow, and they are the ones builders get wrong:
-
-- **General Contractor** — Dispatch coordinates. It does not rebuild an external wheel that
-  already turns. Use the provider; own the interface.
-- **System of Record** — operational truth lives in Dispatch. A plug-in's copy is a copy.
-- **Operational Authority** — with the standing limit that it is authority over *operations*,
-  never over Mike's decisions (§4).
-
-The third line of the doctrine is the testable one, and `tests/test_repository_doctrine.py`
-tests it.
+> **The General Contractor Doctrine was archived on 2026-09-07 — a failed idea, all of it.**
+> Nothing was carried forward from it. The rules people associate with it — Single Source of
+> Truth, *degradation is permitted, incapacity is not*, and *use the provider, own the interface*
+> — were never its property. They are stated in **§5.1** and **§5.4** and stand there on their
+> own, unchanged. The doctrine itself is in **§10.1**, as history.
 
 ### The two halves of this repository, and why both are here
 
@@ -261,12 +255,12 @@ Outlook schedule data. It is **not an independent calendar database**. Use famil
 
 ### 5.6 There is no Manager component
 
-**There is no Manager component in the current architecture. Do not create, restore,
-reference, or infer a Manager component, Manager agent, or Manager authority.**
+**There is no Manager component in the current architecture.** The concept was archived on
+2026-09-07 and now lives in **§10.2** as history rather than as an active prohibition.
 
-`docs/MANAGER.md` is the permanent record of a capability that was *named* in planning and
-*never built*; it authorizes no code, no route, no data model and no runtime behaviour. It
-is history, not a backlog item. Guarded by `tests/test_repository_doctrine.py`.
+**The code guard did not move with it.** `TestNoManagerDoctrine` still forbids Manager modules,
+authority, routing and tables from appearing in code. **Archiving a concept is not permission to
+build it.**
 
 ### 5.7 THE MIKE RULE
 
@@ -276,6 +270,71 @@ shares a clever abstraction. Do not "clean up" duplication across subsystem boun
 without a decision recorded in `DECISION_LOG.md`.
 
 ---
+
+## 5A. The current architecture — node and tablet
+
+**Ratified in `docs/campaign/CONOPS_v1.1.md`.** This is what Dispatch *is*, physically, and it
+governs where code belongs.
+
+**Dispatch operates as a node-and-terminal architecture.** The driver interacts with a tablet.
+Dispatch operates from a laptop node. Joe is a Dispatch capability living on the node,
+communicating with the driver through the tablet.
+
+### The Dispatch Node
+
+A laptop in a ventilated Pelican case inside the truck. It owns **Mission Records, Mission Cards,
+workflow, scheduling, COMI, Publisher, Library, Archive, Route Risk, Joe services, MCP services,
+APIs and audit records.**
+
+> **The node is the operational center of gravity. The node owns workflow and records.**
+
+**Unattended recovery (R5):** the node must survive power loss without a keyboard — BIOS
+auto-power-on, auto-login, services on boot, and a self-test reporting node status to the portal on
+recovery. *A bad bump on I-10 costs seconds, not a roadside IT session.*
+
+### The Driver Workstation
+
+A cellular-enabled tablet. It owns **the phone, microphone, speaker, headset, camera, the Driver
+Portal, the Mission Card display and the Joe interface.**
+
+> **The tablet is not Dispatch. The tablet is the driver's workstation. The tablet is a portal into
+> Dispatch.**
+
+**Trust boundary (R9):** the tablet holds **no records and no standing secrets.** Portal sessions
+authenticate to the node, expire, and are revocable from the node. **A stolen tablet is a hardware
+loss, never a data loss.** `DISPATCH_JOE_TOKEN` never lives on the tablet.
+
+### Connectivity is intermittent by default
+
+The tablet provides the cellular link. The node treats internet as **intermittent by design** —
+outbound work queues and retries honestly. Mission data lives on the node; internet is needed only
+for external services.
+
+| Connectivity | Dispatch (node) | Joe voice | Portal (tablet ↔ node) |
+|---|---|---|---|
+| **Online** | Full | Full | Full |
+| **Offline** | **Full** — records, cards, workflow | **DOWN** — the rented brain is in the cloud | Full, by touch |
+
+The portal shows Joe's state in locked vocabulary: **`JOE LIVE` / `JOE DOWN`.**
+
+**Loss of internet never stops local operation.** It silences the co-driver's voice until signal
+returns. A surface that stops working offline, or that hides the difference, is a defect.
+
+### Records survivability (R8)
+
+Nightly encrypted backup off-node whenever connectivity allows; the append-only audit ships more
+often. Destination is the home NAS. **"Recoverable" and "Portable" are procedures, not adjectives**
+— a restore test to a spare machine is part of the habit, not a claim.
+
+### What this means for where code goes
+
+- Anything that owns a record, a workflow or an audit entry belongs **on the node**.
+- Anything that is a screen, a microphone or a speaker belongs **on the tablet** — and holds
+  nothing.
+- **No feature may assume connectivity.** Offline is the default case, not the error case.
+
+---
+
 
 ## 6. The truth vocabulary — the most important convention here
 
@@ -336,16 +395,41 @@ Do not mark an item verified without actual runtime evidence. Current readiness:
   rule path. Claude agents are for summarization, recommendation and drafting — always
   labelled, never load-bearing.
 - One concern per module. New rules and new connectors are new files.
-- Never weaken fail-closed authentication, CSRF protection, token expiry/revocation, or
-  ownership checks for convenience.
+- ~~Never weaken fail-closed authentication, CSRF protection, token expiry/revocation, or
+  ownership checks for convenience.~~ **SUPERSEDED 2026-09-07 by Owner ruling.** Security becomes
+  a **plug-in module on the deferred list**, alongside Publisher, Library, Librarian and Archive:
+
+  > *"At this point, my concept is an open application. So please disregard and move around, work
+  > around, bypass whatever needs to be done on any security issue. We have serious things to build
+  > without dealing with that at this point."*
+
+  **Kept visible rather than deleted**, because the rule was right when written and will be right
+  again. What replaced it, and the one condition that changes it back, are in
+  `docs/DISPATCH_SECURITY_DEFERRAL.md`. **The short version: `PORTAL_HOST` is `127.0.0.1`, so
+  "open application" means open *on this machine*. The day Phase 3 binds to the network for the
+  tablet, this deferral must be re-read rather than inherited.**
 - Never commit runtime secrets, logs containing secrets, rehearsal databases, evidence
   files, or backups.
 
 **Tests.**
 
-- The suite must stay at **0 failed / 0 skipped / 0 warnings**.
+- **The suite has a known Windows baseline of 12 failures.** All are `WinError 1314` — the
+  symlink-creation privilege Windows withholds — in `test_launcher`, `test_rehearsal_and_proof`
+  and `test_sandbox_survey`. They are environmental, not defects, and they are the same twelve
+  every run.
+
+  **The rule is therefore: no new failures, and run the whole suite before pushing — not the files
+  you touched.** On 2026-09-07 Code pushed two failing tests twice in one day by running targeted
+  tests and reporting them as green. The old wording of this rule (`0 failed / 0 skipped /
+  0 warnings`) was true on CI and false on this machine, and a rule that is false where the work
+  happens gets ignored rather than obeyed.
 - Gated coverage (`cin_lite`, `dispatch`, `portal`) must not drop below its current figure.
 - Do not skip, weaken, remove, or xfail a test to get green.
+- **THE TEST REALITY RULE.** *A test that builds its own precondition proves the logic and says
+  nothing about whether the application can reach it.* Where a state matters, one test must arrive at it the way the screen
+  does. This has now caused four defects: `artifacts_held` written only by tests, `rehearsal_badge`
+  available to every template and called by six, `purge_session` implemented and called by nothing,
+  and the entire Joe contract layer verified behind a login gate that `TESTING=True` switched off.
 
 **Reporting.**
 
@@ -354,38 +438,79 @@ Do not mark an item verified without actual runtime evidence. Current readiness:
 
 ---
 
-## 8. Current build status (2026-08-25)
+## 8. What is proven, and where the status lives
+
+**There is no status block in this file any more, and that is deliberate.**
+
+The old §8 was headed *Current build status (2026-08-25)* and by 2026-09-07 four of its
+statements were false — including *"Nothing in this repository has been run on Mike's Windows
+laptop"*, which `docs/readiness/KNOWN_LIMITATIONS.md` §0 contradicts in its own title, and
+*"there is no copy on Mike's machine"*, written in a file living on that machine.
+
+A dated status block inside a binding doctrine file rots, because doctrine is re-read and status
+is re-written and they do not keep the same schedule. That is the **Operator Document Rule**
+(`docs/governance/OPERATOR_DOCUMENT_RULE.md`) applied to this file: *if the code changed, would
+this be wrong?* Sections 1–7 — no. The status block — yes, and it was.
+
+**Status now lives in one place:**
 
 | | |
 |---|---|
-| Version | `0.1.0` |
-| Suite | **3,696 passed** · 0 failed / 0 skipped / 0 warnings |
-| Gated coverage | **94.74%** over `cin_lite` + `dispatch` + `portal` (floor 90%) |
-| Ungated | `dispatch_launcher/` at 87.75% — Windows-only branches; see `docs/readiness/OPERATIONAL_PROOF.md` §2.1 |
-| Laptop readiness | **UNVERIFIED** — see below |
+| **Where the program stands today** | `D:\MD Files\DISPATCH_CURRENT_STATE.md` |
+| What is proven and what is not | `docs/readiness/OPERATIONAL_PROOF.md` |
+| What is broken or missing | `docs/readiness/KNOWN_LIMITATIONS.md` |
+| The first-start acceptance items | `docs/readiness/LAUNCHER_PROOF_TEMPLATE.md` |
 
-**IMPLEMENTED:** the Spine lifecycle engine; loads, drivers, equipment, capacity,
-milestones, evidence and POD; the Driver Portal; IFTA through finalization, exception
-detection and receipt vision pre-fill; backup and restore; CSRF across mutating routes; the
-connector boundary with eight connectors; rehearsal mode; the twenty-step operational-proof
-system; the Dispatch Launcher and Control Center v1.
+### What stays here, because it is doctrine and not status
 
-**IMPLEMENTED BUT NOT OPERATIONALLY PROVEN:** all of it. Every item above is software
-behaviour verified by the suite. Nothing in this repository has been run on Mike's Windows
-laptop.
+**IMPLEMENTED is not OPERATIONALLY PROVEN.**
 
-**UNVERIFIED:** the fifteen first-start acceptance items in
-`docs/readiness/LAUNCHER_PROOF_TEMPLATE.md`, and the twenty steps of the load proof in
-`docs/readiness/OPERATIONAL_LOAD_PROOF_TEMPLATE.md`.
+- **IMPLEMENTED** — the code exists and the suite exercises it.
+- **OPERATIONALLY PROVEN** — it has run **on Mike's machine** and evidence was recorded.
 
-**Every external system is `UNCONFIGURED`.** No ELD, GPS, traffic, weather, load board,
-mapping, accounting, scanner or Outlook client is connected.
+**The suite is evidence of software behaviour only.** It is never operational proof. A green run
+says nothing about whether Dispatch starts on a Windows laptop, finds the `D:` drive, or keeps a
+load across a restart.
 
-**Dispatch does not know a driver's hours of service.** There is no ELD feed. Any surface
-that implies otherwise is a defect.
+Never represent sample data as live data · a requested action as a completed action · an interface
+definition as a working integration · test success as operational deployment proof.
 
-**The next operational blocker** is stated at the end of
-`docs/readiness/KNOWN_LIMITATIONS.md` and is kept current.
+**The completion gate has not moved:** Mike runs a real load, end to end, on his own machine. Not
+"the tests pass". Not "the feature is implemented".
+
+---
+
+## 8A. Doctrine ruled since 2026-09-05 — read these, they are binding
+
+The campaign package in the block at the top of this file governs the JOE/MCP campaign. **These
+govern Dispatch itself** and were ruled during the screen walk.
+
+| Ruled | Doctrine | Where |
+|---|---|---|
+| 2026-09-06 | **Rehearsal data** — tagged at creation · visibly marked wherever displayed · never represented as live operational truth · must not silently contaminate financial reporting · may be viewed through an intentional mode or filter | `docs/DISPATCH_REHEARSAL_DATA_DOCTRINE.md` |
+| 2026-09-06 | **The Operator Document Rule** — how to operate, configure, start, stop, test or validate a feature belongs in the repository; research, forensics, recovery, analysis, historical records and planning belong in `D:\MD Files` | `docs/governance/OPERATOR_DOCUMENT_RULE.md` |
+| 2026-09-07 | **Security deferral** — security becomes a plug-in module on the deferred list; it must not delay the build | `docs/DISPATCH_SECURITY_DEFERRAL.md` |
+
+### Vocabulary ruled 2026-09-06 — one word, not three
+
+**The party who controls a load is the `Customer`.** Not broker, not shipper. Mike's reason, and it
+is the operative one: *"I use Shipper/Broker synonymously, they are interchangeable, because I have
+no idea which is booking the load."* Broker-versus-shipper is a distinction Dispatch was making
+that the driver does not make.
+
+**Display text on the Driver surfaces was changed. The stored field names were not** — 1,539
+occurrences across 115 Python files, plus `broker_shipper`, `broker_contacts` and `broker_id` in
+the schema. **Renaming those is one deliberate mission after the screen walk, never in passing.**
+The register of every legacy name is `D:\AAA-Dispatch-Screen-Build\_SHARED\NAME_REGISTER.md`.
+
+### The contracts are seven, not six
+
+`POST /api/joe/opportunity` — Opportunity Capture — was ratified 2026-09-06 and built 2026-09-07.
+
+**§8.1 of the governing document lists six.** The seventh is ratified in
+`OPPORTUNITY_CAPTURE_PLAN.md` §2. The equality test in `tests/test_contract_neutrality.py` names
+the source of each contract precisely, and a test holds that discrepancy visible so it is re-read
+rather than tidied away.
 
 ---
 
@@ -394,7 +519,7 @@ that implies otherwise is a defect.
 | | |
 |---|---|
 | Start here | `CLAUDE.md` (this file) |
-| Get Dispatch onto a laptop | `docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md` — step one; there is no copy on Mike's machine |
+| Get Dispatch onto a laptop | `docs/operations/GET_DISPATCH_ONTO_YOUR_LAPTOP.md` — **historical.** The working copy is `D:\Dispatch` and has been since 2026-09-05 |
 | Start Dispatch | **Double-click `DISPATCH_START_HERE.cmd`.** Why that file and not `dispatch.bat`: `docs/readiness/LAUNCH_PATH.md` |
 | First start, in detail | `DISPATCH_FIRST_START_GUIDE.md` |
 | Architecture and the document map | `docs/architecture/DISPATCH_ARCHITECTURE.md` |
@@ -419,3 +544,96 @@ python -m dispatch_launcher status        # what this machine is configured with
 python -m dispatch_launcher start         # start Dispatch
 python portal/app.py                      # start the portal directly
 ```
+
+---
+
+## 10. Archived concepts — the What If box
+
+**Owner ruling, 2026-09-07.** These were architecture once. **They are not now.** They are kept
+here, named and dated, because a concept that is deleted comes back — someone reinvents it, or
+finds a stray reference and assumes it is live.
+
+**Nothing in this section authorizes code.** It is architectural history.
+
+**The rule for everything in this box:** *do not build it, do not restore it, do not infer it from a
+surviving reference — and do not delete the record of it either.*
+
+---
+
+### 10.1 The General Contractor Doctrine — ARCHIVED 2026-09-07
+
+*Ruled `DECISION_LOG.md` 2026-08-25. Archived by Owner ruling 2026-09-07.*
+
+It said:
+
+> **Dispatch is the General Contractor, System of Record, and Operational Authority.**
+>
+> Dispatch coordinates core operational work and uses external wheels or optional plug-ins where
+> appropriate. **Dispatch remains complete and operational without optional plug-ins.**
+
+**Why it is archived.** *Owner ruling, 2026-09-07: "General Contractor was a failed idea. Meant all
+of it to go."*
+
+It described Dispatch as the coordinating centre of an ecosystem of optional plug-ins. The ratified
+architecture is **node and tablet** (§5A) — a physical model of where records and workflow live, not
+a contracting metaphor about what Dispatch presides over. The metaphor was doing no work the node
+model does not do better, and it invited a shape the program never took.
+
+**Nothing was carried forward. There are no survivors.**
+
+An earlier draft of this section tried to rescue three clauses from it. That was wrong, and the
+Owner said so. **Those rules were never the doctrine's property** — they have their own homes and
+always did:
+
+| Rule people associate with it | Where it actually lives |
+|---|---|
+| Single Source of Truth | **§5.1** and D4/D5 of the Driver-First Doctrine |
+| *Degradation is permitted. Incapacity is not.* | **§5.4**, plug-in separation |
+| *Use the provider; own the interface.* | **§5.4** and `docs/connectors/PROVIDER_INSERTION.md` |
+
+They survive because they are independently true, **not** because anything of this doctrine
+survives. Do not cite this section as their authority.
+
+---
+
+### 10.2 The Manager component — ARCHIVED 2026-09-07
+
+*Never built. Named in planning. Prohibited from 2026-08-25. Archived by Owner ruling 2026-09-07.*
+
+**There is no Manager component in the current architecture.** `docs/MANAGER.md` is the permanent
+record of a capability that was named in planning and never built. It authorizes no code, no route,
+no data model and no runtime behaviour.
+
+**What changes with archiving, and what does not.** The concept moves from *prohibition* to
+*history* — it is no longer an active rule a builder must be warned about, it is a thing that was
+considered and set down.
+
+**The code guard stays.** `TestNoManagerDoctrine` in `tests/test_repository_doctrine.py` still
+forbids Manager modules, Manager authority, Manager routing and Manager-owned tables from appearing
+in code. **Archiving a concept is not permission to build it.** If it is ever to be built, that is a
+new Owner ruling and a new mission — not an inference from this box.
+
+Manager work exists on an unmerged branch (866 lines plus 790 test lines), and a merged, running
+Manager exists in `Dispatch-Old`. **Neither is authorized.** They are why the guard stays.
+
+> ### `Dispatch-Old` — parts recovery only
+>
+> **Owner ruling, 2026-09-07:** *"Dispatch-Old was a working sandbox and should only be regarded
+> for parts recovery only."*
+>
+> It is **not** a reference implementation, **not** a source of doctrine, and **not** evidence that
+> something is authorized. That a thing runs there means it was tried, not that it was ruled.
+>
+> **Take a part from it only under an Owner-authorized mission, and say where the part came from.**
+> Lifting behaviour out of a sandbox and into Dispatch without a ruling is how an archived concept
+> comes back through the side door — which is exactly what the Manager guard above exists to stop.
+
+---
+
+### 10.3 How something enters or leaves this box
+
+**Enters:** an Owner ruling, dated, with what replaced it named.
+**Leaves:** an Owner ruling and a new mission. Never by a builder deciding a surviving reference
+looks live.
+
+---
