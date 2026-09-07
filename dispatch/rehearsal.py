@@ -90,6 +90,10 @@ REHEARSAL_TABLES: dict[str, str] = {
     "equipment": "equipment_id",
     "milestones": "milestone_id",
     "evidence": "evidence_id",
+    # The seventh contract. Added 2026-09-07 -- Opportunity Capture was built
+    # without it, which made rule 1 of the rehearsal doctrine (tagged at
+    # creation) impossible for the newest records in the program.
+    "opportunities": "opportunity_id",
     "exceptions": "exception_id",
     "pod_packages": "pod_id",
 }

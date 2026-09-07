@@ -211,9 +211,17 @@ def classify(payload: dict, existing: list) -> tuple:
     considered. Same board and same lane makes it a candidate, and then the
     money and the date have to agree before it is called one load.
     """
+    from dispatch import rehearsal
+
     board = _clean(payload.get("source_board")).lower()
     lane = _lane(payload)
     rate = _rate(payload.get("rate"))
+    # A rehearsal capture and a live one are never the same load, however alike
+    # they look. Merging across that line would put rehearsal data inside an
+    # operational record and there would be no tag left to find it by.
+    session = rehearsal.active_session_id()
+    existing = [e for e in existing
+                if str(e.get("rehearsal_session") or "") == session]
 
     ambiguous = None
     for candidate in existing:
@@ -328,6 +336,15 @@ def capture(payload: dict, *, driver: str, channel: str = "") -> dict:
             "INSERT INTO opportunities (%s) VALUES (%s)"
             % (", ".join(row), ", ".join("?" * len(row))),
             tuple(row.values()))
+
+    # **Tagged at creation** -- rule 1 of the rehearsal data doctrine. This is a
+    # no-op when no rehearsal is active, so the operational path is unchanged.
+    # It was missing when the contract was first built, which made the newest
+    # records in the program the only ones that could not be told apart from
+    # real freight.
+    from dispatch import rehearsal
+
+    rehearsal.tag_if_active("opportunities", opportunity_id)
 
     stored = get(opportunity_id)
     stored["verdict"] = "AMBIGUOUS" if verdict == "AMBIGUOUS" else "NEW"

@@ -115,7 +115,8 @@ CREATE TABLE IF NOT EXISTS opportunities (
     state                 TEXT NOT NULL DEFAULT 'OPEN',
     flag                  TEXT NOT NULL DEFAULT '',
     possible_duplicate_of TEXT NOT NULL DEFAULT '',
-    origins               TEXT NOT NULL DEFAULT ''
+    origins               TEXT NOT NULL DEFAULT '',
+    rehearsal_session     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS retention (

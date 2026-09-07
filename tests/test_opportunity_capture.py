@@ -282,3 +282,58 @@ class TestTheDictationOrderComesFromTheForm:
         monkeypatch.setattr(mt, "TEMPLATE", tuple(flipped))
         assert opp.dictation_order().index("destination") < \
                opp.dictation_order().index("origin")
+
+
+class TestCaptureObeysTheRehearsalDoctrine:
+    """**The gap this closes was mine.** The seventh contract was built on
+    2026-09-07 without a `rehearsal_session` column, one day after the Owner
+    ratified the rehearsal data doctrine. Rule 1 -- *tagged at creation* -- was
+    impossible for the newest records in the program, and the first live capture
+    proved it: an untagged test record in the operational database,
+    indistinguishable from real freight. That is finding F-4, reintroduced.
+    """
+
+    def test_a_capture_outside_a_rehearsal_is_operational(self, client):
+        _post(client)
+        record = opp.all_open()[0]
+        assert record["rehearsal_session"] == ""
+
+    def test_a_capture_inside_a_rehearsal_is_tagged_at_creation(self, client):
+        """Not tagged afterwards. At creation, by the same `tag_if_active` the
+        other five record types use."""
+        from dispatch import rehearsal
+
+        session = rehearsal.start_session(label="capture test", actor_id="tester")
+        with rehearsal.rehearsal_mode(session["session_id"]):
+            _post(client)
+        assert opp.all_open()[0]["rehearsal_session"] == session["session_id"]
+
+    def test_opportunities_is_a_rehearsal_tagged_table(self):
+        from dispatch import rehearsal
+
+        assert "opportunities" in rehearsal.REHEARSAL_TABLES
+        assert rehearsal.REHEARSAL_TABLES["opportunities"] == "opportunity_id"
+
+    def test_a_rehearsal_capture_never_merges_into_a_live_one(self, client):
+        """The rule that makes the tag mean something. Two identical captures,
+        one live and one in rehearsal, are two records -- because merging them
+        would hide rehearsal data inside an operational record with no tag left
+        to find it by."""
+        from dispatch import rehearsal
+
+        _post(client, pickup_date="2026-09-10")
+        session = rehearsal.start_session(label="isolation", actor_id="tester")
+        with rehearsal.rehearsal_mode(session["session_id"]):
+            d = _post(client, pickup_date="2026-09-10").get_json()
+
+        assert d["verdict"] == "NEW", "a rehearsal capture merged into live data"
+        assert len(opp.all_open()) == 2
+        tags = sorted(r["rehearsal_session"] for r in opp.all_open())
+        assert tags == ["", session["session_id"]]
+
+    def test_a_purge_would_find_it(self):
+        """Rule 5 -- an intentional mode or filter. The tag is only worth having
+        if `purge_session` can act on it."""
+        from dispatch import rehearsal
+
+        assert "opportunities" in rehearsal.REHEARSAL_TABLES
