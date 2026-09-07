@@ -4,6 +4,34 @@
 **Date:** 2026-09-07
 **To:** Claude Code (Staff Engineer role per JOE_CONVERSATIONAL_MISSION.md §1B)
 
+
+## OWNER RULINGS — recorded 2026-09-07
+
+**On Step 0:**
+
+1. **The seven fresh documents govern.** Both old governing copies and the nine drafts vaulted per
+   the 09-05 procedure, move log updated. *(Executed — vault item 5. Only **one** old governing copy
+   existed; the second was the fresh document itself and was left in place. Ten files moved.)*
+2. **`CONOPS_v1.1.md` is now present.** *(Verified — 8,871 b, 2026-09-07 12:18.)*
+3. **Relocate the Jules repository** to its own top-level folder. *(Class 2, stated and confirmed.
+   Executed — vault item 6. `D:\Joe Assistant\Build\Jules` → `D:\Jules`, verified intact.)*
+4. **The Word files were format-saves only**, not ahead of the exports.
+
+**On Step 1:**
+
+5. **The governance package stays in `docs/campaign/`**, not at the literal repository root. Ruled
+   2026-09-07 on Code's flagged deviation: the root already holds sixty `.md` files, so seven more
+   would be less findable rather than more. `CLAUDE.md` at the root points at them.
+
+**Still open, reported not resolved:**
+
+- **Four further mission drafts** exist inside the Joe-Assistant repository, byte-identical to
+  drafts already vaulted. Left in place; moving them is Class 2 in a repository this order does not
+  concern.
+- **The §8.1 "seven" wording.** §8.1 lists six endpoints; the seventh comes from
+  `OPPORTUNITY_CAPTURE_PLAN.md`. The equality test must name its source exactly or it will drift.
+
+
 ---
 
 ## Read first, in this order
