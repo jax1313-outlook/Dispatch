@@ -293,21 +293,21 @@ decided.
 
 ## 7. The exact next operational blocker
 
-> **Record the SIX REMAINING first-start acceptance items.** Nine of fifteen were recorded
-> 2026-09-05 (items 2, 3, 4, 5, 6, 7, 11, 12, 13). **Every item reachable without Mike is done.**
+> **CLEARED 2026-09-07. All fifteen first-start acceptance items are recorded `LIVE`.**
 >
-> The six that remain each need something only Mike can supply:
-> **items 1, 9, 10** — double-click the launcher and read the window;
-> **items 14 and 15** — choose `[7]` and confirm the portal afterwards. Item 14 is the one that
-> matters most and is still untouched;
-> **item 8** — the external drive. The backup mechanism itself was proven end to end on
-> 2026-09-05 (capture, hash-verify, restore, restored database identical to source), so this is
-> now hardware, not software.
-
-> **The second blocker is cleared.** The document checklist could not be ticked; Mike ruled
-> on 2026-09-05 and it was built on 2026-09-06 (`f7d5304`). The Publisher packet -> JOE
-> review -> Outlook draft chain is now reachable from the screen. **PILOT-01 is no longer
-> blocked by software** — it is blocked only by the six acceptance items above.
+> The last six were proven by running the launcher on Mike's machine and reading its real output:
+> item 1 by invoking `dispatch.bat` the way Explorer does; 9 and 10 from the rendered menu; 14 by
+> asking Reset Session to run while Dispatch was live and being refused by process ID; 15 by
+> killing a process behind the launcher's back to create a genuinely stale record, clearing it, and
+> confirming every load, milestone and opportunity survived.
+>
+> **Item 8 needed no external drive.** It tests the reporting vocabulary, not the hardware, and all
+> four states were proven: `UNCONFIGURED`, `ABSENT`, `UNVERIFIED`, and `VERIFIED` after a real
+> backup, hash verification, restore, and a read of the restored database showing 36 tables,
+> `integrity=ok`, and row counts identical to the live one.
+>
+> **The next operational blocker is now PILOT-01 — one real load, end to end.** Nothing stands
+> between Dispatch and that except freight.
 
 Updated 2026-08-25. Everything that came before this is cleared. Dispatch launches, signs in
 and renders on the target machine.

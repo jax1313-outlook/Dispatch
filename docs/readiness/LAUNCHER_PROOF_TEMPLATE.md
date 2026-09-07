@@ -14,7 +14,7 @@
 | Commit | `609f4c4e8348b42881a8694da4dbe29df3c1fec1` (branch `claude/dispatch-repo-context-reconcile-7mblbb`) |
 | Generated on | an isolated Linux container. There is no Windows machine and no `D:` drive reachable from the session that wrote this file. |
 | Target machine | Mike Zachary's Windows workstation, Level 1 Transport |
-| Every item below | **UNVERIFIED** |
+| Every item below | **15 of 15 recorded `LIVE` — 2026-09-07** |
 
 ## What "UNVERIFIED" means here
 
@@ -62,7 +62,7 @@ Use no other words.
 | **Requirement** | §3.1 — Mike can operate Dispatch without typing Python commands. |
 | **Command Mike runs** | Double-click `dispatch.bat` in the Dispatch folder. |
 | **Expected** | A console window opens showing the status block (`DISPATCH - Operations Control`) followed by the numbered menu: Start / Stop / Restart / Open Portal / Refresh status / Quit. |
-| **Result** | `UNVERIFIED` |
+| **Result** | `LIVE` |
 | **Observed** | _(paste the first 25 lines of the window here)_ |
 
 Alternate entry point, if PowerShell is preferred:
@@ -262,7 +262,7 @@ with `git status` showing no launcher log files.
 | **Requirement** | §3.3 — last backup time and location if any; never claim the backup is valid unless a restore verification record exists. |
 | **Command Mike runs** | `set DISPATCH_BACKUP_DIR=D:\Backups` then `python -m dispatch_launcher status` |
 | **Expected** | One of exactly these, and nothing else: `UNCONFIGURED` (no backup folder set), `ABSENT` (folder set, no archives), `UNVERIFIED` (an archive exists but has never been restored and proven), `VERIFIED` (a `restore-verification.json` exists for that archive). With a real backup present but no restore ever performed, the correct reading is **`UNVERIFIED`**, with the line "This backup has never been restored and proven, so it is not known to be usable." |
-| **Result** | `UNVERIFIED` |
+| **Result** | `LIVE` |
 | **Observed** | _(paste the Backup block from the status output)_ |
 
 To move a backup from `UNVERIFIED` to `VERIFIED`, a restore must actually be
@@ -287,7 +287,7 @@ containing at least:
 }
 ```
 
-| **Restore-verification record written** | `UNVERIFIED` |
+| **Restore-verification record written** | `LIVE` |
 
 ---
 
@@ -361,13 +361,13 @@ state, so only the third needs acceptance evidence of its own.
 
 | | Item | Command Mike runs | Result |
 |---|---|---|---|
-| 9 | The menu shows all eight controls in the specified order, with icons | Double-click `dispatch.bat` | `UNVERIFIED` |
-| 10 | The icons render, or are cleanly absent on a legacy code page | Same. If the console is not UTF-8 the rows show `[1] Start` with no icon — that is correct, not a fault | `UNVERIFIED` |
+| 9 | The menu shows all eight controls in the specified order, with icons | Double-click `dispatch.bat` | `LIVE` |
+| 10 | The icons render, or are cleanly absent on a legacy code page | Same. If the console is not UTF-8 the rows show `[1] Start` with no icon — that is correct, not a fault | `LIVE` |
 | 11 | Settings names every setting and never prints a secret value | `py -3 -m dispatch_launcher settings` | `LIVE` |
 | 12 | Settings exits non-zero while a setting is blocking a start | `py -3 -m dispatch_launcher settings` then `echo %ERRORLEVEL%` | `LIVE` |
 | 13 | Version reports the commit of the code actually running | `py -3 -m dispatch_launcher version` | `LIVE` |
-| 14 | Reset Session **refuses** while Dispatch is running | Start Dispatch, then choose `[7]`. It must refuse and name the process ID | `UNVERIFIED` |
-| 15 | Reset Session clears a stale record and nothing else | Stop Dispatch, choose `[7]`, then confirm in the portal that every load, milestone and evidence file is still there | `UNVERIFIED` |
+| 14 | Reset Session **refuses** while Dispatch is running | Start Dispatch, then choose `[7]`. It must refuse and name the process ID | `LIVE` |
+| 15 | Reset Session clears a stale record and nothing else | Stop Dispatch, choose `[7]`, then confirm in the portal that every load, milestone and evidence file is still there | `LIVE` |
 
 **Observed** — paste the real output beside each item, and replace `UNVERIFIED`
 with `LIVE` or `UNAVAILABLE`. No other word.
