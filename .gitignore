@@ -57,3 +57,7 @@ run/
 
 # Local test-run scratch, never committed
 .suite_run.txt
+
+# Runtime debris, per EXEC-ORDER v1.0 Step 1
+*.pyc      # compiled bytecode
+*.db       # operational databases never enter the repository
