@@ -184,10 +184,23 @@ class TestOneTemplateForEveryKindOfWork:
     def test_every_way_work_arrives_is_supported(self):
         """TEXT joined the list when the operator named a text message among
         the ways a load turns up. A source is a label on the record, so adding
-        one costs a constant and changes no workflow."""
+        one costs a constant and changes no workflow.
+
+        **DIRECT joined on 2026-09-06** and is the one that matters: it is
+        spelled to match `models.LOAD_SOURCES`, so a hand-opened mission
+        survives into the load record instead of booking with no source. The
+        older values stay valid because records already carry them.
+        """
         assert set(mt.INTAKE_SOURCES) == {
-            "SWEEP", "EMAIL", "JOE", "CUSTOMER", "PHONE", "COURIER", "TEXT",
-            "API"}
+            "SWEEP", "DIRECT", "EMAIL", "JOE", "CUSTOMER", "PHONE", "COURIER",
+            "TEXT", "API"}
+
+    def test_the_source_a_hand_opened_mission_gets_reaches_the_load_record(self):
+        """Why DIRECT exists. Five of the six values the form used to offer were
+        absent from LOAD_SOURCES, so booking silently blanked the field."""
+        from dispatch.models import LOAD_SOURCES
+
+        assert mt.SOURCE_DIRECT.lower() in LOAD_SOURCES
 
     def test_the_ones_a_person_picks_exclude_the_machine_paths(self):
         offered = [key for key, _, _ in mt.MANUAL_SOURCES]

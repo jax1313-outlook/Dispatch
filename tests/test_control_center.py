@@ -281,11 +281,34 @@ class TestSettings:
 
     def test_the_change_command_is_setx_not_set(self, facts):
         """`set` lasts until the window closes, which produces the most
-        confusing possible bug: it works this afternoon and is broken tomorrow."""
+        confusing possible bug: it works this afternoon and is broken tomorrow.
+
+        **One exception, added 2026-09-06.** `DISPATCH_REHEARSAL_SESSION` is
+        session-scoped on purpose: made permanent it would put every future
+        start in rehearsal mode, including PILOT-01, so the real load would be
+        recorded as a test. There the confusing bug is the *desired* behaviour —
+        it should stop working when the window closes.
+        """
         view = settings.collect_settings(facts=facts)
         for row in view.rows:
-            assert row.change_command().startswith("setx ")
+            if row.session_scoped:
+                continue
+            assert row.change_command().startswith("setx "), row.name
         assert "only reaches" in settings.render_settings(view)
+
+    def test_a_session_scoped_setting_is_never_offered_as_setx(self, facts):
+        """The other half of the rule. Without this, the exception above could
+        quietly widen until nothing is permanent."""
+        view = settings.collect_settings(facts=facts)
+        scoped = [r for r in view.rows if r.session_scoped]
+        assert [r.name for r in scoped] == ["DISPATCH_REHEARSAL_SESSION"], (
+            "a new session-scoped setting appeared; is it really one?")
+        for row in scoped:
+            command = row.change_command()
+            assert not command.startswith("setx ")
+            assert "Never setx" in command
+            # Both shells, because the wrong one fails silently in PowerShell.
+            assert "$env:" in command and "set " in command
 
     def test_it_names_what_is_blocking_a_start(self, facts):
         facts.weak_secret_names = ["PORTAL_SECRET_KEY", "DISPATCH_EMAIL_SECRET"]
