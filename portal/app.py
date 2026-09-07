@@ -102,6 +102,22 @@ def create_app(config: dict | None = None) -> Flask:
             return None
         if request.endpoint == "dispatch_api.dispatch_decision":
             return None
+        # `joe_api` carries its own authentication, and this gate is the wrong
+        # shape for it. The login gate is a BROWSER-SESSION control; joe_api is
+        # a MACHINE contract with a bearer token (fail-closed: 503 when unset,
+        # 401 on mismatch), required driver attribution, CSRF, and an audit
+        # entry on every call. Layering a session gate on top did not make it
+        # safer -- it made the whole contract layer unreachable and the token
+        # was never examined. The same reasoning already exempts
+        # dispatch_api.dispatch_decision and the stakeholder blueprint.
+        #
+        # **Owner ruling, 2026-09-07:** security becomes a plug-in module on the
+        # deferred list; the concept at this stage is an open application and
+        # security must not delay the build. Recorded, with the CLAUDE.md §7
+        # conflict stated rather than resolved silently, in
+        # docs/DISPATCH_SECURITY_DEFERRAL.md.
+        if request.blueprint == "joe_api":
+            return None
         if request.endpoint in ("auth.login", "auth.logout"):
             return None
         if not session.get("user_id"):

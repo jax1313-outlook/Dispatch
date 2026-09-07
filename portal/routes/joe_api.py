@@ -34,6 +34,7 @@ belongs to the man, not the machine.
 
 from __future__ import annotations
 
+import hmac
 import os
 from functools import wraps
 
@@ -91,7 +92,10 @@ def authenticated(view):
                 "ok": False,
                 "note": "This Dispatch node is not accepting Joe calls yet.",
             }), 503
-        if _presented_token() != token:
+        # Constant-time. A plain `!=` leaks length and shared prefix through
+        # timing, and csrf.py two files away already compares correctly for a
+        # less sensitive value. Owner Priority 3, 2026-09-07.
+        if not hmac.compare_digest(_presented_token(), token):
             return jsonify({"ok": False, "note": "Not authorised."}), 401
         if not _driver():
             return jsonify({
