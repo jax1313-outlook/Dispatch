@@ -218,6 +218,60 @@ paths:
                   - $ref: '#/components/schemas/Report'
         "400": {description: Refused — protected field, or nothing understood}
 
+  /api/joe/opportunity:
+    post:
+      operationId: captureOpportunity
+      summary: Log a board listing the Owner just read (Class 1)
+      description: >-
+        The seventh contract, ratified in OPPORTUNITY_CAPTURE_PLAN.md section 2.
+        Class 1: internal, reversible, touches no Mission Record and no outside
+        party, so there is no read-back and no confirmed flag. Speed is the
+        point. Sparse capture is valid capture: board, origin, destination and
+        rate are required and nothing else is. No board automation exists in
+        this path; the input is what the Owner dictated.
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_board, origin, destination, rate]
+              properties:
+                source_board:
+                  type: string
+                  description: >-
+                    The board, as the Owner says it. Stored as given and never
+                    validated against a list of products, so a board signed up
+                    for next year needs no code change.
+                origin: {type: string, description: City and state minimum}
+                destination: {type: string, description: City and state minimum}
+                rate:
+                  type: number
+                  description: >-
+                    Required, and never invented. Zero is a number a broker
+                    could have said; a missing rate is not free freight.
+                pieces_weight: {type: string}
+                equipment: {type: string}
+                pickup_date: {type: string}
+                delivery_date: {type: string}
+                contact: {type: string}
+                notes: {type: string}
+                captured_via:
+                  type: string
+                  enum: [VOICE, CHAT, MISSIONSCREEN, SWEEP]
+                  description: >-
+                    Named by nature, never by product. An unrecognised value is
+                    recorded as CHAT and noted in the audit rather than losing
+                    the capture.
+      responses:
+        "201": {description: Captured, or captured and flagged POSSIBLE DUPLICATE}
+        "200": {description: Merged into an existing capture of the same load}
+        "400": {description: Board, lane or rate missing}
+        "503": {description: Node not accepting Joe calls; token unset}
+
   /api/joe/send-notice:
     post:
       operationId: sendNotice

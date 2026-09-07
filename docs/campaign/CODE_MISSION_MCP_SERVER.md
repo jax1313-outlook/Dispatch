@@ -39,3 +39,31 @@ The doctrine of JOE_CONVERSATIONAL_MISSION.md §1A, §2, §3 translated into a p
 2. Connection instructions for Claude Code and Claude Desktop (the config snippet, and the one-line usage note for the Owner).
 3. Status line for the register: MCP SERVER: LIVE / CONFIGURED / UNVERIFIED, with reasons.
 4. Anything exceeding or falling short of this mission, stated plainly. No false success, no silent failure.
+
+---
+
+## NOTE FROM STEP 3 — CSRF, for whoever builds this
+
+**Found 2026-09-07 while running THE CAPTURE TEST against the real app.**
+
+Four of the seven contracts are mutating — `driver-status`, `send-notice`,
+`mission-record`, `opportunity` — and **the `joe_api` blueprint is not CSRF-exempt.**
+A POST with a valid `DISPATCH_JOE_TOKEN` and no CSRF token is refused **403 CSRF token
+missing or invalid**, before the endpoint is reached.
+
+**This is not a defect and must not be "fixed" by exempting the blueprint.** That would
+be a Class 3 change to a security boundary on the ratified contract layer. The suite
+deliberately runs *with* CSRF on rather than disabling it under TESTING — see
+`tests/conftest.py`, `CSRFTestClient`.
+
+**A machine client can satisfy it without a login.** Verified:
+
+1. `GET` any Joe contract with the bearer token. The response sets a readable
+   `csrf_token` cookie.
+2. Send that value as the `X-CSRF-Token` header on every mutating call.
+
+Confirmed end to end: capture returned `201`, re-capture `200 MERGED`.
+
+**So the MCP server must do a GET before its first mutating call and reuse the token.**
+Building it without this returns 403 on every write and looks like an auth failure —
+which it is not, and the token would be blamed.

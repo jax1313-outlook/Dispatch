@@ -96,6 +96,28 @@ CREATE TABLE IF NOT EXISTS pod_packages (
     notes         TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS opportunities (
+    opportunity_id        TEXT PRIMARY KEY,
+    source_board          TEXT NOT NULL,
+    origin                TEXT NOT NULL,
+    destination           TEXT NOT NULL,
+    rate                  REAL,
+    pieces_weight         TEXT NOT NULL DEFAULT '',
+    equipment             TEXT NOT NULL DEFAULT '',
+    pickup_date           TEXT NOT NULL DEFAULT '',
+    delivery_date         TEXT NOT NULL DEFAULT '',
+    contact               TEXT NOT NULL DEFAULT '',
+    notes                 TEXT NOT NULL DEFAULT '',
+    captured_via          TEXT NOT NULL DEFAULT '',
+    captured_by           TEXT NOT NULL,
+    captured_at           TEXT NOT NULL,
+    updated_at            TEXT NOT NULL DEFAULT '',
+    state                 TEXT NOT NULL DEFAULT 'OPEN',
+    flag                  TEXT NOT NULL DEFAULT '',
+    possible_duplicate_of TEXT NOT NULL DEFAULT '',
+    origins               TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS retention (
     archive_id        TEXT PRIMARY KEY,
     load_id           TEXT NOT NULL REFERENCES loads(load_id),

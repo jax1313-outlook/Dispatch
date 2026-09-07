@@ -215,17 +215,36 @@ class TestAdaptersAreWhereProvidersLive:
 
 
 class TestTheContractMatchesTheDoctrine:
-    """Section 8 specifies six Phase 1 endpoints. Doctrine and implementation
-    must match exactly -- not 'at least', not 'roughly'."""
+    """The contracts in code are exactly the ratified seven -- not 'at least',
+    not 'roughly'.
 
-    SPECIFIED = {
-        ("GET", "/api/joe/mission-status"),
-        ("POST", "/api/joe/driver-status"),
-        ("GET", "/api/joe/facility-intel/<path:facility_id>"),
-        ("GET", "/api/joe/schedule-fit"),
-        ("POST", "/api/joe/send-notice"),
-        ("PATCH", "/api/joe/mission-record/<path:mission_id>"),
+    **Seven since 2026-09-06**, when Opportunity Capture was ratified as the
+    seventh contract and built under EXEC-ORDER v1.0 Step 3.
+
+    **Where "seven" comes from, named exactly.** §8.1 item 1 lists **six**
+    endpoints; the seventh is ratified in `OPPORTUNITY_CAPTURE_PLAN.md` §2. The
+    ground rule's phrase *"§8.1 (seven, including Opportunity Capture)"* is loose
+    on that point, and a test asserting equality has to name its source or it
+    drifts. So each entry below carries the document that ratified it, and
+    `test_six_come_from_8_1_and_one_does_not` keeps the discrepancy visible
+    rather than letting it be tidied away.
+
+    **Equality, not sufficiency.** Adding an endpoint beyond spec is Class 3 --
+    never Code's -- so a surplus fails as loudly as a gap.
+    """
+
+    #: (method, rule) -> the document and section that ratified it.
+    RATIFIED = {
+        ("GET", "/api/joe/mission-status"): "MISSION §8.1",
+        ("POST", "/api/joe/driver-status"): "MISSION §8.1",
+        ("GET", "/api/joe/facility-intel/<path:facility_id>"): "MISSION §8.1",
+        ("GET", "/api/joe/schedule-fit"): "MISSION §8.1",
+        ("POST", "/api/joe/send-notice"): "MISSION §8.1",
+        ("PATCH", "/api/joe/mission-record/<path:mission_id>"): "MISSION §8.1",
+        ("POST", "/api/joe/opportunity"): "OPP-CAPTURE §2",
     }
+
+    SPECIFIED = set(RATIFIED)
 
     def _live(self):
         from portal.app import create_app
@@ -236,11 +255,25 @@ class TestTheContractMatchesTheDoctrine:
                 for m in r.methods if m in ("GET", "POST", "PATCH", "PUT",
                                             "DELETE")}
 
-    def test_exactly_the_six(self):
+    def test_exactly_the_seven(self):
         assert self._live() == self.SPECIFIED
 
+    def test_there_are_seven_not_six(self):
+        assert len(self.SPECIFIED) == 7
+
     def test_nothing_exceeds_the_specification(self):
+        """Adding an endpoint beyond spec is Class 3, never Code's."""
         assert self._live() - self.SPECIFIED == set()
+
+    def test_six_come_from_8_1_and_one_does_not(self):
+        """The Step 0 finding, held in place by a test. If someone later claims
+        all seven come from §8.1, this fails and the discrepancy is re-read
+        rather than re-buried."""
+        by_source = {}
+        for contract, source in self.RATIFIED.items():
+            by_source.setdefault(source, []).append(contract)
+        assert len(by_source["MISSION §8.1"]) == 6
+        assert by_source["OPP-CAPTURE §2"] == [("POST", "/api/joe/opportunity")]
 
     def test_nothing_specified_is_missing(self):
         assert self.SPECIFIED - self._live() == set()

@@ -469,3 +469,72 @@ def send_notice():
 # append-only audit log, which `dispatch/audit.py` is. It does not require a
 # way to read it back over the API, and Phase 1 needs none: the log is a local
 # file on the node that writes it.
+
+
+# --------------------------------------------------------- opportunity capture
+
+@joe_api.route("/api/joe/opportunity", methods=["POST"])
+@authenticated
+def opportunity_capture():
+    """Log a board listing the Owner just read. **The seventh contract.**
+
+    OPP-CAPTURE v1.0 §2. **Class 1 — no read-back, no `confirmed` flag.** It is
+    internal and reversible, touches no Mission Record and no outside party, and
+    §1 is explicit that *speed is the point: capture in seconds, move to the next
+    listing.* Requiring a confirmation here would be confirmation that does not
+    match consequence, which is the whole of Section 3.
+
+    **Sparse capture is valid capture.** Board, lane and rate are required and
+    nothing else is — *"a capture with gaps beats a listing lost to the next
+    screen."*
+
+    **No board automation exists in this path.** The input is what the Owner
+    dictated. Nothing here reads a board, and nothing here may be taught to.
+    """
+    from dispatch import opportunity
+
+    payload = request.get_json(silent=True) or {}
+    driver = _driver()
+    channel = _channel()
+
+    try:
+        record = opportunity.capture(payload, driver=driver, channel=channel)
+    except opportunity.OpportunityError as refusal:
+        # Honest Reporting Rule: say what is missing, log the refusal, and do
+        # not half-store a capture that was never valid.
+        audit.record(action="opportunity-capture", driver=driver,
+                     channel=channel, result=audit.RESULT_FAILURE,
+                     note=str(refusal))
+        return jsonify({"ok": False, "note": str(refusal)}), 400
+
+    verdict = record.get("verdict", "NEW")
+    audit.record(
+        action="opportunity-capture", driver=driver, channel=channel,
+        mission_id=record["opportunity_id"],
+        intent="%s %s to %s" % (record.get("source_board", ""),
+                                record.get("origin", ""),
+                                record.get("destination", "")),
+        new_value=str(record.get("rate") or ""),
+        result=audit.RESULT_SUCCESS,
+        note=("merged into existing capture; filled %s"
+              % (", ".join(record.get("filled") or []) or "nothing")
+              if verdict == "MERGED" else
+              "flagged %s of %s" % (opportunity.FLAG_POSSIBLE_DUPLICATE,
+                                    record.get("possible_duplicate_of", ""))
+              if verdict == "AMBIGUOUS" else "captured")
+        + (" (captured_via %r not recognised, recorded as CHAT)"
+           % record["unrecognised_channel"] if record.get("unrecognised_channel") else ""))
+
+    return jsonify({
+        "ok": True,
+        "verdict": verdict,
+        "opportunity_id": record["opportunity_id"],
+        "echo": opportunity.echo(record),
+        "flag": record.get("flag", ""),
+        "possible_duplicate_of": record.get("possible_duplicate_of", ""),
+        "filled": record.get("filled", []),
+        "opportunity": {k: record.get(k) for k in (
+            "source_board", "origin", "destination", "rate", "pieces_weight",
+            "equipment", "pickup_date", "delivery_date", "contact", "notes",
+            "captured_via", "captured_by", "captured_at", "state", "origins")},
+    }), 201 if verdict != "MERGED" else 200
