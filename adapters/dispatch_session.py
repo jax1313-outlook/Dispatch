@@ -188,6 +188,37 @@ class DispatchSession:
             data = {"ok": False, "note": raw[:200]}
         return Result(status, data)
 
+    def reset(self) -> None:
+        """Drop the session and start clean.
+
+        Cookies bind a CSRF token to a session, so a node restart invalidates
+        both together. Clearing one and keeping the other produces a client that
+        looks connected and cannot write.
+        """
+        self._jar.clear()
+        self._csrf = ""
+        self._opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self._jar))
+
+    def reconnect(self) -> bool:
+        """Re-establish the session after the node went away and came back.
+
+        **CONOPS v1.1 treats connectivity as intermittent by design**, and the
+        node itself restarts -- for a settings change, for a power cycle in the
+        truck. Both end a session without warning, and the symptom is a 403 that
+        looks exactly like a CSRF failure.
+
+        Returns True when a session is live again. Returns False rather than
+        raising, because a caller draining a queue needs to decide what to do
+        with the queue, not catch an exception.
+        """
+        self.reset()
+        try:
+            self.acquire_csrf()
+            return True
+        except DispatchError:
+            return False
+
     def request(self, method: str, path: str, body: dict | None = None) -> Result:
         """Every call goes through here, and so does every refusal.
 
@@ -200,10 +231,20 @@ class DispatchSession:
         if method in MUTATING and not self._csrf:
             self.acquire_csrf()
 
-        result = self._raw(method, path, body)
+        try:
+            result = self._raw(method, path, body)
+        except DispatchError:
+            # The node did not answer. It may have restarted between calls --
+            # that is normal in a truck, not exceptional. One reconnect, one
+            # retry, and then the truth.
+            if not self.reconnect():
+                raise
+            result = self._raw(method, path, body)
 
         if result.status == 403 and method in MUTATING:
-            self.acquire_csrf()
+            # An expired session and an expired CSRF token look identical from
+            # here, so recover both rather than guessing which it was.
+            self.reconnect()
             result = self._raw(method, path, body)
 
         if result.status == 503:
@@ -282,3 +323,129 @@ class DispatchSession:
 
         return self.patch("/api/joe/mission-record/" + quote(str(mission_id)),
                           confirmed=bool(confirmed), **fields)
+
+
+# --------------------------------------------------- consuming JOE's queue
+
+#: The only submission kind this drain will act on, and it acts on it only when
+#: it parses as an Opportunity Capture.
+#:
+#: **Everything else stays queued.** `finding`, `recommendation`, `draft`,
+#: `explanation`, `question` and `proposed_change` are proposals for a human.
+#: Acting on one would be Dispatch deciding, and `dispatch_port.py` is explicit:
+#: *"JOE never writes to Dispatch. It submits a request that Dispatch or Mike
+#: accepts or rejects."* Accepting is a decision. Capture is the one thing that
+#: is not, because OPP-CAPTURE section 1 rules it Class 1 -- internal,
+#: reversible, touching no Mission Record and no outside party.
+ACTS_ON = "action_request"
+
+
+class DrainReport:
+    """What the drain did, and what it refused to do.
+
+    **Refusals are the point.** A drain that reported only successes would look
+    identical whether it had written six captures or skipped six decisions, and
+    the second is the one Mike needs to see.
+    """
+
+    __slots__ = ("captured", "left_queued", "failed", "unreachable")
+
+    def __init__(self):
+        self.captured = []      # (request, Result)
+        self.left_queued = []   # (request, why)
+        self.failed = []        # (request, error)
+        self.unreachable = False
+
+    @property
+    def ok(self) -> bool:
+        return not self.failed and not self.unreachable
+
+    def __repr__(self) -> str:
+        return ("DrainReport(captured=%d, left_queued=%d, failed=%d, unreachable=%s)"
+                % (len(self.captured), len(self.left_queued), len(self.failed),
+                   self.unreachable))
+
+    def lines(self) -> list:
+        """The report in the locked declarative voice, one fact per line."""
+        out = []
+        for request, result in self.captured:
+            out.append(result.get("echo") or "LOGGED. OPPORTUNITY %s."
+                       % result.get("opportunity_id", ""))
+        for request, why in self.left_queued:
+            out.append("LEFT QUEUED. %s. %s" % (str(getattr(request, "kind", "")).upper(), why))
+        for request, error in self.failed:
+            out.append("NOT LOGGED. %s" % error)
+        if self.unreachable:
+            out.append("DISPATCH UNREACHABLE. NOTHING WAS WRITTEN. THE QUEUE IS UNCHANGED.")
+        return out
+
+
+def drain(port, session, *, parse=None) -> DrainReport:
+    """Consume queued requests from JOE and write the captures through the
+    seventh contract.
+
+    `port` is anything with a `pending()` returning objects that carry `kind`
+    and `detail` -- **duck-typed on purpose.** Dispatch does not import
+    Joe-Assistant and must not: they are separate repositories and the
+    dependency would run the wrong way. `dispatch_port.py` says the interface
+    belongs to Dispatch; this consumes what JOE hands over without knowing what
+    JOE is.
+
+    **It removes nothing from the queue.** JOE's queue is in-memory and JOE's to
+    own; a consumer that mutated it would be reaching across a boundary that was
+    drawn deliberately. What was written is reported, and what to do with the
+    original is JOE's business.
+
+    **Nothing executes by default** (Constitution 3.1). This runs when it is
+    called, writes only Class 1 captures, and leaves every decision queued.
+    """
+    from dispatch import opportunity as opp
+
+    parse = parse or opp.parse_dictation
+    report = DrainReport()
+
+    try:
+        pending = list(port.pending())
+    except Exception as unreadable:  # noqa: BLE001
+        report.failed.append((None, "the queue could not be read: %s"
+                              % type(unreadable).__name__))
+        return report
+
+    for request in pending:
+        kind = str(getattr(request, "kind", "")).strip().lower()
+        detail = str(getattr(request, "detail", "") or "").strip()
+
+        if kind != ACTS_ON:
+            report.left_queued.append(
+                (request, "a %s is a proposal for Mike, not an action for Dispatch"
+                 % kind or "request"))
+            continue
+
+        parsed = parse(detail)
+        gaps = [g for g in parsed["missing"] if g != "rate"]
+        if gaps:
+            # Board and lane are the load's identity. Without them there is
+            # nothing to log and nothing to deduplicate against, and inventing
+            # either would be worse than leaving it queued.
+            report.left_queued.append(
+                (request, "not a capture: %s missing" % ", ".join(gaps)))
+            continue
+
+        try:
+            result = session.capture_opportunity(**parsed["fields"])
+        except NodeNotAccepting as closed:
+            # Fail-closed is the node working, not a fault to route around.
+            report.failed.append((request, str(closed)))
+            report.unreachable = True
+            break
+        except DispatchError as down:
+            report.failed.append((request, str(down)))
+            report.unreachable = True
+            break
+
+        if result.ok:
+            report.captured.append((request, result))
+        else:
+            report.failed.append((request, result.note or "refused by the node"))
+
+    return report

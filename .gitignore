@@ -68,3 +68,4 @@ run/
 .verify*.txt
 .final*.txt
 *.local-run.txt
+.final-run*.txt
