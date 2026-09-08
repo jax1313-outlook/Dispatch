@@ -1232,3 +1232,59 @@ He was right. **`/intake` — New Mission — already renders the whole template
 **And it emptied something built an hour earlier.** `CAPTURE_ONLY` existed because the board was a contract requirement the Mission Card had no field for, which would have made every card-read capture refuse. With the requirement gone there is nothing in it, so the Dispatch half was deleted. **JOE keeps the mechanism** — an empty list is the right shape for *"none right now"*, and the form decides whether there are any, not JOE.
 
 ---
+
+## 2026-09-08 — HOS comes from Motive. Dispatch does not build it.
+
+**PR:** (this change — documentation only)
+**Capability:** Hours of Service. **Not built, and now ruled not to be.**
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"HOS will be taken care of by MCP/API to Motive ELD."*
+
+**Context.** The Freight System Design Package spells the rules out — 11 hours driving after 10 off, a 14-hour on-duty window, a 30-minute break after 8, 60-in-7 or 70-in-8 — and Dispatch's Calendar and Booking board make scheduling decisions today with no knowledge of any of them. The obvious inference was that Dispatch should model HOS. **It should not.**
+
+Motive is the ELD of record. Duty status is *its* truth, it is the one a roadside inspection reads, and a second calculation of the same hours in Dispatch would be a second source of operational truth — the one thing §5.1 forbids. Dispatch **reads** hours through an adapter when one exists; it never computes them.
+
+**What that means for a builder.** No HOS engine, no duty-status table, no 14-hour clock in `capacity.py` or `scheduling.py`. When the Motive connector is built it enters through `dispatch/connectors/` like every other external system, with a declared capability, an audit trail and an honest status — and reports `UNCONFIGURED` until it exists.
+
+---
+
+## 2026-09-08 — Payload limits get somewhere to live
+
+**PR:** (this change)
+**Capability:** `equipment` gains `gvwr_lb` and `payload_lb`; `EQUIPMENT_TYPES` gains `cargo_van` and `enclosed_trailer`; Registration shows the units and the combined payload.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"The payload numbers are useful to Booking and Scoring. But can you create a place to change the Equipment type and payload numbers for dispatch under SETTINGS?"*
+
+**Two findings behind it, both from the Freight System Design Package.**
+
+**Neither unit Level 1 Transport runs was in `EQUIPMENT_TYPES`.** The list held `dry_van`, `reefer`, `flatbed`, `step_deck`, `lowboy`, `tanker`, `container`, `box_truck`, `straight_truck`, `other` — and the operation is a **non-CDL cargo van pulling an enclosed trailer.** Both of the only two vehicles the carrier owns would have been filed as *"other"*.
+
+**The payload numbers had nowhere to go.** A grep for `GVWR`, `GCWR` or payload across the whole program returned nothing, while `truck_arrangement.py` already carries `CargoUnit`, `ArrangementViolation` and `FEASIBILITY_STATUSES` — **a refusal engine with no limits to check against.** The document states van payload 4,604 lb, trailer 5,918 lb, combined GCWR ~19,940 lb. The listing dictated in the first live voice test — *four pallets, 1,500 lb each* — is 6,000 lb, over the van's own payload before the trailer is coupled, and nothing would have said so.
+
+**Zero means "not stated", never "no limit".** A judgement made against a blank is not a judgement, and the screen says which units have no number rather than adding a zero into a total that would then look like an answer.
+
+**Edited on Fleet, shown on Registration** — the same shape the Driver block settled into. Equipment already has a table and Fleet already has the form; a second form here is a copy that drifts.
+
+---
+
+## 2026-09-08 — The Owner's design rules enter the repository. Archive and Library separated.
+
+**PR:** (this change — doctrine only)
+**Capability:** `CLAUDE.md` §5.6 (new) and §7. No code changes. Sections 5.6–5.8 renumbered.
+**Class:** **3.** Doctrine is not Code's to write.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"I'd recommend putting all three into CLAUDE.md §7 as yours, with numbers. Not a new rule — an existing one that was only ever enforced by you noticing. Do it ... Section 8 is worthy of consideration. do both"*
+
+**Rules 14, 15 and 16** come from the Owner's own L1-COS architecture recap and had never been carried into this repository. Rule 16 is quoted in two modules; **Rules 14 and 15 were quoted nowhere** — and Rule 15, *Reuse Before Create*, is the one that governs how a builder works. It was broken twice on the day it was finally written down: eleven of the Mission Card's thirty-three fields copied into JOE, and a printable capture sheet built for a form New Mission already renders. **Both were caught by the Owner, not by the program.**
+
+That is the argument for writing it: a rule enforced only by somebody noticing is a rule that will be broken again. Two guards now hold it in code — a test forbidding a second rendering of the Mission Template, and one forbidding JOE to declare a field list of its own.
+
+**Archive and Library** — the recap's Section 8, now `CLAUDE.md` §5.6:
+
+> Archive stores completed history. Library stores approved reusable knowledge.
+
+Dispatch has had both since it was written and the sentence appeared nowhere in the repository, which is how two stores end up holding each other's contents. **The test is the tense:** a completed run belongs to the Archive; what that run *taught* belongs to the Library, and moving it there is a deliberate act — **Rule 16**, and the only door between them.
+
+**The roadmap behind it is parked, not built.** `D:\MD Files\EXPANSION_PARKING_LOT.md` P-9 records Location Intelligence with its real cost, and the finding underneath it: `facility-intel` has no facility record behind it and scavenges past loads, so the tenth trip learns nothing from the first nine — **Rule 14 exactly inverted.**
+
+---

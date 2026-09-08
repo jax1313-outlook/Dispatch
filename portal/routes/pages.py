@@ -967,8 +967,21 @@ def registration():
         saved = True
 
     drivers = dispatch_svc.list_drivers()
+    equipment = dispatch_svc.list_equipment()
+    # What the combination may carry, added up from the units themselves rather
+    # than typed in twice. A unit with no payload stated contributes nothing and
+    # the total says so -- adding a zero as though it were a limit would produce
+    # a number that looks like an answer.
+    # The envelope Booking and Scoring read, built from the units themselves.
+    # Nothing here is typed twice: change a unit on Fleet and this changes.
+    from dispatch import capacity as capacity_engine
+
+    envelope = capacity_engine.physical_capacity_from_equipment(equipment)
     return render_template(
         "registration.html",
+        equipment=equipment,
+        envelope=envelope,
+        payload_unstated=[e for e in equipment if not e.get("payload_lb")],
         carrier=carrier.get(),
         missing=carrier.missing(),
         saved=saved,

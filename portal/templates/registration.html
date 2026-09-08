@@ -153,6 +153,80 @@
         </p>
     </section>
 
+    {# ── 🚚 Equipment ───────────────────────────
+       The same shape as Driver: what it is, and one click to where it is
+       edited. Equipment already has a table and Fleet already has the form.
+
+       The payload numbers are here because Booking and Scoring will want them:
+       a listing of four pallets at 1,500 lb is 6,000 lb, which is over the
+       van's own payload before the trailer is coupled. #}
+    <section class="card-section">
+        <h2>🚚 Equipment</h2>
+        {% if equipment %}
+        <table class="data-table">
+            <thead><tr><th>Unit</th><th>Type</th><th>GVWR</th><th>Max payload</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for e in equipment %}
+                <tr>
+                    <td><strong>{{ e.unit_number or '—' }}</strong></td>
+                    <td>{{ e.equipment_type.replace('_', ' ') }}</td>
+                    <td>{% if e.gvwr_lb %}{{ "{:,}".format(e.gvwr_lb) }} lb{% else %}<span style="color:#c62828;">not stated</span>{% endif %}</td>
+                    <td>{% if e.payload_lb %}{{ "{:,}".format(e.payload_lb) }} lb{% else %}<span style="color:#c62828;">not stated</span>{% endif %}</td>
+                    <td>{{ e.status }}</td>
+                    <td style="text-align:right;">
+                        <a class="btn btn-sm" href="{{ url_for('pages.fleet') }}">Edit</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {# **This is what Booking and Scoring read.** Derived from the rows
+           above -- change a unit on Fleet and this changes with it. Nothing is
+           typed twice and nothing is hardcoded. #}
+        <div style="margin-top:14px;padding:10px 12px;background:#f6f7f9;border-left:4px solid #37474f;">
+            <strong>CARGO LIMITS &mdash; {{ envelope.configuration_status }}</strong>
+            <span style="color:#666;font-size:13px;">{{ envelope.configuration_source }}</span>
+            <table class="data-table" style="margin-top:8px;">
+                <tbody>
+                    <tr><td style="width:38%;">Max weight</td>
+                        <td>{% if envelope.max_weight_lbs %}{{ "{:,.0f}".format(envelope.max_weight_lbs) }} lb{% else %}<span style="color:#c62828;">not stated</span>{% endif %}</td></tr>
+                    <tr><td>Max volume</td>
+                        <td>{% if envelope.max_volume_cuft %}{{ "{:,.0f}".format(envelope.max_volume_cuft) }} cu ft{% else %}<span style="color:#c62828;">not stated</span>{% endif %}</td></tr>
+                    <tr><td>Max linear feet</td>
+                        <td>{% if envelope.max_linear_feet %}{{ "{:,.1f}".format(envelope.max_linear_feet) }} ft{% else %}<span style="color:#c62828;">not stated</span>{% endif %}</td></tr>
+                    <tr><td>Pallet positions</td>
+                        <td>{% if envelope.max_pallets %}{{ envelope.max_pallets }}{% else %}<span style="color:#c62828;">not stated</span>{% endif %}</td></tr>
+                    <tr><td>Liftgate / ramp / temp</td>
+                        <td>{{ 'liftgate' if envelope.has_liftgate else '&mdash;' | safe }}
+                            &middot; {{ 'ramp' if envelope.has_ramp else '&mdash;' | safe }}
+                            &middot; {{ 'temp control' if envelope.has_temp_control else '&mdash;' | safe }}</td></tr>
+                </tbody>
+            </table>
+            <p style="font-size:13px;color:#666;margin:8px 0 0;">
+                Volume and linear feet are <strong>derived</strong> from each
+                unit's cargo dimensions, never typed twice.
+                <strong>UNVERIFIED</strong> means every number is present and
+                nobody has checked one against a door plate &mdash; only a person
+                can make it VERIFIED.
+                {% if payload_unstated %}
+                <br><span style="color:#c62828;">{{ payload_unstated|length }}
+                unit(s) state no payload and add nothing to these totals.</span>
+                {% endif %}
+            </p>
+        </div>
+        {% else %}
+        <p style="font-size:13px;margin:0 0 10px;">
+            <strong>UNCONFIGURED — no equipment record exists.</strong>
+            Without a stated payload, nothing can tell you a load is too heavy.
+        </p>
+        {% endif %}
+        <p style="font-size:13px;color:#666;margin:10px 0 0;">
+            Units are added and edited on
+            <a href="{{ url_for('pages.fleet') }}">Fleet</a> — <em>+ Add Equipment</em>.
+            <strong>A payload of zero means "not stated", never "no limit"</strong>
+            — nothing will judge a load against a blank.
+        </p>
+    </section>
+
     {# ── 🏢 Company ─────────────────────────────────────────────────── #}
     <section class="card-section">
         <h2>🏢 Company</h2>

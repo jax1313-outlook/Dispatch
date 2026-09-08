@@ -113,6 +113,47 @@
                 <input type="text" name="vin" style="width:100%;padding:4px 8px;"></label></div>
             <div><label><strong>License Plate</strong><br>
                 <input type="text" name="license_plate" style="width:100%;padding:4px 8px;"></label></div>
+            {# What the unit may legally carry. Added 2026-09-08: the Freight
+               System Design Package states van payload 4,604 lb and trailer
+               5,918 lb, and the program had nowhere to put either -- while
+               truck_arrangement already refuses an infeasible load and had no
+               limit to check against. #}
+            <div><label><strong>GVWR (lb)</strong><br>
+                <input type="number" name="gvwr_lb" min="0" placeholder="9950"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Max payload (lb)</strong><br>
+                <input type="number" name="payload_lb" min="0" placeholder="4604"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            {# The cargo box, inside. Volume and linear feet are DERIVED from
+               these -- never typed twice, so they cannot disagree. #}
+            <div><label><strong>Cargo length (in)</strong><br>
+                <input type="number" name="cargo_length_in" min="0" placeholder="146"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Cargo width (in)</strong><br>
+                <input type="number" name="cargo_width_in" min="0" placeholder="54"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Cargo height (in)</strong><br>
+                <input type="number" name="cargo_height_in" min="0" placeholder="79"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            {# A pallet that fits the box and not the door does not fit. #}
+            <div><label><strong>Door width (in)</strong><br>
+                <input type="number" name="door_width_in" min="0"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            <div><label><strong>Door height (in)</strong><br>
+                <input type="number" name="door_height_in" min="0"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            {# Counted, not computed. A wheel well costs a position that the
+               floor area does not know about. #}
+            <div><label><strong>Pallet positions</strong><br>
+                <input type="number" name="pallet_positions" min="0"
+                       style="width:100%;padding:4px 8px;"></label></div>
+            <div><label style="display:block;margin-top:22px;">
+                <input type="checkbox" name="has_liftgate" value="1"> Liftgate</label>
+                <label style="display:block;">
+                <input type="checkbox" name="has_ramp" value="1"> Ramp</label>
+                <label style="display:block;">
+                <input type="checkbox" name="has_temp_control" value="1"> Temp control</label>
+            </div>
             <div class="full-width"><label><strong>Notes</strong><br>
                 <input type="text" name="notes" style="width:100%;padding:4px 8px;"></label></div>
         </div>

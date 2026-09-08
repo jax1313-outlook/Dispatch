@@ -131,6 +131,13 @@ DRIVER_STATUSES = ["active", "inactive", "on_leave"]
 LICENSE_CLASSES = ["A", "B", "C"]
 
 EQUIPMENT_TYPES = [
+    # The two units Level 1 Transport actually runs. Neither was on this list
+    # until 2026-09-08, so the only two vehicles the carrier owns would both
+    # have been filed as "other" -- a non-CDL cargo van pulling an enclosed
+    # trailer, which is the whole operating model
+    # ("Freight System Design Package -- Cargo Van + Trailer Operation").
+    "cargo_van",
+    "enclosed_trailer",
     "dry_van",
     "reefer",
     "flatbed",
@@ -512,6 +519,27 @@ class Equipment:
     year: str = ""
     vin: str = ""
     license_plate: str = ""
+    #: What the unit may legally carry, from its own plate. **0 means "not
+    #: stated", never "no limit"** -- a judgement made against a zero is not a
+    #: judgement, and `truck_arrangement` must refuse to make one.
+    gvwr_lb: int = 0
+    payload_lb: int = 0
+    #: The cargo box, inside. These are what `capacity.PhysicalCapacity` needs
+    #: and has never been given: volume and linear feet are derived from them,
+    #: never typed twice.
+    cargo_length_in: int = 0
+    cargo_width_in: int = 0
+    cargo_height_in: int = 0
+    #: The opening. **A pallet that fits the box and not the door does not fit.**
+    door_width_in: int = 0
+    door_height_in: int = 0
+    #: Floor positions, counted -- not computed from the floor area. A van with
+    #: a wheel well has fewer positions than its length suggests, and the number
+    #: that matters is the one somebody counted.
+    pallet_positions: int = 0
+    has_liftgate: bool = False
+    has_ramp: bool = False
+    has_temp_control: bool = False
     status: str = "active"
     notes: str = ""
     created_at: str = ""

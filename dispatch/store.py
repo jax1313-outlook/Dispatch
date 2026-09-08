@@ -863,12 +863,19 @@ def create_equipment(eqp: Equipment) -> dict:
         conn.execute(
             """INSERT INTO equipment
                (equipment_id, unit_number, equipment_type, make, model,
-                year, vin, license_plate, status, notes,
+                year, vin, license_plate, gvwr_lb, payload_lb,
+                cargo_length_in, cargo_width_in, cargo_height_in,
+                door_width_in, door_height_in, pallet_positions,
+                has_liftgate, has_ramp, has_temp_control, status, notes,
                 created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (eqp.equipment_id, eqp.unit_number, eqp.equipment_type,
              eqp.make, eqp.model, eqp.year, eqp.vin,
-             eqp.license_plate, eqp.status, eqp.notes,
+             eqp.license_plate, eqp.gvwr_lb, eqp.payload_lb,
+             eqp.cargo_length_in, eqp.cargo_width_in, eqp.cargo_height_in,
+             eqp.door_width_in, eqp.door_height_in, eqp.pallet_positions,
+             int(eqp.has_liftgate), int(eqp.has_ramp), int(eqp.has_temp_control),
+             eqp.status, eqp.notes,
              eqp.created_at, eqp.updated_at),
         )
         rehearsal.tag_in(conn, "equipment", eqp.equipment_id)

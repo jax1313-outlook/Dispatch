@@ -175,3 +175,91 @@ class TestTheScreenItself:
             assert machine_setting not in page, (
                 "%s is machine configuration and belongs on Settings"
                 % machine_setting)
+
+
+class TestTheEquipmentBlock:
+    """**Owner ruling, 2026-09-08:** *"The payload numbers are useful to Booking
+    and Scoring. But can you create a place to change the Equipment type and
+    payload numbers for dispatch under SETTINGS?"*
+
+    Same shape as the Driver block: shown here, edited on Fleet. Equipment
+    already has a table and Fleet already has the form.
+    """
+
+    def test_the_units_level_1_actually_runs_are_choosable(self):
+        """Neither was on the list until this ruling, so **both of the only two
+        vehicles the carrier owns would have been filed as "other"** -- a
+        non-CDL cargo van pulling an enclosed trailer, which is the whole
+        operating model."""
+        from dispatch.models import EQUIPMENT_TYPES
+
+        assert "cargo_van" in EQUIPMENT_TYPES
+        assert "enclosed_trailer" in EQUIPMENT_TYPES
+
+    def test_a_unit_carries_its_own_limits(self, app):
+        with app.app_context():
+            unit = services.create_equipment(
+                unit_number="VAN-1", equipment_type="cargo_van",
+                gvwr_lb=9950, payload_lb=4604)
+        assert unit["gvwr_lb"] == 9950
+        assert unit["payload_lb"] == 4604
+
+    def test_the_screen_shows_them_and_points_at_fleet(self, client, app):
+        with app.app_context():
+            services.create_equipment(unit_number="VAN-1",
+                                      equipment_type="cargo_van",
+                                      gvwr_lb=9950, payload_lb=4604)
+        page = client.get("/settings/registration").get_data(as_text=True)
+        assert "VAN-1" in page
+        assert "4,604" in page
+        assert "/fleet" in page
+
+    def test_the_cargo_limits_block_is_what_booking_will_read(self, client, app):
+        """**Owner ruling, 2026-09-08:** the numbers that feed load arrangement
+        and cargo limits, entered once and derived everywhere else."""
+        with app.app_context():
+            services.create_equipment(
+                unit_number="VAN-1", equipment_type="cargo_van",
+                payload_lb=4604, cargo_length_in=146, cargo_width_in=54,
+                cargo_height_in=79, pallet_positions=4)
+        page = client.get("/settings/registration").get_data(as_text=True)
+        assert "CARGO LIMITS" in page
+        assert "UNVERIFIED" in page       # numbers present, nobody attested
+        assert "360 cu ft" in page        # derived, not typed
+        assert "12.2 ft" in page
+
+    def test_the_combined_payload_adds_the_units_up(self, client, app):
+        """From the units themselves, never typed twice."""
+        with app.app_context():
+            services.create_equipment(unit_number="VAN-1",
+                                      equipment_type="cargo_van",
+                                      payload_lb=4604)
+            services.create_equipment(unit_number="TRL-1",
+                                      equipment_type="enclosed_trailer",
+                                      payload_lb=5918)
+        page = client.get("/settings/registration").get_data(as_text=True)
+        assert "10,522" in page
+
+    def test_a_unit_with_no_payload_is_named_not_counted_as_zero(self, client, app):
+        """**Zero means "not stated", never "no limit".** Adding a blank into a
+        total produces a number that looks like an answer."""
+        with app.app_context():
+            services.create_equipment(unit_number="VAN-1",
+                                      equipment_type="cargo_van",
+                                      payload_lb=4604)
+            services.create_equipment(unit_number="TRL-1",
+                                      equipment_type="enclosed_trailer")
+        page = client.get("/settings/registration").get_data(as_text=True)
+        assert "4,604" in page
+        assert "not stated" in page
+        # The sentence wraps in the template; collapse whitespace before
+        # matching, or the test is asserting the line width.
+        import re
+
+        flat = re.sub(r"\s+", " ", page)
+        assert "1 unit(s) state no payload" in flat
+
+    def test_registration_holds_no_equipment_form(self, client):
+        page = client.get("/settings/registration").get_data(as_text=True)
+        assert 'name="gvwr_lb"' not in page, (
+            "Registration grew an equipment form; units are edited on Fleet")

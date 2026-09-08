@@ -256,6 +256,93 @@ def evaluate_reserve_dimension(
     return impact, findings
 
 
+# ---------------------------------------------------- the asset profile
+
+#: Cubic inches in a cubic foot. Named because `/ 1728` in a formula is a
+#: number nobody can check.
+CUBIC_INCHES_PER_FOOT = 1728
+
+
+def physical_capacity_from_equipment(units) -> "PhysicalCapacity":
+    """The capacity envelope of a set of units, built from what they declare.
+
+    **Owner ruling, 2026-09-08:** *"can you build entry space that feeds load
+    arrangement and cargo limits for scoring and Booking? They need real numbers
+    but I do not want to hard code these numbers in. Then changing equipment
+    requires a trip back to you."*
+
+    `PhysicalCapacity` has asked for `asset_profile_id` and reported
+    `UNCONFIGURED` since it was written. **The equipment record is the asset
+    profile it was waiting for**, and nobody had ever filled one in -- so this
+    builds one rather than inventing a new shape.
+
+    NOTHING HERE IS A CONSTANT. Volume and linear feet are derived from the
+    dimensions on each unit; the weight is the sum of the payloads. Change a
+    unit on the Fleet screen and every consumer sees the new envelope on the
+    next call. **Swapping the trailer is a Fleet edit, not a code change.**
+
+    HONEST ABOUT WHAT IT DOES NOT KNOW:
+
+      * a unit with no payload contributes nothing to the weight, and the
+        status falls to PARTIAL -- **zero is "not stated", never "no limit"**
+      * a unit with no dimensions contributes no volume and no linear feet
+      * `VERIFIED` is never set here. Somebody has to have checked the plate
+        against the paperwork, and no function can attest to that
+    """
+    units = [dict(u) for u in (units or [])]
+    if not units:
+        return PhysicalCapacity(configuration_status="UNCONFIGURED",
+                                configuration_source="no equipment record exists")
+
+    def number(unit, key):
+        try:
+            return float(unit.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    weight = sum(number(u, "payload_lb") for u in units)
+    volume = 0.0
+    linear = 0.0
+    for unit in units:
+        length = number(unit, "cargo_length_in")
+        width = number(unit, "cargo_width_in")
+        height = number(unit, "cargo_height_in")
+        if length and width and height:
+            volume += (length * width * height) / CUBIC_INCHES_PER_FOOT
+        if length:
+            linear += length / 12.0
+    pallets = int(sum(number(u, "pallet_positions") for u in units))
+
+    stated = [u for u in units
+              if number(u, "payload_lb") and number(u, "cargo_length_in")]
+    if not stated:
+        status = "UNCONFIGURED"
+        source = "no unit states a payload and a length"
+    elif len(stated) < len(units):
+        status = "PARTIAL"
+        source = "%d of %d units are fully stated" % (len(stated), len(units))
+    else:
+        # Every number is present and none of them has been checked against a
+        # door plate by a person. That is exactly what UNVERIFIED means.
+        status = "UNVERIFIED"
+        source = "from %d equipment record(s)" % len(units)
+
+    kinds = [str(u.get("equipment_type") or "") for u in units if u.get("equipment_type")]
+    return PhysicalCapacity(
+        asset_profile_id="+".join(str(u.get("unit_number") or "?") for u in units),
+        configuration_status=status,
+        configuration_source=source,
+        max_weight_lbs=_round(weight),
+        max_volume_cuft=_round(volume),
+        max_linear_feet=_round(linear),
+        max_pallets=pallets,
+        equipment_type="+".join(kinds) if kinds else "unknown",
+        has_liftgate=any(u.get("has_liftgate") for u in units),
+        has_ramp=any(u.get("has_ramp") for u in units),
+        has_temp_control=any(u.get("has_temp_control") for u in units),
+    )
+
+
 @dataclass
 class PhysicalCapacity:
     asset_profile_id: str = ""

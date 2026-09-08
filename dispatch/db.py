@@ -210,6 +210,17 @@ CREATE TABLE IF NOT EXISTS drivers (
 
 CREATE TABLE IF NOT EXISTS equipment (
     equipment_id    TEXT PRIMARY KEY,
+    gvwr_lb          INTEGER NOT NULL DEFAULT 0,
+    payload_lb       INTEGER NOT NULL DEFAULT 0,
+    cargo_length_in  INTEGER NOT NULL DEFAULT 0,
+    cargo_width_in   INTEGER NOT NULL DEFAULT 0,
+    cargo_height_in  INTEGER NOT NULL DEFAULT 0,
+    door_width_in    INTEGER NOT NULL DEFAULT 0,
+    door_height_in   INTEGER NOT NULL DEFAULT 0,
+    pallet_positions INTEGER NOT NULL DEFAULT 0,
+    has_liftgate     INTEGER NOT NULL DEFAULT 0,
+    has_ramp         INTEGER NOT NULL DEFAULT 0,
+    has_temp_control INTEGER NOT NULL DEFAULT 0,
     unit_number     TEXT NOT NULL DEFAULT '',
     equipment_type  TEXT NOT NULL DEFAULT 'dry_van',
     make            TEXT NOT NULL DEFAULT '',
@@ -513,6 +524,26 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     here -- guarded so re-running it against a database that already has
     the column is a harmless no-op.
     """
+    # What a unit may legally carry. Ruled 2026-09-08 after the Freight System
+    # Design Package turned up numbers the program had nowhere to put:
+    # van payload 4,604 lb, trailer 5,918 lb, combined GCWR ~19,940 lb.
+    # `truck_arrangement` already refuses an infeasible load and had no limits
+    # to check against.
+    for column in ("gvwr_lb INTEGER NOT NULL DEFAULT 0",
+                   "payload_lb INTEGER NOT NULL DEFAULT 0",
+                   "cargo_length_in INTEGER NOT NULL DEFAULT 0",
+                   "cargo_width_in INTEGER NOT NULL DEFAULT 0",
+                   "cargo_height_in INTEGER NOT NULL DEFAULT 0",
+                   "door_width_in INTEGER NOT NULL DEFAULT 0",
+                   "door_height_in INTEGER NOT NULL DEFAULT 0",
+                   "pallet_positions INTEGER NOT NULL DEFAULT 0",
+                   "has_liftgate INTEGER NOT NULL DEFAULT 0",
+                   "has_ramp INTEGER NOT NULL DEFAULT 0",
+                   "has_temp_control INTEGER NOT NULL DEFAULT 0"):
+        try:
+            conn.execute("ALTER TABLE equipment ADD COLUMN %s" % column)
+        except sqlite3.OperationalError:
+            pass
     try:
         conn.execute("ALTER TABLE ifta_fuel_purchases ADD COLUMN evidence_id TEXT")
     except sqlite3.OperationalError:

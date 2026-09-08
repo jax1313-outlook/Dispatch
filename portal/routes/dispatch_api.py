@@ -1115,6 +1115,19 @@ def create_equipment():
         year=data.get("year", ""),
         vin=data.get("vin", ""),
         license_plate=data.get("license_plate", ""),
+        # What the capacity engine reads. Absent means 0, which every consumer
+        # treats as "not stated" rather than as "no limit".
+        gvwr_lb=data.get("gvwr_lb", 0),
+        payload_lb=data.get("payload_lb", 0),
+        cargo_length_in=data.get("cargo_length_in", 0),
+        cargo_width_in=data.get("cargo_width_in", 0),
+        cargo_height_in=data.get("cargo_height_in", 0),
+        door_width_in=data.get("door_width_in", 0),
+        door_height_in=data.get("door_height_in", 0),
+        pallet_positions=data.get("pallet_positions", 0),
+        has_liftgate=bool(data.get("has_liftgate")),
+        has_ramp=bool(data.get("has_ramp")),
+        has_temp_control=bool(data.get("has_temp_control")),
         notes=data.get("notes", ""),
     )
     return jsonify({"status": "ok", "equipment": eqp}), 201

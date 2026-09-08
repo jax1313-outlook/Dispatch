@@ -253,7 +253,30 @@ The Driver Portal Calendar is a Monday-through-Sunday visual capacity board that
 Outlook schedule data. It is **not an independent calendar database**. Use familiar terms —
 `Calendar`, `PU`, `DEL` — and no scheduling jargon.
 
-### 5.6 There is no Manager component
+### 5.6 Archive and Library are different things
+
+**The Owner's L1-COS architecture recap, Section 8, carried into doctrine 2026-09-08:**
+
+> **Archive stores completed history. Library stores approved reusable knowledge.**
+
+Dispatch has both and the sentence appeared nowhere in this repository, which is how two stores
+end up holding each other's contents.
+
+| | |
+|---|---|
+| **Archive** — `D:\Archive`, `cin_lite/archive.py`, `docs/…/retention` | What **happened**. Closed loads, decisions taken, packets published, evidence. **Append-only and finished.** Nothing in it is a reference for the next load; it is the record that the last one occurred |
+| **Library** — `portal/models/library.py`, the Company Library | What is **known and reusable**. Doctrine, rate policy, procedures, approved reference. **Curated, and edited when it changes** |
+
+**The test is the tense.** A completed run belongs to the Archive. What that run *taught* belongs
+to the Library — and moving it there is a deliberate act, never a side effect of closing a load.
+That act is **Rule 16**, and it is the only door between them.
+
+The roadmap the recap sets out — Broker, Customer, Location Intelligence, Operations and
+Intelligence libraries, against Load, Decision, Publisher, Location and Broker history archives —
+is **not built and not authorized.** It is parked in `D:\MD Files\EXPANSION_PARKING_LOT.md` with
+a cost against it.
+
+### 5.7 There is no Manager component
 
 **There is no Manager component in the current architecture.** The concept was archived on
 2026-09-07 and now lives in **§10.2** as history rather than as an active prohibition.
@@ -262,7 +285,7 @@ Outlook schedule data. It is **not an independent calendar database**. Use famil
 authority, routing and tables from appearing in code. **Archiving a concept is not permission to
 build it.**
 
-### 5.7 THE MIKE RULE
+### 5.8 THE MIKE RULE
 
 Subsystems are deliberately kept standalone even where that duplicates a little code. A
 subsystem that can be lifted out and run on its own is worth more than a subsystem that
@@ -377,10 +400,32 @@ Do not mark an item verified without actual runtime evidence. Current readiness:
 
 ## 7. Working rules
 
+### The Owner's design rules — numbered, and his
+
+**These are Mike's, written in the L1-COS architecture recap and never carried into this
+repository.** Rule 16 is quoted in two modules; **Rules 14 and 15 were quoted nowhere**, and
+Rule 15 is the one that governs how a builder works. It was enforced for months only by the
+Owner noticing a duplicate and saying so — twice in one afternoon on 2026-09-08, which is why
+it is finally written down.
+
+| | | |
+|---|---|---|
+| **Rule 14** | **Capture Once, Use Many** | *"The first trip gathers intelligence. The tenth trip consumes intelligence."* |
+| **Rule 15** | **Reuse Before Create** | *"Expand existing roles before creating new layers."* |
+| **Rule 16** | **Experience Becomes An Asset** | *"Convert operational experience into reusable company capability."* |
+
+**Rule 15 in practice, because it is the one that gets broken.** Before writing anything new,
+find what already does it. On 2026-09-08 Code copied eleven of the Mission Card's thirty-three
+fields into JOE rather than asking Dispatch for the form, and built a printable capture sheet
+for a form the New Mission screen already renders. **Both were caught by the Owner, not by the
+program.** The guards that now exist — a test forbidding a second rendering of the Mission
+Template, and one forbidding JOE to declare a field list — exist because a rule enforced by
+somebody noticing is a rule that will be broken again.
+
 **Doctrine.**
 
 - Read existing repository doctrine before creating anything. Reuse and update rather than
-  duplicate. `docs/architecture/DISPATCH_ARCHITECTURE.md` §1 is the map.
+  duplicate — **Rule 15.** `docs/architecture/DISPATCH_ARCHITECTURE.md` §1 is the map.
 - **The repository is the source of truth — not conversation history.** A previous session's
   chat is gone and was never authoritative.
 - Do not document unapproved ideas as doctrine, and do not overwrite settled doctrine merely
