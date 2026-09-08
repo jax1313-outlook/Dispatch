@@ -40,6 +40,7 @@ jobs:
 
       - name: Run test suite with coverage
         run: |
+          set -o pipefail
           python -m pytest \
             --cov=cin_lite \
             --cov=dispatch \
@@ -47,7 +48,27 @@ jobs:
             --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-fail-under=90
+            --cov-fail-under=90 \
+            -q --tb=short 2>&1 | tee pytest-output.txt
+
+      # A run that fails with "Process completed with exit code 1" and nothing
+      # else tells the person reading the failure email nothing at all, and the
+      # log itself needs a token to fetch. This puts the names of the failing
+      # tests where they can be read without one: in the run's annotations and
+      # in its summary.
+      - name: Name the failures where they can be read
+        if: ${{ failure() }}
+        run: |
+          grep -E '^(FAILED|ERROR) ' pytest-output.txt | head -40 | while read -r line; do
+            echo "::error title=pytest::${line}"
+          done
+          {
+            echo "### pytest (py${{ matrix.python-version }})"
+            echo '```'
+            grep -E '^(FAILED|ERROR) |^[0-9]+ (passed|failed)|passed|failed|Required test coverage' \
+              pytest-output.txt | tail -40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage report
         if: ${{ always() && matrix.python-version == '3.12' }}
