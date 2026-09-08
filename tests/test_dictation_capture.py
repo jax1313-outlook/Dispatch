@@ -92,12 +92,13 @@ class TestSparseCaptureAndTheOneQuestion:
         assert r["missing"] == ["rate"]
         assert opp.one_question(r["missing"]) == "RATE?"
 
-    def test_a_missing_board_is_logged_missing_not_asked_about(self):
-        """§6 allows exactly one question and it is about money. Everything else
-        is recorded absent — speed outranks completeness."""
+    def test_a_missing_board_is_not_missing_at_all_any_more(self):
+        """**Owner ruling, 2026-09-08.** The board was one of the four a capture
+        could not be logged without. It is now carried and not required, so a
+        listing dictated without it is complete rather than sparse."""
         r = opp.parse_dictation("log this one Jacksonville to Ocala. $600")
-        assert "source_board" in r["missing"]
-        assert opp.one_question(r["missing"]) == ""
+        assert "source_board" not in r["missing"]
+        assert r["missing"] == []
 
     def test_a_rate_is_never_invented(self):
         f = opp.parse_dictation("log this one DAT. Tampa to Naples")["fields"]

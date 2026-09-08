@@ -46,6 +46,21 @@ def create_app(config: dict | None = None) -> Flask:
     register_routes(app)
     init_csrf(app)
 
+    # The declared home time zone becomes the one `dispatch.clock` reads, once,
+    # here. `clock.home_today()` is called from dataclass __post_init__ and from
+    # properties like `is_expired` -- a database read in those would be a query
+    # per date, and would make `clock` depend on `db`, which `models` imports.
+    #
+    # It must not stop the portal starting: a node with no carrier row is a
+    # perfectly ordinary new node, and a broken one still has to boot far enough
+    # to show the screen that fixes it.
+    try:
+        from dispatch import carrier
+
+        carrier.apply_to_environment()
+    except Exception:  # noqa: BLE001 - reported on the screen, never fatal here
+        pass
+
     @app.before_request
     def _require_authority_login():
         """DISPATCH_PIN login gate (governance/PORTAL_AUTHENTICATION_DISPATCH_PIN_SCOPE_v1.md). Fails closed in real (non-TESTING) use: a missing/unbootstrapped identity does

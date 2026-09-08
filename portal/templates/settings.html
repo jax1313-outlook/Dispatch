@@ -4,6 +4,17 @@
 
 {% block body %}
 <section class="card-section">
+    <p style="margin:0;font-size:13px;">
+        This page is what the <strong>machine</strong> needs in order to start
+        Dispatch, and it is read-only: every value here is read from the
+        environment before there is a database to read it from.
+        What the <strong>business</strong> is —
+        <a href="{{ url_for('pages.registration') }}">Registration</a> —
+        is the page you can edit.
+    </p>
+</section>
+
+<section class="card-section">
     <h2>Storage Roots</h2>
     <p style="font-size:13px;color:#666;margin-bottom:8px;">D:\ ownership structure. Set all three for production; unset = development mode.</p>
     <table class="data-table">

@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Registration — Dispatch{% endblock %}
+{% block page_title %}⚙ Settings — Registration{% endblock %}
+
+{% block body %}
+
+{# Owner ruling, 2026-09-08: "That's it. Nothing else."
+   Four blocks, one Save. Everything larger is in the Expansion Parking Lot. #}
+
+{% if saved %}
+<section class="card-section" style="border-left:4px solid #2e7d32;">
+    <strong>Saved.</strong>
+    The home time zone took effect immediately — today, here, is
+    <strong>{{ home_today }}</strong>.
+</section>
+{% endif %}
+
+{% if zone_problem %}
+<section class="card-section" style="border-left:4px solid #c62828;">
+    <strong>HOME TIME ZONE — UNAVAILABLE.</strong>
+    <p style="margin:6px 0 0;">{{ zone_problem }}</p>
+</section>
+{% endif %}
+
+<section class="card-section">
+    <p style="font-size:13px;color:#666;margin:0;">
+        What this <strong>business</strong> is. What this <strong>machine</strong>
+        needs in order to start — storage roots, keys, the portal host — is on
+        <a href="{{ url_for('pages.settings') }}">Settings</a> and is read before
+        Dispatch has a database to read it from. The two are kept apart on purpose.
+    </p>
+    {% if missing %}
+    <p style="font-size:13px;margin:10px 0 0;">
+        <strong>UNCONFIGURED:</strong> {{ missing|join(' · ') }}.
+        Nothing is blocked — surfaces that need one of these will say so and name it.
+    </p>
+    {% endif %}
+</section>
+
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# ── 🏠 Home Base ───────────────────────────────────────────────── #}
+    <section class="card-section">
+        <h2>🏠 Home Base</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:10px;">
+            The home terminal. It is the base for IFTA and for hours of service,
+            and it does not move when the truck does.
+        </p>
+        {# Four across, and the columns are sized to the field rather than to the
+           grid: a two-letter state in a full-width box invites a full state
+           name, which is not what the box accepts. #}
+        <div style="display:grid;grid-template-columns:3fr 2fr 70px 1fr;gap:12px;max-width:820px;">
+            <label>Street<br>
+                <input type="text" name="home_street" value="{{ carrier.home_street }}"
+                       style="width:100%;padding:6px 8px;" autofocus></label>
+            <label>City<br>
+                <input type="text" name="home_city" value="{{ carrier.home_city }}"
+                       style="width:100%;padding:6px 8px;"></label>
+            <label>State<br>
+                <input type="text" name="home_state" value="{{ carrier.home_state }}"
+                       maxlength="2" placeholder="FL"
+                       style="width:100%;padding:6px 8px;text-transform:uppercase;"></label>
+            <label>ZIP<br>
+                <input type="text" name="home_zip" value="{{ carrier.home_zip }}"
+                       maxlength="10" style="width:100%;padding:6px 8px;"></label>
+        </div>
+    </section>
+
+    {# ── 🕒 Home Time Zone ──────────────────────────────────────────── #}
+    <section class="card-section">
+        <h2>🕒 Home Time Zone</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:10px;">
+            <strong>Every date in Dispatch is this zone's date</strong> — IFTA legs,
+            HOS, licence expiry, maintenance, driver pay. Crossing a time zone
+            never changes it. Timestamps stay UTC, which is a different question
+            and the right answer to it.
+        </p>
+        <div style="max-width:420px;">
+            <label>Zone<br>
+                <select name="home_time_zone" style="width:100%;padding:6px 8px;">
+                    {% for zone, label in [
+                        ('America/New_York', 'Eastern — America/New_York'),
+                        ('America/Chicago', 'Central — America/Chicago'),
+                        ('America/Denver', 'Mountain — America/Denver'),
+                        ('America/Phoenix', 'Arizona, no DST — America/Phoenix'),
+                        ('America/Los_Angeles', 'Pacific — America/Los_Angeles'),
+                        ('America/Anchorage', 'Alaska — America/Anchorage'),
+                        ('Pacific/Honolulu', 'Hawaii — Pacific/Honolulu')] %}
+                    <option value="{{ zone }}"
+                        {% if carrier.home_time_zone == zone
+                              or (not carrier.home_time_zone and zone == zone_default) %}selected{% endif %}>
+                        {{ label }}</option>
+                    {% endfor %}
+                </select></label>
+        </div>
+        <p style="font-size:13px;margin:10px 0 0;">
+            In use now: <strong>{{ zone_in_use }}</strong> — today, here, is
+            <strong>{{ home_today }}</strong>.
+        </p>
+    </section>
+
+    {# ── 👤 Driver ──────────────────────────────────────────────────────
+       A pointer, not a form. Drivers already have a table, Fleet already has the
+       form, and the Driver Portal already logs in per driver. A second place to
+       edit one truth is the one thing this screen must not become. #}
+    <section class="card-section">
+        <h2>👤 Driver</h2>
+        {% if drivers %}
+        {# Every row opens the driver's own page, where the edit form already
+           lives. Owner feedback, 2026-09-08: "none of those fields are allowed
+           for data alteration or change."
+
+           He is right that they must be editable, and this is how -- one click
+           to the form that already exists, rather than a second form here. The
+           fields are the same fields either way; a copy of the form is a copy
+           that drifts. #}
+        <table class="data-table">
+            <thead><tr><th>Name</th><th>Licence</th><th>Class</th><th>Phone</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            {% for d in drivers %}
+                <tr>
+                    <td><a href="{{ url_for('pages.driver_detail', driver_id=d.driver_id) }}"><strong>{{ d.name or '—' }}</strong></a></td>
+                    <td>{{ d.license_number or '—' }}</td>
+                    <td>{{ d.license_class or '—' }}</td>
+                    <td>{{ d.phone or '—' }}</td>
+                    <td>{{ d.status }}</td>
+                    <td style="text-align:right;">
+                        <a class="btn btn-sm"
+                           href="{{ url_for('pages.driver_detail', driver_id=d.driver_id) }}">Edit</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if drivers|length < driver_target %}
+        <p style="font-size:13px;margin:10px 0 0;">
+            <strong>{{ drivers|length }} of {{ driver_target }}.</strong>
+            Add the rest on <a href="{{ url_for('pages.fleet') }}">Fleet</a>.
+        </p>
+        {% endif %}
+        {% else %}
+        <p style="font-size:13px;margin:0 0 10px;">
+            <strong>UNCONFIGURED — no driver record exists.</strong>
+            Every audit entry carries a driver's name, and right now that name is a
+            default rather than a record.
+        </p>
+        {% endif %}
+        <p style="font-size:13px;color:#666;margin:10px 0 0;">
+            <strong>Edit</strong> opens the driver's own page, where every field
+            can be changed. New drivers are added on
+            <a href="{{ url_for('pages.fleet') }}">Fleet</a> — <em>+ Add Driver</em>.
+            Both go to the same record; there is only ever one of it.
+        </p>
+    </section>
+
+    {# ── 🏢 Company ─────────────────────────────────────────────────── #}
+    <section class="card-section">
+        <h2>🏢 Company</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:10px;">
+            Goes on every rate confirmation, arrival notice and delivery packet,
+            and on the IFTA return.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:820px;">
+            <label>Legal name<br>
+                <input type="text" name="legal_name" value="{{ carrier.legal_name }}"
+                       style="width:100%;padding:6px 8px;"></label>
+            <label>Doing business as<br>
+                <input type="text" name="dba" value="{{ carrier.dba }}"
+                       style="width:100%;padding:6px 8px;"></label>
+            <label>USDOT number<br>
+                <input type="text" name="usdot" value="{{ carrier.usdot }}"
+                       style="width:100%;padding:6px 8px;"></label>
+            <label>MC / docket number<br>
+                <input type="text" name="mc_number" value="{{ carrier.mc_number }}"
+                       style="width:100%;padding:6px 8px;"></label>
+            <label>IFTA account number<br>
+                <input type="text" name="ifta_account" value="{{ carrier.ifta_account }}"
+                       style="width:100%;padding:6px 8px;"></label>
+            <label>IFTA base jurisdiction<br>
+                <input type="text" name="base_jurisdiction" value="{{ carrier.base_jurisdiction }}"
+                       maxlength="2" placeholder="FL"
+                       style="width:70px;padding:6px 8px;text-transform:uppercase;"></label>
+            <label>Phone<br>
+                <input type="text" name="phone" value="{{ carrier.phone }}"
+                       style="width:100%;padding:6px 8px;"></label>
+            <label>Email<br>
+                <input type="text" name="email" value="{{ carrier.email }}"
+                       style="width:100%;padding:6px 8px;"></label>
+        </div>
+    </section>
+
+    <section class="card-section">
+        <button type="submit" class="btn btn-success">Save</button>
+    </section>
+</form>
+
+{% endblock %}

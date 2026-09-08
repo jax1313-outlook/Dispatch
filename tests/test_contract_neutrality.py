@@ -215,11 +215,12 @@ class TestAdaptersAreWhereProvidersLive:
 
 
 class TestTheContractMatchesTheDoctrine:
-    """The contracts in code are exactly the ratified seven -- not 'at least',
+    """The contracts in code are exactly the ratified eight -- not 'at least',
     not 'roughly'.
 
     **Seven since 2026-09-06**, when Opportunity Capture was ratified as the
-    seventh contract and built under EXEC-ORDER v1.0 Step 3.
+    seventh contract and built under EXEC-ORDER v1.0 Step 3. **Eight since
+    2026-09-08**, when the Owner ruled the Mission Card template published.
 
     **Where "seven" comes from, named exactly.** §8.1 item 1 lists **six**
     endpoints; the seventh is ratified in `OPPORTUNITY_CAPTURE_PLAN.md` §2. The
@@ -242,6 +243,12 @@ class TestTheContractMatchesTheDoctrine:
         ("POST", "/api/joe/send-notice"): "MISSION §8.1",
         ("PATCH", "/api/joe/mission-record/<path:mission_id>"): "MISSION §8.1",
         ("POST", "/api/joe/opportunity"): "OPP-CAPTURE §2",
+        # Ruled 2026-09-08. The Owner asked why JOE did not already know the
+        # form -- "How does Joe not know the fields in this document?" -- and
+        # the answer was that I had copied eleven of the Mission Card's
+        # thirty-three fields into JOE and written my own questions for them.
+        # He ruled: "build B, publish the template from Dispatch."
+        ("GET", "/api/joe/mission-template"): "DECISION_LOG 2026-09-08",
     }
 
     SPECIFIED = set(RATIFIED)
@@ -255,17 +262,31 @@ class TestTheContractMatchesTheDoctrine:
                 for m in r.methods if m in ("GET", "POST", "PATCH", "PUT",
                                             "DELETE")}
 
-    def test_exactly_the_seven(self):
+    def test_exactly_the_eight(self):
         assert self._live() == self.SPECIFIED
 
-    def test_there_are_seven_not_six(self):
-        assert len(self.SPECIFIED) == 7
+    def test_there_are_eight(self):
+        assert len(self.SPECIFIED) == 8
 
     def test_nothing_exceeds_the_specification(self):
         """Adding an endpoint beyond spec is Class 3, never Code's."""
         assert self._live() - self.SPECIFIED == set()
 
-    def test_six_come_from_8_1_and_one_does_not(self):
+    def test_the_template_is_a_read_of_a_definition_not_of_operational_truth(self):
+        """Why an eighth endpoint did not need a new class of thinking.
+
+        It publishes the *shape* of the form -- keys, labels, the question to
+        ask -- which is identical on an empty node and a busy one. No load, no
+        driver and no record passes through it, so nothing it returns could ever
+        be a second copy of operational truth.
+        """
+        from dispatch import mission_template as mt
+
+        published = {"key", "label", "section", "required", "hint", "spoken",
+                     "choices", "opportunity_field"}
+        assert published <= (set(vars(mt.TEMPLATE[0])) | {"opportunity_field"})
+
+    def test_six_come_from_8_1_and_two_do_not(self):
         """The Step 0 finding, held in place by a test. If someone later claims
         all seven come from §8.1, this fails and the discrepancy is re-read
         rather than re-buried."""

@@ -69,3 +69,5 @@ run/
 .final*.txt
 *.local-run.txt
 .final-run*.txt
+.registration_preview.html
+.capture_sheet_preview.html

@@ -115,18 +115,28 @@ class TestSparseCaptureIsValidCapture:
     """§2: *"only board, origin, destination, and rate are required. A capture
     with gaps beats a listing lost to the next screen."*"""
 
-    def test_the_four_alone_are_enough(self, client):
+    def test_the_three_alone_are_enough(self, client):
         r = _post(client)
         assert r.status_code == 201
         record = opp.get(r.get_json()["opportunity_id"])
         for gap in ("pieces_weight", "equipment", "pickup_date", "contact", "notes"):
             assert record[gap] == ""
 
-    @pytest.mark.parametrize("missing", ["source_board", "origin", "destination"])
-    def test_each_of_the_four_is_actually_required(self, client, missing):
+    @pytest.mark.parametrize("missing", ["origin", "destination"])
+    def test_each_of_the_three_is_actually_required(self, client, missing):
         r = _post(client, **{missing: ""})
         assert r.status_code == 400
         assert missing in r.get_json()["note"]
+
+    def test_the_board_is_carried_but_no_longer_required(self, client):
+        """**Owner ruling, 2026-09-08:** *"I don't think that which load board
+        the opportunity comes from is significant enough to track."*
+
+        Carried, not tracked -- the field stays and rows keep what they hold,
+        but no listing is refused for want of it and nothing asks."""
+        r = _post(client, source_board="")
+        assert r.status_code == 201
+        assert "source_board" in opp.FIELDS
 
     def test_a_missing_rate_is_refused_not_defaulted(self, client):
         """Zero is a number a broker could have said. A missing rate is not
@@ -169,11 +179,20 @@ class TestTheDeduplicationRule:
     """§3: *"One load = one Opportunity record"* — and *"the engine never
     silently guesses two loads are one."*"""
 
-    def test_a_different_board_is_a_different_load(self, client):
-        _post(client, source_board="DAT", pickup_date="2026-09-10")
-        r = _post(client, source_board="Truckstop", pickup_date="2026-09-10")
-        assert r.get_json()["verdict"] == "NEW"
-        assert len(opp.all_open()) == 2
+    def test_the_same_load_on_two_boards_is_one_load(self, client):
+        """**Owner ruling, 2026-09-08:** *"I don't think that which load board
+        the opportunity comes from is significant enough to track."*
+
+        The board used to be part of a load's identity, so the same listing
+        posted to DAT and to Truckstop read as two loads. **Brokers post to
+        several boards.** A lane and a rate are what make a load the same load;
+        where it was seen is not, and this test was asserting the opposite.
+        """
+        first = _post(client, source_board="DAT", pickup_date="2026-09-10")
+        again = _post(client, source_board="Truckstop", pickup_date="2026-09-10")
+        assert again.get_json()["verdict"] == "MERGED"
+        assert (again.get_json()["opportunity_id"]
+                == first.get_json()["opportunity_id"])
 
     def test_a_different_lane_is_a_different_load(self, client):
         _post(client, pickup_date="2026-09-10")

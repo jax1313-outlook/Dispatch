@@ -131,6 +131,70 @@ def _mission(mission_id: str):
 
 # ---------------------------------------------------------------- Class 1 ---
 
+@joe_api.route("/api/joe/mission-template", methods=["GET"])
+@authenticated
+def mission_template():
+    """**The form itself.** What JOE asks, in what order, in whose words.
+
+    Owner ruling, 2026-09-08: *"build B, publish the template from Dispatch."*
+    Class 3 -- an endpoint beyond the six the governing document names -- and
+    ruled rather than assumed.
+
+    WHY IT EXISTS. JOE had its own list of eleven fields with eleven questions I
+    wrote. The Mission Card has **thirty-three fields, each already carrying the
+    question to ask** -- `Field.spoken`, whose own comment says *"a template read
+    aloud badly is a template nobody finishes."* Two lists that must agree will
+    eventually disagree, and the copy was already wrong: it had no load number,
+    which the card has had all along.
+
+    The Owner put it plainly: *"How does Joe not know the fields in this
+    document?"* It does now, and it asks rather than remembering.
+
+    **This is a read of a definition, not of operational truth.** No load, no
+    driver, no record of any kind passes through here -- it is the shape of the
+    form, which is the same on an empty node as on a busy one. Class 1 to serve.
+
+    The Company Library is deliberately not the source. A printed mission brief
+    is a *rendering* of the form; learning fields from it would drift the first
+    time the form changed and the print did not.
+    """
+    from dispatch import mission_template as mt
+    from dispatch import opportunity
+
+    onto = opportunity.ONTO_MISSION_CARD
+    for_card = {card_field: contract_field
+                for contract_field, card_field in onto.items()}
+
+    fields = [{
+        "key": field.key,
+        "label": field.label,
+        "section": field.section,
+        "required": bool(field.required),
+        "hint": field.hint,
+        # The question, in the words the form already chose. JOE says this.
+        "spoken": field.spoken,
+        "choices": list(field.choices or ()),
+        # Which contract field this one feeds, or "" when it is for the card
+        # alone. JOE needs both: it asks for everything and sends what fits.
+        "opportunity_field": for_card.get(field.key, ""),
+    } for field in mt.TEMPLATE]
+
+    audit.record(action="mission-template", driver=_driver(),
+                 channel=_channel(), result=audit.RESULT_SUCCESS,
+                 note="published %d fields" % len(fields))
+
+    return jsonify({
+        "ok": True,
+        "fields": fields,
+        "sections": list(dict.fromkeys(f["section"] for f in fields)),
+        "opportunity": {
+            "fields": list(opportunity.FIELDS),
+            "required": list(opportunity.REQUIRED),
+            "dictation_order": list(opportunity.dictation_order()),
+        },
+    }), 200
+
+
 @joe_api.route("/api/joe/mission-status", methods=["GET"])
 @authenticated
 def mission_status():

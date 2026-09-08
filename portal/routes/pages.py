@@ -941,6 +941,48 @@ def queues():
     )
 
 
+@pages_bp.route("/settings/registration", methods=["GET", "POST"])
+def registration():
+    """Who this business is. **Four things, one Save, and nothing else.**
+
+    Owner ruling, 2026-09-08: *"That's it. Nothing else."* Everything larger --
+    sharing carrier identity between nodes, five-node IFTA consolidation, a
+    settings screen that can write the settings that gate startup -- is parked
+    in `D:\\MD Files\\EXPANSION_PARKING_LOT.md` and must stay there.
+
+    **The Driver block is a pointer, not a form.** `drivers` already has a
+    table, Fleet already has `+ Add Driver`, and the Driver Portal already logs
+    in per driver by phone and PIN. A second place to edit one truth is the one
+    thing this screen must not become.
+
+    Nothing here blocks anything. A blank Registration means surfaces report
+    `UNCONFIGURED` and name what is missing -- *degradation is permitted,
+    incapacity is not.*
+    """
+    from dispatch import carrier, clock, services as dispatch_svc
+
+    saved = False
+    if request.method == "POST":
+        carrier.save(request.form)
+        saved = True
+
+    drivers = dispatch_svc.list_drivers()
+    return render_template(
+        "registration.html",
+        carrier=carrier.get(),
+        missing=carrier.missing(),
+        saved=saved,
+        drivers=drivers,
+        # Owner ruling 2026-09-08: one driver for now -- himself. Five is the
+        # ceiling and it lives in the Parking Lot, not in this screen.
+        driver_target=1,
+        zone_in_use=clock.home_zone_name(),
+        zone_problem=clock.zone_problem(),
+        zone_default=clock.DEFAULT_HOME_ZONE,
+        home_today=clock.home_today(),
+    )
+
+
 @pages_bp.route("/settings")
 def settings():
     import os

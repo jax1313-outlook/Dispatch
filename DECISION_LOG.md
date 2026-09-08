@@ -1186,3 +1186,49 @@ IFTA is filed four times a year. Nothing needs to run continuously to produce a 
 **Not built. Specified only.** The export/import shape belongs to a mission of its own, and no second node exists yet.
 
 ---
+
+## 2026-09-08 — Dispatch publishes the Mission Card template. An eighth contract.
+
+**PR:** (this change)
+**Capability:** A new endpoint on the JOE contract layer — `GET /api/joe/mission-template` — plus `/capture-sheet`, a printable rendering of the same definition. `dispatch/opportunity.py` gains `ONTO_MISSION_CARD`, lifted out of `dictation_order()` so the mapping can be published rather than re-derived.
+**Class:** **3.** *"Add an endpoint beyond spec"* is named in `CLAUDE.md` as reserved to human command, and `test_contract_neutrality.py` refused the change until the specification was updated with this ruling attached.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"build B, publish the template from Dispatch."*
+
+**The question that produced it, in the Owner's words:** *"How can Joe not know the forms that are in the company library? ... the level four agent should know all the documents and should be able to follow along in a field by field narration. Am I correct?"*
+
+**He was correct, and the evidence was worse than the question implied.** JOE held eleven fields with eleven questions written by Code. The Mission Card holds **thirty-three, each already carrying the question to ask** — `Field.spoken`, whose own comment reads *"a template read aloud badly is a template nobody finishes."* The copy was already wrong: it had no load number, which the card has had all along, and Code had reported the absence as a limitation of the contract rather than as a copy that was missing a field.
+
+**Why it happened.** The two repositories cannot share a Python path — both contain a package named `adapters`. Code hit that wall, **copied the form instead of solving the wall**, and left a comment saying Dispatch was authoritative. A comment naming the real source is not a source of truth; it is an apology written in advance.
+
+**Why B and not the alternatives.** A direct import was proven to work but couples a plug-in to the host's internals, and §5.4 requires plug-ins to enter through a governed boundary. A generated file is a copy the moment the form changes and nobody regenerates it. **The contract layer is how JOE and Dispatch already speak**, and this is the same shape as the seven that came before.
+
+**Nothing operational passes through it.** It publishes the *shape* of the form — keys, labels, the question to ask, the choices, and which card fields feed the seventh contract. It returns the same answer on an empty node as on a busy one, which a test asserts.
+
+**The copy he can read: the screen that already exists.** The Owner asked for one — *"I will have a copy of the template because I can bring it up on the tablet or my laptop... and we're both reading the same document"* — and Code built `/capture-sheet`, a printable rendering.
+
+**It was deleted the same hour, on the Owner's correction:** *"I don't think you need to create a form that already exists. the load card and the mission brief are one and the same and already exist in dispatch."*
+
+He was right. **`/intake` — New Mission — already renders the whole template**, sectioned, from `mt.fields_in()`, and that screen's own docstring says *"There is no courier form and no phone-load form: the source is a label on the record, never a different kind of mission."* The page Code built was a **third** rendering of one form, which is the thing that screen exists to prevent. Open New Mission beside the load board and read down it.
+
+**The endpoint is not a third rendering, and that is the distinction worth keeping.** It publishes the definition in a form a machine can read — keys, choice lists, the spoken question — none of which a rendered screen provides without scraping it. **One definition · one screen for people · one endpoint for JOE.**
+
+**What follows, and is not done yet.** JOE's eleven invented fields are to be **deleted, not synchronised.** Two lists that must agree will eventually disagree, and the second one is always the one nobody updates.
+
+---
+
+## 2026-09-08 — The load board comes off the required list
+
+**PR:** (this change)
+**Capability:** The seventh contract's required set, and the deduplication rule that used the board as part of a load's identity. `dispatch/opportunity.py`.
+**Class:** **3.** Changing what a ratified contract requires is not Code's to decide.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"At this moment, I don't think that which load board the opportunity comes from is significant enough to track."*
+
+**Carried, not tracked.** `source_board` stays in `FIELDS` and stays in the table — rows already hold it, and a field nobody is asked for costs nothing. It leaves `REQUIRED`, so no listing is refused for want of it, and JOE stops asking.
+
+**It also fixes the dedup rule it was part of, which nobody had noticed was wrong.** `classify()` required the board to match before two captures could be one load, so **the same listing posted to DAT and to Truckstop read as two loads.** Brokers post to several boards; a lane and a rate are what make a load the same load, and where it was seen is not. A test that asserted the old behaviour — `test_a_different_board_is_a_different_load` — now asserts the new one and says why.
+
+**And it emptied something built an hour earlier.** `CAPTURE_ONLY` existed because the board was a contract requirement the Mission Card had no field for, which would have made every card-read capture refuse. With the requirement gone there is nothing in it, so the Dispatch half was deleted. **JOE keeps the mechanism** — an empty list is the right shape for *"none right now"*, and the form decides whether there are any, not JOE.
+
+---

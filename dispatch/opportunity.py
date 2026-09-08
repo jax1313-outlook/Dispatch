@@ -44,15 +44,45 @@ from dispatch.db import get_connection
 
 # --------------------------------------------------------------- the contract
 
-#: Required by voice: board, lane, rate. **Everything after money is optional.**
-#: §2: *"Sparse capture is valid capture ... A capture with gaps beats a listing
-#: lost to the next screen."*
-REQUIRED = ("source_board", "origin", "destination", "rate")
+#: Contract field -> the Mission Card field it corresponds to.
+#:
+#: Lifted out of `dictation_order()` on 2026-09-08 so it can be **published**
+#: rather than re-derived. JOE asks Dispatch what the form is; this is the half
+#: of the answer that says which of the Mission Card's fields feed the seventh
+#: contract and which are for the card alone.
+ONTO_MISSION_CARD = {
+    "origin": "pickup_location",
+    "destination": "delivery_location",
+    "pieces_weight": "cargo_lines",
+    "equipment": "service",
+    "rate": "rate",
+    "pickup_date": "pickup_window",
+    "delivery_date": "delivery_window",
+    "contact": "customer_poc",
+    "notes": "notes",
+}
+
+#: **Owner ruling, 2026-09-08:** *"At this moment, I don't think that which load
+#: board the opportunity comes from is significant enough to track."*
+#:
+#: `source_board` was required and is now optional. The field stays -- rows
+#: already carry it and it costs nothing to keep -- but no capture is refused
+#: for want of it and nothing asks for it.
+#:
+#: **It also improves the dedup rule it was part of.** The board was matched as
+#: part of a load's identity, so the same load posted to DAT and to Truckstop
+#: read as two loads. Brokers post to several boards; a lane and a rate are what
+#: make a load the same load, and where it was seen is not.
+REQUIRED = ("origin", "destination", "rate")
 
 #: Everything the contract carries. Freeform where the plan says freeform.
+#:
+#: `source_board` is here and not in REQUIRED: **kept, not tracked.** Rows
+#: already carry it, dropping the column would lose what they hold, and a field
+#: nobody is asked for costs nothing.
 FIELDS = REQUIRED + (
-    "pieces_weight", "equipment", "pickup_date", "delivery_date",
-    "contact", "notes", "captured_via",
+    "source_board", "pieces_weight", "equipment", "pickup_date",
+    "delivery_date", "contact", "notes", "captured_via",
 )
 
 #: Channels, **named by nature and never by product** (Contract-First Rule).
@@ -88,18 +118,7 @@ def dictation_order() -> tuple:
     """
     from dispatch import mission_template as mt
 
-    #: contract field -> the Mission Card field it corresponds to.
-    onto = {
-        "origin": "pickup_location",
-        "destination": "delivery_location",
-        "pieces_weight": "cargo_lines",
-        "equipment": "service",
-        "rate": "rate",
-        "pickup_date": "pickup_window",
-        "delivery_date": "delivery_window",
-        "contact": "customer_poc",
-        "notes": "notes",
-    }
+    onto = ONTO_MISSION_CARD
     card = [f.key for f in mt.TEMPLATE]
     positioned = sorted(
         (k for k in FIELDS if onto.get(k) in card),
@@ -139,7 +158,9 @@ def _utc_now() -> str:
 def validate(payload: dict) -> list:
     """What is missing. Empty list means the capture is loggable.
 
-    Only the four. Everything else may be absent and the capture still stands.
+    **Lane and rate. Nothing else.** §2: *"Sparse capture is valid capture ... a
+    capture with gaps beats a listing lost to the next screen."* The board came
+    off the list on 2026-09-08 by Owner ruling.
     """
     problems = []
     for key in REQUIRED:
@@ -214,7 +235,6 @@ def classify(payload: dict, existing: list) -> tuple:
     """
     from dispatch import rehearsal
 
-    board = _clean(payload.get("source_board")).lower()
     lane = _lane(payload)
     rate = _rate(payload.get("rate"))
     # A rehearsal capture and a live one are never the same load, however alike
@@ -226,8 +246,9 @@ def classify(payload: dict, existing: list) -> tuple:
 
     ambiguous = None
     for candidate in existing:
-        if _clean(candidate.get("source_board")).lower() != board:
-            continue
+        # The board is deliberately NOT part of a load's identity. Ruled
+        # 2026-09-08: a broker posts the same load to several boards, and two
+        # sightings of one load are one load. The lane and the rate decide.
         if _lane(candidate) != lane:
             continue
 

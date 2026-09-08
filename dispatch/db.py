@@ -168,6 +168,32 @@ CREATE TABLE IF NOT EXISTS settlements (
     notes           TEXT NOT NULL DEFAULT ''
 );
 
+-- Who this carrier is. Exactly one row, id 'carrier', enforced by the CHECK:
+-- a business has one identity and a second row would be a second answer to
+-- "what is our USDOT number".
+--
+-- It holds what the BUSINESS is. What the MACHINE needs to start -- storage
+-- roots, keys, the portal host -- stays in the environment, because it is read
+-- before there is a database to read it from. The two must not merge.
+CREATE TABLE IF NOT EXISTS carrier (
+    carrier_id        TEXT PRIMARY KEY CHECK (carrier_id = 'carrier'),
+    legal_name        TEXT NOT NULL DEFAULT '',
+    dba               TEXT NOT NULL DEFAULT '',
+    usdot             TEXT NOT NULL DEFAULT '',
+    mc_number         TEXT NOT NULL DEFAULT '',
+    ifta_account      TEXT NOT NULL DEFAULT '',
+    base_jurisdiction TEXT NOT NULL DEFAULT '',
+    phone             TEXT NOT NULL DEFAULT '',
+    email             TEXT NOT NULL DEFAULT '',
+    home_street       TEXT NOT NULL DEFAULT '',
+    home_city         TEXT NOT NULL DEFAULT '',
+    home_state        TEXT NOT NULL DEFAULT '',
+    home_zip          TEXT NOT NULL DEFAULT '',
+    home_time_zone    TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS drivers (
     driver_id       TEXT PRIMARY KEY,
     name            TEXT NOT NULL DEFAULT '',

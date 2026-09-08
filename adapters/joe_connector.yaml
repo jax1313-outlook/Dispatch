@@ -94,6 +94,62 @@ components:
         reasoning: {type: string}
 
 paths:
+  # The form itself: what to ask, in what order, in whose words. Ruled by the
+  # Owner 2026-09-08 -- "build B, publish the template from Dispatch" -- after
+  # he asked why JOE did not already know the fields on a document it had been
+  # asked to fill in. It publishes a definition, never a record: the answer is
+  # the same on an empty node as on a busy one.
+  /api/joe/mission-template:
+    get:
+      operationId: getMissionTemplate
+      summary: The Mission Card's fields and the question to ask for each (Class 1)
+      parameters:
+        - $ref: '#/components/parameters/Driver'
+        - $ref: '#/components/parameters/Channel'
+      responses:
+        '200':
+          description: Every field the Mission Card declares, in card order.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {type: boolean}
+                  sections:
+                    type: array
+                    items: {type: string}
+                  fields:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: {type: string}
+                        label: {type: string}
+                        section: {type: string}
+                        required: {type: boolean}
+                        hint: {type: string}
+                        spoken:
+                          type: string
+                          description: What JOE says when taking this field by voice.
+                        choices:
+                          type: array
+                          items: {type: string}
+                        opportunity_field:
+                          type: string
+                          description: >-
+                            Which field of the seventh contract this one feeds,
+                            or empty when it belongs to the Mission Card alone.
+                  opportunity:
+                    type: object
+                    properties:
+                      fields: {type: array, items: {type: string}}
+                      required: {type: array, items: {type: string}}
+                      dictation_order: {type: array, items: {type: string}}
+        '401':
+          description: No bearer token, or the wrong one.
+        '503':
+          description: This node is not accepting Joe calls.
+
   /api/joe/mission-status:
     get:
       operationId: getMissionStatus
