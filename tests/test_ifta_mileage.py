@@ -255,8 +255,17 @@ class TestIFTATripLegPlausibilityWarning:
         """date defaults to today inside IFTATripLeg.__post_init__ -- the
         plausibility check must key off the record's real stored date, not
         the empty string the caller passed, or it would silently skip."""
-        from datetime import date as date_cls
-        today = date_cls.today()
+        # The model stamps the date in UTC (`models._utc_now()`), so the test
+        # must read the same clock. Reading the local one made this fail every
+        # evening between 8pm and midnight Eastern -- four hours a day when the
+        # two calendars disagree -- which is how it came up.
+        #
+        # **The clock the model uses is a real question, not settled here.** A
+        # leg driven at 9pm Eastern on 31 March is stamped 1 April in UTC and
+        # files into the wrong IFTA quarter. That is the calculation engine and
+        # `DECISION_LOG.md` governs it, so it is raised rather than changed.
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).date()
         quarter = (today.month - 1) // 3 + 1
         year, q = today.year, quarter
         starts = {1: "01-01", 2: "04-01", 3: "07-01", 4: "10-01"}
