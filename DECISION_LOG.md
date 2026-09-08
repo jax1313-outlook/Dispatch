@@ -1114,3 +1114,75 @@ orphaned server — has still never been exercised.
 **Scope, and the condition that reopens it.** `PORTAL_HOST` is `127.0.0.1`, which is the condition `docs/DISPATCH_SECURITY_DEFERRAL.md` names. **The day Phase 3 binds to the network for the tablet, this entry is re-read rather than inherited.**
 
 ---
+
+## 2026-09-08 — The business day is the home terminal's day
+
+**PR:** (this change)
+**Capability:** IFTA calculation engine (`dispatch/models.py` trip leg and fuel purchase dates), plus every other calendar-date derivation in `dispatch/models.py`, `dispatch/services.py` and `dispatch/store.py`. New module `dispatch/clock.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"all ifta and HOS logs are based on the declaired HOME location and never altered to accomidate the crossing of time zones. My HOME location is Eastern Time Zone. This is a gap I never thought of and will need to addressed in a system setup screen we have yet to create. I never thought of needing a setup screen to enter the needed information regarding the Company and the Driver using Dispatch until now."* — followed by *"yes fix everything that falls on this for sure."*
+
+**Context.** Dispatch derived every calendar date from UTC. Between 8pm and midnight Eastern that is tomorrow, so for four hours a day the program disagreed with the business about what day it was: a trip leg driven at 9pm on 31 March was dated 1 April and filed into **the wrong IFTA quarter**; a CDL read expired the evening before it expired; maintenance read overdue a day early; driver pay was stamped tomorrow. Twelve call sites, one defect. Found because a test failed only in the evening.
+
+**What changed.** `dispatch/clock.py` holds the rule once. Every *calendar date* now comes from `clock.home_today()`, read against the declared home zone. **Every *timestamp* stays UTC** — `created_at`, the audit trail and record ids order events and must never move. That split is the design.
+
+**Scope.** The Owner ruled IFTA and HOS and then authorized the rest. All twelve sites changed together, because a program that disagrees with itself about what day it is would be worse than one that is wrong consistently.
+
+**Degradation.** An unloadable zone name falls back to UTC and reports the reason through `clock.zone_problem()`. It does not raise and it is not silent.
+
+**Dependency.** `tzdata` on Windows only (`dispatch/requirements.txt`). Linux ships the IANA database; Windows does not, and the node is a Windows laptop. It is the IANA data packaged by CPython's maintainers, not a vendor.
+
+**Raised, not resolved.** The home time zone has nowhere to live but an environment variable, and it is not alone — carrier name, USDOT, MC, IFTA account, base jurisdiction, home terminal, and the driver's CDL are all hardcoded, defaulted or absent. Specified in `docs/specifications/COMPANY_AND_DRIVER_SETUP.md`. **Specified, not built, not authorized.**
+
+---
+
+## 2026-09-08 — Five nodes, one per truck. No base server.
+
+**PR:** (this change — documentation only)
+**Capability:** Architecture. `docs/specifications/COMPANY_AND_DRIVER_SETUP.md` open question 4. No code changes.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"here is the dilemma, the cost for a static base operation with a server communicating across the vast USA is more than any small Owner Operator can afford. I came up with the NODE idea to keep everything local to a single truck with Celluar service for access to the rented brain and email/phone. Until another cost based solution is discovered I would say 5 nodes."*
+
+**Context.** The five-driver ruling raised the question CONOPS v1.1 does not answer: a node lives in a truck, so five drivers means five nodes or one shared one. **Ruled: five nodes, one per truck.** Each is complete and local; cellular reaches the rented brain, email and phone, and nothing else.
+
+**The reason is cost, and it is the design constraint, not a footnote.** A base server reachable from anywhere in the United States is a monthly bill an owner-operator does not have. The node model exists to avoid it. Any future proposal that reintroduces hosting has to answer that first.
+
+**Note the phrasing: *"until another cost based solution is discovered."*** This is ruled, not closed. What it forecloses is a hosted base station; it does not foreclose a way for five nodes to reconcile.
+
+**What this leaves unsolved, recorded so it is not discovered later.** Five independent nodes means **carrier-level truth has no home**: IFTA across five trucks, settlements, equipment, and who is available. No node can hold it, because each one knows only its own truck. This is the first thing that has to be answered before a second node exists, and it must be answered without a server.
+
+**Staff recommendation, not authorized.** It probably does not need one. Nodes already ship encrypted backups to the home NAS under CONOPS R8, and the archive and restore machinery is built and proven. **Files, not a server:** each node exports its quarter, one designated machine imports five files and produces the carrier's return. No hosting, no monthly cost, no second source of truth — one machine that assembles copies and owns none of them. Class 3: recommended and held.
+
+**One-copy rule.** `CLAUDE.md`'s one-copy rule is one working copy **per machine**. Five nodes are five machines, not five copies on one. Recorded because the two are easy to confuse.
+
+---
+
+## 2026-09-08 — IFTA consolidates on a machine, not on a server
+
+**PR:** (this change — documentation only)
+**Capability:** IFTA calculation engine, at fleet scope. No code changes.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"i agree we go with your solution."* — accepting the recommendation held under the five-node ruling earlier the same day.
+
+**The question that produced it, in the Owner's words:** *"if i had 3 drivers and 3 systems kept apart for some unknow reason then each NODE would be responsiable for ITS IFTA, correct?"*
+
+**Answer: no.** IFTA is filed **per carrier**, not per truck. One licence, one quarterly return, covering every qualified vehicle. Three nodes do not make three returns.
+
+**Dispatch already agrees, and was built that way from the start.** `get_ifta_quarterly_report(year, quarter, vehicle_id="")` — an empty `vehicle_id` means the whole fleet, and the helper beneath it is `_fleet_mpg_estimate`. A per-vehicle report is an optional filter, never the filing. On three nodes today you would get three correct answers to the wrong question, each a fleet of one.
+
+**What follows.** Each node owns its own truck's trip legs and fuel purchases — the primary records, which belong where the truck is. It does **not** own the return.
+
+**The solution, ruled.** The home NAS is already the meeting place: CONOPS R8 ships each node's encrypted backup there. Each node exports its quarter; **one machine the Owner sits at reads five files and produces one return.** It runs when it is run, holds nothing, and owns nothing.
+
+**A consolidator is not a server, and the distinction is the whole point:**
+
+| | |
+|---|---|
+| **Server** | Always on · reachable from anywhere · holds the truth · **a bill every month, forever** |
+| **Consolidator** | Runs when run · reads copies · **holds nothing** · costs nothing |
+
+IFTA is filed four times a year. Nothing needs to run continuously to produce a document four times a year, and the cost constraint that produced the node architecture forbids anything that does.
+
+**Not built. Specified only.** The export/import shape belongs to a mission of its own, and no second node exists yet.
+
+---

@@ -1,0 +1,12 @@
+# Dispatch core. The freight platform runs on the Python standard library --
+# this file exists for the one thing the standard library needs help with.
+#
+# `zoneinfo` reads the IANA time zone database. Linux and macOS ship one;
+# Windows does not, and Dispatch's node is a Windows laptop. Without this the
+# home time zone cannot be loaded, `dispatch/clock.py` falls back to UTC, and
+# every calendar date is wrong by several hours in the evening -- which is the
+# defect that ruling exists to fix.
+#
+# It is the IANA database packaged by CPython's own maintainers. It is data,
+# not a vendor.
+tzdata>=2024.1 ; sys_platform == "win32"

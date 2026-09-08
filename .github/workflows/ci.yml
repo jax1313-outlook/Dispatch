@@ -36,6 +36,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r cin_lite/requirements.txt
           pip install -r portal/requirements.txt
+          pip install -r dispatch/requirements.txt
           pip install pytest pytest-cov
 
       - name: Run test suite with coverage

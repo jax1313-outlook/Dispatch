@@ -11,6 +11,8 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
+from dispatch import clock
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -573,7 +575,7 @@ class MaintenanceSchedule:
     def is_overdue(self) -> bool:
         if not self.next_due_date:
             return False
-        return self.next_due_date < _utc_now()[:10]
+        return self.next_due_date < clock.home_today()
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -635,14 +637,14 @@ class ComplianceDocument:
     def is_expired(self) -> bool:
         if not self.expiry_date:
             return False
-        return self.expiry_date < _utc_now()[:10]
+        return self.expiry_date < clock.home_today()
 
     @property
     def days_until_expiry(self) -> int | None:
         if not self.expiry_date:
             return None
         from datetime import datetime
-        today = datetime.fromisoformat(_utc_now()[:10])
+        today = datetime.fromisoformat(clock.home_today())
         expiry = datetime.fromisoformat(self.expiry_date)
         return (expiry - today).days
 
@@ -832,7 +834,7 @@ class IFTATripLeg:
         if not self.created_at:
             self.created_at = _utc_now()
         if not self.date:
-            self.date = _utc_now()[:10]
+            self.date = clock.home_today()
         if self.jurisdiction:
             _validate_choice(self.jurisdiction, IFTA_JURISDICTIONS, "jurisdiction")
 
@@ -860,7 +862,7 @@ class IFTAFuelPurchase:
         if not self.created_at:
             self.created_at = _utc_now()
         if not self.date:
-            self.date = _utc_now()[:10]
+            self.date = clock.home_today()
         if self.jurisdiction:
             _validate_choice(self.jurisdiction, IFTA_JURISDICTIONS, "jurisdiction")
 

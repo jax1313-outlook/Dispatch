@@ -3271,10 +3271,10 @@ def approve_driver_pay(pay_ids: list[str]) -> int:
 
 
 def mark_driver_pay_paid(pay_ids: list[str], paid_date: str = "") -> int:
-    from dispatch.models import _utc_now
+    from dispatch import clock
 
     if not paid_date:
-        paid_date = _utc_now()[:10]
+        paid_date = clock.home_today()
     count = 0
     for pay_id in pay_ids:
         result = store.update_driver_pay(
@@ -3356,13 +3356,13 @@ def complete_maintenance(
     service_miles: float = 0.0,
 ) -> dict | None:
     from datetime import datetime, timedelta
-    from dispatch.models import _utc_now
+    from dispatch import clock
 
     sched = store.get_maintenance_schedule(schedule_id)
     if not sched:
         return None
     if not service_date:
-        service_date = _utc_now()[:10]
+        service_date = clock.home_today()
     updates: dict = {
         "status": "completed",
         "last_service_date": service_date,
@@ -3478,8 +3478,8 @@ def get_expiring_compliance_documents(days_ahead: int = 30) -> list[dict]:
 
 
 def check_compliance_alerts() -> dict:
-    from dispatch.models import _utc_now
-    today = _utc_now()[:10]
+    from dispatch import clock
+    today = clock.home_today()
     all_docs = store.list_compliance_documents(status="active")
     expired_count = 0
     expiring_count = 0

@@ -1980,8 +1980,8 @@ def delete_maintenance_schedule(schedule_id: str) -> bool:
 
 
 def get_upcoming_maintenance(days_ahead: int = 7) -> list[dict]:
-    from dispatch.models import _utc_now
-    today = _utc_now()[:10]
+    from dispatch import clock
+    today = clock.home_today()
     from datetime import datetime, timedelta
     cutoff = (datetime.fromisoformat(today) + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
     sql = """\
@@ -1999,8 +1999,8 @@ def get_upcoming_maintenance(days_ahead: int = 7) -> list[dict]:
 
 
 def get_overdue_maintenance() -> list[dict]:
-    from dispatch.models import _utc_now
-    today = _utc_now()[:10]
+    from dispatch import clock
+    today = clock.home_today()
     sql = """\
     SELECT ms.*, e.unit_number, e.equipment_type, e.make, e.model
     FROM maintenance_schedules ms
@@ -2113,10 +2113,10 @@ def delete_compliance_document(doc_id: str) -> bool:
 
 
 def _enrich_compliance_doc(d: dict) -> None:
-    from dispatch.models import _utc_now
+    from dispatch import clock
     from datetime import datetime
     expiry = d.get("expiry_date", "")
-    today = _utc_now()[:10]
+    today = clock.home_today()
     if expiry:
         d["is_expired"] = expiry < today
         try:
@@ -2133,9 +2133,9 @@ def _enrich_compliance_doc(d: dict) -> None:
 
 
 def get_expiring_compliance_documents(days_ahead: int = 30) -> list[dict]:
-    from dispatch.models import _utc_now
+    from dispatch import clock
     from datetime import datetime, timedelta
-    today = _utc_now()[:10]
+    today = clock.home_today()
     cutoff = (datetime.fromisoformat(today) + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
     sql = """\
     SELECT * FROM compliance_documents
