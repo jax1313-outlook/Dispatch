@@ -192,9 +192,29 @@ class TestExemptions:
                 "%s is exempt from CSRF and not behind @authenticated"
                 % rule.endpoint)
 
-    def test_an_unauthenticated_write_to_joe_api_is_still_refused(self):
+    @pytest.mark.parametrize("configured,expected", [
+        (True, 401),    # a token exists and this caller did not present it
+        (False, 503),   # no token exists, so the node is not accepting at all
+    ])
+    def test_an_unauthenticated_write_to_joe_api_is_still_refused(
+            self, monkeypatch, configured, expected):
         """The gate that replaced CSRF, exercised rather than asserted. This is
-        the whole justification for the exemption: no token, no write."""
+        the whole justification for the exemption: **no token, no write.**
+
+        Both states are covered because they are different sentences and both
+        must refuse. An earlier version asserted only 401/403 and passed on this
+        laptop, where `DISPATCH_JOE_TOKEN` happens to be set -- then failed in
+        CI, where it is not, on a 503 that was the node being *more* fail-closed
+        rather than less. A test that only passes on a configured machine proves
+        nothing about an unconfigured one.
+        """
+        from portal.routes.joe_api import TOKEN_VAR
+
+        if configured:
+            monkeypatch.setenv(TOKEN_VAR, "a-real-token-nobody-presented")
+        else:
+            monkeypatch.delenv(TOKEN_VAR, raising=False)
+
         app = create_app()
         app.config["TESTING"] = False
         with app.test_client() as client:
@@ -202,8 +222,9 @@ class TestExemptions:
                                json={"source_board": "DAT", "origin": "Tampa",
                                      "destination": "Miami", "rate": 900,
                                      "driver": "nobody"})
-        assert resp.status_code in (401, 403), (
-            "a write with no bearer token was accepted")
+        assert resp.status_code == expected, (
+            "a write with no bearer token was answered %d" % resp.status_code)
+        assert resp.get_json().get("ok") is False
 
     def test_the_email_decision_link_still_works_without_a_token(self, client):
         """These arrive from a mail client with no session at all."""

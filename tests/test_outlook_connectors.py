@@ -17,11 +17,52 @@ happen -- a hang, or a claim that something was sent when it was not.
 
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 
 from dispatch import scheduling
 from dispatch.connectors import outlook_mail, registry
 from portal import cockpit, joe_voice
+
+
+@pytest.fixture
+def com_available(monkeypatch):
+    """Make the COM import succeed, so the Windows branch runs anywhere.
+
+    Both adapters try `import win32com.client` first and, when it fails, report
+    *"The Outlook connection is not installed on this machine."* On Linux --
+    which is where CI runs -- that is the only branch reachable, so a test
+    asserting the *"Outlook is not open"* wording never saw the code it was
+    written for. Two of them failed in CI for three days for exactly that
+    reason, on a machine where they had never once run.
+
+    This is the same move `sandbox_survey.safety.long_path(windows=...)` makes
+    and for the same stated reason: **a branch that only executes on the target
+    machine is a branch nobody has ever seen work.**
+
+    `Dispatch` raises rather than returning a stub, which turns this fixture
+    into the assertion the whole class exists to make -- *asking COM for Outlook
+    when Outlook is closed starts a headless instance that wedges.* If either
+    adapter ever reaches COM with Outlook closed, the test fails here.
+    """
+    pythoncom = types.ModuleType("pythoncom")
+    pythoncom.CoInitialize = lambda: None
+    pythoncom.CoUninitialize = lambda: None
+
+    def _never(*args, **kwargs):
+        raise AssertionError(
+            "COM was dispatched while Outlook was closed -- this is the hang")
+
+    client = types.ModuleType("win32com.client")
+    client.Dispatch = _never
+    win32com = types.ModuleType("win32com")
+    win32com.client = client
+
+    monkeypatch.setitem(sys.modules, "pythoncom", pythoncom)
+    monkeypatch.setitem(sys.modules, "win32com", win32com)
+    monkeypatch.setitem(sys.modules, "win32com.client", client)
 
 
 VOCABULARY = ("LIVE", "CONFIGURED", "UNCONFIGURED", "SIMULATED",
@@ -53,20 +94,42 @@ class TestItNeverLaunchesOutlook:
         session = session[:session.index("def _release")]
         assert session.index("_outlook_is_running") < session.index("Dispatch(")
 
-    def test_a_closed_outlook_is_reported_not_started(self, monkeypatch):
+    def test_a_closed_outlook_is_reported_not_started(self, monkeypatch, com_available):
         monkeypatch.setattr(scheduling, "_outlook_is_running", lambda: False)
         probe = scheduling.OutlookCalendarAdapter().probe()
         assert probe["live"] is False
         assert probe["status"] == "UNAVAILABLE"
         assert "not open" in probe["blocker"]
 
-    def test_mail_says_nothing_was_sent_when_outlook_is_closed(self, monkeypatch):
+    def test_mail_says_nothing_was_sent_when_outlook_is_closed(self, monkeypatch,
+                                                               com_available):
         monkeypatch.setattr(outlook_mail, "_outlook_is_running", lambda: False)
         result = outlook_mail.OutlookMailAdapter().send(
             "someone@example.com", "Subject", "Body")
         assert result["sent"] is False
         assert result["ok"] is False
         assert "nothing was sent" in result["blocker"].lower()
+
+    @pytest.mark.parametrize("adapter,module", [
+        ("OutlookCalendarAdapter", "scheduling"),
+        ("OutlookMailAdapter", "outlook_mail"),
+    ])
+    def test_a_machine_without_outlook_says_so_instead_of_guessing(
+            self, monkeypatch, adapter, module):
+        """The other branch, and the one CI actually takes. No pywin32 means no
+        Outlook, and the honest answer is UNAVAILABLE with the reason named --
+        never a silent success and never a hang."""
+        for name in ("pythoncom", "win32com", "win32com.client"):
+            monkeypatch.setitem(sys.modules, name, None)
+
+        if module == "scheduling":
+            answer = scheduling.OutlookCalendarAdapter().probe()
+            assert answer["status"] == "UNAVAILABLE"
+        else:
+            answer = outlook_mail.OutlookMailAdapter().send(
+                "someone@example.com", "Subject", "Body")
+            assert answer["sent"] is False
+        assert "not installed on this machine" in answer["blocker"]
 
 
 class TestSendingAndDraftingAreDifferentActs:
