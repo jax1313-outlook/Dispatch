@@ -162,11 +162,48 @@ class TestExemptions:
     bind a token to and carry their own signed credential instead. Anything
     wider and the protection quietly stops protecting."""
 
-    def test_the_exemption_list_is_the_login_gate_list(self):
-        assert EXEMPT_BLUEPRINTS == {"decisions", "stakeholder"}
+    def test_the_exemption_list_is_exactly_these_three(self):
+        """Equality, not membership. A test that only checked what is *in* the
+        list would pass while the list grew."""
+        assert EXEMPT_BLUEPRINTS == {"decisions", "stakeholder", "joe_api"}
         assert "dispatch_api.dispatch_decision" in EXEMPT_ENDPOINTS
         # A whole-blueprint exemption for dispatch_api would open 146 routes.
         assert not any(e == "dispatch_api" for e in EXEMPT_BLUEPRINTS)
+
+    def test_joe_api_is_exempt_because_the_bearer_token_is_the_gate(self):
+        """**The reason is the exemption.** `joe_api` has no ambient authority
+        for a forged request to borrow: every route on it requires a bearer
+        token in an `Authorization` header, and no browser sends that header on
+        its own. Remove `@authenticated` from a route on this blueprint and the
+        exemption becomes a hole -- so this asserts the guard is still there
+        rather than trusting the docstring that says it is."""
+        from portal.routes import joe_api as blueprint_module
+
+        app = create_app()
+        routes = [rule for rule in app.url_map.iter_rules()
+                  if str(rule.endpoint).startswith("joe_api.")]
+        assert routes, "the joe_api blueprint is not registered"
+
+        for rule in routes:
+            view = app.view_functions[rule.endpoint]
+            # `authenticated` wraps the view; the wrapper is what carries the
+            # marker, because the guard is what must survive, not the name.
+            assert getattr(view, "__wrapped__", None) is not None, (
+                "%s is exempt from CSRF and not behind @authenticated"
+                % rule.endpoint)
+
+    def test_an_unauthenticated_write_to_joe_api_is_still_refused(self):
+        """The gate that replaced CSRF, exercised rather than asserted. This is
+        the whole justification for the exemption: no token, no write."""
+        app = create_app()
+        app.config["TESTING"] = False
+        with app.test_client() as client:
+            resp = client.post("/api/joe/opportunity",
+                               json={"source_board": "DAT", "origin": "Tampa",
+                                     "destination": "Miami", "rate": 900,
+                                     "driver": "nobody"})
+        assert resp.status_code in (401, 403), (
+            "a write with no bearer token was accepted")
 
     def test_the_email_decision_link_still_works_without_a_token(self, client):
         """These arrive from a mail client with no session at all."""

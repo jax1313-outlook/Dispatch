@@ -22,10 +22,33 @@ authenticated by their own signed tokens instead:
   * the `decisions` blueprint (cin_lite's email action links),
   * the `stakeholder` blueprint (the external read-only broker view),
   * `dispatch_api.dispatch_decision` (the freight email action link), and only
-    that endpoint, never its whole blueprint.
+    that endpoint, never its whole blueprint,
+  * the `joe_api` blueprint -- the seven contracts JOE speaks to.
 
-Widening this list is how CSRF protection quietly stops protecting anything,
-so it is defined once, here, next to the reason it exists.
+`joe_api` is exempt for a different reason than the rest, and the difference is
+the justification. **CSRF is a defence against ambient authority.** It exists
+because a browser attaches the session cookie to a request whether or not the
+page that made it had any business making it, so the server needs a second proof
+that the page was one of its own. `joe_api` has no ambient authority to abuse:
+every route on it carries `@authenticated`, which requires a bearer token in an
+`Authorization` header. **No browser sends that header on its own.** A forged
+cross-site request to `/api/joe/opportunity` arrives without the token and is
+refused by the auth guard, which is the gate that was actually holding the door.
+
+Requiring CSRF here bought nothing and cost something real. A machine client had
+to fetch a page, keep two cookies and replay a token before its first write, and
+when any of that lapsed the refusal came back as a 403 indistinguishable from a
+bad token. JOE speaks this contract from a tablet over a link CONOPS v1.1 calls
+intermittent by design, so "the session went away" is the normal case here, not
+the exceptional one.
+
+**This is scoped by `PORTAL_HOST` being `127.0.0.1`** -- the condition
+`docs/DISPATCH_SECURITY_DEFERRAL.md` names. The day Phase 3 binds to the network
+for the tablet, this entry is re-read rather than inherited, along with the rest
+of that deferral.
+
+Widening this list is how CSRF protection quietly stops protecting anything, so
+it is defined once, here, and each entry carries the reason it earned its place.
 """
 
 from __future__ import annotations
@@ -40,7 +63,7 @@ _HEADER = "X-CSRF-Token"
 _FORM_FIELD = "csrf_token"
 _MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 
-EXEMPT_BLUEPRINTS = {"decisions", "stakeholder"}
+EXEMPT_BLUEPRINTS = {"decisions", "stakeholder", "joe_api"}
 EXEMPT_ENDPOINTS = {"dispatch_api.dispatch_decision", "auth.login",
                     "driver_portal.driver_login", "driver_portal.driver_forgot_pin"}
 

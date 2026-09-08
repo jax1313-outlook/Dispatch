@@ -1099,3 +1099,18 @@ orphaned server — has still never been exercised.
 **Note:** JOE is unaffected. It cannot send at all — Article II of the Assistant Plugin Constitution has eight permitted functions and transmission is not one of them.
 
 ---
+
+## 2026-09-07 — `joe_api` exempted from CSRF; the bearer token is the gate
+
+**PR:** (this change)
+**Capability:** `portal/csrf.py` — the exemption list — and `tests/test_csrf_protection.py`. No route, contract, or data-model change.
+**Approved by:** Mike (owner), under the standing security deferral.
+**Approval, verbatim:** *"At this point, my concept is an open application. So please disregard and move around, work around, bypass whatever needs to be done on any security issue. We have serious things to build without dealing with that at this point."*
+
+**Context.** JOE speaks the seven contracts as a machine client. CSRF required it to fetch a page, hold two cookies and replay a token before its first write, and when any of that lapsed the refusal arrived as a 403 indistinguishable from a bad token. CONOPS v1.1 calls the tablet's link intermittent by design, so a lapsed session is the normal case on this blueprint, not the exceptional one.
+
+**Why this is not a weakening.** CSRF defends against **ambient authority** — the browser attaching a session cookie to a request the page had no business making. `joe_api` has none to borrow: every route carries `@authenticated`, which requires a bearer token in an `Authorization` header, and no browser sends that header on its own. A forged cross-site request arrives without the token and is refused by the auth guard, which is the gate that was actually holding the door. Two tests now hold that: one asserts every route on the blueprint is still behind `@authenticated`, and one exercises an unauthenticated write and requires a refusal.
+
+**Scope, and the condition that reopens it.** `PORTAL_HOST` is `127.0.0.1`, which is the condition `docs/DISPATCH_SECURITY_DEFERRAL.md` names. **The day Phase 3 binds to the network for the tablet, this entry is re-read rather than inherited.**
+
+---
