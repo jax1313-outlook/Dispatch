@@ -238,10 +238,17 @@ class TestFuelEstimatorTemplate:
         assert "Estimate Fuel Cost" in html
         assert 'href="/fuel-estimator"' not in html
 
-    def test_add_as_expense_button(self, client):
-        resp = client.get("/fuel-estimator")
-        html = resp.data.decode()
-        assert "Add as Fuel Expense" in html
+    def test_the_estimator_writes_nothing(self, client):
+        """TOOLBOX is read-only utility functionality, Mike's ruling of
+        2026-09-09. Add as Fuel Expense posted onto a live load, so it came off.
+        Applying an estimate to a load becomes a workflow action elsewhere.
+
+        The expense API itself is untouched and still tested above -- what went
+        away is a calculator reaching into an operational record."""
+        html = client.get("/fuel-estimator").data.decode()
+        assert "Add as Fuel Expense" not in html
+        assert "addAsExpense" not in html
+        assert "/expenses" not in html
 
     def test_ifta_link(self, client):
         resp = client.get("/fuel-estimator")
