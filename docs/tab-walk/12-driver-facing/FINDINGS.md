@@ -1,14 +1,14 @@
-# Tab Walk — JOE Portal and Driver Facing
+# Tab Walk — Driver Facing
 
 - Status: NOT STARTED
 - Walked on:
-- Finding ID prefix: JOE
+- Finding ID prefix: DRIVERFACE
 
 ## Scope
 
-Nav entries: JOE Portal
+Nav entries: none in main nav; reached directly
 
-Templates: joe_portal.html, driver_home.html, driver_login.html, driver_forgot_pin.html, stakeholder_view.html
+Templates: driver_home.html, driver_login.html, driver_forgot_pin.html, stakeholder_view.html
 
 Routes:
 
@@ -50,7 +50,7 @@ A question that cannot be answered is a finding. Record it as one.
 Every finding gets an ID. Never renumber. A closed finding keeps its number
 so commits and tests can keep pointing at it.
 
-### JOE-001 — short title
+### DRIVERFACE-001 — short title
 
 - Severity: blocker | broken | wrong | rough | cosmetic
 - Status: open | fixed | wont-fix | deferred

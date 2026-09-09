@@ -63,16 +63,15 @@ to still mean the same thing.
 
 ## Tabs
 
-The nav entries below were read from `portal/templates/base.html` on
-`merge/main-into-joe-portal`, which carries four entries `main` does not have:
-JOE Portal, Candidates, Booking, and New Mission. Those four appear in tabs 02
-and 12. Walk the branch that will actually run on Mike's laptop, and correct
-this table if that is not the joe-portal branch.
+Nav entries below are the 24 on `main`, confirmed against the running portal at
+`127.0.0.1:8080` on 2026-09-09. The joe-portal branch adds JOE Portal,
+Candidates, Booking and New Mission. Those are not in the running nav, so they
+are listed as templates under tab 02 rather than as nav entries.
 
 | # | Tab | Prefix | Nav entries | Status |
 | --- | --- | --- | --- | --- |
 | 01 | [Dispatch](01-dispatch/FINDINGS.md) | DISPATCH | Dispatch, Operations, Calendar, Exceptions | not started |
-| 02 | [Loads and Booking](02-loads/FINDINGS.md) | LOADS | Load Search, SAM, Candidates, Booking, New Mission, Pipeline | not started |
+| 02 | [Pre-Commitment Lifecycle](02-pre-commit/FINDINGS.md) | PRECOMMIT | Load Search, SAM, Pipeline | not started |
 | 03 | [Fleet](03-fleet/FINDINGS.md) | FLEET | Fleet | not started |
 | 04 | [Drivers](04-drivers/FINDINGS.md) | DRIVERS | Driver Pay | not started |
 | 05 | [Billing and Profitability](05-billing/FINDINGS.md) | BILLING | Billing, Profitability | not started |
@@ -82,7 +81,7 @@ this table if that is not the joe-portal branch.
 | 09 | [Intelligence and Library](09-intelligence/FINDINGS.md) | INTEL | Intelligence, Library | not started |
 | 10 | [Archive and Queues](10-archive/FINDINGS.md) | ARCHIVE | Archive, Queues, Conflict Notices | not started |
 | 11 | [Portal Shell and Settings](11-portal-shell/FINDINGS.md) | SHELL | Home, Settings | not started |
-| 12 | [JOE Portal and Driver Facing](12-driver-facing/FINDINGS.md) | JOE | JOE Portal | not started |
+| 12 | [Driver Facing](12-driver-facing/FINDINGS.md) | DRIVERFACE | none in main nav; reached directly | not started |
 
 Status values, in order: `not started`, `walked`, `findings open`, `fixed`,
 `proven`. A tab reaches `proven` only when every finding in it is closed

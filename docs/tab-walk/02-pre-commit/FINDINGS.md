@@ -1,14 +1,14 @@
-# Tab Walk — Loads and Booking
+# Tab Walk — Pre-Commitment Lifecycle
 
 - Status: NOT STARTED
 - Walked on:
-- Finding ID prefix: LOADS
+- Finding ID prefix: PRECOMMIT
 
 ## Scope
 
-Nav entries: Load Search, SAM, Candidates, Booking, New Mission, Pipeline
+Nav entries: Load Search, SAM, Pipeline
 
-Templates: search.html, sam.html, candidates.html, booking.html, mission_intake.html, mission_brief.html, brief.html, pending.html, load_readonly_detail.html, decision.html
+Templates: search.html, sam.html, pending.html, decision.html, load_readonly_detail.html, booking.html, candidates.html, mission_intake.html, mission_brief.html, brief.html
 
 Routes:
 
@@ -50,7 +50,7 @@ A question that cannot be answered is a finding. Record it as one.
 Every finding gets an ID. Never renumber. A closed finding keeps its number
 so commits and tests can keep pointing at it.
 
-### LOADS-001 — short title
+### PRECOMMIT-001 — short title
 
 - Severity: blocker | broken | wrong | rough | cosmetic
 - Status: open | fixed | wont-fix | deferred

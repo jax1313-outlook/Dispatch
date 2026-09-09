@@ -39,37 +39,68 @@ place. Specifically:
 Record these under the normal finding format with severity and status like any other. Add
 the line `Lens: yes` so they can be pulled out as a set at the end of the walk.
 
+## Settled by Mike, 2026-09-09
+
+These were open when the constitution was first read against the repository. Mike closed
+them. They are settled for the purpose of the walk. Findings use these answers.
+
+**R1 — One record, not three objects.** The Opportunity Card is updated as negotiation
+proceeds. When Mike presses Accept, the card changes name and carries all of its encoded
+data forward through the end-to-end process. The record's identity persists the whole way.
+
+This confirms `docs/DISPATCH_STATE_TRANSITION_RULES.md`, which already holds one record,
+one identity, purpose changes while identity does not. The constitution's arrows are a
+change of name and purpose, not a replacement of the object. Accept is the commit gate.
+
+Question 4 on every tab is therefore asking which named phase of one record the screen
+shows, never which of several objects it holds.
+
+**R2 — JOE is no longer optional.** This supersedes the JOE optionality language in
+`docs/DISPATCH_SYSTEM_INDEPENDENCE_DOCTRINE.md` and
+`docs/DISPATCH_EXTERNAL_ADAPTER_BOUNDARIES.md`. See T1 below for what it leaves open.
+
+**R3 — JOE Portal is not the booking workbench.** The booking workbench now sits in the
+Pre-Commitment Lifecycle. Per the constitution, Intelligence owns the entire pre-commit
+lifecycle, so the workbench belongs to that owner and not to a portal screen.
+
+**R4 — Departments are superseded by agents.** The model is no longer deterministic
+separation of process by department name. It is agents. Their Level is not yet determined.
+
+Stop writing "department" in walk findings. Write "agent". Where a screen or a doctrine
+file still says department, that wording is a finding, not a fact.
+
 ## Open questions, unresolved
 
-These surfaced when the constitution was read against what is already in the repository.
-None of them are resolved here. They are listed so the walk does not silently pick a side,
-and so the same question is not re-argued on twelve separate tabs.
+Listed so the walk does not silently pick a side, and so the same question is not
+re-argued on twelve separate tabs. Mike resolves these.
 
-**Workers or departments.** The repository already calls Intelligence, Library, Publisher
-and Archive a tri-department set with shared object contracts. The constitution calls them
-workers and adds Joe and Dispatch. Same nouns, two vocabularies. Until Mike settles it,
-findings should use the constitution's word and name the doctrine file they are reading
-against.
+**T1 — What JOE being required does to independence.** `DISPATCH_SYSTEM_INDEPENDENCE_DOCTRINE.md`
+lists JOE under what Dispatch borrows, and names "No JOE" as one of the designed degraded
+states. R2 makes JOE required. Two readings follow and they lead different places. Either
+JOE moves from borrowed to owned, and Dispatch must then contain that capability itself,
+or JOE stays borrowed and Dispatch no longer runs complete without it. The second reading
+contradicts the standing rule that Dispatch remains complete and operational without
+optional plug-ins. Degraded mode needs a new answer for the JOE row either way.
 
-**Manager already holds the handoff seat.** `docs/MANAGER.md` documents Manager as
-dormant, never built, sitting over Intelligence, Library, Publisher and Archive, receiving
-their output, presenting it for review, and routing decisions. That is close to the
-function the constitution identifies as the missing artifact. The walk must not build
+**T2 — Which stages an agent may occupy.** `DISPATCH_DETERMINISTIC_CHASSIS.md` holds that
+the engine is deterministic and that five stages never collapse: filter, score, sort,
+recommendation, decision. It states that decision may not be produced by the engine. R4
+replaces deterministic department separation with agents. The boundary that must survive
+is that no agent produces a decision. Which of the other four stages an agent may occupy,
+and whether an agent-produced score still has to reproduce from the record and the profile
+alone, is undetermined.
+
+**T3 — Agent Level.** R4 leaves Level undetermined. Until it is set, the constitution's
+Level 1 through Level 3 numbering describes artifacts, not agent tiers. Do not use the
+word Level in a finding to mean an agent tier.
+
+**T4 — Manager already holds the handoff seat.** `docs/MANAGER.md` documents Manager as
+dormant and never built, sitting over Intelligence, Library, Publisher and Archive,
+receiving their output, presenting it for review, and routing decisions. That is close to
+the function the constitution identifies as the missing artifact. The walk must not build
 Manager as a side effect of documenting handoffs. Manager's status is Mike's to change.
 
-**One record or three objects.** `docs/DISPATCH_STATE_TRANSITION_RULES.md` opens with one
-record, one identity, and holds that purpose changes while identity does not. The
-constitution's transition reads as object replacement: Opportunity Card becomes Committed
-Load becomes Load Card or Mission Record. These may be the same thing said two ways, or
-they may conflict. Question 4 on every tab depends on which it is, so resolve it early.
-
-**Three meanings of JOE.** The repository's doctrine files describe JOE as a dialog
-assistant and narration layer, explicitly optional, with records displaying without
-narrative when it is unavailable. The constitution lists Joe as a worker that owns work.
-On the joe-portal branch, JOE Portal is the booking workbench holding Candidates, Booking
-and New Mission. Three different things share one name.
-
-**Level 2 partly exists.** The constitution's Level 2 chain runs from opportunity
+**T5 — Level 2 partly exists.** The constitution's Level 2 chain runs from opportunity
 discovery to archive. `docs/DISPATCH_STATE_TRANSITION_RULES.md` already covers activation
 events, atomic human gates, run phases, and transitions that must never happen. Level 2
 should be reconciled with that file, not written fresh alongside it.

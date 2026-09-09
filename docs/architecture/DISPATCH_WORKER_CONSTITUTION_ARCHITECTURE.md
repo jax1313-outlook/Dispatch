@@ -7,7 +7,11 @@ stable reference. This document authorizes no code, no route, no data model, and
 runtime behavior. It is the lens the tab walk looks through, not a build order.
 
 Where its vocabulary meets existing doctrine, see `docs/tab-walk/LENS.md`. That file
-records the open questions. It does not resolve them. Mike resolves them.
+records what Mike has settled and what is still open. It resolves nothing on its own.
+
+Two things below have already moved. Mike has ruled that JOE is no longer optional, and
+that department-named separation of process is superseded by agents whose Level is not yet
+determined. The text here is preserved as written. LENS.md carries the rulings.
 
 ---
 
