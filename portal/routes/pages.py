@@ -462,6 +462,13 @@ def compliance():
 
 @pages_bp.route("/fuel-estimator")
 def fuel_estimator():
+    """Parked for TOOLBOX on 2026-09-09, Mike's ruling. The nav entry is gone;
+    this path still resolves and the page still works.
+
+    TOOLBOX is the future home: a single screen of owner/operator calculators,
+    reference tables, federal links and utilities, none of which is workflow.
+    The inventory and what has to be settled first are in
+    docs/tab-walk/PARKING_LOT.md."""
     from dispatch import services as dispatch_svc
     defaults = {
         "avg_fuel_price": dispatch_svc.get_avg_fuel_price(),

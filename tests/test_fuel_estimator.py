@@ -229,10 +229,14 @@ class TestFuelEstimatorTemplate:
         assert "7.0" in html
         assert "4.000" in html
 
-    def test_nav_link(self, client):
+    def test_page_still_resolves_though_the_nav_link_is_gone(self, client):
+        """Parked for TOOLBOX on 2026-09-09. Off the nav, not removed --
+        the page and its calculator still work at the same path."""
         resp = client.get("/fuel-estimator")
+        assert resp.status_code == 200
         html = resp.data.decode()
-        assert "fuel-estimator" in html
+        assert "Estimate Fuel Cost" in html
+        assert 'href="/fuel-estimator"' not in html
 
     def test_add_as_expense_button(self, client):
         resp = client.get("/fuel-estimator")
