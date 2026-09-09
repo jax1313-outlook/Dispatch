@@ -6,6 +6,19 @@ finding from the walk lives under this directory and nowhere else.
 Start here. If a tab-walk note is not linked from the table below, it does not
 exist as far as the after-build process is concerned.
 
+## The lens
+
+Tabs are read through the worker constitution architecture, at
+`docs/architecture/DISPATCH_WORKER_CONSTITUTION_ARCHITECTURE.md`. Every tab
+answers the same six questions before its findings are written.
+
+[LENS.md](LENS.md) holds those questions, what counts as a lens finding, and the
+vocabulary questions that are still open between the constitution and existing
+doctrine. Read it once before tab 01 and do not re-argue those questions per tab.
+
+The objective is understanding before redesign. Working capability is preserved.
+No broad refactor comes out of this walk. Findings only. Mike decides.
+
 ## How this is organised
 
 One folder per tab. Each folder holds:
@@ -49,6 +62,12 @@ to still mean the same thing.
 | cosmetic | Presentation only |
 
 ## Tabs
+
+The nav entries below were read from `portal/templates/base.html` on
+`merge/main-into-joe-portal`, which carries four entries `main` does not have:
+JOE Portal, Candidates, Booking, and New Mission. Those four appear in tabs 02
+and 12. Walk the branch that will actually run on Mike's laptop, and correct
+this table if that is not the joe-portal branch.
 
 | # | Tab | Prefix | Nav entries | Status |
 | --- | --- | --- | --- | --- |

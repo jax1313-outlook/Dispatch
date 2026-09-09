@@ -22,6 +22,29 @@ without reading the source first, that gap is itself a finding.
 What happened when the page was opened against real data. Name the load or
 record used, so the walk can be repeated later and get the same result.
 
+## The six questions
+
+Read against `docs/architecture/DISPATCH_WORKER_CONSTITUTION_ARCHITECTURE.md`.
+See `docs/tab-walk/LENS.md` for how to apply these and what already conflicts.
+A question that cannot be answered is a finding. Record it as one.
+
+**1. Which worker owns this function?**
+
+**2. Is the tab displaying workflow, or defining workflow?**
+
+**3. Is worker responsibility incorrectly embedded in the screen?**
+
+**4. What state transition does this screen represent?**
+
+**5. What inputs, outputs, and handoffs are present?**
+
+- Receives:
+- Produces:
+- Hands off to:
+- Handoff condition:
+
+**6. Does the current implementation align with worker ownership?**
+
 ## Findings
 
 Every finding gets an ID. Never renumber. A closed finding keeps its number
@@ -31,6 +54,8 @@ so commits and tests can keep pointing at it.
 
 - Severity: blocker | broken | wrong | rough | cosmetic
 - Status: open | fixed | wont-fix | deferred
+- Lens: yes | no — yes if worker ownership, handoffs, states and screens are
+  mixed together here. Lens findings are understanding, not a work order.
 - Evidence: evidence/filename
 - Seen: what was observed, exactly, including any error text
 - Expected: what should have happened instead
