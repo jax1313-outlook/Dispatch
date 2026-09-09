@@ -268,6 +268,19 @@ paid; free routing engines are not truck-legal), and whether a computed mileage 
 replace a posted one on a load record — which is a Current Reality write and therefore
 not the connector's to make.
 
+**TruckMap was considered and ruled out, 2026-09-09.** It has no developer API. Their own
+answer to the question is that they allow third-party apps to *deep link* to truck routes
+and location results, and that an app developer should email them. A deep link opens a
+route for a human to look at; it returns no distance a scoring engine can read. TruckMap
+remains a candidate for a "open this route" link on a load, which is a different feature
+from this connector and does not fill it.
+
+**What the absence costs, concretely.** Scoring computes revenue per mile, fuel, net and
+margin from `distance_miles`. Without a router that number comes from the 22-pair lane
+table in `dispatch/scoring.py` or from a board posting. A dictated load carries neither,
+so a lane the table does not hold scores on rate alone and says so. Adding lanes to that
+table is the cheapest honest fix and needs no provider at all.
+
 ### 4.8 Future External Intelligence Connector — `future_intelligence`
 
 | | |
