@@ -63,6 +63,50 @@ so commits and tests can keep pointing at it.
 - Fix: the commit or branch that closed it
 - Proven: date this was confirmed working on Mike's laptop with a real load
 
+
+### FLEET-001 — Fleet cannot be removed; Settings does not contain its functions
+
+- Severity: n/a — this is a blocked removal, not a defect
+- Status: open — needs Mike's ruling
+- Lens: yes
+- Evidence: `portal/templates/settings.html`, `portal/templates/fleet.html`,
+  `portal/templates/search.html:82` and `:113`
+- Seen: Mike proposed removing Fleet on 2026-09-09, conditional on nothing under
+  it being needed elsewhere. The condition is not met, on two counts.
+
+  **Settings does not manage drivers or equipment.** It has eleven sections:
+  storage roots, resolved paths, portal configuration, integration status,
+  acquisition, email delivery, stall thresholds, system keys, accounting and
+  doctrine reference. None of them touch the roster. Fleet is the only screen
+  with Add Driver and Add Equipment, the only view of the roster, and the only
+  view of driver-to-equipment assignments.
+
+  **Load Search links into Fleet.** Its driver rows link to the Fleet driver
+  detail page and its equipment rows link to the Fleet equipment detail page.
+  Removing those routes breaks two columns of Load Search.
+
+- Expected: if Fleet goes, driver and equipment management has to exist
+  somewhere first, and Load Search needs somewhere to point.
+- Cause: the premise looks like it came from what Settings is named rather than
+  what it holds. Settings is configuration. Fleet is a roster.
+- Fix:
+- Proven:
+
+The service layer underneath is used well beyond the Fleet tab and is not at
+issue. Dispatch reads active drivers and equipment for its assignment dropdowns,
+the driver portal reads active equipment, and the dispatch API owns create,
+list and assign. None of that lives in the Fleet tab; the tab is the only user
+interface onto it.
+
+Three ways forward, all Mike's call:
+
+1. Keep Fleet as it is and revisit after the walk.
+2. Move driver and equipment management into Settings first, then remove Fleet
+   and repoint Load Search.
+3. Remove the Fleet tab from the nav but keep the routes, so Load Search still
+   works and the roster is reachable by URL. This is the reversible option and
+   matches what was done with SAM.
+
 ## Decisions made during this walk
 
 Decisions that change behavior belong in DECISION_LOG.md at the repo root.
