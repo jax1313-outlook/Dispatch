@@ -329,6 +329,7 @@ that implies otherwise is a defect.
 | What remains, in order | `docs/readiness/COMPLETION_BLUEPRINT_v2.md` |
 | What is proven, and what is not | `docs/readiness/OPERATIONAL_PROOF.md` |
 | What is broken or missing | `docs/readiness/KNOWN_LIMITATIONS.md` |
+| The tab-by-tab walk of the portal | `docs/tab-walk/README.md` — index, status per tab, and every finding from the walk |
 | Every decision, in order | `DECISION_LOG.md` |
 | Adding an external provider | `docs/connectors/PROVIDER_INSERTION.md` |
 
