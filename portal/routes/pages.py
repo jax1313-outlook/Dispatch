@@ -42,40 +42,26 @@ def home():
     sam_sorted = sorted(sam_entries.values(), key=_priority_key, reverse=True)[:5]
     dispatch_sorted = sorted(dispatch_entries.values(), key=_priority_key, reverse=True)[:5]
 
-    unresolved = conflict.get_unresolved()
-    pub_queue = [a for a in publisher.get_queue() if a["status"] not in ("APPROVED", "ARCHIVED")]
-
-    pending_items = pending.list_pending()
+    # Every screened card, not the ten that fit in the two lists below. The old
+    # "Active Cards" number counted the truncated top-5 slices and so silently
+    # capped at 10.
+    screened_count = len(sam_entries) + len(dispatch_entries)
 
     all_engine_loads = dispatch_svc.list_loads()
     active_engine = [l for l in all_engine_loads if l["status"] not in ("archived", "cancelled", "completed")]
 
-    fleet_summary = dispatch_svc.get_fleet_summary()
-    fin_dashboard = dispatch_svc.get_financial_dashboard()
-
-    stalled = dispatch_svc.check_stalled_loads()
-    from dispatch import store as dispatch_store
-    recent_activity = dispatch_store.get_recent_activity(limit=15)
-    chart_data = dispatch_svc.get_chart_data()
-    attention_needed = helpers.attention_needed()
-
+    # The Financial Snapshot, stalled loads, recent activity, the load charts
+    # and the cross-department attention feed were all removed from Home. Their
+    # queries go with them -- this render no longer pays for data the screen
+    # does not show. Each one still lives on the tab that owns it, except the
+    # ones recorded in docs/tab-walk/PARKING_LOT.md.
     return render_template(
         "home.html",
         sam_cards=sam_sorted,
         dispatch_cards=dispatch_sorted,
         simulated_count=sandbox.simulated_count(),
-        conflict_count=len(unresolved),
-        publisher_count=len(pub_queue),
-        archive_count=arc_model.total_count(),
-        intel_count=intel_model.total_count(),
-        pending_count=len(pending_items),
+        screened_count=screened_count,
         engine_load_count=len(active_engine),
-        fleet_summary=fleet_summary,
-        fin_dashboard=fin_dashboard,
-        stalled_loads=stalled,
-        recent_activity=recent_activity,
-        chart_data=chart_data,
-        attention_needed=attention_needed,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )

@@ -97,28 +97,44 @@ class TestFleetPageUtilizationSection:
 
 
 class TestHomeStalledBadge:
-    def test_no_stalled_no_badge(self, client):
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "Stalled Loads" not in html or "summary-danger" not in html
+    """The stalled badge and its notify button were removed from Home by Mike on
+    2026-09-09. Stalled loads and the alert action belong to /dispatch, which
+    already carried both.
+    """
 
-    def test_notify_all_button_present_when_stalled(self, client):
-        load = services.create_load(customer="Stalled Co")
-        services.update_load(load["load_id"], status="dispatched")
+    @staticmethod
+    def _stall(load_id):
         from dispatch import store
         from datetime import datetime, timezone, timedelta
+
         old_time = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
         with store.get_connection() as conn:
             conn.execute(
                 "UPDATE loads SET updated_at=? WHERE load_id=?",
-                (old_time, load["load_id"]),
+                (old_time, load_id),
             )
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "Notify All Stalled" in html
-        assert "notifyStalled()" in html
+
+    def test_home_has_no_stalled_badge_even_when_stalled(self, client):
+        load = services.create_load(customer="Stalled Co")
+        services.update_load(load["load_id"], status="dispatched")
+        self._stall(load["load_id"])
+        html = client.get("/home").data.decode()
+        assert "Stalled Loads" not in html
+        assert "summary-danger" not in html
+        # The notifyStalled() helper itself still ships in the shared script --
+        # what went away is the button that called it. Its only caller was the
+        # Home panel, so it is now orphaned. Parked, not deleted.
+        assert "Notify All Stalled" not in html
+
+    def test_dispatch_still_offers_the_stall_alert_action(self, client):
+        load = services.create_load(customer="Stalled Co")
+        services.update_load(load["load_id"], status="dispatched")
+        self._stall(load["load_id"])
+        html = client.get("/dispatch").data.decode()
+        assert "Send Stall Alerts" in html
+        assert "sendStallAlerts()" in html
 
 
 # ── Notify stalled API ──────────────────────────────────────────────

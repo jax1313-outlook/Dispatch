@@ -3,194 +3,28 @@
 {% block page_title %}Home{% endblock %}
 
 {% block body %}
+{# Two counts, on Mike's instruction. Home is for immediate operational
+   awareness, not workflow administration.
+
+   Screened Loads is the old "Active Cards" renamed. These are not active
+   missions, not committed loads and not booked loads. They are opportunities
+   Intelligence has already screened, analyzed and scored, waiting on a human
+   decision.
+
+   Conflict Notices, Publisher Queue, Archived Records, Intelligence Records,
+   Fleet Active, Stalled Loads and Pending Decisions were removed from Home.
+   Each stays reachable from its own tab and none of the capability underneath
+   was touched. Pending decisions remain visible through Pipeline. #}
 <div class="dashboard-summary">
     <div class="summary-card">
-        <span class="summary-number">{{ (sam_cards|length) + (dispatch_cards|length) }}</span>
-        <span class="summary-label">Active Cards</span>
-    </div>
-    <div class="summary-card summary-warning">
-        <span class="summary-number">{{ conflict_count }}</span>
-        <span class="summary-label">Conflict Notices</span>
-    </div>
-    <div class="summary-card summary-info">
-        <span class="summary-number">{{ publisher_count }}</span>
-        <span class="summary-label">Publisher Queue</span>
-    </div>
-    <div class="summary-card summary-archive">
-        <span class="summary-number">{{ archive_count }}</span>
-        <span class="summary-label">Archived Records</span>
-    </div>
-    <div class="summary-card summary-intel">
-        <span class="summary-number">{{ intel_count }}</span>
-        <span class="summary-label">Intelligence Records</span>
+        <span class="summary-number">{{ screened_count }}</span>
+        <span class="summary-label">Screened Loads</span>
     </div>
     <a href="{{ url_for('pages.dispatch') }}" class="summary-card" style="text-decoration:none;color:inherit;border-left:4px solid #27ae60;">
         <span class="summary-number">{{ engine_load_count }}</span>
         <span class="summary-label">Active Loads</span>
     </a>
-    <a href="{{ url_for('pages.pending_decisions') }}" class="summary-card summary-pending" style="text-decoration:none;color:inherit;">
-        <span class="summary-number">{{ pending_count }}</span>
-        <span class="summary-label">Pending Decisions</span>
-    </a>
-    <a href="{{ url_for('pages.fleet') }}" class="summary-card" style="text-decoration:none;color:inherit;border-left:4px solid #2980b9;">
-        <span class="summary-number">{{ fleet_summary.drivers_by_status.get('active', 0) }}D / {{ fleet_summary.equipment_by_status.get('active', 0) }}E</span>
-        <span class="summary-label">Fleet Active</span>
-    </a>
-    {% if stalled_loads %}
-    <a href="#stalled-alert" class="summary-card summary-danger" style="text-decoration:none;color:inherit;">
-        <span class="summary-number">{{ stalled_loads|length }}</span>
-        <span class="summary-label">Stalled Loads</span>
-    </a>
-    {% endif %}
 </div>
-
-{% if attention_needed %}
-<div class="card-section" id="attention-needed">
-    <h2>Attention Needed Across Departments</h2>
-    <div class="activity-feed">
-        {% for item in attention_needed %}
-        <div class="activity-item">
-            <span class="activity-type">{{ item.source }}</span>
-            <a href="{{ item.url }}">{{ item.title }}</a>
-            {% if item.detail %}<span class="activity-note">{{ item.detail }}</span>{% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-{% if fin_dashboard and fin_dashboard.loads_with_rate > 0 %}
-<div class="card-section">
-    <h2>Financial Snapshot</h2>
-    <div class="financial-summary">
-        <div class="financial-item financial-revenue">
-            <span class="financial-label">Revenue</span>
-            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_revenue) }}</span>
-        </div>
-        <div class="financial-item {% if fin_dashboard.total_profit >= 0 %}financial-profit{% else %}financial-loss{% endif %}">
-            <span class="financial-label">Profit</span>
-            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_profit) }}</span>
-            <span class="financial-label">{{ "%.1f"|format(fin_dashboard.margin_pct) }}% margin</span>
-        </div>
-        <div class="financial-item" style="border-left:3px solid #27ae60;">
-            <span class="financial-label">Paid</span>
-            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_paid) }}</span>
-            <span class="financial-label">{{ fin_dashboard.paid_count }} loads</span>
-        </div>
-        <div class="financial-item" style="border-left:3px solid {% if fin_dashboard.overdue_count > 0 %}#e74c3c{% else %}#f39c12{% endif %};">
-            <span class="financial-label">Outstanding</span>
-            <span class="financial-value">${{ "%.0f"|format(fin_dashboard.total_outstanding) }}</span>
-            <span class="financial-label">{{ fin_dashboard.invoiced_count }} invoiced{% if fin_dashboard.overdue_count %}, {{ fin_dashboard.overdue_count }} overdue{% endif %}</span>
-        </div>
-        <div class="financial-item">
-            <button class="btn btn-sm" onclick="runAgingCheck()" title="Scan invoiced settlements for overdue payments">Run Aging Check</button>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-{# ── Dashboard Charts ─────────────────────────────────────────────── #}
-{% if chart_data and chart_data.loads_by_status %}
-<div class="card-section">
-    <h2>Load Overview</h2>
-    <div style="display:flex;gap:24px;flex-wrap:wrap;">
-
-        {# ── Loads by Status (horizontal bar chart) ─── #}
-        <div style="flex:1;min-width:280px;">
-            <h3 style="font-size:14px;color:#7f8c8d;margin-bottom:8px;">Loads by Status</h3>
-            {% set status_colors = {
-                'created': '#3498db', 'dispatched': '#2980b9', 'en_route_pickup': '#8e44ad',
-                'at_pickup': '#9b59b6', 'picked_up': '#e67e22', 'in_transit': '#f39c12',
-                'at_delivery': '#27ae60', 'delivered': '#2ecc71', 'completed': '#1abc9c',
-                'archived': '#7f8c8d', 'cancelled': '#e74c3c'
-            } %}
-            {% set max_count = chart_data.loads_by_status.values()|max if chart_data.loads_by_status else 1 %}
-            {% for status, count in chart_data.loads_by_status.items() %}
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                <span style="width:100px;font-size:12px;text-align:right;color:#555;">{{ status|replace('_', ' ') }}</span>
-                <div style="flex:1;background:#f0f0f0;border-radius:3px;height:20px;position:relative;">
-                    <div style="width:{{ (count / max_count * 100)|round }}%;background:{{ status_colors.get(status, '#95a5a6') }};height:100%;border-radius:3px;min-width:2px;"></div>
-                </div>
-                <span style="width:30px;font-size:12px;font-weight:700;color:#333;">{{ count }}</span>
-            </div>
-            {% endfor %}
-        </div>
-
-        {# ── Revenue by Month (bar chart) ─── #}
-        {% if chart_data.monthly_revenue %}
-        <div style="flex:1;min-width:280px;">
-            <h3 style="font-size:14px;color:#7f8c8d;margin-bottom:8px;">Monthly Revenue</h3>
-            {% set max_rev = chart_data.monthly_revenue|map(attribute='revenue')|max if chart_data.monthly_revenue else 1 %}
-            {% set chart_height = 120 %}
-            {% set bar_count = chart_data.monthly_revenue|length %}
-            {% set bar_width = ([40, (260 / (bar_count if bar_count > 0 else 1))|round|int]|min) %}
-            <svg width="100%" viewBox="0 0 {{ bar_count * (bar_width + 8) + 20 }} {{ chart_height + 30 }}" style="max-width:400px;">
-                {% for item in chart_data.monthly_revenue %}
-                {% set bar_h = (item.revenue / max_rev * chart_height)|round|int if max_rev > 0 else 0 %}
-                {% set x = loop.index0 * (bar_width + 8) + 10 %}
-                <rect x="{{ x }}" y="{{ chart_height - bar_h }}" width="{{ bar_width }}" height="{{ bar_h }}"
-                      fill="#27ae60" rx="2" opacity="0.85"/>
-                <text x="{{ x + bar_width / 2 }}" y="{{ chart_height + 14 }}" text-anchor="middle"
-                      font-size="9" fill="#666">{{ item.month[5:] if item.month|length >= 7 else item.month }}</text>
-                <text x="{{ x + bar_width / 2 }}" y="{{ chart_height - bar_h - 4 }}" text-anchor="middle"
-                      font-size="9" fill="#333" font-weight="600">${{ "%.0f"|format(item.revenue) }}</text>
-                {% endfor %}
-            </svg>
-        </div>
-        {% endif %}
-
-    </div>
-</div>
-{% endif %}
-
-{% if stalled_loads %}
-<div class="card-section" id="stalled-alert">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-        <h2 style="color:#e74c3c;margin-bottom:0;">Stalled Loads ({{ stalled_loads|length }})</h2>
-        <button class="btn btn-sm btn-warning" onclick="notifyStalled()">Notify All Stalled</button>
-    </div>
-    <table class="data-table" style="margin-top:0.5rem;">
-        <thead>
-            <tr>
-                <th>Load ID</th>
-                <th>Customer</th>
-                <th>Status</th>
-                <th>Time in Status</th>
-                <th>Threshold</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for sl in stalled_loads[:10] %}
-            <tr style="border-left:3px solid #e74c3c;">
-                <td><a href="{{ url_for('pages.dispatch_detail', load_id=sl.load_id) }}">{{ sl.load_id[:8] }}</a></td>
-                <td>{{ sl.customer or '—' }}</td>
-                <td><span class="status-tag status-{{ sl.status }}">{{ sl.status }}</span></td>
-                <td>{{ sl.hours_in_status }}h</td>
-                <td>{{ sl.threshold_hours }}h</td>
-                <td><a href="{{ url_for('pages.dispatch_detail', load_id=sl.load_id) }}" class="btn btn-xs">View</a></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-{% if recent_activity %}
-<div class="card-section" id="recent-activity">
-    <h2>Recent Activity</h2>
-    <div class="activity-feed">
-        {% for item in recent_activity %}
-        <div class="activity-item">
-            <span class="activity-time">{{ item.event_time|time_ago }}</span>
-            <span class="activity-type">{{ item.event_type }}</span>
-            <a href="{{ url_for('pages.dispatch_detail', load_id=item.load_id) }}">{{ item.customer or item.load_id[:8] }}</a>
-            {% if item.note %}<span class="activity-note">{{ item.note }}</span>{% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 
 {% if simulated_count %}
 <div class="sample-data-banner">

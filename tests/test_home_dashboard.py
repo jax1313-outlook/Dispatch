@@ -90,55 +90,42 @@ class TestHomePage:
         resp = client.get("/home")
         assert resp.status_code == 200
 
-    def test_no_stalled_section_when_none(self, client):
-        services.create_load(customer="Fresh Corp")
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "stalled-alert" not in html
+    # Stalled Loads and Recent Activity were removed from Home by Mike on
+    # 2026-09-09. Home is for immediate operational awareness, not workflow
+    # administration. Stalled loads still render on /dispatch, which owns them.
+    # Recent Activity has no other surface and is parked --
+    # docs/tab-walk/PARKING_LOT.md.
 
-    def test_stalled_section_shown(self, client):
+    def test_stalled_section_not_on_home(self, client):
         load = services.create_load(customer="Old Corp")
         _age_load(load["load_id"], 30)
         resp = client.get("/home")
         html = resp.data.decode()
-        assert "stalled-alert" in html
-        assert "Old Corp" in html
-        assert "Stalled Loads" in html
+        assert "stalled-alert" not in html
+        assert "Stalled Loads" not in html
 
-    def test_stalled_links_to_detail(self, client):
-        load = services.create_load(customer="Link Corp")
+    def test_stalled_still_shown_on_dispatch(self, client):
+        load = services.create_load(customer="Old Corp")
         _age_load(load["load_id"], 30)
-        resp = client.get("/home")
+        resp = client.get("/dispatch")
         html = resp.data.decode()
+        assert "Stalled" in html
         assert load["load_id"][:8] in html
 
-    def test_no_activity_section_when_empty(self, client):
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "recent-activity" not in html
-
-    def test_activity_section_shown(self, client):
+    def test_activity_section_not_on_home(self, client):
         load = services.create_load(customer="Activity Corp")
         services.add_milestone(load["load_id"], event_type="arrived_pickup", location="NYC")
         resp = client.get("/home")
         html = resp.data.decode()
-        assert "recent-activity" in html
-        assert "Recent Activity" in html
-        assert "arrived_pickup" in html
-        assert "Activity Corp" in html
+        assert "recent-activity" not in html
+        assert "Recent Activity" not in html
 
-    def test_activity_note_shown(self, client):
+    def test_activity_still_recorded_even_though_home_stopped_showing_it(self, client):
         load = services.create_load(customer="Note Corp")
         services.add_milestone(
             load["load_id"], event_type="delivered", location="LA", note="Arrived early"
         )
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "Arrived early" in html
+        from dispatch import store as dispatch_store
 
-    def test_stalled_table_has_threshold(self, client):
-        load = services.create_load(customer="Threshold Corp")
-        _age_load(load["load_id"], 30)
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "24h" in html
+        activity = dispatch_store.get_recent_activity(limit=15)
+        assert any(item["note"] == "Arrived early" for item in activity)
