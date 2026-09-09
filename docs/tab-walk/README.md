@@ -30,6 +30,56 @@ One folder per tab. Each folder holds:
 
 `_template/FINDINGS.md` is the blank. Copy it if a new tab is added.
 
+## Working method
+
+Set by Mike, 2026-09-09. This governs the rest of the walk.
+
+**Review as the owner/operator, not as a software designer.** The objective is
+not optimal software design. It is operational simplification and screen
+ownership discovery.
+
+**The unit of work is the tab, not the individual change.** Do not treat every
+screen adjustment as a release candidate. Work the order below and validate once
+at the end.
+
+1. Review the entire tab.
+2. Identify findings.
+3. Remove, relocate or consolidate items as directed.
+4. Record parking lot entries.
+5. Complete all agreed changes for the entire tab.
+6. Update documentation.
+7. Then validate the completed tab.
+
+**"Delete" means park.** When Mike says delete, remove it from the screen and
+record it in [PARKING_LOT.md](PARKING_LOT.md). It does not mean get rid of the
+capability. Nothing is destroyed during the walk.
+
+**A function that loses its caller is parked, not deleted.** Record it and keep
+walking.
+
+**Tests get updated when ownership changed.** Update them and keep walking.
+Do not stop the walk to argue with a test that encodes the old screen.
+
+## The four operator questions
+
+The six questions in [LENS.md](LENS.md) come from the constitution and ask about
+architecture. These four come from Mike and ask about the screen. Both apply to
+every tab.
+
+1. Who owns this?
+2. Does it belong here?
+3. Is this operationally useful?
+4. Does it reduce or increase cognitive load?
+
+Open the screen. Find the noise. Remove the noise. Keep only what earns its
+space.
+
+## Not during the walk
+
+Final optimization, cleanup, dead-code removal, repository-wide validation and
+architecture refactoring all happen after the tab review is complete. Anything
+that looks like one of those gets parked, not done.
+
 ## Working rules
 
 - One working copy at `D:\Dispatch`. The walk does not get its own clone and
