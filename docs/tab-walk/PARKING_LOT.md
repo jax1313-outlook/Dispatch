@@ -313,3 +313,29 @@ estimator splits into a pure calculator plus a separate action.
 
 Note also that TOOLBOX's reference data is IFTA-derived. A calculator screen
 that reads live operational data is not quite a standalone utility either.
+
+### TOOLBOX ruling — 2026-09-09
+
+Mike settled the blocker. **TOOLBOX is read-only utility functionality.**
+
+Kept in the Fuel Estimator, all unchanged: the calculation, the MPG defaults,
+the fuel price defaults, the quick reference table, and the IFTA-derived
+pre-fill.
+
+**Removed: Add as Fuel Expense.** It posted a fuel expense onto a live load. A
+workflow action modifying an operational record does not belong in a calculator.
+The button and its handler are gone from the page. The expense API is untouched
+and every workflow screen that uses it still does.
+
+The Load ID field stays. It reads a rate confirmation to fill in distance, which
+is a read, not a write.
+
+Future TOOLBOX: Fuel Estimator, Per Diem Calculator, Fuel Surcharge Reference,
+Fuel Surcharge Calculator, Federal Reference Links, and further owner/operator
+utilities.
+
+**Parked, not built: apply an estimate to a load.** Mike's answer to the open
+question is that this becomes a separate workflow action on a workflow screen.
+TOOLBOX is not responsible for modifying live records. Where that action lives
+is not decided, and the natural candidates are the load detail screen and
+Billing. Until it exists, a fuel estimate is copied by hand into an expense.
