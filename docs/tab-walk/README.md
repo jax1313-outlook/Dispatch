@@ -161,6 +161,12 @@ Status values, in order: `not started`, `walked`, `findings open`, `fixed`,
 `proven`. A tab reaches `proven` only when every finding in it is closed
 against a real load on Mike's laptop.
 
+## Status
+
+- [STATUS_2026-09-09.md](STATUS_2026-09-09.md) — architectural state of the
+  walk: navigation, tab status, parking lot, workers, the surviving core,
+  technical debt, and what still needs proving on a real load.
+
 ## Where other things belong
 
 - [PARKING_LOT.md](PARKING_LOT.md) — things removed or deferred during the walk

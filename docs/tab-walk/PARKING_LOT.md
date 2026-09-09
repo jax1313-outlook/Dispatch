@@ -434,11 +434,14 @@ decisions. See `builder-notes/owner-operator-scoreboard.md`.
 
 QuickBooks or a future accounting integration owns these.
 
-**One caution.** That integration does not exist. `accounting_export.py`, the
-accounting connector, and the Settings page all record the same thing: no
-QuickBooks integration exists anywhere in this codebase. So until it is built,
-parking invoicing does not hand the work to another system. It hands it to Mike,
-by hand, outside Dispatch.
+**Correction, same day.** An earlier version of this entry said no accounting
+system exists. Wrong. Accounting is one of eight architecturally defined
+connectors, and the handoff already works: accounting_export writes one JSON
+file per settlement and the connector labels it MANUAL rather than letting a
+written file read as money moved. QuickBooks is one candidate implementation,
+not the definition. What is unproven is a live adapter, not the architecture.
+Preserve accounting-facing data, exports, notification types and APIs for that
+adapter. Do not absorb them into Dispatch.
 
 **Three things follow from the boundary and are not yet decided.** Four of the
 eleven notification types are accounting events -- invoice created, payment

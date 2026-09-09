@@ -47,40 +47,70 @@ Checked on `tab-walk/build`, 2026-09-09.
 | Maintenance escrow | Missing | The word appears nowhere. `repair` is money already spent, not money set aside |
 
 So the scoreboard is one number that exists, one that exists in the wrong shape,
-and five to build.
+and five to build. **Goals are the new concept.** Everything else is arithmetic
+over data Dispatch already holds. A goal is a number Mike sets and the system
+remembers, so it needs a home. Settings is the obvious one, beside the stall
+thresholds, which are the existing precedent for an operator-set number.
 
-**Goals are the new concept.** Everything else is arithmetic over data Dispatch
-already holds. A goal is a number Mike sets and the system remembers, which
-means it needs somewhere to live. Settings is the obvious home, next to the
-stall thresholds, which are the existing precedent for an operator-set number.
+## Accounting is architecturally present — CORRECTION 2026-09-09
 
-## What the accounting boundary costs
+An earlier version of this note said no accounting system exists. That was
+wrong, and wrong in a way that mattered: it confused a missing implementation
+with a missing architecture.
 
-Drawing the line at accounting has consequences beyond two screens. Recorded so
-they are decided rather than discovered.
+The correct finding, per Mike:
 
-**Four of the eleven notification types are accounting events.** Invoice
-created, payment received, payment overdue, settlement disputed. If accounting
-leaves Dispatch, those leave with it or they fire on records Dispatch no longer
-owns.
+| Layer | State |
+| --- | --- |
+| Accounting role and handoff | Defined in Dispatch architecture and workflow |
+| Accounting interface boundary | Defined. Accounting is one of eight connectors, alongside email transport, load board, mapping, scanner and Outlook |
+| Accounting implementation | Replaceable. QuickBooks is one candidate, not the definition |
+| Live accounting adapter | Not proven in the repository |
 
-**Two of the eleven Alerts sources are accounting events.** Disputed
-settlements sit in Decisions Required and overdue settlements in Exceptions. A
-dispute is a collections matter by this ruling, so it is questionable whether
-either belongs on the Alerts screen.
+The handoff already exists and is honest about itself. `accounting_export.py`
+writes one JSON file per settlement into an export directory, and the accounting
+connector labels that result `MANUAL` rather than letting a written file read as
+money having moved. That is a destination, not a gap.
 
-**The accounting connector is documented as not built.** `accounting_export.py`
-and the accounting connector both record that no QuickBooks integration exists
-anywhere in the codebase, and Settings tells the operator the same. So the
-system Mike is deferring to does not exist yet either. Until it does, parking
-invoicing means the work is done outside Dispatch by hand.
+Two things the connector will not do whatever provider is chosen: write a
+settlement, invoice or payment, and decide what is owed. Both are Dispatch's own
+record and its own authority.
+
+So the boundary is: Dispatch prepares and routes the accounting handoff.
+External accounting software owns bookkeeping, invoicing, payments, collections,
+disputes, profit reporting and the accounting record. Billing and Profitability
+are parked because they duplicate the external wheel, not because the work has
+nowhere to go.
+
+**Preserve, do not absorb.** Existing accounting-facing data, export logic,
+notification types, APIs and handoff structures stay for later adapter work.
+
+### What that leaves to decide
+
+Four of the eleven notification types are accounting events: invoice created,
+payment received, payment overdue, settlement disputed. Two of the eleven Alerts
+sources are as well: disputed settlements under Decisions Required, overdue ones
+under Exceptions. These are accounting-facing structures, so under the preserve
+rule they stay. Whether they should surface on Dispatch's screens before a live
+adapter exists is a separate question and is open.
+
+## The scorecard is not accounting
+
+Its purpose is operational decision support. It answers two questions:
+
+> Do I need another load this week?
+> Should I use Thursday, Friday, or reserve capacity to close the goal gap?
+
+It does not replace accounting software and does not claim accounting-grade
+profit. The gross target, if defined later, is operational.
 
 ## Open questions
 
 1. Where does a goal live, and is it one number or one per week and month?
 2. Is the trend a comparison of two windows, or a direction on a series?
-3. Do the four accounting notifications and two Alerts sources go with
-   accounting, or stay until the integration is real?
+3. The four accounting notifications and two Alerts sources are preserved under
+   the boundary rule. Should they still surface on Dispatch screens before a
+   live adapter exists?
 4. Gross profit estimate is marked optional. Build it or not?
 
 ## Answer
