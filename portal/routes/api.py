@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request, session
 
+from dispatch import spoken_date
+
 from portal import helpers
 from portal.models import sandbox, publisher, conflict
 from portal.models import library as lib_model
@@ -576,11 +578,25 @@ def integrations_clear(integration_type):
 # ---- Helpers ----
 
 def _extract_window_start(window: str) -> str:
-    """Extract start datetime from a window like '2026-07-30 06:00 - 10:00'."""
+    """The start of a window, as a date arithmetic can be done on.
+
+    A board-scraped window already carries one: '2026-07-30 06:00 - 10:00'.
+    A dictated one does not -- it says 'Thursday' -- and this used to copy that
+    word into the operational row unchanged. The calendar groups loads by the
+    first seven characters of the date, so it compared 'Thursda' against
+    '2026-09' and the load silently never appeared.
+
+    Spoken dates now go through `dispatch.spoken_date`, which resolves what it
+    can and refuses the rest. An empty return means the window was said in a way
+    nothing could read, and the caller keeps the words where a human can see
+    them. An undated load is recoverable. A load dated 'Thursda' is not.
+    """
     if not window:
         return ""
-    parts = window.split(" - ")
-    return parts[0].strip()
+    first = str(window).split(" - ")[0].strip()
+    if spoken_date.looks_resolved(first):
+        return first
+    return spoken_date.resolve(window)
 
 
 def _auto_rate_confirm(dispatch_svc, load_id: str, cd: dict) -> None:
@@ -624,4 +640,15 @@ def _build_booking_notes(cd: dict, entry: dict) -> str:
         parts.append(f"Weight: {cd['weight_lbs']} lbs")
     if cd.get("detention_history"):
         parts.append(f"Detention: {cd['detention_history']}")
+    if cd.get("pieces_weight"):
+        parts.append(f"Pieces/weight: {cd['pieces_weight']}")
+
+    # A window nothing could read leaves the date empty rather than storing a
+    # word that looks like one. The words go here so the load is visibly
+    # undated with the reason attached, instead of quietly missing its day.
+    for field, label in (("pickup_window", "Pickup"), ("delivery_window", "Delivery")):
+        said = cd.get(field)
+        if said and not _extract_window_start(said):
+            parts.append(f"{label} as dictated, not read as a date: {said}")
+
     return " | ".join(parts)
