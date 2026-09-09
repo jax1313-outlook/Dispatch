@@ -38,6 +38,36 @@ CARD_LEVELS: dict[int, str] = {
     5: "Authority",
 }
 
+# Mike's operational-consequence bands, set during the tab 01 walk on 2026-09-09.
+# These are the sort order of the Alerts screen. They answer "how does this stop
+# the truck", which is a different question from card_level's "what kind of item
+# is this". Both are kept: card_level still decides which cards carry the
+# non-optional closing statement.
+BANDS: dict[str, dict] = {
+    "blocker": {
+        "marker": "\U0001F534",
+        "label": "Operational Blockers",
+        "meaning": "Mission cannot proceed. Committed load at risk. Truck cannot move.",
+    },
+    "decision": {
+        "marker": "\U0001F7E0",
+        "label": "Decisions Required",
+        "meaning": "Requires Mike's authority. Approval, commitment, or ruling required.",
+    },
+    "exception": {
+        "marker": "\U0001F7E1",
+        "label": "Exceptions",
+        "meaning": "Missing information. Conflicts. Corrective actions.",
+    },
+    "admin": {
+        "marker": "\U0001F535",
+        "label": "Administrative",
+        "meaning": "Library gaps. Housekeeping. Non-operational maintenance items.",
+    },
+}
+
+BAND_ORDER: tuple[str, ...] = ("blocker", "decision", "exception", "admin")
+
 REQUIRED_CARD_CLOSING = "This is a recommendation only. No action is authorized. Mike decides."
 
 # Card levels at or above this carry the non-optional closing statement --
@@ -50,6 +80,7 @@ def _card(
     card_id: str,
     source: str,
     card_level: int,
+    band: str,
     title: str,
     summary: str,
     url: str,
@@ -60,6 +91,10 @@ def _card(
         "source": source,
         "card_level": card_level,
         "level_label": CARD_LEVELS[card_level],
+        "band": band,
+        "band_label": BANDS[band]["label"],
+        "band_marker": BANDS[band]["marker"],
+        "band_order": BAND_ORDER.index(band),
         "title": title,
         "summary": summary,
         "url": url,
@@ -76,6 +111,7 @@ def _publisher_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"publisher-{action.get('id', '')}",
             source="publisher",
+            band="decision",
             card_level=5,
             title=action.get("action_type", "Publisher Action"),
             summary=f"{action.get('trigger_reason', '')} (status: {action.get('status', '')})",
@@ -95,6 +131,7 @@ def _conflict_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"conflict-{notice.get('id', '')}",
             source="conflict",
+            band="exception",
             card_level=level,
             title=notice.get("conflict_type", "conflict").replace("_", " ").title(),
             summary=notice.get("explanation", ""),
@@ -116,6 +153,7 @@ def _govcon_pending_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"govcon-{item.get('contract_id', '')}",
             source="govcon_pending",
+            band="decision",
             card_level=level,
             title=contract.get("title") or item.get("contract_id", "Pending Contract Decision"),
             summary=item.get("summary") or f"Recommended: {decision.get('action', 'review')}",
@@ -143,6 +181,7 @@ def _exception_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"exception-{exc.get('exception_id', '')}",
             source="exception",
+            band="blocker" if exc.get("severity") == "critical" else "exception",
             card_level=level,
             title=title,
             summary=summary,
@@ -166,6 +205,7 @@ def _settlement_cards() -> list[dict]:
             cards.append(_card(
                 card_id=f"settlement-{stl.get('settlement_id', '')}",
                 source="settlement",
+                band="decision" if status == "disputed" else "exception",
                 card_level=level,
                 title=title,
                 summary=summary,
@@ -192,6 +232,7 @@ def _stalled_load_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"stalled-{load.get('load_id', '')}",
             source="stalled_load",
+            band="blocker",
             card_level=2,
             title=title,
             summary=summary,
@@ -209,6 +250,7 @@ def _queue_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"queue-review-{record.get('contract_id', '')}",
             source="queue_review",
+            band="decision",
             card_level=2,
             title=record.get("summary") or record.get("contract_id", "Review Item"),
             summary=f"Routed to human review ({record.get('action_label') or record.get('action', '')}).",
@@ -219,6 +261,7 @@ def _queue_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"queue-analysis-{record.get('contract_id', '')}",
             source="queue_analysis",
+            band="admin",
             card_level=1,
             title=record.get("summary") or record.get("contract_id", "Analysis Item"),
             summary=f"Queued for deeper analysis ({record.get('action_label') or record.get('action', '')}).",
@@ -242,6 +285,7 @@ def _comi_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"comi-{package.get('id', '')}",
             source="comi",
+            band="exception",
             card_level=2,
             title=title,
             summary=f"Status: {package['status']}",
@@ -257,6 +301,7 @@ def _library_gap_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"library-gap-{asset.replace(' ', '-').lower()}",
             source="library_gap",
+            band="admin",
             card_level=1,
             title=f"Missing: {asset}",
             summary="Required company asset not yet uploaded to the Library.",
@@ -283,6 +328,7 @@ def _route_risk_cards() -> list[dict]:
         cards.append(_card(
             card_id=f"routerisk-{event['route_risk_event_id']}",
             source="route_risk",
+            band="blocker" if event["consequence_level"] >= 4 else "exception",
             card_level=max(1, event["consequence_level"]),
             title=title,
             summary=summary,
@@ -317,14 +363,28 @@ def build_feed() -> dict:
 
     cards.sort(key=lambda c: c["created_at"], reverse=True)
     cards.sort(key=lambda c: c["card_level"], reverse=True)
+    # Band is the outermost sort. Within a band the existing consequence-level
+    # and recency order is preserved, so nothing about the old ordering is lost;
+    # it now runs inside the band rather than across the whole feed.
+    cards.sort(key=lambda c: c["band_order"])
 
     counts_by_level = {level: 0 for level in CARD_LEVELS}
     for c in cards:
         counts_by_level[c["card_level"]] += 1
 
+    counts_by_band = {band: 0 for band in BAND_ORDER}
+    cards_by_band: dict[str, list[dict]] = {band: [] for band in BAND_ORDER}
+    for c in cards:
+        counts_by_band[c["band"]] += 1
+        cards_by_band[c["band"]].append(c)
+
     return {
         "cards": cards,
         "counts_by_level": counts_by_level,
         "levels": CARD_LEVELS,
+        "counts_by_band": counts_by_band,
+        "cards_by_band": cards_by_band,
+        "bands": BANDS,
+        "band_order": BAND_ORDER,
         "total": len(cards),
     }

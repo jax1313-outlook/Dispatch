@@ -21,14 +21,18 @@ def index():
     return redirect(url_for("pages.home"))
 
 
+@pages_bp.route("/alerts")
 @pages_bp.route("/operations")
-def operations():
-    """Consequence-sorted decision feed -- one screen for everything open
-    across Publisher/Conflicts/Pipeline/Exceptions/Settlements/Stalled
-    Loads/Queues/Library gaps. See portal/models/operations_feed.py."""
+def alerts():
+    """Everything open across Publisher/Conflicts/Pipeline/Exceptions/
+    Settlements/Stalled Loads/Queues/Library gaps, on one screen, sorted into
+    Mike's four operational-consequence bands. See portal/models/operations_feed.py.
+
+    Renamed from Operations on 2026-09-09. The old /operations path still
+    resolves so nothing that already links here breaks."""
     from portal.models import operations_feed
     feed = operations_feed.build_feed()
-    return render_template("operations.html", **feed)
+    return render_template("alerts.html", **feed)
 
 
 @pages_bp.route("/home")
