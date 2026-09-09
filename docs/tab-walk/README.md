@@ -60,6 +60,30 @@ walking.
 **Tests get updated when ownership changed.** Update them and keep walking.
 Do not stop the walk to argue with a test that encodes the old screen.
 
+## Evidence standard
+
+Set by Mike, 2026-09-09, after the alerting discovery on tab 01.
+
+**Doctrine is not capability. Capability must be proven.**
+
+Do not assume a capability exists because a document describes it. Require
+repository evidence or runtime proof. Do not infer runtime behavior from code
+structure alone.
+
+The alerting note is the worked example. Doctrine named an approved mailbox.
+Code contained eleven notification builders. Neither fact meant a single alert
+had ever been delivered, and none had.
+
+Every capability claim in this walk carries one of four classes:
+
+| Class | Means |
+| --- | --- |
+| Proven | An artifact, a record or a run exists and was inspected |
+| Partially proven | The path has run at least once, but not that it runs when it should |
+| Implemented but unverified | The code path exists and was read; nothing shows it has run |
+| Assumed by doctrine | A document says it should be so; nothing shows that it is |
+| Missing | Nothing implements it |
+
 ## The four operator questions
 
 The six questions in [LENS.md](LENS.md) come from the constitution and ask about

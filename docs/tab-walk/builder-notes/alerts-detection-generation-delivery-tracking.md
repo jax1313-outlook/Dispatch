@@ -1,7 +1,7 @@
 # Are alerts detected, generated, delivered, and tracked?
 
 - Opened: 2026-09-09, by Mike, during the Home walk
-- Status: OPEN
+- Status: DECIDED 2026-09-09 — design settled, nothing built. Build item parked.
 - Raised by: the premise that the red alerts on screen should already have been
   sent to `ops@l1truck.com`, and therefore that the screen is reporting a past
   alert rather than acting as an alert center
@@ -137,4 +137,71 @@ Three questions for Mike, in order:
 
 ## Answer
 
-Not yet answered.
+Decided by Mike, 2026-09-09. Recorded here as design. Nothing below is built.
+The build item is in `../PARKING_LOT.md`.
+
+**Mike's status ruling.** Detection proven. Generation partially proven.
+Delivery not implemented and unproven. Tracking missing. That matches the
+evidence above, with one wording change adopted here: generation is
+*partially* proven, because one artifact proves the path can run, not that it
+runs when it should.
+
+**Q1. Should alerts go out by mail from the truck? Yes, but creation and
+delivery are separate events.**
+
+The truck may be offline. The outbox is not a failure state, it is required.
+The workflow is:
+
+```
+Alert Condition
+      ↓
+Alert Record Created
+      ↓
+Outbox
+      ↓
+Delivery Attempt
+      ↓
+Result Recorded
+```
+
+A future deterministic process drains the outbox when delivery becomes
+available. That drain is deterministic chassis work under R5, not agent work.
+
+This reframes the delivery finding. Writing to the outbox is correct behavior.
+What is missing is the alert record before it, and the recorded result after it.
+
+**Q2. Should stalled alerts fire automatically? Yes. Automatic.**
+
+The purpose is: the human forgot, the system noticed. An alert that waits on a
+button press depends on the same human who is unaware of the stalled condition.
+Stalled is currently the only one of the eleven notification types that a person
+has to trigger. That is backwards.
+
+**Q3. What must be recorded for an alert to count as tracked?**
+
+Minimum fields on the alert record:
+
+| Field | |
+| --- | --- |
+| Alert ID | |
+| Alert Type | |
+| Related Mission Record | the one record, under R1 |
+| Trigger Time | |
+| Intended Recipient | |
+| Created Status | |
+| Delivery Attempt Status | |
+| Delivery Success Status | |
+| Delivery Failure Status | |
+
+The business must be able to answer: what happened, when did it happen, who was
+supposed to receive it, was delivery attempted, was delivery successful.
+
+Note against the current build: the transport already returns a result string
+carrying most of the delivery answer, and `_notify_safe` discards it. The
+information exists and is thrown away at the last step.
+
+## Standing lesson from this note
+
+Doctrine is not capability. Capability must be proven by repository evidence or
+runtime proof. Do not assume a capability exists because a document describes
+it. Recorded as a walk standard in `../README.md`.

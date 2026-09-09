@@ -39,4 +39,4 @@ and then say what it changed.
 
 ## Notes
 
-- [Are alerts detected, generated, delivered, and tracked?](alerts-detection-generation-delivery-tracking.md) — opened 2026-09-09, open
+- [Are alerts detected, generated, delivered, and tracked?](alerts-detection-generation-delivery-tracking.md) — opened 2026-09-09, decided 2026-09-09. Design settled, build parked.

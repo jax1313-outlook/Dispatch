@@ -59,6 +59,31 @@ in `base.html`. Its only caller was the Home button. Dispatch uses a different
 function, `sendStallAlerts`. Nothing calls `notifyStalled` now. Delete it or
 give it a caller, but not before the alert question below is settled.
 
+## Build items, designed but not built
+
+These are decided. They are not tab-walk edits and nothing here is implemented
+during the walk. They go on the build list when the walk is finished.
+
+**Alerting: record, deliver, track.** Decided by Mike 2026-09-09. Full evidence
+and the decisions are in
+`builder-notes/alerts-detection-generation-delivery-tracking.md`.
+
+Three pieces, in order:
+
+1. **An alert record, created when the condition is detected.** Alert ID, alert
+   type, related mission record, trigger time, intended recipient, and the four
+   status fields for created, attempted, succeeded and failed. Nothing today
+   records that an alert exists.
+2. **Automatic firing for stalled loads.** Stalled is the only one of the eleven
+   notification types that waits on a human pressing a button, which means it
+   depends on the same person who has not noticed the stall. The other ten
+   already fire from inside the service layer.
+3. **Result recording, and an outbox drain.** The outbox is required, not a
+   failure. Creation and delivery are separate events. The transport already
+   returns a result string carrying most of the delivery answer and it is thrown
+   away at the last step. Recording it is the smallest first move. Draining the
+   outbox when connectivity returns is deterministic chassis work under R5.
+
 ## Related
 
 Questions that need answering before any of the above becomes a build item go

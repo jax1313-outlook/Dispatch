@@ -159,8 +159,14 @@ so commits and tests can keep pointing at it.
 ### DISPATCH-006 — Send Stall Alerts reports success while delivering nothing
 
 - Severity: broken
-- Status: open
+- Status: open — CONFIRMED against source 2026-09-09 at Mike's request
 - Lens: no
+- Confirmed: `notified` is `len(check_stalled_loads(...))`. The endpoint calls
+  `notify_stalled_loads`, which detects the stalled set, loops sending, and then
+  returns the detected set unchanged. No send outcome reaches the count. A
+  transport exception does not reduce it either, because `_notify_safe` catches
+  every exception and prints to stderr. The number reports detection and is
+  labelled delivery.
 - Evidence: `portal/routes/dispatch_api.py:212-220`, `dispatch/services.py:1443-1451`,
   `cin_lite/email_delivery.py:159-164`, and the single artifact at
   `D:\Archive\CIN\Outbox\dispatch-stalled-SBX-DISPATCH-E2E-DEMO-001.eml`
