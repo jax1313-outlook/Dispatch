@@ -48,27 +48,27 @@
             <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Load Search</a></li>
             <li><a href="{{ url_for('pages.dispatch') }}" class="{% if request.endpoint == 'pages.dispatch' %}active{% endif %}">Dispatch</a></li>
             <li><a href="{{ url_for('pages.load_calendar') }}" class="{% if request.endpoint == 'pages.load_calendar' %}active{% endif %}">Calendar</a></li>
-            <li><a href="{{ url_for('pages.exceptions') }}" class="{% if request.endpoint == 'pages.exceptions' %}active{% endif %}">Exceptions</a></li>
             <li><a href="{{ url_for('pages.ifta') }}" class="{% if request.endpoint == 'pages.ifta' %}active{% endif %}">IFTA</a></li>
-            <li><a href="{{ url_for('pages.archive_view') }}" class="{% if request.endpoint == 'pages.archive_view' %}active{% endif %}">Archive</a></li>
-            <li><a href="{{ url_for('pages.intelligence_view') }}" class="{% if request.endpoint == 'pages.intelligence_view' %}active{% endif %}">Intelligence</a></li>
-            <li><a href="{{ url_for('pages.pending_decisions') }}" class="{% if request.endpoint == 'pages.pending_decisions' %}active{% endif %}">Pipeline</a></li>
-            <li><a href="{{ url_for('pages.queues') }}" class="{% if request.endpoint == 'pages.queues' %}active{% endif %}">Queues</a></li>
-            <li><a href="{{ url_for('pages.conflicts') }}" class="{% if request.endpoint == 'pages.conflicts' %}active{% endif %}">Conflict Notices</a></li>
-            <li><a href="{{ url_for('pages.driver_pay') }}" class="{% if request.endpoint == 'pages.driver_pay' %}active{% endif %}">Driver Pay</a></li>
             <li><a href="{{ url_for('pages.email_templates') }}" class="{% if request.endpoint == 'pages.email_templates' %}active{% endif %}">Email Templates</a></li>
             <li><a href="{{ url_for('pages.settings') }}" class="{% if request.endpoint == 'pages.settings' %}active{% endif %}">Settings</a></li>
             {# Parked during the tab walk, 2026-09-09. Off the nav, still
-               reachable by URL, nothing removed underneath. Fuel Estimator and
-               Fleet went first; then SAM, Profitability, Compliance, Brokers,
-               Publisher, Library and Billing. Each is one line to restore. Why
-               each one was parked and what it is expected to become is recorded
-               in docs/tab-walk/PARKING_LOT.md.
+               reachable by URL, nothing removed underneath. Each is one line to
+               restore, and docs/tab-walk/PARKING_LOT.md says why each one went.
 
-               Note for whoever comes here looking for money: there is no
-               financial screen on this nav now. Invoicing, recording a payment,
+               Fuel Estimator, Fleet, SAM, Profitability, Compliance, Brokers,
+               Publisher, Library, Billing, Exceptions, Archive, Intelligence,
+               Pipeline, Queues, Conflict Notices, Driver Pay.
+
+               Sixteen parked, eight left. Two notes for whoever comes looking:
+
+               There is no financial screen on this nav. Invoicing, payments,
                disputes, write-offs and the aging check all still work at
-               /billing, they are just not linked. #}
+               /billing.
+
+               Several parked pages are where Alerts sends you. Its cards link
+               to /publisher, /conflicts, /pipeline, /queues and /library by
+               path, and those all still resolve. Alerts is now the way in to
+               most of them. #}
         </ul>
     </nav>
 
