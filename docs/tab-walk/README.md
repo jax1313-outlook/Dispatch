@@ -89,6 +89,12 @@ against a real load on Mike's laptop.
 
 ## Where other things belong
 
+- [PARKING_LOT.md](PARKING_LOT.md) — things removed or deferred during the walk
+  that still need a decision. Not a backlog and not a build list.
+- [builder-notes/](builder-notes/README.md) — ideas and questions that have to
+  be dealt with before a build list can be finalized. A finding says what a
+  screen does. A builder note says what is not yet understood well enough to
+  build against. Every claim in one carries its evidence class.
 - Behavior decisions go in `DECISION_LOG.md` at the repo root. Record only the
   decision ID here.
 - Architecture and conformance reports stay where they are at the repo root.
