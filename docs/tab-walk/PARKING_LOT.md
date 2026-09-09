@@ -327,8 +327,11 @@ workflow action modifying an operational record does not belong in a calculator.
 The button and its handler are gone from the page. The expense API is untouched
 and every workflow screen that uses it still does.
 
-The Load ID field stays. It reads a rate confirmation to fill in distance, which
-is a read, not a write.
+**Also removed: the Load ID field.** Mike, same day. It only read a rate
+confirmation to fill in distance, but it still tied a calculator to a specific
+operational record. The page now knows nothing about loads. The estimator API
+still accepts a load_id and is still tested; only this screen stopped sending
+one.
 
 Future TOOLBOX: Fuel Estimator, Per Diem Calculator, Fuel Surcharge Reference,
 Fuel Surcharge Calculator, Federal Reference Links, and further owner/operator
