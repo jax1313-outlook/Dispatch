@@ -108,3 +108,37 @@ class TestTheBookingSeam:
         from portal.routes.api import _extract_window_start
         written = _extract_window_start("September 15")
         assert written[:7] == "2026-09"
+
+
+class TestADictatedCityStillFindsItsLane:
+    """A comma used to be required to separate the state.
+
+    "Jacksonville, FL" split cleanly and "Jacksonville FL" did not, so every
+    voice capture failed the distance lookup, economics came back "rate or
+    distance data missing", and every card scored the same. Invisible while
+    every load came from a board, because boards write the comma.
+    """
+
+    def test_a_lane_matches_with_or_without_the_comma(self):
+        from dispatch.scoring import known_distance
+
+        assert known_distance("Jacksonville, FL", "Savannah, GA") == 140
+        assert known_distance("Jacksonville FL", "Savannah GA") == 140
+
+    def test_a_lane_the_table_does_not_hold_stays_unknown(self):
+        """None, not an estimate. Scoring says so rather than pricing a guess."""
+        from dispatch.scoring import known_distance
+
+        assert known_distance("Ocala FL", "Macon GA") is None
+
+    def test_the_card_gets_the_distance_and_the_score_moves(self):
+        from dispatch.scoring import score_load
+
+        known = score_load({"origin": "Jacksonville FL", "destination": "Savannah GA",
+                            "rate": 1150, "distance_miles": 140})
+        unknown = score_load({"origin": "Ocala FL", "destination": "Macon GA",
+                              "rate": 900})
+
+        assert known["score"] > unknown["score"]
+        assert "missing" in unknown["economic_opportunity_flag"]
+        assert "/mi" in known["economic_opportunity_flag"]

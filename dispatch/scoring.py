@@ -71,11 +71,24 @@ _KNOWN_DISTANCES: dict[tuple[str, str], float] = {
 
 
 def _normalize_city(location: str) -> str:
+    """The city, however the location was written.
+
+    A comma used to be required to separate the state: "Jacksonville, FL" split
+    cleanly, "Jacksonville FL" did not, and the second one never matched a lane
+    in the table. That was invisible while every load came from a board, because
+    boards write the comma. A dictated load does not -- nobody says "comma" -- so
+    every voice capture failed the distance lookup, economics came back "rate or
+    distance data missing", and every card scored identically. Fixed 2026-09-09,
+    before the first voice run.
+
+    A trailing two-letter token is a state abbreviation. No city's name ends in
+    a bare two-letter word, so taking it off cannot swallow part of one.
+    """
     if not location:
         return ""
     city = location.split(",")[0].strip().lower()
     city = re.sub(r"\s+", " ", city)
-    return city
+    return re.sub(r"\s+[a-z]{2}$", "", city)
 
 
 def _lookup_distance(origin: str, destination: str) -> float | None:
@@ -86,6 +99,22 @@ def _lookup_distance(origin: str, destination: str) -> float | None:
     if a == b:
         return 0.0
     return _KNOWN_DISTANCES.get((a, b)) or _KNOWN_DISTANCES.get((b, a))
+
+
+def known_distance(origin: str, destination: str) -> float | None:
+    """The table's distance for a lane, or None when it does not hold one.
+
+    A public name for something the engine already knows, added 2026-09-09 so a
+    caller filling in a sparse card does not have to reach past the underscore.
+
+    **This is the table, not a mapping provider.** It answers for the lanes Level
+    1 Transport actually runs and returns None for everything else, which is the
+    honest answer until the mapping connector is live. A caller that gets None
+    leaves the distance absent rather than estimating one -- scoring already
+    reports "rate or distance data missing", and that is better than economics
+    computed on a guess.
+    """
+    return _lookup_distance(origin, destination)
 
 
 def _estimate_deadhead(destination: str) -> float | None:

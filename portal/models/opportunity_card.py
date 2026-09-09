@@ -107,7 +107,19 @@ def from_capture(record: dict) -> dict:
     score = None
     scoring = None
     try:
-        from dispatch.scoring import score_load
+        from dispatch.scoring import known_distance, score_load
+
+        # A dictated listing carries no mileage -- nobody says "one hundred and
+        # forty miles" reading a board. Without it, economics cannot compute and
+        # every capture scores identically, which makes a stack of cards
+        # impossible to rank. The engine's own table answers for the lanes this
+        # truck runs, so ask it. Lanes the table does not hold stay absent, and
+        # scoring says "rate or distance data missing" rather than pricing a
+        # guess.
+        if not card.get("distance_miles"):
+            miles = known_distance(card.get("origin", ""), card.get("destination", ""))
+            if miles:
+                card["distance_miles"] = miles
 
         scoring = score_load(dict(card))
         score = scoring.get("score")
