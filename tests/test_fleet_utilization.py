@@ -124,7 +124,7 @@ class TestFleetAssignments:
 class TestFleetPageUtilization:
     def test_available_shown_for_unassigned(self, client):
         services.create_driver(name="Free Driver")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Available" in html
 
@@ -132,7 +132,7 @@ class TestFleetPageUtilization:
         d = services.create_driver(name="Working Driver")
         load = services.create_load(customer="Active Customer")
         services.assign_driver(load["load_id"], d["driver_id"])
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Active Customer" in html
 
@@ -140,13 +140,13 @@ class TestFleetPageUtilization:
         d = services.create_driver(name="Link Driver")
         load = services.create_load(customer="Link Corp")
         services.assign_driver(load["load_id"], d["driver_id"])
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert f"/dispatch/{load['load_id']}" in html
 
     def test_equipment_available_shown(self, client):
         services.create_equipment(unit_number="FREE-001")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Available" in html
 
@@ -154,19 +154,19 @@ class TestFleetPageUtilization:
         e = services.create_equipment(unit_number="BUSY-001")
         load = services.create_load(customer="Equip Customer")
         services.assign_equipment(load["load_id"], e["equipment_id"])
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Equip Customer" in html
 
     def test_inactive_driver_shows_dash(self, client):
         d = services.create_driver(name="Inactive Driver")
         services.update_driver(d["driver_id"], status="inactive")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Available" not in html or "Inactive Driver" in html
 
     def test_assignment_column_header_present(self, client):
         services.create_driver(name="Header Test")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Assignment" in html

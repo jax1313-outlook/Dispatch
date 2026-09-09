@@ -1,12 +1,16 @@
-{% extends "base.html" %}
-{% block title %}Fleet — Dispatch{% endblock %}
-{% block page_title %}Fleet Management{% endblock %}
-{% block page_actions %}
-<button class="btn btn-sm btn-success" onclick="toggleForm('new-driver-form')">+ Add Driver</button>
-<button class="btn btn-sm btn-success" onclick="toggleForm('new-equipment-form')">+ Add Equipment</button>
-{% endblock %}
+{# The fleet roster -- drivers, equipment, and who is on what.
 
-{% block body %}
+   Moved out of its own tab and into Settings on Mike's instruction, 2026-09-09.
+   Settings is where the shop is set up, and the roster is part of setting up the
+   shop. The Fleet tab is gone from the nav and /fleet redirects here.
+
+   Kept as a partial rather than pasted into settings.html so there is still one
+   definition of it, the same way the opportunity cards were handled.
+
+   Needs from the route: drivers, equipment, summary, assignments,
+   driver_statuses, license_classes, equipment_types, equipment_statuses, and
+   the five filter values. #}
+<h2 style="margin-top:0;">Fleet</h2>
 
 {# ── Fleet Summary ──────────────────────────────────────────────── #}
 <div class="dashboard-summary">
@@ -124,7 +128,7 @@
 {# ── Drivers Table ──────────────────────────────────────────────── #}
 <div class="card-section">
     <h2>Drivers ({{ drivers|length }})</h2>
-    <form method="get" action="{{ url_for('pages.fleet') }}" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+    <form method="get" action="{{ url_for('pages.settings') }}" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
         {% if equip_status_filter %}<input type="hidden" name="equip_status" value="{{ equip_status_filter }}">{% endif %}
         {% if equip_type_filter %}<input type="hidden" name="equip_type" value="{{ equip_type_filter }}">{% endif %}
         {% if equip_search %}<input type="hidden" name="unit_number" value="{{ equip_search }}">{% endif %}
@@ -135,14 +139,14 @@
         <div>
             <button type="submit" class="btn btn-sm btn-primary">Search</button>
             {% if driver_search or driver_status_filter %}
-            <a href="{{ url_for('pages.fleet', equip_status=equip_status_filter or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}" class="btn btn-sm">Clear</a>
+            <a href="{{ url_for('pages.settings', equip_status=equip_status_filter or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}" class="btn btn-sm">Clear</a>
             {% endif %}
         </div>
     </form>
     <div style="margin-bottom:10px;display:flex;gap:4px;flex-wrap:wrap;">
-        <a href="{{ url_for('pages.fleet', driver_name=driver_search or '', equip_status=equip_status_filter or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}" class="btn btn-sm {% if not driver_status_filter %}btn-primary{% endif %}">All</a>
+        <a href="{{ url_for('pages.settings', driver_name=driver_search or '', equip_status=equip_status_filter or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}" class="btn btn-sm {% if not driver_status_filter %}btn-primary{% endif %}">All</a>
         {% for s in driver_statuses %}
-        <a href="{{ url_for('pages.fleet', driver_status=s, driver_name=driver_search or '', equip_status=equip_status_filter or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}"
+        <a href="{{ url_for('pages.settings', driver_status=s, driver_name=driver_search or '', equip_status=equip_status_filter or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}"
            class="btn btn-sm {% if driver_status_filter == s %}btn-primary{% endif %}">{{ s|replace('_', ' ')|title }}</a>
         {% endfor %}
     </div>
@@ -218,7 +222,7 @@
 {# ── Equipment Table ────────────────────────────────────────────── #}
 <div class="card-section">
     <h2>Equipment ({{ equipment|length }})</h2>
-    <form method="get" action="{{ url_for('pages.fleet') }}" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+    <form method="get" action="{{ url_for('pages.settings') }}" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
         {% if driver_status_filter %}<input type="hidden" name="driver_status" value="{{ driver_status_filter }}">{% endif %}
         {% if driver_search %}<input type="hidden" name="driver_name" value="{{ driver_search }}">{% endif %}
         <div>
@@ -237,14 +241,14 @@
         <div>
             <button type="submit" class="btn btn-sm btn-primary">Search</button>
             {% if equip_search or equip_status_filter or equip_type_filter %}
-            <a href="{{ url_for('pages.fleet', driver_status=driver_status_filter or '', driver_name=driver_search or '') }}" class="btn btn-sm">Clear</a>
+            <a href="{{ url_for('pages.settings', driver_status=driver_status_filter or '', driver_name=driver_search or '') }}" class="btn btn-sm">Clear</a>
             {% endif %}
         </div>
     </form>
     <div style="margin-bottom:10px;display:flex;gap:4px;flex-wrap:wrap;">
-        <a href="{{ url_for('pages.fleet', driver_status=driver_status_filter or '', driver_name=driver_search or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}" class="btn btn-sm {% if not equip_status_filter %}btn-primary{% endif %}">All</a>
+        <a href="{{ url_for('pages.settings', driver_status=driver_status_filter or '', driver_name=driver_search or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}" class="btn btn-sm {% if not equip_status_filter %}btn-primary{% endif %}">All</a>
         {% for s in equipment_statuses %}
-        <a href="{{ url_for('pages.fleet', equip_status=s, driver_status=driver_status_filter or '', driver_name=driver_search or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}"
+        <a href="{{ url_for('pages.settings', equip_status=s, driver_status=driver_status_filter or '', driver_name=driver_search or '', equip_type=equip_type_filter or '', unit_number=equip_search or '') }}"
            class="btn btn-sm {% if equip_status_filter == s %}btn-primary{% endif %}">{{ s|replace('_', ' ')|title }}</a>
         {% endfor %}
     </div>
@@ -426,4 +430,3 @@ function deleteEquipment(equipId) {
     });
 }
 </script>
-{% endblock %}

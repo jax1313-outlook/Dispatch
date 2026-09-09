@@ -73,19 +73,19 @@ class TestFleetSummaryUtilization:
 
 class TestFleetPageUtilizationSection:
     def test_utilization_section_present(self, client):
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert 'id="fleet-utilization"' in html
 
     def test_show_utilization_button(self, client):
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Show Utilization" in html
 
     def test_utilization_counts_rendered(self, client):
         services.create_driver(name="D1")
         services.create_equipment(unit_number="T-001")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "Drivers Assigned" in html
         assert "Drivers Available" in html

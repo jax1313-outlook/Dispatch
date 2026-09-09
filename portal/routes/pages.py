@@ -472,7 +472,20 @@ def fuel_estimator():
 
 @pages_bp.route("/fleet")
 def fleet():
+    """Fleet moved inside Settings on 2026-09-09. Settings is where the shop is
+    set up, and the roster is part of setting up the shop.
+
+    The path still resolves so nothing that links or bookmarks here breaks, and
+    the roster's own filter links keep working -- they carry query arguments,
+    which the redirect preserves."""
+    return redirect(url_for("pages.settings", **request.args))
+
+
+def _fleet_context() -> dict:
+    """The roster, its filters and its vocabulary. Read by Settings, which now
+    renders it through _fleet_panel.html."""
     from dispatch import services as dispatch_svc
+    from dispatch import store as dispatch_store
     from dispatch.models import (
         DRIVER_STATUSES, LICENSE_CLASSES,
         EQUIPMENT_TYPES, EQUIPMENT_STATUSES,
@@ -484,35 +497,28 @@ def fleet():
     equip_type = request.args.get("equip_type")
     equip_search = request.args.get("unit_number", "").strip()
 
-    drivers = dispatch_svc.list_drivers(
-        status=driver_status or None,
-        name=driver_search or None,
-    )
-    equipment = dispatch_svc.list_equipment(
-        status=equip_status or None,
-        equipment_type=equip_type or None,
-        unit_number=equip_search or None,
-    )
-    summary = dispatch_svc.get_fleet_summary()
-    from dispatch import store as dispatch_store
-    assignments = dispatch_store.get_fleet_assignments()
-
-    return render_template(
-        "fleet.html",
-        drivers=drivers,
-        equipment=equipment,
-        summary=summary,
-        assignments=assignments,
-        driver_statuses=DRIVER_STATUSES,
-        license_classes=LICENSE_CLASSES,
-        equipment_types=EQUIPMENT_TYPES,
-        equipment_statuses=EQUIPMENT_STATUSES,
-        driver_status_filter=driver_status or "",
-        driver_search=driver_search,
-        equip_status_filter=equip_status or "",
-        equip_type_filter=equip_type or "",
-        equip_search=equip_search,
-    )
+    return {
+        "drivers": dispatch_svc.list_drivers(
+            status=driver_status or None,
+            name=driver_search or None,
+        ),
+        "equipment": dispatch_svc.list_equipment(
+            status=equip_status or None,
+            equipment_type=equip_type or None,
+            unit_number=equip_search or None,
+        ),
+        "summary": dispatch_svc.get_fleet_summary(),
+        "assignments": dispatch_store.get_fleet_assignments(),
+        "driver_statuses": DRIVER_STATUSES,
+        "license_classes": LICENSE_CLASSES,
+        "equipment_types": EQUIPMENT_TYPES,
+        "equipment_statuses": EQUIPMENT_STATUSES,
+        "driver_status_filter": driver_status or "",
+        "driver_search": driver_search,
+        "equip_status_filter": equip_status or "",
+        "equip_type_filter": equip_type or "",
+        "equip_search": equip_search,
+    }
 
 
 @pages_bp.route("/fleet/driver/<driver_id>")
@@ -978,6 +984,8 @@ def settings():
         stall_thresholds=_STALL_THRESHOLDS_HOURS,
         storage_paths=storage_paths,
         integration_entries=integrations_registry.list_entries(),
+        # The fleet roster now renders at the top of this page.
+        **_fleet_context(),
     )
 
 

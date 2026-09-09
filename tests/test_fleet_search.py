@@ -160,7 +160,7 @@ class TestEquipmentAPI:
 class TestFleetPage:
     def test_driver_search_on_page(self, client):
         services.create_driver(name="Fleet Driver")
-        resp = client.get("/fleet?driver_name=Fleet")
+        resp = client.get("/settings?driver_name=Fleet")
         assert resp.status_code == 200
         html = resp.data.decode()
         assert "Fleet Driver" in html
@@ -170,14 +170,14 @@ class TestFleetPage:
         services.update_driver(d["driver_id"], status="inactive")
         services.create_driver(name="ActiveGuy")
 
-        resp = client.get("/fleet?driver_status=active")
+        resp = client.get("/settings?driver_status=active")
         html = resp.data.decode()
         assert "ActiveGuy" in html
         assert "InactiveGuy" not in html
 
     def test_equipment_search_on_page(self, client):
         services.create_equipment(unit_number="SRCH-001")
-        resp = client.get("/fleet?unit_number=SRCH")
+        resp = client.get("/settings?unit_number=SRCH")
         assert resp.status_code == 200
         html = resp.data.decode()
         assert "SRCH-001" in html
@@ -186,17 +186,17 @@ class TestFleetPage:
         services.create_equipment(unit_number="FB-010", equipment_type="flatbed")
         services.create_equipment(unit_number="RF-010", equipment_type="reefer")
 
-        resp = client.get("/fleet?equip_type=flatbed")
+        resp = client.get("/settings?equip_type=flatbed")
         html = resp.data.decode()
         assert "FB-010" in html
         assert "RF-010" not in html
 
     def test_clear_button_shown(self, client):
-        resp = client.get("/fleet?driver_name=test")
+        resp = client.get("/settings?driver_name=test")
         html = resp.data.decode()
         assert "Clear" in html
 
     def test_no_clear_without_filters(self, client):
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert html.count('Clear</a>') == 0
