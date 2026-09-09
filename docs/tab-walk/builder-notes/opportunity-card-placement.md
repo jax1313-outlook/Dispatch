@@ -75,16 +75,33 @@ findings are in.
 Four facts that bear on the placement question. All proven by inspection of the
 `main` branch on 2026-09-09.
 
-**1. The card is not a component. It is copied five times.**
+**1. The card was not a component. RESOLVED 2026-09-09.**
 
-Card markup appears in `home.html` twice, and in `dispatch.html`, `sam.html`,
-`pending.html` and `brief.html`. There is not a single `{% include %}` anywhere
-in the template set. Every instance is hand-copied.
+Corrected on closer reading. It was hand-copied four times across two families,
+not five times across one.
 
-This changes the shape of the question. There is no one card to relocate.
-Deciding where it belongs currently means deciding five times, and any change to
-the presentation has to be made five times. Making it one shared partial is the
-precondition for placement to be a single decision.
+| Family | Full density | Compact density |
+| --- | --- | --- |
+| Freight opportunity card | `dispatch.html` | Home top-loads strip |
+| SAM contract opportunity card | `sam.html` | Home top-opportunities strip |
+
+`pending.html` renders a different card entirely, priority-driven with no
+Intelligence score. `brief.html` is the detail view, not a card. Neither was in
+scope.
+
+There was not a single `{% include %}` anywhere in the template set, so every
+instance was hand-copied and the copies had already drifted. The compact freight
+card carried a SAMPLE DATA badge that the full one did not.
+
+Mike directed the extraction on 2026-09-09. There are now two macro partials,
+`_card_dispatch.html` and `_card_sam.html`, each with a compact and a full
+density. 179 lines of duplicated markup collapsed into two files.
+
+Presentation did not change. Proven by rendering Home, Dispatch and SAM against
+the same fixture data before and after, and diffing: identical output apart from
+indentation.
+
+Placement is now a single decision rather than four.
 
 **2. Load Search has no card surface today.**
 
