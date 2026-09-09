@@ -449,3 +449,25 @@ received, payment overdue, settlement disputed. Two of the eleven Alerts feed
 sources are too: disputed settlements under Decisions Required and overdue ones
 under Exceptions. And the Billing page holds the only user interface for any of
 it. Each either goes with accounting or stays until the integration is real.
+
+## Seven more parked — 2026-09-09
+
+Exceptions, Archive, Intelligence, Pipeline, Queues, Conflict Notices, Driver
+Pay. Off the nav, routes intact, nothing removed underneath.
+
+Sixteen screens parked in total. Eight nav entries remain: Home, Alerts, Load
+Search, Dispatch, Calendar, IFTA, Email Templates, Settings.
+
+Two inbound links checked before cutting. Queues links to Archive, both now
+parked and both still resolving. The driver detail page links to Driver Pay, and
+that page is still reached from the Settings roster and from Load Search, so the
+link still works.
+
+**Alerts is now the way in to most of what came off.** Its cards link to
+publisher, conflicts, pipeline, queues and library by path, and all five still
+resolve. Five of the sixteen parked screens are reachable by clicking an alert.
+That is the shape the rename was for: the nav stopped being the index of every
+screen, and the alert became the route to the screen that matters right now.
+
+Exceptions is the same story from the other side. Its items already appear in the
+Alerts Exceptions band, each linked to its own page.
