@@ -167,8 +167,10 @@ class TestBrokerScorecardPage:
         assert "Active Brokers" in html
         assert "Total Loads" in html
 
-    def test_nav_link(self, client):
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "/brokers" in html
-        assert "Brokers</a>" in html
+    def test_parked_off_the_nav_but_still_reachable(self, client):
+        """Parked on 2026-09-09, Mike's ruling. The broker directory and
+        scorecard are expected to be useful inside the Publisher workflow rather
+        than as a tab of their own, so the nav entry went and the page stayed.
+        """
+        assert "Brokers</a>" not in client.get("/home").data.decode()
+        assert client.get("/brokers").status_code == 200
