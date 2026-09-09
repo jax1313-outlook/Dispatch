@@ -162,3 +162,76 @@ more. Nothing was destroyed, per the standing rule.
 The blocker on going further is unchanged: `dispatch/notifications.py` gets its
 mail transport from `cin_lite/email_delivery.py`, so all eleven freight
 notifications run through the module being separated. That moves first.
+
+## SAM retention manifest — what moves to the SAM repository
+
+Mike's instruction: retain every SAM function and capability, parked here for
+movement to the SAM GitHub repository later. Nothing below is deleted. This is
+the packing list.
+
+State described is `tab-walk/build` as of 2026-09-09, after the mail transport
+was rehomed.
+
+### The engine — `cin_lite/`
+
+The contract-intelligence package, twenty-eight modules.
+
+| Group | Modules |
+| --- | --- |
+| Intake and processing | `acquisition`, `processing`, `run` |
+| Agents | `extractor`, `router`, `summarizer`, `proposal_writer` |
+| Rules, ten of them | `set_aside`, `naics_sin`, `cyber_compliance`, `foreign_influence`, `jv_mp_structure`, `past_performance`, `subcontractor_dominance`, `vendor_network`, `pricing_anomaly`, `base` |
+| Control and flow | `control`, `pipeline`, `pending` |
+| Storage | `archive` |
+| Workflows | `proposal` |
+| Contract mail | `email_delivery`, now decision rendering and routing only |
+| Fixtures | `sample_data/` |
+
+### Portal surfaces
+
+- `/sam` route in `portal/routes/pages.py`, and `sam.html`
+- `_card_sam.html`, both densities
+- `portal/routes/decisions.py` — the emailed decision link handler
+- `portal/routes/pipeline.py` — Pipeline and Queues
+- `pending.html`, and the contract half of `archive.html` and `brief.html`
+- `helpers.load_and_process_sam` in `portal/helpers.py`
+- The three contract sources in the Alerts feed: govcon pending, review queue,
+  analysis queue
+
+### Configuration and data
+
+- `DISPATCH_SAM_API_KEY`, `DISPATCH_SAM_LIMIT`, `DISPATCH_SAM_POSTED_FROM`,
+  `DISPATCH_SAM_POSTED_TO`, `DISPATCH_SAM_NAICS`, `DISPATCH_SAM_PTYPE`,
+  `DISPATCH_SAM_FETCH_DESCRIPTION`, `DISPATCH_ARCHIVE_PATH`
+- The contract archive on disk, `D:\Archive\CIN`, including its own outbox
+
+### Tests that go with it
+
+`test_acquisition`, `test_processing`, `test_rules`, `test_routing`,
+`test_summarization`, `test_extraction`, `test_run`, `test_control_center`,
+`test_control_email`, `test_email_control`, `test_pipeline_api`,
+`test_proposal_trigger`, `test_archive`, `test_storage_routing`.
+
+`conftest.py` is shared and stays. It carries SAM fixtures the contract tests
+need, so the SAM repo takes a copy of those fixtures rather than the file.
+
+### Already resolved
+
+**The mail transport.** Was `cin_lite/email_delivery.py`, now `dispatch/mail.py`.
+Dispatch owns addressing, message building, the HMAC token pair, SMTP and the
+outbox. The two programs no longer share an outbox. `cin_lite` imports the
+transport from Dispatch until it leaves, then takes a copy. Done 2026-09-09.
+
+### Still crossing the line
+
+Three things reach across and have to be settled before the split.
+
+**Receipt vision.** `cin_lite/agents/receipt_vision.py` is used by the freight
+side, not the contract side: fuel-receipt scanning in the driver portal and the
+dispatch API. Same shape as the mail transport was. It rehomes to Dispatch.
+
+**Backup.** `dispatch/backup.py` imports `cin_lite.archive` deliberately, as a
+module attribute, so it covers both archives. After the split it covers one.
+
+**The sandbox store.** Freight and contract entries share one store, separated
+only by `source_type`. Splitting the programs splits that store.
