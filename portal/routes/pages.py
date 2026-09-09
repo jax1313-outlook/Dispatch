@@ -963,7 +963,10 @@ def settings():
         "database": str(get_db_path().resolve()),
         "uploads": str(_get_upload_dir().resolve()),
         "archive": str(cin_archive.ARCHIVE_ROOT.resolve()),
-        "outbox": str((cin_archive.ARCHIVE_ROOT / "Outbox").resolve()),
+        # Dispatch's own outbox, not the contract archive's. They stopped being
+        # the same directory when the mail transport moved to dispatch/mail.py
+        # on 2026-09-09, and this row kept pointing at the contract one.
+        "outbox": str(email_delivery._OUTBOX.resolve()),
         "library_intel": str(get_memory_dir().resolve()),
         "archive_records": str(get_archive_dir().resolve()),
     }
