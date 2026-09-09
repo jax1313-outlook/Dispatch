@@ -81,18 +81,48 @@ def card_data_for(record: dict) -> dict:
 
 
 def from_capture(record: dict) -> dict:
-    """Create or update the card for one captured Opportunity.
+    """Create or update the card for one captured Opportunity, and score it.
 
     Returns the sandbox entry. Safe to call on every capture: NEW makes the card,
-    MERGED finds the same one and fills it in.
+    MERGED finds the same one, fills it in, and scores it again on what is now
+    known.
 
-    A capture is not scored here. Scoring is Intelligence's, it is deterministic,
-    and inventing a number at capture time would put a screen in the middle of
-    something that is not its work.
+    **The score is the engine's, not this module's.** `dispatch.scoring` is the
+    deterministic chassis: same inputs, same policy profile, same score, every
+    time. Running it here is not a screen deciding anything, it is a screen
+    asking the engine that already owns the question. Nothing here computes,
+    adjusts or overrides a number.
+
+    A sparse capture scores on what it has. Position impact, drive-time risk and
+    the rest come back as unknowns where the lane or the windows were not said,
+    which is the honest answer and is visible on the card as such.
+
+    Scoring never costs the card. If the engine cannot score this capture the
+    card still exists, unscored, and can be scored later when the gaps are
+    filled. A capture that reached a screen beats a capture held back for want
+    of a number.
     """
-    return sandbox.create_entry(
+    card = card_data_for(record)
+
+    score = None
+    scoring = None
+    try:
+        from dispatch.scoring import score_load
+
+        scoring = score_load(dict(card))
+        score = scoring.get("score")
+    except Exception:  # noqa: BLE001 - an unscored card still beats no card
+        scoring = None
+
+    entry = sandbox.create_entry(
         source_type=SOURCE_TYPE,
         source_id=record["opportunity_id"],
         title=title_for(record),
-        card_data=card_data_for(record),
+        card_data=card,
+        score=score,
     )
+    if scoring:
+        updated = sandbox.update_scoring(entry["id"], scoring)
+        if updated:
+            entry = updated
+    return entry

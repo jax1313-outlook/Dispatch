@@ -22,6 +22,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dispatch.models import ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from portal.models import get_memory_dir, atomic_write_json
 
 SECTIONS = [
@@ -127,6 +128,96 @@ def add_record(section: str, name: str, content: str = "",
     data[section].append(record)
     _save(data)
     return record
+
+
+# ── Documents ───────────────────────────────────────────────────────
+#
+# Built 2026-09-09. Until this existed a Library record could hold a name and
+# some text, and nothing else. Every asset Publisher's packet manifest asks for
+# -- W-9, insurance, authority, rate sheets, terms -- is a document, and there
+# was no way to put one in. The missing-asset list could be satisfied by typing
+# a name, which is the kind of premature truth this codebase is careful about
+# everywhere else.
+#
+# Files live beside library.json under the memory root, not in the JSON. The
+# record keeps the filename, the size and the stored path, so what Publisher
+# needs to fetch is on the record and the store stays small enough to read.
+
+
+def documents_dir() -> Path:
+    """Where Library documents are kept. Beside the library itself, so a backup
+    that takes one takes the other."""
+    d = get_memory_dir() / "LibraryDocuments"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _safe_stored_name(record_id: str, original_filename: str) -> str:
+    """A stored filename that cannot escape the documents directory.
+
+    The record id leads, so two uploads of `w9.pdf` never collide, and only the
+    extension is taken from what the browser sent. A filename is attacker- or
+    accident-supplied text; it does not get to choose a path.
+    """
+    ext = ""
+    if "." in original_filename:
+        candidate = original_filename.rsplit(".", 1)[-1].lower()
+        if candidate.isalnum() and len(candidate) <= 8:
+            ext = "." + candidate
+    return f"{record_id}{ext}"
+
+
+def add_document(section: str, name: str, file_data: bytes,
+                 original_filename: str, content: str = "",
+                 metadata: dict | None = None,
+                 submitted_by: str = "human") -> dict:
+    """Place one document in the Library.
+
+    The record is created first so its id can name the file. If writing the file
+    fails, the record is removed rather than left behind pointing at nothing --
+    a Library entry that claims a document it does not have is worse than no
+    entry, because the missing-asset check would stop asking for it.
+    """
+    if not file_data:
+        raise ValueError("a document needs a file")
+    if len(file_data) > MAX_FILE_SIZE:
+        raise ValueError(
+            f"file exceeds the {MAX_FILE_SIZE // (1024 * 1024)} MB limit")
+    ext = original_filename.rsplit(".", 1)[-1].lower() if "." in original_filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"file type not allowed: .{ext}" if ext else "file has no extension")
+
+    record = add_record(section, name, content=content,
+                        metadata=metadata, submitted_by=submitted_by)
+    stored = _safe_stored_name(record["id"], original_filename)
+    try:
+        (documents_dir() / stored).write_bytes(file_data)
+    except OSError:
+        delete_record(record["id"])
+        raise
+
+    record["metadata"] = dict(record.get("metadata") or {})
+    record["metadata"].update({
+        "document": stored,
+        "original_filename": original_filename,
+        "size_bytes": len(file_data),
+    })
+    return update_record(record["id"], metadata=record["metadata"])
+
+
+def document_path(record_id: str) -> Path | None:
+    """The file behind a record, or None when the record has no document or the
+    file is not where the record says it is."""
+    for records in _load().values():
+        for record in records:
+            if record.get("id") != record_id:
+                continue
+            stored = (record.get("metadata") or {}).get("document")
+            if not stored:
+                return None
+            path = documents_dir() / stored
+            return path if path.exists() else None
+    return None
 
 
 def review_candidate(record_id: str, approve: bool, reviewed_by: str) -> dict:

@@ -28,6 +28,10 @@
                 <span class="library-name">{{ record.name }}</span>
                 <span class="library-meta">{{ record.updated_at }}</span>
             </div>
+            {% if record.metadata and record.metadata.document %}
+            <a href="{{ url_for('api.library_document', record_id=record.id) }}"
+               class="btn btn-sm" title="{{ record.metadata.original_filename }}">Download</a>
+            {% endif %}
             <span class="status-tag status-interested">{{ record.status }}</span>
             <button class="btn btn-sm btn-danger" onclick="libraryDelete('{{ record.id }}')" title="Remove">&#10005;</button>
         </div>
@@ -39,8 +43,25 @@
     </div>
     {% endif %}
 
+    {# Upload, 2026-09-09. Every asset Publisher's packet manifest asks for is a
+       document, and until now the only way to satisfy the missing-asset check
+       was to type its name. The file input sits beside Add Record rather than
+       replacing it, because a broker note or a piece of approved language is
+       still a text record and should not be made to invent a file. #}
     <div class="section-actions">
         <button class="btn btn-sm btn-success" onclick="libraryAdd('{{ section.key }}')">+ Add Record</button>
+        <form class="library-upload" style="display:inline-flex;gap:6px;align-items:center;margin-left:8px;"
+              onsubmit="libraryUpload(event, '{{ section.key }}')">
+            <input type="text" name="name" placeholder="Document name" required
+                   style="padding:5px 8px;" {% if section.key == 'company' and section.missing %}list="missing-{{ section.key }}"{% endif %}>
+            {% if section.key == 'company' and section.missing %}
+            <datalist id="missing-{{ section.key }}">
+                {% for asset in section.missing %}<option value="{{ asset }}"></option>{% endfor %}
+            </datalist>
+            {% endif %}
+            <input type="file" name="file" required style="font-size:12px;">
+            <button type="submit" class="btn btn-sm btn-primary">Upload</button>
+        </form>
     </div>
 </section>
 {% endfor %}

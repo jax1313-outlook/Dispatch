@@ -172,3 +172,42 @@ class TestCaptureEndpointMakesTheCard:
         assert data["carded"] is False
         assert "store unavailable" in data["card_note"]
         assert opportunity.get(data["opportunity_id"]) is not None
+
+
+class TestTheCardIsScored:
+    def test_a_capture_carries_the_engine_score(self):
+        """The score is `dispatch.scoring`'s, not the bridge's. Running the
+        deterministic engine at capture time is a screen asking the engine that
+        owns the question, not a screen deciding anything."""
+        record = _capture()
+        entry = opportunity_card.from_capture(record)
+
+        assert entry["score"] is not None
+        assert isinstance(entry["score"], int)
+
+    def test_a_sparse_capture_scores_on_what_it_has(self):
+        """Unknowns where the lane or the windows were not said. That is the
+        honest answer and it shows on the card as such."""
+        record = opportunity.capture(
+            {"origin": "Ocala FL", "destination": "Macon GA", "rate": 900},
+            driver="mike", channel="VOICE",
+        )
+        entry = opportunity_card.from_capture(record)
+
+        assert entry["score"] is not None
+        assert entry.get("position_impact")
+
+    def test_scoring_never_costs_the_card(self, monkeypatch):
+        """A capture that reached a screen beats a capture held back for want
+        of a number."""
+        import dispatch.scoring as scoring
+
+        monkeypatch.setattr(
+            scoring, "score_load",
+            lambda load, **kw: (_ for _ in ()).throw(RuntimeError("engine down")))
+
+        record = _capture()
+        entry = opportunity_card.from_capture(record)
+
+        assert entry is not None
+        assert entry["score"] is None

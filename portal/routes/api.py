@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request, send_file, session
 
 from dispatch import spoken_date
 
@@ -291,6 +291,54 @@ def library_add():
         return jsonify({"status": "ok", "record": record})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@api_bp.route("/library/upload", methods=["POST"])
+def library_upload():
+    """Put a document in the Library, where Publisher can reach it.
+
+    Multipart, because this carries a file. `library_add` above stays as it is
+    for text records -- a broker note or a piece of approved language does not
+    need a file and should not be made to invent one.
+
+    The document is what makes the missing-asset check honest. Before this,
+    typing "W-9" satisfied it and Publisher's packet manifest went green with
+    nothing behind it.
+    """
+    uploaded = request.files.get("file")
+    section = request.form.get("section", "")
+    name = (request.form.get("name") or "").strip()
+
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "file required"}), 400
+    if not section or not name:
+        return jsonify({"error": "section and name required"}), 400
+
+    try:
+        record = lib_model.add_document(
+            section=section,
+            name=name,
+            file_data=uploaded.read(),
+            original_filename=uploaded.filename,
+            content=request.form.get("content", ""),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"status": "ok", "record": record}), 201
+
+
+@api_bp.route("/library/document/<record_id>", methods=["GET"])
+def library_document(record_id):
+    """Hand back the document behind one record.
+
+    This is how Publisher reaches what was uploaded, and how a human checks that
+    what the Library claims to hold is really there.
+    """
+    path = lib_model.document_path(record_id)
+    if path is None:
+        return jsonify({"error": "no document for that record"}), 404
+    return send_file(path, as_attachment=True,
+                     download_name=path.name)
 
 
 @api_bp.route("/library/review", methods=["POST"])
