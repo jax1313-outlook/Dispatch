@@ -206,12 +206,18 @@ class TestFuelEstimatorTemplate:
         assert "Fuel Cost Estimator" in html
 
     def test_form_elements(self, client):
+        """Three inputs, and no load. The Load ID field came off on 2026-09-09
+        with the TOOLBOX ruling -- it only read a rate confirmation, but it tied
+        a calculator to a specific operational record. The API still accepts a
+        load_id and is still tested above; this screen just stopped sending one.
+        """
         resp = client.get("/fuel-estimator")
         html = resp.data.decode()
         assert 'id="fuel-distance"' in html
         assert 'id="fuel-mpg"' in html
         assert 'id="fuel-price"' in html
-        assert 'id="fuel-load-id"' in html
+        assert 'id="fuel-load-id"' not in html
+        assert "load_id" not in html
 
     def test_reference_table(self, client):
         resp = client.get("/fuel-estimator")

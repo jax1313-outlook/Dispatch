@@ -25,9 +25,6 @@
                 <input type="number" id="fuel-price" step="0.001" min="0" value="{{ defaults.avg_fuel_price or '' }}" style="width:100%;padding:6px 8px;" placeholder="Avg: {{ defaults.avg_fuel_price or 'N/A' }}">
                 <span style="font-size:0.8em;color:#999;">{% if defaults.avg_fuel_price %}Fleet avg: ${{ "%.3f"|format(defaults.avg_fuel_price) }}/gal{% else %}No fuel data yet{% endif %}</span>
             </label></div>
-            <div><label><strong>Load ID (optional)</strong><br>
-                <input type="text" id="fuel-load-id" style="width:100%;padding:6px 8px;" placeholder="Auto-fill distance from rate conf.">
-            </label></div>
         </div>
         <div style="display:flex;gap:8px;">
             <button type="submit" class="btn btn-sm btn-success">Calculate</button>
@@ -72,11 +69,9 @@ function calculateFuel(e) {
     var dist = document.getElementById('fuel-distance').value;
     var mpg = document.getElementById('fuel-mpg').value;
     var price = document.getElementById('fuel-price').value;
-    var loadId = document.getElementById('fuel-load-id').value;
     if (dist) params.distance_miles = dist;
     if (mpg) params.mpg = mpg;
     if (price) params.fuel_price = price;
-    if (loadId) params.load_id = loadId;
 
     var qs = Object.entries(params).map(function(kv) { return kv[0] + '=' + encodeURIComponent(kv[1]); }).join('&');
     fetch('/api/dispatch/fuel-estimate?' + qs).then(function(r) { return r.json(); }).then(function(data) {
@@ -102,17 +97,23 @@ function calculateFuel(e) {
 
 function clearForm() {
     document.getElementById('fuel-distance').value = '';
-    document.getElementById('fuel-load-id').value = '';
     document.getElementById('fuel-result').style.display = 'none';
     lastEstimate = null;
 }
 
-{# "Add as Fuel Expense" was removed on 2026-09-09, Mike's TOOLBOX ruling.
-   It posted a fuel expense onto a live load, which is a workflow action, and
-   TOOLBOX is read-only utility functionality. The calculation, the MPG and fuel
-   price defaults, the IFTA-derived pre-fill and the quick reference table all
-   stay. Applying an estimate to a load becomes a separate workflow action on a
-   workflow screen -- parked, see docs/tab-walk/PARKING_LOT.md. #}
+{# "Add as Fuel Expense" and the Load ID field were both removed on 2026-09-09,
+   Mike's TOOLBOX ruling. TOOLBOX is read-only utility functionality, and this
+   page now knows nothing about loads at all. The button wrote a fuel expense
+   onto a live load. The Load ID field only read a rate confirmation, but it
+   still tied a calculator to a specific operational record, so it went too.
+
+   What stays: the calculation, the MPG and fuel price defaults, the
+   IFTA-derived pre-fill and the quick reference table.
+
+   The API behind this page still accepts load_id and is still tested. Nothing
+   was removed from it -- only this screen stopped passing one. Applying an
+   estimate to a load becomes a separate workflow action on a workflow screen --
+   parked, see docs/tab-walk/PARKING_LOT.md. #}
 (function buildRefTable() {
     var price = {{ defaults.avg_fuel_price or 4.0 }};
     var distances = [100, 200, 300, 500, 750, 1000, 1500, 2000];
