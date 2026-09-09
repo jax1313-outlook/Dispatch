@@ -156,6 +156,30 @@ so commits and tests can keep pointing at it.
 - Fix:
 - Proven:
 
+### DISPATCH-006 — Send Stall Alerts reports success while delivering nothing
+
+- Severity: broken
+- Status: open
+- Lens: no
+- Evidence: `portal/routes/dispatch_api.py:212-220`, `dispatch/services.py:1443-1451`,
+  `cin_lite/email_delivery.py:159-164`, and the single artifact at
+  `D:\Archive\CIN\Outbox\dispatch-stalled-SBX-DISPATCH-E2E-DEMO-001.eml`
+- Seen: the endpoint returns `notified` set to the number of loads found
+  stalled. It is not a count of alerts delivered. With no SMTP host configured,
+  and none is configured on this machine, every message is written to a file
+  instead of sent, and the transport's own result string saying so is discarded
+  before anyone can see it. The button reports a positive number either way.
+- Expected: a control that says alerts were sent should only say so when they
+  were. At minimum the response should distinguish detected from delivered.
+- Cause: `_notify_safe` runs each notification for its side effect and keeps no
+  return value, by design, so a mail failure cannot fail a completed write. The
+  cost is that the outcome is unavailable to the caller.
+- Fix:
+- Proven:
+
+Full evidence and the three questions it raises are in
+`docs/tab-walk/builder-notes/alerts-detection-generation-delivery-tracking.md`.
+
 ## Decisions made during this walk
 
 None yet.
