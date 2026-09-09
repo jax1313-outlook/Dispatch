@@ -593,10 +593,33 @@ def opportunity_capture():
         + (" (captured_via %r not recognised, recorded as CHAT)"
            % record["unrecognised_channel"] if record.get("unrecognised_channel") else ""))
 
+    # The card, at capture time. Mike's ruling of 2026-09-09: it exists the
+    # moment he stops speaking, not later when a screen assembles one.
+    #
+    # After the capture is stored and audited, never before. A card is a view of
+    # a capture that already happened, and the contract's own record is the
+    # thing that must survive. If making the card fails, the capture stands and
+    # the failure is reported rather than swallowed -- the Honest Reporting Rule
+    # is why the response carries `carded` instead of quietly implying one.
+    carded = False
+    card_note = ""
+    try:
+        from portal.models import opportunity_card
+
+        opportunity_card.from_capture(record)
+        carded = True
+    except Exception as exc:  # noqa: BLE001 - a card must never lose a capture
+        card_note = f"capture stored; card not created ({exc})"
+        audit.record(action="opportunity-card", driver=driver, channel=channel,
+                     mission_id=record["opportunity_id"],
+                     result=audit.RESULT_FAILURE, note=card_note)
+
     return jsonify({
         "ok": True,
         "verdict": verdict,
         "opportunity_id": record["opportunity_id"],
+        "carded": carded,
+        "card_note": card_note,
         "echo": opportunity.echo(record),
         "flag": record.get("flag", ""),
         "possible_duplicate_of": record.get("possible_duplicate_of", ""),
