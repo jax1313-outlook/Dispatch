@@ -40,3 +40,4 @@ and then say what it changed.
 ## Notes
 
 - [Are alerts detected, generated, delivered, and tracked?](alerts-detection-generation-delivery-tracking.md) — opened 2026-09-09, decided 2026-09-09. Design settled, build parked.
+- [Where does the opportunity card belong?](opportunity-card-placement.md) — opened 2026-09-09, open. Placement and ownership, not redesign. Deferred until Load Search and SAM are walked.
