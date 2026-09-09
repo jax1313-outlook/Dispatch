@@ -40,16 +40,17 @@ def home():
     from dispatch import services as dispatch_svc
 
     all_entries = sandbox.get_all()
-    sam_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "sam"}
+    # Freight only. SAM is divorced from Dispatch and is no longer surfaced on
+    # Home -- docs/tab-walk/PARKING_LOT.md. The /sam page still reads the same
+    # sandbox store; it is simply not linked from here or from the nav.
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
 
-    sam_sorted = sorted(sam_entries.values(), key=_priority_key, reverse=True)[:5]
     dispatch_sorted = sorted(dispatch_entries.values(), key=_priority_key, reverse=True)[:5]
 
-    # Every screened card, not the ten that fit in the two lists below. The old
-    # "Active Cards" number counted the truncated top-5 slices and so silently
-    # capped at 10.
-    screened_count = len(sam_entries) + len(dispatch_entries)
+    # Every screened load, not the five that fit in the strip below. The old
+    # "Active Cards" number counted truncated top-5 slices and so silently
+    # capped.
+    screened_count = len(dispatch_entries)
 
     all_engine_loads = dispatch_svc.list_loads()
     active_engine = [l for l in all_engine_loads if l["status"] not in ("archived", "cancelled", "completed")]
@@ -61,7 +62,6 @@ def home():
     # ones recorded in docs/tab-walk/PARKING_LOT.md.
     return render_template(
         "home.html",
-        sam_cards=sam_sorted,
         dispatch_cards=dispatch_sorted,
         simulated_count=sandbox.simulated_count(),
         screened_count=screened_count,

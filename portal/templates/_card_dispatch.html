@@ -1,0 +1,122 @@
+{# The freight opportunity card. One definition, used everywhere.
+
+   Extracted 2026-09-09 on Mike's instruction during the tab walk. It was
+   hand-copied in two places, dispatch.html and home.html, which meant any
+   change to the card had to be made twice and the two had already drifted.
+   Nothing about the presentation changed in the extraction. Both densities
+   render exactly what they rendered before.
+
+   Two densities, not two cards:
+
+     full     the review surface. Every field Intelligence produced, the
+              operational considerations line, the engine link, and the full
+              action set. This is dispatch.html today.
+     compact  a four-field summary with three actions, for a screen that is
+              pointing at the card rather than being the card. This is the
+              Home top-loads strip today.
+
+   The card is an Intelligence product under the constitution. Where it is
+   displayed is still open -- see docs/tab-walk/builder-notes/opportunity-card-placement.md.
+
+   Import with context so card_visual, format_score and url_for resolve:
+     {% from "_card_dispatch.html" import dispatch_card with context %}
+#}
+{% macro dispatch_card(entry, compact=False) %}
+        {% set vis = card_visual(entry.score) %}
+        {% set cd = entry.card_data %}
+        <div class="card card-dispatch">
+            <div class="card-header {{ vis.css }}">
+                <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
+                <span class="card-score">Score {{ format_score(entry.score) }}</span>
+            </div>
+            <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
+            <div class="card-meta">
+                <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+                {% if compact and entry.data_origin == 'SIMULATED' %}<span class="origin-tag origin-simulated" title="Bundled sample data. This is not a real load.">SAMPLE DATA</span>{% endif %}
+            </div>
+            {% if compact %}
+            <div class="card-fields">
+                <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
+                <div><strong>Dest:</strong> {{ cd.destination or 'Unknown' }}</div>
+                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}</div>
+                <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
+            </div>
+            {% else %}
+            <div class="card-fields two-col">
+                <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
+                <div><strong>Destination:</strong> {{ cd.destination or 'Unknown' }}</div>
+                <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
+                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}{% if cd.rpm %} | <strong>RPM:</strong> ${{ cd.rpm }}{% endif %}</div>
+                <div><strong>Pickup:</strong> {{ cd.pickup_window or 'Unknown' }}</div>
+                <div><strong>Delivery:</strong> {{ cd.delivery_window or 'Unknown' }}</div>
+                <div><strong>Equipment:</strong> {{ cd.equipment_required or 'Unknown' }}
+                    {% if cd.equipment_match == 'match' %}<span class="equip-ok">&#10003;</span>
+                    {% elif cd.equipment_match == 'mismatch' %}<span class="equip-bad">&#10007;</span>
+                    {% endif %}
+                </div>
+                <div><strong>Weight:</strong> {{ '%s lbs'|format(cd.weight_lbs|int) if cd.weight_lbs else 'Unknown' }}</div>
+                {% if cd.source_link %}
+                <div><strong>Source:</strong> <a href="{{ cd.source_link }}" target="_blank" rel="noopener">View Source</a></div>
+                {% else %}
+                <div><strong>Source:</strong> Unknown</div>
+                {% endif %}
+                <div><strong>Distance:</strong> {{ '%s mi'|format(cd.distance_miles) if cd.distance_miles else 'Unknown' }}</div>
+            </div>
+
+            <div class="card-indicators">
+                {% if cd.detention_history %}
+                <span class="indicator" title="Detention History">&#128337; {{ cd.detention_history }}</span>
+                {% endif %}
+                {% if cd.location_intelligence %}
+                <span class="indicator" title="Location Intel">&#128205; {{ cd.location_intelligence }}</span>
+                {% endif %}
+                {% if cd.broker_intelligence %}
+                <span class="indicator" title="Broker Intel">&#128188; {{ cd.broker_intelligence }}</span>
+                {% endif %}
+            </div>
+
+            <div class="card-considerations">
+                <small>
+                    <strong>Operational Considerations:</strong>
+                    Position Impact: {{ entry.position_impact or 'Unknown' }} |
+                    Drive-Time Risk (estimated, no ELD): {{ entry.hos_risk or 'Unknown' }} |
+                    Return Route: {{ entry.return_home_required or 'Unknown' }} |
+                    Deadhead: {{ cd.deadhead_miles ~ ' mi' if cd.deadhead_miles else 'Unknown' }} |
+                    Fuel Est: {{ '$' ~ cd.fuel_estimate if cd.fuel_estimate else 'Unknown' }}
+                </small>
+            </div>
+
+            {% if entry.engine_load_id %}
+            <div class="card-engine-link">
+                <strong>Engine Load:</strong>
+                <a href="{{ url_for('pages.dispatch_detail', load_id=entry.engine_load_id) }}">{{ entry.engine_load_id[:12] }}...</a>
+                {% if cd.engine_status %}
+                <span class="status-tag dispatch-{{ cd.engine_status }}">{{ cd.engine_status|replace('_', ' ') }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <div class="card-actions">
+                {% if compact %}
+                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Brief</a>
+                <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
+                <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
+                {% else %}
+                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Open Brief</a>
+                {% if cd.source_link %}
+                <a href="{{ cd.source_link }}" target="_blank" rel="noopener" class="btn btn-sm">Open Source</a>
+                {% endif %}
+                {% if not entry.engine_load_id %}
+                <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
+                <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
+                <button class="btn btn-sm btn-danger" onclick="cardAction('{{ entry.id }}', 'pass')">Pass</button>
+                <button class="btn btn-sm btn-warning" onclick="cardAction('{{ entry.id }}', 'watch')">Watch</button>
+                <button class="btn btn-sm" onclick="createInquiry('{{ entry.id }}')">Send Inquiry Draft</button>
+                <button class="btn btn-sm btn-purple" onclick="triggerPublisher('{{ entry.id }}', 'Broker Packet Required')">Trigger Publisher</button>
+                <button class="btn btn-sm btn-book" onclick="bookLoad('{{ entry.id }}')">Book Load</button>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+{% endmacro %}
