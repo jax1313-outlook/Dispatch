@@ -250,3 +250,66 @@ it, unchanged. `/fleet` redirects to `/settings`, and the driver and equipment
 detail pages kept their paths because Load Search links into them.
 
 Nothing about Fleet was removed or reduced. See `03-fleet/FINDINGS.md`.
+
+## TOOLBOX — 2026-09-09
+
+Mike's ruling. TOOLBOX is not workflow. It is not Dispatch. It is not operations
+review. It is a collection of owner/operator calculators, references, links and
+utility tools, and it does not exist yet.
+
+Future shape:
+
+```
+TOOLBOX
+ ├── Calculators
+ ├── Reference Tables
+ ├── Federal Links
+ └── Owner/Operator Utilities
+```
+
+Named for it: Fuel Estimator, Per Diem Calculator, Fuel Surcharge Calculator,
+Fuel Surcharge Tables, and related utility tools. Capability is not deleted.
+
+### What actually exists, of the five named
+
+| Named | Class | Where it is |
+| --- | --- | --- |
+| Fuel Estimator | Proven | A working screen. Parked off the nav 2026-09-09; `/fuel-estimator` still resolves |
+| Fuel Surcharge Tables | Proven, as data not as a screen | The IFTA jurisdiction table in `dispatch/models.py` carries a rate and a surcharge for every state. It renders inside IFTA reports, never as a reference table |
+| Per Diem Calculator | Missing | The phrase does not appear anywhere in the repository |
+| Fuel Surcharge Calculator | Missing | Surcharge is applied inside IFTA reporting. Nothing calculates one standalone |
+| Cost Per Mile, Breakeven | Missing | Mike listed both as future |
+
+So TOOLBOX is one existing screen, one existing table that has never been
+presented as a table, and three things to build.
+
+### The Fuel Estimator, recorded
+
+**Calculations.** Estimated fuel cost from distance, MPG and price per gallon,
+via `GET/POST /api/dispatch/fuel-estimate`. A quick-reference grid built in the
+page: eight distances from 100 to 2000 miles against 6, 7 and 8 MPG, priced at
+the current average.
+
+**Reference data and where it comes from.** Two defaults are pre-filled from
+real IFTA data, not typed in. Average fuel price is total fuel spend divided by
+total gallons across every IFTA fuel purchase. Fleet MPG is total trip-leg miles
+divided by total gallons. With no IFTA data, both return zero and the fields
+read "N/A", which is what Mike's screen shows today.
+
+**Dependencies.** `get_avg_fuel_price` and `get_fleet_mpg` in
+`dispatch/services.py`, both reading IFTA tables. The optional Load ID field
+auto-fills distance from a rate confirmation.
+
+### One thing to settle before TOOLBOX is built
+
+The Fuel Estimator has an **Add as Expense** button. It posts a fuel expense
+onto a load. That is a write into a live record, which is workflow by Mike's own
+definition, sitting inside a calculator.
+
+It cannot move to TOOLBOX unchanged without carrying workflow into a screen
+defined as not being workflow. Three options, Mike's call: the button stays
+behind on a workflow screen, TOOLBOX gets a narrow exception for it, or the
+estimator splits into a pure calculator plus a separate action.
+
+Note also that TOOLBOX's reference data is IFTA-derived. A calculator screen
+that reads live operational data is not quite a standalone utility either.
