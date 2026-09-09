@@ -67,7 +67,7 @@ so commits and tests can keep pointing at it.
 ### FLEET-001 — Fleet cannot be removed; Settings does not contain its functions
 
 - Severity: n/a — this is a blocked removal, not a defect
-- Status: open — needs Mike's ruling
+- Status: RESOLVED 2026-09-09 — Mike moved Fleet inside Settings instead
 - Lens: yes
 - Evidence: `portal/templates/settings.html`, `portal/templates/fleet.html`,
   `portal/templates/search.html:82` and `:113`
@@ -115,3 +115,31 @@ Record the decision ID here and do not restate the decision itself.
 ## Carried forward
 
 Anything this tab depends on that a different tab owns. Name that tab.
+
+## Resolution — 2026-09-09
+
+Mike took option 2, with the merge going the other way from what I described.
+Rather than move driver and equipment management into Settings and then delete
+Fleet, Fleet moved in whole and the tab was retired.
+
+What changed:
+
+- `fleet.html` became `_fleet_panel.html`, a partial that Settings includes. One
+  definition of the roster, not a copy.
+- The Fleet route body became `_fleet_context()`, read by Settings.
+- The roster renders at the top of Settings, above paths and keys, with Add
+  Driver and Add Equipment as the page actions.
+- The Fleet nav entry is gone.
+
+What did not change, and why it matters:
+
+- `/fleet` redirects to `/settings` and carries its query arguments through, so
+  bookmarks and the roster's own filter links keep working.
+- The driver and equipment detail pages keep their existing paths. Load Search
+  links straight into them, and that was the second blocker on removing Fleet.
+  Their back buttons now say Settings.
+
+Twenty tests were fetching the Fleet page. Ownership changed, so they fetch
+Settings. Per the working method, tests get updated and the walk continues.
+
+Tab 03 is complete pending a runtime pass on Mike's laptop.

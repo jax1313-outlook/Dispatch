@@ -235,3 +235,15 @@ module attribute, so it covers both archives. After the split it covers one.
 
 **The sandbox store.** Freight and contract entries share one store, separated
 only by `source_type`. Splitting the programs splits that store.
+
+## Fleet, folded into Settings — 2026-09-09
+
+Not parked, moved. Recorded here because the nav lost an entry and someone will
+look for it.
+
+The roster lives at the top of the Settings page now: drivers, equipment,
+assignments, Add Driver, Add Equipment, the filters and the inline edits. All of
+it, unchanged. `/fleet` redirects to `/settings`, and the driver and equipment
+detail pages kept their paths because Load Search links into them.
+
+Nothing about Fleet was removed or reduced. See `03-fleet/FINDINGS.md`.
