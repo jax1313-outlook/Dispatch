@@ -224,11 +224,14 @@ transport from Dispatch until it leaves, then takes a copy. Done 2026-09-09.
 
 ### Still crossing the line
 
-Three things reach across and have to be settled before the split.
+Two things still reach across. Two more did and are resolved.
 
-**Receipt vision.** `cin_lite/agents/receipt_vision.py` is used by the freight
-side, not the contract side: fuel-receipt scanning in the driver portal and the
-dispatch API. Same shape as the mail transport was. It rehomes to Dispatch.
+**Receipt vision. RESOLVED 2026-09-09.** Moved to `dispatch/receipt_vision.py`.
+It was freight work all along: fuel-receipt scanning in the driver portal and
+the dispatch API. It sat in the contract package only because that is where it
+was first written, the same shape as the mail transport, and it moved the same
+way. The contract agents package now holds only the extractor, router,
+summarizer and proposal writer.
 
 **Backup.** `dispatch/backup.py` imports `cin_lite.archive` deliberately, as a
 module attribute, so it covers both archives. After the split it covers one.
