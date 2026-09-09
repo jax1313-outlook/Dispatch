@@ -3,6 +3,8 @@
 {% block page_title %}Home{% endblock %}
 
 {% block body %}
+{% from "_card_sam.html" import sam_card with context %}
+{% from "_card_dispatch.html" import dispatch_card with context %}
 <div class="dashboard-summary">
     <div class="summary-card">
         <span class="summary-number">{{ (sam_cards|length) + (dispatch_cards|length) }}</span>
@@ -208,30 +210,7 @@
     <h2>Dispatch — Top Loads</h2>
     <div class="card-grid">
     {% for entry in dispatch_cards %}
-        {% set vis = card_visual(entry.score) %}
-        <div class="card card-dispatch">
-            <div class="card-header {{ vis.css }}">
-                <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
-                <span class="card-score">Score {{ format_score(entry.score) }}</span>
-            </div>
-            <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
-            <div class="card-meta">
-                <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
-                {% if entry.data_origin == 'SIMULATED' %}<span class="origin-tag origin-simulated" title="Bundled sample data. This is not a real load.">SAMPLE DATA</span>{% endif %}
-            </div>
-            <div class="card-fields">
-                {% set cd = entry.card_data %}
-                <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
-                <div><strong>Dest:</strong> {{ cd.destination or 'Unknown' }}</div>
-                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}</div>
-                <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
-            </div>
-            <div class="card-actions">
-                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Brief</a>
-                <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
-                <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
-            </div>
-        </div>
+        {{ dispatch_card(entry, compact=True) }}
     {% endfor %}
     </div>
 </section>
@@ -242,28 +221,7 @@
     <h2>SAM — Top Opportunities</h2>
     <div class="card-grid">
     {% for entry in sam_cards %}
-        {% set vis = card_visual(entry.score, entry.decision) %}
-        <div class="card card-sam">
-            <div class="card-header {{ vis.css }}">
-                <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
-                {% if entry.decision and entry.decision.priority %}
-                <span class="card-score">Priority: {{ entry.decision.priority }}</span>
-                {% endif %}
-            </div>
-            <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
-            <div class="card-meta">
-                <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
-                {% if entry.data_origin == 'SIMULATED' %}<span class="origin-tag origin-simulated" title="Bundled sample data. This is not a real load.">SAMPLE DATA</span>{% endif %}
-            </div>
-            <div class="card-fields">
-                {% set cd = entry.card_data %}
-                <div><strong>Agency:</strong> {{ cd.agency or 'Unknown' }}</div>
-                <div><strong>Sol #:</strong> {{ cd.solicitation_number or 'Unknown' }}</div>
-            </div>
-            <div class="card-actions">
-                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Brief</a>
-            </div>
-        </div>
+        {{ sam_card(entry, compact=True) }}
     {% endfor %}
     </div>
 </section>
