@@ -413,3 +413,36 @@ Billing in `builder-notes/billing-operational-awareness-metrics.md`. They belong
 to whichever screen survives, which now looks like Profitability. The note's
 findings stand either way: almost none of it is built, and maintenance escrow
 does not exist anywhere in the repository.
+
+### Accounting leaves Dispatch — 2026-09-09
+
+Mike's clarification, which settles the Billing and Profitability question
+properly. Neither screen survives. What survives is a new Owner/Operator
+Scoreboard: weekly and monthly revenue against goals, the gap between them, the
+trend, and an optional gross profit estimate. Freight decisions, not accounting
+decisions. See `builder-notes/owner-operator-scoreboard.md`.
+
+**Parked as belonging to accounting systems, not Dispatch:**
+
+- Invoicing
+- Payments
+- Collections
+- Factoring
+- Disputes
+- Accounting reports
+- Historical profitability reports
+
+QuickBooks or a future accounting integration owns these.
+
+**One caution.** That integration does not exist. `accounting_export.py`, the
+accounting connector, and the Settings page all record the same thing: no
+QuickBooks integration exists anywhere in this codebase. So until it is built,
+parking invoicing does not hand the work to another system. It hands it to Mike,
+by hand, outside Dispatch.
+
+**Three things follow from the boundary and are not yet decided.** Four of the
+eleven notification types are accounting events -- invoice created, payment
+received, payment overdue, settlement disputed. Two of the eleven Alerts feed
+sources are too: disputed settlements under Decisions Required and overdue ones
+under Exceptions. And the Billing page holds the only user interface for any of
+it. Each either goes with accounting or stays until the integration is real.
