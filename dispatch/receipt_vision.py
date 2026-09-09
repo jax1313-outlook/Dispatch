@@ -2,6 +2,11 @@
 codebase's own established agent pattern (cin_lite/agents/extractor.py),
 not a port of Hold's separate ClaudeVisionExtractor class.
 
+Moved here from ``cin_lite/agents/`` on 2026-09-09. It never was contract-side
+work: its two callers are the driver portal's fuel upload and the dispatch API,
+both freight. It sat inside the package being separated with SAM, the same way
+the mail transport did, and for the same reason it had to come out.
+
 Extracts one receipt image's structured fields to pre-fill the Add Fuel
 Purchase form on /ifta. Never creates a fuel purchase or evidence record
 itself -- the dispatcher always reviews the pre-filled form and clicks
