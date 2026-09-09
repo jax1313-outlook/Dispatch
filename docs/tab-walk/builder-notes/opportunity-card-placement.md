@@ -67,8 +67,12 @@ Possible future layout: Operations Portal, then Opportunity Review, then
 Opportunity Cards. Candidate homes named so far are Load Search, Load Sweeper,
 and Opportunity Review.
 
-Deferred until Load Search is walked, SAM is walked, and further tab-walk
-findings are in.
+Deferred until Load Search is walked and further tab-walk findings are in.
+
+**Narrowed 2026-09-09.** SAM is divorced from Dispatch and parked entire, so
+this note is now about the freight opportunity card only. `_card_sam.html` and
+the Home top-opportunities strip go with SAM to the parking lot. The SAM review
+is no longer a gate on this decision, which leaves Load Search as the only one.
 
 ## What the repository shows
 

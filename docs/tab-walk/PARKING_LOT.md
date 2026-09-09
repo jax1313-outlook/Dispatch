@@ -59,6 +59,53 @@ in `base.html`. Its only caller was the Home button. Dispatch uses a different
 function, `sendStallAlerts`. Nothing calls `notifyStalled` now. Delete it or
 give it a caller, but not before the alert question below is settled.
 
+## SAM, parked entire — 2026-09-09
+
+Mike's ruling: **SAM is divorced from Dispatch completely.** It has its own
+GitHub repository and will be developed as a separate program later. Every
+builder note and every function surrounding SAM is parked.
+
+Nothing is removed yet. Parked means out of scope for the walk and recorded
+here, per the standing rule.
+
+**Tab 02 no longer covers SAM.** It is Load Search and Pipeline only. The
+opportunity-card placement note no longer waits on a SAM review.
+
+### What "SAM" actually reaches
+
+This is larger than the SAM tab. Surveyed on `main`, 2026-09-09.
+
+| Surface | What it is |
+| --- | --- |
+| SAM tab | `/sam`, `sam.html`, the nav entry, `helpers.load_and_process_sam` |
+| SAM card | `_card_sam.html`, both densities, and the Home top-opportunities strip |
+| `cin_lite/` | The contract-intelligence engine. Acquisition, four agents (extractor, router, summarizer, proposal writer), eight govcon rule modules, the proposal workflow, pipeline, pending, archive, control |
+| Pipeline tab | Fed by `cin_lite.pending` |
+| Queues tab | Fed by `cin_lite.pipeline.routing_history` |
+| Alerts feed | Three of eleven sources are contract-side: govcon pending, review queue, analysis queue |
+| Brief page | Renders SAM entries as well as freight entries |
+| Sandbox | `source_type == "sam"` entries share one store with freight entries |
+
+### The one real entanglement
+
+`cin_lite/email_delivery.py` is not a SAM file. It is the shared outbound mail
+transport, and `dispatch/notifications.py` imports it for all eleven freight
+notifications. Every load alert in Dispatch goes out through the
+contract-intelligence module.
+
+So separating SAM is not removing a tab. The freight side currently depends on
+a module inside the thing being separated. That transport has to move to the
+Dispatch side, or be duplicated, before SAM can leave. This is the first item on
+any SAM separation work, and it connects directly to the alerting build item
+below.
+
+### Open question for Mike
+
+Does SAM come off the running portal now, or stay visible until the separate
+program exists? Parking the notes is unambiguous. Removing the tab, the card,
+the Pipeline and Queues surfaces, and three of the eleven Alerts sources is a
+much larger change and has not been directed.
+
 ## Build items, designed but not built
 
 These are decided. They are not tab-walk edits and nothing here is implemented

@@ -6,9 +6,9 @@
 
 ## Scope
 
-Nav entries: Load Search, SAM, Pipeline
+Nav entries: Load Search, Pipeline (SAM parked entire, see ../PARKING_LOT.md)
 
-Templates: search.html, sam.html, pending.html, decision.html, load_readonly_detail.html, booking.html, candidates.html, mission_intake.html, mission_brief.html, brief.html
+Templates: search.html, pending.html, decision.html, load_readonly_detail.html, booking.html, candidates.html, mission_intake.html, mission_brief.html, brief.html
 
 Routes:
 

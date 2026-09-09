@@ -145,7 +145,7 @@ are listed as templates under tab 02 rather than as nav entries.
 | # | Tab | Prefix | Nav entries | Status |
 | --- | --- | --- | --- | --- |
 | 01 | [Dispatch](01-dispatch/FINDINGS.md) | DISPATCH | Dispatch, Operations, Calendar, Exceptions | findings open (code side) |
-| 02 | [Pre-Commitment Lifecycle](02-pre-commit/FINDINGS.md) | PRECOMMIT | Load Search, SAM, Pipeline | not started |
+| 02 | [Pre-Commitment Lifecycle](02-pre-commit/FINDINGS.md) | PRECOMMIT | Load Search, Pipeline | not started |
 | 03 | [Fleet](03-fleet/FINDINGS.md) | FLEET | Fleet | not started |
 | 04 | [Drivers](04-drivers/FINDINGS.md) | DRIVERS | Driver Pay | not started |
 | 05 | [Billing and Profitability](05-billing/FINDINGS.md) | BILLING | Billing, Profitability | not started |

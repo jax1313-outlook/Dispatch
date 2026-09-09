@@ -188,7 +188,45 @@ Full evidence and the three questions it raises are in
 
 ## Decisions made during this walk
 
-None yet.
+**Operations is retired as a screen name. The screen is ALERTS.** Mike,
+2026-09-09.
+
+Operations means active work: pickups, deliveries, mission execution, truck
+movement. This screen carries none of that. It carries blockers, decisions
+needing authority, exceptions and administrative gaps. It is displaying
+conditions that have fallen outside normal operations, so it was misnamed.
+
+**The screen is a review queue, not an alert history.** It is not evidence that
+any alert was delivered. Detection is proven and generation partially proven,
+but delivery and tracking are not, so nothing on this screen may be read as
+proof of notification. See
+`docs/tab-walk/builder-notes/alerts-detection-generation-delivery-tracking.md`.
+
+**Ordering: band first, existing consequence level second.** Band sets
+operational importance. Consequence level continues to order within the band.
+Implemented on `tab01/operations-alerts`.
+
+**Ownership stays open.** Alerts remains a standalone screen for now. It may
+stay standalone, become a Dispatch subsection, or fold into a larger operations
+review screen. Deferred until more tab-walk findings exist.
+
+### DISPATCH-007 — a conflict on a committed load cannot reach the blocker band
+
+- Severity: wrong
+- Status: open — needs Mike's ruling, not a fix
+- Lens: yes
+- Evidence: `portal/models/operations_feed.py`, `_conflict_cards`
+- Seen: Mike's blocker band names "equipment mismatch on committed load" as an
+  example. Every conflict notice currently lands in the exception band
+  regardless of severity, because a conflict notice attaches to a sandbox card
+  and carries no notion of whether the load is committed.
+- Expected: a critical conflict on a committed load is a blocker. The truck
+  cannot move.
+- Cause: not traced. The gap looks structural rather than a mapping mistake.
+  Conflict notices are raised pre-commit, so "on a committed load" may not be a
+  state a conflict notice can currently be in.
+- Fix:
+- Proven:
 
 ## Carried forward
 
