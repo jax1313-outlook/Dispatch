@@ -22,7 +22,7 @@ hardening pass is not authorized to invent -- see the deployment decision
 register for the open questions this boundary exists to eventually answer.
 
 Transport itself reuses the same proven degrade-to-local-file pattern as
-every other email in this codebase (cin_lite.email_delivery._send_or_write):
+every other email in this codebase (dispatch.mail._send_or_write):
 if DISPATCH_SMTP_HOST isn't configured, or the send fails, the message is
 written to Archive/Outbox instead of being lost, and the pipeline never
 blocks on it.
@@ -30,7 +30,7 @@ blocks on it.
 
 from __future__ import annotations
 
-from cin_lite.email_delivery import _build, _send_or_write
+from dispatch.mail import _build, _send_or_write
 
 
 def notify_customer(to_address: str, subject: str, body: str, fallback_id: str) -> str:

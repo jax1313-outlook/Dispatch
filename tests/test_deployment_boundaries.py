@@ -30,7 +30,7 @@ class TestCustomerNotificationBoundary:
 
     def test_falls_back_to_local_file_when_smtp_unconfigured(self, tmp_path, monkeypatch):
         monkeypatch.delenv("DISPATCH_SMTP_HOST", raising=False)
-        from cin_lite import email_delivery
+        from dispatch import mail as email_delivery
         monkeypatch.setattr(email_delivery, "_OUTBOX", tmp_path / "Outbox")
 
         result = customer_notifications.notify_customer(
@@ -44,7 +44,7 @@ class TestCustomerNotificationBoundary:
 
     def test_never_raises_even_if_smtp_send_fails(self, tmp_path, monkeypatch):
         monkeypatch.setenv("DISPATCH_SMTP_HOST", "smtp.invalid.example")
-        from cin_lite import email_delivery
+        from dispatch import mail as email_delivery
         monkeypatch.setattr(email_delivery, "_OUTBOX", tmp_path / "Outbox")
 
         # Unreachable host -- should degrade to the local fallback, not raise.

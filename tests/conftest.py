@@ -73,9 +73,15 @@ def _scrub_env(monkeypatch):
 def tmp_archive(tmp_path, monkeypatch):
     """Redirect every archive + email + pending write into a per-test tmp directory."""
     from cin_lite import archive, email_delivery, pending
+    from dispatch import mail
 
     root = tmp_path / "Archive"
     monkeypatch.setattr(archive, "ARCHIVE_ROOT", root)
+    # Two outboxes since the mail transport moved to the Dispatch side on
+    # 2026-09-09. Dispatch writes its own undelivered mail, cin_lite writes the
+    # contract side's. Both have to be redirected or the suite writes .eml files
+    # into the developer's real archive.
+    monkeypatch.setattr(mail, "_OUTBOX", root / "Outbox")
     monkeypatch.setattr(email_delivery, "_OUTBOX", root / "Outbox")
     monkeypatch.setattr(pending, "_PENDING_DIR", root / "Pending")
     # The portal's JSON stores resolve through PORTAL_DATA_DIR
