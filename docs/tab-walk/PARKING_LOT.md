@@ -136,3 +136,29 @@ Three pieces, in order:
 Questions that need answering before any of the above becomes a build item go
 in `builder-notes/`, not here. This file tracks what was set aside. That folder
 tracks what is not yet understood.
+
+## SAM removal, what actually happened — 2026-09-09
+
+Mike's ruling: remove the SAM tab and card only. Everything else stays until the
+mail transport is rehomed.
+
+Removed from the screens:
+
+- The SAM nav entry in `base.html`
+- The Home top-opportunities strip, and the SAM card import with it
+- `sam_cards` and the SAM half of `screened_count` in the Home route. Screened
+  Loads counts freight only now, which is what the name meant
+
+Left alone, and reachable:
+
+- `/sam` still resolves and `sam.html` still renders
+- `_card_sam.html` still works, both densities
+- `cin_lite` entire, Pipeline, Queues, the Brief page, and the three contract
+  sources in the Alerts feed
+
+Restoring the tab is one line in `base.html`. Restoring the Home strip is a few
+more. Nothing was destroyed, per the standing rule.
+
+The blocker on going further is unchanged: `dispatch/notifications.py` gets its
+mail transport from `cin_lite/email_delivery.py`, so all eleven freight
+notifications run through the module being separated. That moves first.
