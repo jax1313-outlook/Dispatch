@@ -55,9 +55,19 @@ change of name and purpose, not a replacement of the object. Accept is the commi
 Question 4 on every tab is therefore asking which named phase of one record the screen
 shows, never which of several objects it holds.
 
-**R2 — JOE is no longer optional.** This supersedes the JOE optionality language in
-`docs/DISPATCH_SYSTEM_INDEPENDENCE_DOCTRINE.md` and
-`docs/DISPATCH_EXTERNAL_ADAPTER_BOUNDARIES.md`. See T1 below for what it leaves open.
+**R2 — The Communication Worker role is required. The JOE implementation is not.**
+
+Communication capability is constitutional. JOE is one replaceable implementation of that
+role. The JOE implementation stays optional and must keep supporting degraded operation
+under `docs/DISPATCH_SYSTEM_INDEPENDENCE_DOCTRINE.md`. The "No JOE" degraded state stays
+valid and stays required.
+
+JOE is not operational truth. JOE is not workflow. JOE is not Mission Records. External
+systems are wheels. Dispatch is the truck.
+
+The distinction the walk applies: a constitutional role may be required, and any single
+implementation of it may still be replaceable and optional. A finding that says a screen
+depends on JOE is only a defect if the screen breaks when JOE is absent.
 
 **R3 — JOE Portal is not the booking workbench.** The booking workbench now sits in the
 Pre-Commitment Lifecycle. Per the constitution, Intelligence owns the entire pre-commit
@@ -69,26 +79,27 @@ separation of process by department name. It is agents. Their Level is not yet d
 Stop writing "department" in walk findings. Write "agent". Where a screen or a doctrine
 file still says department, that wording is a finding, not a fact.
 
+**R5 — Worker constitutions do not replace the deterministic chassis.**
+
+Workers replace organizational departments. They do not replace deterministic mechanisms.
+Where deterministic behavior already exists and is governed by doctrine, that behavior
+remains exactly as it is.
+
+Intelligence may collect, analyze, evaluate and recommend. Policy-driven scoring remains
+reproducible and deterministic. Sorting remains deterministic. Recommendations remain
+deterministic where doctrine requires. Decision remains human.
+
+Workers own business responsibilities. The chassis owns deterministic functions. The five
+stages in `docs/DISPATCH_DETERMINISTIC_CHASSIS.md` survive the worker model untouched.
+
+A worker boundary and a chassis stage are answers to different questions. Question 1 on
+every tab asks who owns the business responsibility. It does not license moving a
+deterministic function into a worker.
+
 ## Open questions, unresolved
 
 Listed so the walk does not silently pick a side, and so the same question is not
 re-argued on twelve separate tabs. Mike resolves these.
-
-**T1 — What JOE being required does to independence.** `DISPATCH_SYSTEM_INDEPENDENCE_DOCTRINE.md`
-lists JOE under what Dispatch borrows, and names "No JOE" as one of the designed degraded
-states. R2 makes JOE required. Two readings follow and they lead different places. Either
-JOE moves from borrowed to owned, and Dispatch must then contain that capability itself,
-or JOE stays borrowed and Dispatch no longer runs complete without it. The second reading
-contradicts the standing rule that Dispatch remains complete and operational without
-optional plug-ins. Degraded mode needs a new answer for the JOE row either way.
-
-**T2 — Which stages an agent may occupy.** `DISPATCH_DETERMINISTIC_CHASSIS.md` holds that
-the engine is deterministic and that five stages never collapse: filter, score, sort,
-recommendation, decision. It states that decision may not be produced by the engine. R4
-replaces deterministic department separation with agents. The boundary that must survive
-is that no agent produces a decision. Which of the other four stages an agent may occupy,
-and whether an agent-produced score still has to reproduce from the record and the profile
-alone, is undetermined.
 
 **T3 — Agent Level.** R4 leaves Level undetermined. Until it is set, the constitution's
 Level 1 through Level 3 numbering describes artifacts, not agent tiers. Do not use the
