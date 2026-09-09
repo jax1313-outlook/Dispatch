@@ -381,3 +381,35 @@ inside the workflow rather than beside it.
 That makes the future shape a question worth asking once rather than three
 times: does the Publisher workflow absorb the broker directory and the Library
 as panels, the way Settings absorbed Fleet? Not decided.
+
+## Billing parked — 2026-09-09
+
+Mike's ruling: Profitability replaces it. Nav is down to fifteen entries and now
+carries no financial screen at all.
+
+**Profitability replaces the reporting, not the workflow.** This is the one
+thing to carry forward. The two screens are not the same kind of thing:
+
+| Billing | Profitability |
+| --- | --- |
+| Settlements list, with Record Payment, Dispute and Write Off | Per-load profit rankings |
+| Uninvoiced loads, with Create Invoice and batch Invoice Selected | Sort, order, status and date filters |
+| Run Aging Check | Profitable and unprofitable counts |
+| Twelve action buttons | One, the filter submit |
+
+Billing is where money is collected. Profitability is where money is read. With
+both off the nav there is no linked path to create an invoice or record a
+payment. Everything still works at `/billing`; it is simply not reachable by
+clicking.
+
+Both are parked, so the question of which returns is open. If Profitability is
+the survivor, it inherits the invoicing workflow or that workflow lands
+somewhere else.
+
+**The Billing metrics note follows Billing.** Mike's target metrics -- weekly
+revenue, monthly revenue, rolling 7 and 30 day comparisons, and a gross profit
+estimate of revenue minus fuel minus maintenance escrow -- were recorded against
+Billing in `builder-notes/billing-operational-awareness-metrics.md`. They belong
+to whichever screen survives, which now looks like Profitability. The note's
+findings stand either way: almost none of it is built, and maintenance escrow
+does not exist anywhere in the repository.
