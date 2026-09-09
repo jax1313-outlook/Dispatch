@@ -342,3 +342,42 @@ question is that this becomes a separate workflow action on a workflow screen.
 TOOLBOX is not responsible for modifying live records. Where that action lives
 is not decided, and the natural candidates are the load detail screen and
 Billing. Until it exists, a fuel estimate is copied by hand into an expense.
+
+## Five screens parked — 2026-09-09
+
+Mike walked Profitability, Compliance, Brokers, Publisher and Library and parked
+all five. Off the nav, routes intact, nothing removed underneath. Nav went from
+twenty-four entries to sixteen.
+
+Checked before removing, the same discipline that caught the Fleet problem: none
+of the five is linked from any other page. Their only internal links are their
+own filter forms. The Alerts feed reaches Publisher and Library by path and
+still works.
+
+| Parked | What it holds | Note |
+| --- | --- | --- |
+| Profitability | Per-load rankings by profit, with sort, order, status and date filters, plus profitable and unprofitable counts | Overlaps Billing. Both read the same rate and expense data |
+| Compliance | Document tracker with expiry alerts, entity/type/status filters, Add Document and Check Alerts | Empty today. Its expiry alerts already reach the Alerts feed |
+| Brokers | Contact directory and performance scorecard, with active and blacklisted counts | Mike: useful inside the Publisher workflow, not as a tab of its own |
+| Publisher | The action queue. Broker Packet Required and the rest, with their manifests and Generate Draft | See below |
+| Library | Company, broker and customer libraries of approved reusable assets | Mike: useful inside the workflow, not beside it |
+
+### Two things worth flagging
+
+**Publisher is a constitutional worker.** The constitution gives Publisher the
+commitment package lifecycle and its own boundary: may produce, may not commit.
+Parking the screen parks a view, not the role. Publisher still runs, still
+raises actions, and those actions still appear in the Alerts feed under
+Decisions Required. Nothing about the worker changed.
+
+**Brokers and Library are the Publisher's inputs.** The Publisher queue's own
+manifest names what it is missing: W-9, insurance, authority, business card,
+rate sheets, terms, capabilities, compliance documents, fleet and equipment,
+driver qualifications. Those live in the Library. The broker it is packaging
+for lives in the broker directory. So all three parked screens are pieces of one
+workflow, which is consistent with Mike's note that Brokers and Library belong
+inside the workflow rather than beside it.
+
+That makes the future shape a question worth asking once rather than three
+times: does the Publisher workflow absorb the broker directory and the Library
+as panels, the way Settings absorbed Fleet? Not decided.
