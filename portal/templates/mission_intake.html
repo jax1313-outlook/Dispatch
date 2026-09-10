@@ -18,7 +18,7 @@
      goes somewhere else is a screen he leaves with the browser's back button,
      which is not navigation. #}
   <nav class="ops-nav">
-    <a href="{{ url_for('joe_portal.candidate_queue') }}">CANDIDATES</a>
+    <a href="{{ url_for('joe_portal.candidate_queue') }}">LOADS</a>
     <a href="{{ url_for('joe_portal.booking_board') }}">BOOKING</a>
     <a class="on" href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
     <a href="{{ url_for('pages.home') }}">DISPATCH</a>
@@ -31,7 +31,7 @@
       <span class="brief-load">Same record, whatever brought it in</span>
     </div>
     <nav class="brief-actions">
-      <a class="btn" href="{{ url_for('joe_portal.candidate_queue') }}">&larr; Candidates</a>
+      <a class="btn" href="{{ url_for('joe_portal.candidate_queue') }}">&larr; LOADS</a>
       <button class="btn primary" type="submit">CREATE CANDIDATE</button>
     </nav>
   </header>

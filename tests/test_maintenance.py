@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dispatch import clock
 from datetime import datetime, timedelta
 
 import pytest
@@ -27,15 +28,15 @@ def _make_equipment(**kw) -> dict:
 
 
 def _future(days: int = 5) -> str:
-    return (datetime.utcnow() + timedelta(days=days)).strftime("%Y-%m-%d")
+    return (clock.home_date() + timedelta(days=days)).isoformat()
 
 
 def _past(days: int = 5) -> str:
-    return (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    return (clock.home_date() - timedelta(days=days)).isoformat()
 
 
 def _today() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%d")
+    return clock.home_date().isoformat()
 
 
 # ── Model Tests ─────────────────────────────────────────────────────
@@ -268,7 +269,7 @@ class TestMaintenanceService:
         )
         assert result["status"] == "scheduled"
         assert result["last_service_date"] == _today()
-        expected_next = (datetime.utcnow() + timedelta(days=90)).strftime("%Y-%m-%d")
+        expected_next = (clock.home_date() + timedelta(days=90)).isoformat()
         assert result["next_due_date"] == expected_next
 
     def test_complete_maintenance_with_miles(self):

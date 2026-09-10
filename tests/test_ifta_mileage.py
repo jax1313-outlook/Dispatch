@@ -264,8 +264,12 @@ class TestIFTATripLegPlausibilityWarning:
         # leg driven at 9pm Eastern on 31 March is stamped 1 April in UTC and
         # files into the wrong IFTA quarter. That is the calculation engine and
         # `DECISION_LOG.md` governs it, so it is raised rather than changed.
-        from datetime import datetime, timezone
-        today = datetime.now(timezone.utc).date()
+        # The home terminal's day, not UTC's. clock.home_today() is what the
+        # service stamps a leg with, and between home midnight and UTC midnight
+        # the two dates differ -- so a UTC "today" here failed every evening and
+        # passed every morning.
+        from dispatch import clock
+        today = clock.home_date()
         quarter = (today.month - 1) // 3 + 1
         year, q = today.year, quarter
         starts = {1: "01-01", 2: "04-01", 3: "07-01", 4: "10-01"}

@@ -243,8 +243,10 @@ class TestNoScreenIsADeadEnd:
         html = client.get(screens["brief"]).get_data(as_text=True)
         actions = html[html.index('class="brief-actions"'):]
         actions = actions[:actions.index("</nav>")]
-        assert "CANDIDATES" in actions
-        assert actions.index("CANDIDATES") < actions.index("COCKPIT"), (
+        # LOADS, not CANDIDATES, since decision D-LOADS on 2026-09-09. Freight
+        # office language: the screen holds loads, not candidate records.
+        assert "LOADS" in actions
+        assert actions.index("LOADS") < actions.index("COCKPIT"), (
             "leaving a brief should return him to the load listing, not the truck")
 
     def test_the_cockpit_is_still_reachable_from_the_brief(self, client):

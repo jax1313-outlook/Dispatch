@@ -94,6 +94,11 @@ EXEMPT = {
     "dispatch/connectors/outlook_connector.py": "Outlook adapter -- same role as outlook_mail.py",
     "dispatch/connectors/contract.py": "SECRET_ENV_VARS must name the keys it redacts, or they leak",
     "portal/models/integrations_registry.py": "credential store; its security note names the secrets it holds",
+    # Moved out of cin_lite/agents/ on 2026-09-09 because it is freight work:
+    # fuel-receipt scanning for the driver portal and the dispatch API. It names
+    # the model it calls, so it sits among the connectors rather than at the top
+    # of dispatch/ -- an adapter in role, like outlook_mail.py beside it.
+    "dispatch/connectors/receipt_vision.py": "vision adapter -- names the model it calls",
 }
 
 #: How many provider references the settings exemption may carry before it

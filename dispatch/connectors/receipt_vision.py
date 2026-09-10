@@ -7,6 +7,11 @@ work: its two callers are the driver portal's fuel upload and the dispatch API,
 both freight. It sat inside the package being separated with SAM, the same way
 the mail transport did, and for the same reason it had to come out.
 
+It lives among the connectors rather than at the top of ``dispatch/`` because it
+names a model provider, and the contract roots are meant to be provider-free.
+That makes it an adapter in role if not in shape: like ``outlook_mail.py`` beside
+it, it is the one place a vendor is named so that nothing above it has to.
+
 Extracts one receipt image's structured fields to pre-fill the Add Fuel
 Purchase form on /ifta. Never creates a fuel purchase or evidence record
 itself -- the dispatcher always reviews the pre-filled form and clicks

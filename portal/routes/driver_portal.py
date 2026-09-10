@@ -18,7 +18,7 @@ from pathlib import Path
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from dispatch import receipt_vision
+from dispatch.connectors import receipt_vision
 from dispatch import route_risk as route_risk_model
 from dispatch import services as dispatch_svc
 from dispatch.models import ALLOWED_EXTENSIONS, IFTA_JURISDICTIONS, MAX_FILE_SIZE

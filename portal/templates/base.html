@@ -47,15 +47,21 @@
                one used from a cab, and the rest of this cockpit is desk work. #}
             <li><a href="{{ url_for('joe_portal.portal_home') }}" class="{% if request.blueprint == 'joe_portal' %}active{% endif %}">JOE Portal</a></li>
             <li><a href="{{ url_for('pages.home') }}" class="{% if request.endpoint == 'pages.home' %}active{% endif %}">Home</a></li>
-            {# Booking: everything before COMMIT. Candidates first because it
-               is the workbench -- what is waiting on a decision -- and Booking
-               is the answer to how far out he is covered.
+            {# Booking: everything before COMMIT. LOADS first because it is the
+               workbench -- what is waiting on a decision -- and Booking is the
+               answer to how far out he is covered.
+
+               LOADS, not Candidates. Decision D-LOADS, 2026-09-09: this is a
+               freight operation and the screen holds scored loads. It answers
+               "show me the available loads", not "show me the candidate
+               records". The OPP- identifier stays on the card, where it belongs;
+               it is not a name for the screen.
 
                These three did not go through the tab walk. They are the
                capture-review-commit flow Mike is about to run, so the merge
                kept them. Parking any of them is a ruling that has not been
                made. #}
-            <li><a href="{{ url_for('joe_portal.candidate_queue') }}" class="{% if request.endpoint == 'joe_portal.candidate_queue' %}active{% endif %}">Candidates</a></li>
+            <li><a href="{{ url_for('joe_portal.candidate_queue') }}" class="{% if request.endpoint == 'joe_portal.candidate_queue' %}active{% endif %}">LOADS</a></li>
             <li><a href="{{ url_for('joe_portal.booking_board') }}" class="{% if request.endpoint == 'joe_portal.booking_board' %}active{% endif %}">Booking</a></li>
             <li><a href="{{ url_for('joe_portal.mission_intake') }}" class="{% if request.endpoint == 'joe_portal.mission_intake' %}active{% endif %}">New Mission</a></li>
             <li><a href="{{ url_for('pages.alerts') }}" class="{% if request.endpoint == 'pages.alerts' %}active{% endif %}">Alerts</a></li>

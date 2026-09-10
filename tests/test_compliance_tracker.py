@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dispatch import clock
 from datetime import datetime, timedelta
 
 import pytest
@@ -33,11 +34,11 @@ def client():
 
 
 def _future_date(days: int) -> str:
-    return (datetime.utcnow() + timedelta(days=days)).strftime("%Y-%m-%d")
+    return (clock.home_date() + timedelta(days=days)).isoformat()
 
 
 def _past_date(days: int) -> str:
-    return (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    return (clock.home_date() - timedelta(days=days)).isoformat()
 
 
 # ── Model tests ──────────────────────────────────────────────────

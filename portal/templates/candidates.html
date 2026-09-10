@@ -9,7 +9,7 @@
    "these need me". #}
 <!doctype html>
 <meta charset="utf-8">
-<title>Candidates — Level 1 Transport</title>
+<title>Loads — Level 1 Transport</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='mission_brief.css') }}">
 
 <div class="brief">
@@ -17,7 +17,7 @@
      goes somewhere else is a screen he leaves with the browser's back button,
      which is not navigation. #}
   <nav class="ops-nav">
-    <a class="on" href="{{ url_for('joe_portal.candidate_queue') }}">CANDIDATES</a>
+    <a class="on" href="{{ url_for('joe_portal.candidate_queue') }}">LOADS</a>
     <a href="{{ url_for('joe_portal.booking_board') }}">BOOKING</a>
     <a href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
     <a href="{{ url_for('pages.home') }}">DISPATCH</a>
@@ -26,7 +26,7 @@
   <header class="brief-head">
     <div class="brief-title">
       <span class="company">LEVEL 1 TRANSPORT</span>
-      <h1>CANDIDATES</h1>
+      <h1>LOADS</h1>
       <span class="brief-load">{{ rows|length }} waiting on a decision</span>
     </div>
     <nav class="brief-actions">
@@ -87,6 +87,6 @@
   {% endfor %}
 
   <footer class="brief-foot">
-    Candidates are in Booking. COMMIT is where Dispatch begins.
+    Loads are in Booking. COMMIT is where Dispatch begins.
   </footer>
 </div>
