@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from cin_lite.agents import receipt_vision
+from dispatch import receipt_vision
 from dispatch.db import set_db_path
 
 

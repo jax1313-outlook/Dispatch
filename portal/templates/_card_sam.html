@@ -1,0 +1,86 @@
+{# The SAM contract opportunity card. One definition, used everywhere.
+
+   Extracted 2026-09-09 on Mike's instruction during the tab walk. It was
+   hand-copied in sam.html and home.html. Nothing about the presentation
+   changed in the extraction.
+
+   Two densities, not two cards:
+
+     full     agency, solicitation, value, response date, NAICS, source, the
+              Intelligence summary and recommendation, and the full action set.
+              This is sam.html today.
+     compact  agency and solicitation number with one link out, for a screen
+              pointing at the card rather than being the card. This is the Home
+              top-opportunities strip today.
+
+   Import with context so card_visual and url_for resolve:
+     {% from "_card_sam.html" import sam_card with context %}
+#}
+{% macro sam_card(entry, compact=False) %}
+        {% set vis = card_visual(entry.score, entry.decision) %}
+        {% set cd = entry.card_data %}
+        <div class="card card-sam">
+            <div class="card-header {{ vis.css }}">
+                <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
+                {% if entry.decision and entry.decision.priority %}
+                <span class="card-score">Priority: {{ entry.decision.priority }}</span>
+                {% endif %}
+            </div>
+            <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
+            <div class="card-meta">
+                <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
+                {% if compact %}
+                {% if entry.data_origin == 'SIMULATED' %}<span class="origin-tag origin-simulated" title="Bundled sample data. This is not a real load.">SAMPLE DATA</span>{% endif %}
+                {% else %}
+                {% if entry.flags %}
+                <span class="flag-count">{{ entry.flags|length }} flag(s)</span>
+                {% endif %}
+                {% endif %}
+            </div>
+            {% if compact %}
+            <div class="card-fields">
+                <div><strong>Agency:</strong> {{ cd.agency or 'Unknown' }}</div>
+                <div><strong>Sol #:</strong> {{ cd.solicitation_number or 'Unknown' }}</div>
+            </div>
+            <div class="card-actions">
+                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Brief</a>
+            </div>
+            {% else %}
+            <div class="card-fields">
+                <div><strong>Agency:</strong> {{ cd.agency or 'Unknown' }}</div>
+                <div><strong>Solicitation:</strong> {{ cd.solicitation_number or 'Unknown' }}</div>
+                <div><strong>Est. Value:</strong> {{ '$%s'|format(cd.estimated_value|int) if cd.estimated_value else 'Unknown' }}</div>
+                <div><strong>Response Date:</strong> {{ cd.response_date or 'Unknown' }}</div>
+                <div><strong>NAICS:</strong> {{ cd.naics_text or 'Unknown' }}</div>
+                {% if cd._sam_ui_link %}
+                <div><strong>Source:</strong> <a href="{{ cd._sam_ui_link }}" target="_blank" rel="noopener">View on SAM.gov</a></div>
+                {% elif cd._source_file %}
+                <div><strong>Source:</strong> {{ cd._source_file }}</div>
+                {% endif %}
+            </div>
+            {% if entry.summary %}
+            <div class="card-summary">
+                <strong>Summary:</strong> {{ entry.summary }}
+            </div>
+            {% endif %}
+            {% if entry.decision %}
+            <div class="card-recommendation">
+                <strong>Recommendation:</strong> {{ entry.decision.action|replace('_', ' ')|title }}
+                {% if entry.decision.reason %}
+                <br><small>{{ entry.decision.reason }}</small>
+                {% endif %}
+            </div>
+            {% endif %}
+            <div class="card-actions">
+                <a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}" class="btn btn-sm">Open Brief</a>
+                {% if cd._sam_ui_link %}
+                <a href="{{ cd._sam_ui_link }}" target="_blank" rel="noopener" class="btn btn-sm">Open Source</a>
+                {% endif %}
+                <button class="btn btn-sm btn-success" onclick="cardAction('{{ entry.id }}', 'interested')">Interested</button>
+                <button class="btn btn-sm btn-primary" onclick="cardAction('{{ entry.id }}', 'pursue')">Pursue</button>
+                <button class="btn btn-sm btn-danger" onclick="cardAction('{{ entry.id }}', 'pass')">Pass</button>
+                <button class="btn btn-sm btn-warning" onclick="cardAction('{{ entry.id }}', 'watch')">Watch</button>
+            </div>
+            {% endif %}
+        </div>
+{% endmacro %}

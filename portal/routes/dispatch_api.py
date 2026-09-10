@@ -1758,7 +1758,7 @@ def extract_ifta_fuel_receipt():
     Always returns 200 with either extracted fields or an
     available:false reason; the one genuine client error is no file at
     all."""
-    from cin_lite.agents import receipt_vision
+    from dispatch import receipt_vision
 
     uploaded_file = request.files.get("file")
     if not uploaded_file or not uploaded_file.filename:

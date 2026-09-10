@@ -101,26 +101,27 @@ class TestTheScreenSaysSo:
         body = client.get("/home").get_data(as_text=True)
         assert "1 of 2 loads are rehearsal data" in body
 
-    def test_the_financial_snapshot_is_labelled_when_it_includes_rehearsal(self, client):
+    def test_the_counts_are_labelled_when_they_include_rehearsal(self, client):
         """**The one that matters.**
 
-        A number cannot wear a badge. If the snapshot is computed over rehearsal
-        records it must say so in the heading, or it states test revenue with the
-        same confidence it would state real revenue.
+        A number cannot wear a badge. The Financial Snapshot this used to check
+        came off Home on 2026-09-09, but the reasoning is unchanged and now
+        applies to the counts that remain: if Screened Loads and Active Loads are
+        computed over rehearsal records they must say so, or they state test
+        figures with the same confidence they would state real ones.
         """
         load, _ = _tagged_load()
         services.confirm_rate(load["load_id"], rate_amount=1000.0)
         body = client.get("/home").get_data(as_text=True)
-        assert "Financial Snapshot" in body
-        assert "REHEARSAL DATA" in body
+        assert "REHEARSAL" in body
+        assert "rehearsal data" in body
 
-    def test_the_snapshot_is_not_labelled_when_the_data_is_real(self, client):
+    def test_the_counts_are_not_labelled_when_the_data_is_real(self, client):
         load = services.create_load(customer="Real Co")
         services.confirm_rate(load["load_id"], rate_amount=1000.0)
         body = client.get("/home").get_data(as_text=True)
-        assert "Financial Snapshot" in body
-        assert "REHEARSAL DATA" not in body
-        assert "INCLUDES REHEARSAL" not in body
+        assert "rehearsal-data-note" not in body
+        assert "rehearsal data" not in body
 
     def test_nothing_is_hidden(self, client):
         """Mike chose *show both*, not *show only real*.

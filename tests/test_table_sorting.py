@@ -59,7 +59,7 @@ class TestSortScript:
         assert "initTableSort" in html
 
     def test_sort_script_in_fleet(self, client):
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert "initTableSort" in html
 
@@ -89,7 +89,7 @@ class TestSortableHeaders:
 
     def test_fleet_table_has_sortable_columns(self, client):
         services.create_driver(name="Sort Driver", phone="555-0000")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         html = resp.data.decode()
         assert 'class="data-table"' in html
 

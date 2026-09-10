@@ -89,7 +89,7 @@ class TestDriverDetailPage:
     def test_back_link(self, client):
         drv = services.create_driver(name="Back Link Driver")
         resp = client.get(f"/fleet/driver/{drv['driver_id']}")
-        assert b"Back to Fleet" in resp.data
+        assert b"Back to Settings" in resp.data
 
 
 # ── Equipment Detail Page ────────────────────────────────────────────
@@ -159,7 +159,7 @@ class TestEquipmentDetailPage:
     def test_back_link(self, client):
         eqp = services.create_equipment(unit_number="BACK-01", equipment_type="dry_van")
         resp = client.get(f"/fleet/equipment/{eqp['equipment_id']}")
-        assert b"Back to Fleet" in resp.data
+        assert b"Back to Settings" in resp.data
 
 
 # ── Fleet Table Links ────────────────────────────────────────────────
@@ -168,12 +168,12 @@ class TestEquipmentDetailPage:
 class TestFleetTableLinks:
     def test_driver_name_is_link(self, client):
         drv = services.create_driver(name="Linked Driver")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         assert resp.status_code == 200
         assert f"/fleet/driver/{drv['driver_id']}".encode() in resp.data
 
     def test_equipment_unit_is_link(self, client):
         eqp = services.create_equipment(unit_number="LINK-01", equipment_type="dry_van")
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         assert resp.status_code == 200
         assert f"/fleet/equipment/{eqp['equipment_id']}".encode() in resp.data

@@ -286,7 +286,7 @@ def submit_package(load_id: str, submitted_by: str | None) -> dict:
             "before submitting"
         )
 
-    from cin_lite import email_delivery
+    from dispatch import mail as email_delivery
 
     results = []
     for to, subject, body in recipients:

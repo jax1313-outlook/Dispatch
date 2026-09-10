@@ -137,7 +137,7 @@ class TestTheImportGraphHolds:
         reachable = transitive_first_party_imports(
             _PACKAGE_DIR / "email_transport_connector.py"
         )
-        assert "cin_lite.email_delivery" in reachable
+        assert "dispatch.mail" in reachable
         assert not any(name.startswith("dispatch.services") for name in reachable)
 
 

@@ -206,12 +206,18 @@ class TestFuelEstimatorTemplate:
         assert "Fuel Cost Estimator" in html
 
     def test_form_elements(self, client):
+        """Three inputs, and no load. The Load ID field came off on 2026-09-09
+        with the TOOLBOX ruling -- it only read a rate confirmation, but it tied
+        a calculator to a specific operational record. The API still accepts a
+        load_id and is still tested above; this screen just stopped sending one.
+        """
         resp = client.get("/fuel-estimator")
         html = resp.data.decode()
         assert 'id="fuel-distance"' in html
         assert 'id="fuel-mpg"' in html
         assert 'id="fuel-price"' in html
-        assert 'id="fuel-load-id"' in html
+        assert 'id="fuel-load-id"' not in html
+        assert "load_id" not in html
 
     def test_reference_table(self, client):
         resp = client.get("/fuel-estimator")
@@ -229,15 +235,26 @@ class TestFuelEstimatorTemplate:
         assert "7.0" in html
         assert "4.000" in html
 
-    def test_nav_link(self, client):
+    def test_page_still_resolves_though_the_nav_link_is_gone(self, client):
+        """Parked for TOOLBOX on 2026-09-09. Off the nav, not removed --
+        the page and its calculator still work at the same path."""
         resp = client.get("/fuel-estimator")
+        assert resp.status_code == 200
         html = resp.data.decode()
-        assert "fuel-estimator" in html
+        assert "Estimate Fuel Cost" in html
+        assert 'href="/fuel-estimator"' not in html
 
-    def test_add_as_expense_button(self, client):
-        resp = client.get("/fuel-estimator")
-        html = resp.data.decode()
-        assert "Add as Fuel Expense" in html
+    def test_the_estimator_writes_nothing(self, client):
+        """TOOLBOX is read-only utility functionality, Mike's ruling of
+        2026-09-09. Add as Fuel Expense posted onto a live load, so it came off.
+        Applying an estimate to a load becomes a workflow action elsewhere.
+
+        The expense API itself is untouched and still tested above -- what went
+        away is a calculator reaching into an operational record."""
+        html = client.get("/fuel-estimator").data.decode()
+        assert "Add as Fuel Expense" not in html
+        assert "addAsExpense" not in html
+        assert "/expenses" not in html
 
     def test_ifta_link(self, client):
         resp = client.get("/fuel-estimator")

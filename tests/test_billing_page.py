@@ -146,8 +146,18 @@ class TestBillingPage:
 
 
 class TestBillingNavLink:
-    def test_billing_link_in_sidebar(self, client):
-        resp = client.get("/home")
+    def test_parked_off_the_nav_but_the_workflow_still_answers(self, client):
+        """Parked 2026-09-09, Mike's ruling that Profitability replaces it.
+
+        Profitability replaces the reporting, not the workflow. Invoicing,
+        recording a payment, disputes, write-offs and the aging check all live
+        here and nowhere else, so this asserts the page still works rather than
+        only that the link is gone.
+        """
+        assert "/billing" not in client.get("/home").data.decode()
+
+        resp = client.get("/billing")
+        assert resp.status_code == 200
         html = resp.data.decode()
-        assert "/billing" in html
-        assert "Billing" in html
+        assert "Settlements" in html
+        assert "Run Aging Check" in html

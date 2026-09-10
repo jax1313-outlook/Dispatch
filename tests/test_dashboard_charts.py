@@ -96,29 +96,30 @@ class TestChartDataAPI:
 
 
 class TestChartRendering:
-    def test_chart_section_shown_with_loads(self, client):
+    """Load Overview was removed from Home by Mike on 2026-09-09.
+
+    Home is for immediate operational awareness, not workflow administration.
+    The chart data itself is untouched and still served by /api/dispatch/charts,
+    tested above. Where the charts should live instead is parked --
+    docs/tab-walk/PARKING_LOT.md.
+    """
+
+    def test_chart_section_not_on_home_with_loads(self, client):
         services.create_load(customer="Chart Render Co")
         resp = client.get("/home")
         html = resp.data.decode()
-        assert "Load Overview" in html
-        assert "Loads by Status" in html
-
-    def test_no_chart_section_without_loads(self, client):
-        resp = client.get("/home")
-        html = resp.data.decode()
         assert "Load Overview" not in html
+        assert "Loads by Status" not in html
 
-    def test_revenue_chart_shown_with_rates(self, client):
+    def test_revenue_chart_not_on_home(self, client):
         load = services.create_load(customer="Rev Chart Co")
         services.confirm_rate(load["load_id"], rate_amount=2000.0)
         resp = client.get("/home")
         html = resp.data.decode()
-        assert "Monthly Revenue" in html
-        assert "<svg" in html
+        assert "Monthly Revenue" not in html
 
-    def test_status_bar_widths_rendered(self, client):
+    def test_chart_data_still_available_from_the_api(self, client):
         services.create_load(customer="Bar Co")
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "created" in html
-        assert "background:" in html
+        resp = client.get("/api/dispatch/charts")
+        assert resp.status_code == 200
+        assert resp.get_json()["loads_by_status"]["created"] >= 1

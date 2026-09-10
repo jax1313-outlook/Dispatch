@@ -49,35 +49,44 @@
             <li><a href="{{ url_for('pages.home') }}" class="{% if request.endpoint == 'pages.home' %}active{% endif %}">Home</a></li>
             {# Booking: everything before COMMIT. Candidates first because it
                is the workbench -- what is waiting on a decision -- and Booking
-               is the answer to how far out he is covered. #}
+               is the answer to how far out he is covered.
+
+               These three did not go through the tab walk. They are the
+               capture-review-commit flow Mike is about to run, so the merge
+               kept them. Parking any of them is a ruling that has not been
+               made. #}
             <li><a href="{{ url_for('joe_portal.candidate_queue') }}" class="{% if request.endpoint == 'joe_portal.candidate_queue' %}active{% endif %}">Candidates</a></li>
             <li><a href="{{ url_for('joe_portal.booking_board') }}" class="{% if request.endpoint == 'joe_portal.booking_board' %}active{% endif %}">Booking</a></li>
             <li><a href="{{ url_for('joe_portal.mission_intake') }}" class="{% if request.endpoint == 'joe_portal.mission_intake' %}active{% endif %}">New Mission</a></li>
-            <li><a href="{{ url_for('pages.operations') }}" class="{% if request.endpoint == 'pages.operations' %}active{% endif %}">Operations</a></li>
+            <li><a href="{{ url_for('pages.alerts') }}" class="{% if request.endpoint == 'pages.alerts' %}active{% endif %}">Alerts</a></li>
             {# One Search link, not two. Labelled "Load Search" because that is
                the name decision D6 gave the capability. #}
             <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Load Search</a></li>
-            <li><a href="{{ url_for('pages.sam') }}" class="{% if request.endpoint == 'pages.sam' %}active{% endif %}">SAM</a></li>
             <li><a href="{{ url_for('pages.dispatch') }}" class="{% if request.endpoint == 'pages.dispatch' %}active{% endif %}">Dispatch</a></li>
             <li><a href="{{ url_for('pages.load_calendar') }}" class="{% if request.endpoint == 'pages.load_calendar' %}active{% endif %}">Calendar</a></li>
-            <li><a href="{{ url_for('pages.fleet') }}" class="{% if request.endpoint == 'pages.fleet' %}active{% endif %}">Fleet</a></li>
-            <li><a href="{{ url_for('pages.exceptions') }}" class="{% if request.endpoint == 'pages.exceptions' %}active{% endif %}">Exceptions</a></li>
-            <li><a href="{{ url_for('pages.billing') }}" class="{% if request.endpoint == 'pages.billing' %}active{% endif %}">Billing</a></li>
-            <li><a href="{{ url_for('pages.profitability') }}" class="{% if request.endpoint == 'pages.profitability' %}active{% endif %}">Profitability</a></li>
             <li><a href="{{ url_for('pages.ifta') }}" class="{% if request.endpoint == 'pages.ifta' %}active{% endif %}">IFTA</a></li>
-            <li><a href="{{ url_for('pages.fuel_estimator') }}" class="{% if request.endpoint == 'pages.fuel_estimator' %}active{% endif %}">Fuel Estimator</a></li>
-            <li><a href="{{ url_for('pages.compliance') }}" class="{% if request.endpoint == 'pages.compliance' %}active{% endif %}">Compliance</a></li>
-            <li><a href="{{ url_for('pages.brokers') }}" class="{% if request.endpoint == 'pages.brokers' %}active{% endif %}">Brokers</a></li>
-            <li><a href="{{ url_for('pages.publisher_view') }}" class="{% if request.endpoint == 'pages.publisher_view' %}active{% endif %}">Publisher</a></li>
-            <li><a href="{{ url_for('pages.library') }}" class="{% if request.endpoint == 'pages.library' %}active{% endif %}">Library</a></li>
-            <li><a href="{{ url_for('pages.archive_view') }}" class="{% if request.endpoint == 'pages.archive_view' %}active{% endif %}">Archive</a></li>
-            <li><a href="{{ url_for('pages.intelligence_view') }}" class="{% if request.endpoint == 'pages.intelligence_view' %}active{% endif %}">Intelligence</a></li>
-            <li><a href="{{ url_for('pages.pending_decisions') }}" class="{% if request.endpoint == 'pages.pending_decisions' %}active{% endif %}">Pipeline</a></li>
-            <li><a href="{{ url_for('pages.queues') }}" class="{% if request.endpoint == 'pages.queues' %}active{% endif %}">Queues</a></li>
-            <li><a href="{{ url_for('pages.conflicts') }}" class="{% if request.endpoint == 'pages.conflicts' %}active{% endif %}">Conflict Notices</a></li>
-            <li><a href="{{ url_for('pages.driver_pay') }}" class="{% if request.endpoint == 'pages.driver_pay' %}active{% endif %}">Driver Pay</a></li>
             <li><a href="{{ url_for('pages.email_templates') }}" class="{% if request.endpoint == 'pages.email_templates' %}active{% endif %}">Email Templates</a></li>
-            <li><a href="{{ url_for('pages.registration') }}" class="{% if request.endpoint in ('pages.registration', 'pages.settings') %}active{% endif %}">&#9881; Settings</a></li>
+            {# Settings, not Registration. Settings is where the fleet roster
+               now lives, so it is the one to land on. #}
+            <li><a href="{{ url_for('pages.settings') }}" class="{% if request.endpoint in ('pages.registration', 'pages.settings') %}active{% endif %}">Settings</a></li>
+            {# Parked during the tab walk, 2026-09-09. Off the nav, still
+               reachable by URL, nothing removed underneath. Each is one line to
+               restore, and docs/tab-walk/PARKING_LOT.md says why each one went.
+
+               Fuel Estimator, Fleet, SAM, Profitability, Compliance, Brokers,
+               Publisher, Library, Billing, Exceptions, Archive, Intelligence,
+               Pipeline, Queues, Conflict Notices, Driver Pay.
+
+               Sixteen parked, eight left. Two notes for whoever comes looking:
+
+               There is no financial screen on this nav. Invoicing, payments,
+               disputes, write-offs and the aging check all still work at
+               /billing.
+
+               Several parked pages are where Alerts sends you. Its cards link
+               to /publisher, /conflicts, /pipeline, /queues and /library by
+               path, and those all still resolve. Alerts is now the way in to
+               most of them. #}
         </ul>
     </nav>
 

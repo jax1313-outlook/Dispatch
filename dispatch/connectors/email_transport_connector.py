@@ -1,6 +1,6 @@
 """Email Transport Connector — a truthful wrapper around the mail path that exists.
 
-``cin_lite/email_delivery.py`` is the sole mail transport for the whole program
+``dispatch/mail.py`` is the sole mail transport for the whole program
 and this connector does not replace one line of it. Section 6.4 says so plainly:
 "Where the repository already has Outlook, email, or other integration code,
 wrap or migrate it behind the contract rather than duplicating it." A second
@@ -62,7 +62,7 @@ from dispatch.connectors.contract import (
     utc_now,
 )
 
-#: The receipt prefixes ``cin_lite/email_delivery.py`` returns. Pinned by test.
+#: The receipt prefixes ``dispatch/mail.py`` returns. Pinned by test.
 RECEIPT_SENT_PREFIX = "sent via "
 RECEIPT_NOT_CONFIGURED_PREFIX = "not sent (SMTP not configured)"
 RECEIPT_FAILED_PREFIX = "delivery failed"
@@ -94,7 +94,7 @@ class EmailTransportConnector(BaseConnector):
     #: there is no second implementation, only a seam for driving the three
     #: receipt branches without a network.
     def _delivery_module(self):
-        from cin_lite import email_delivery
+        from dispatch import mail as email_delivery
 
         return email_delivery
 

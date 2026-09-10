@@ -30,63 +30,45 @@ def client(tmp_path, monkeypatch):
 
 
 class TestHomeFinancialSnapshot:
-    def test_home_no_financials_when_no_loads(self, client):
-        resp = client.get("/home")
-        assert resp.status_code == 200
-        html = resp.data.decode()
-        assert "Financial Snapshot" not in html
+    """The Financial Snapshot came off Home on 2026-09-09.
 
-    def test_home_shows_financials_with_rate(self, client):
+    Home carries two counts and the cards. Money is not immediate operational
+    awareness, and the same figures already render on Billing and Dispatch.
+    These tests now hold the removal in place and check the figures still exist
+    where they were not removed from.
+    """
+
+    def test_home_carries_no_financials_at_all(self, client):
         load = services.create_load(customer="Acme")
         services.confirm_rate(load["load_id"], rate_amount=1500.0)
 
-        resp = client.get("/home")
-        assert resp.status_code == 200
-        html = resp.data.decode()
-        assert "Financial Snapshot" in html
-        assert "$1500" in html
-        assert "Revenue" in html
-        assert "Profit" in html
+        html = client.get("/home").data.decode()
+        assert "Financial Snapshot" not in html
+        # The shared script still defines runAgingCheck; what went away is the
+        # button on this page that called it.
+        assert "Run Aging Check" not in html
+        assert "Outstanding" not in html
 
-    def test_home_shows_outstanding_with_settlement(self, client):
-        load = services.create_load(customer="Acme")
-        services.confirm_rate(load["load_id"], rate_amount=2000.0)
-        services.create_settlement(load["load_id"], due_date="2026-12-01")
-
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "Outstanding" in html
-        assert "1 invoiced" in html
-
-    def test_home_shows_overdue_count(self, client, monkeypatch):
-        load = services.create_load(customer="Acme")
-        services.confirm_rate(load["load_id"], rate_amount=1000.0)
-        services.create_settlement(load["load_id"], due_date="2025-01-01")
-        services.check_overdue_settlements()
-
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "overdue" in html
-
-    def test_home_aging_check_button_present(self, client):
-        load = services.create_load(customer="Acme")
-        services.confirm_rate(load["load_id"], rate_amount=500.0)
-
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "runAgingCheck" in html
-
-    def test_home_paid_loads_display(self, client, monkeypatch):
+    def test_home_carries_no_financials_when_money_has_moved_either(self, client, monkeypatch):
         monkeypatch.setenv("DISPATCH_PORTAL_URL", "http://localhost:8080")
         load = services.create_load(customer="Acme")
         services.confirm_rate(load["load_id"], rate_amount=3000.0)
         services.create_settlement(load["load_id"], due_date="2026-12-01")
         services.record_payment(load["load_id"], payment_amount=3000.0)
 
-        resp = client.get("/home")
-        html = resp.data.decode()
-        assert "Paid" in html
-        assert "1 loads" in html
+        html = client.get("/home").data.decode()
+        assert "Financial Snapshot" not in html
+        assert "Paid" not in html
+
+    def test_the_figures_still_render_on_billing(self, client):
+        """Removed from Home, not removed. Billing is where money is worked."""
+        load = services.create_load(customer="Acme")
+        services.confirm_rate(load["load_id"], rate_amount=1500.0)
+        services.create_settlement(load["load_id"], due_date="2026-12-01")
+
+        html = client.get("/billing").data.decode()
+        assert "Total Revenue" in html
+        assert "Run Aging Check" in html
 
 
 class TestDispatchAgingCheckButton:

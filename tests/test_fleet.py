@@ -438,16 +438,16 @@ class TestFleetPage:
             yield c
 
     def test_fleet_page_loads(self, client):
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         assert resp.status_code == 200
-        assert b"Fleet Management" in resp.data
+        assert b"Fleet" in resp.data
 
     def test_fleet_page_shows_driver(self, client):
         client.post("/api/dispatch/drivers", json={"name": "Page Driver"})
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         assert b"Page Driver" in resp.data
 
     def test_fleet_page_shows_equipment(self, client):
         client.post("/api/dispatch/equipment", json={"unit_number": "T-PAGE"})
-        resp = client.get("/fleet")
+        resp = client.get("/settings")
         assert b"T-PAGE" in resp.data

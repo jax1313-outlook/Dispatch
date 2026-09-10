@@ -732,12 +732,12 @@ class TestEmailTransportWrapsTheExistingTransport:
         assert EmailTransportConnector().identity().provider_id == "relay.example.test"
 
     def test_it_calls_the_existing_transport_rather_than_reimplementing_it(self, connector_db, monkeypatch):
-        from cin_lite import email_delivery
+        from dispatch import mail as email_delivery
 
         calls = []
         monkeypatch.setattr(
             email_delivery, "send",
-            lambda subject, body, to, fallback_id: calls.append((subject, to)) or "not sent (SMTP not configured); written to /x",
+            lambda subject, body, to, fallback_id, outbox=None: calls.append((subject, to)) or "not sent (SMTP not configured); written to /x",
         )
         EmailTransportConnector().fetch(
             ConnectorRequest("send", {"subject": "hello", "body": "b", "to": ["a@b.test"]})

@@ -21,7 +21,7 @@ from typing import Callable
 
 from dispatch import tokens
 
-from cin_lite.email_delivery import (
+from dispatch.mail import (
     _build,
     _send_or_write,
     from_address,

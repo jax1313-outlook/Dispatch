@@ -1737,15 +1737,18 @@ class TestNewPages:
         assert 'status-partially_verified">PARTIALLY VERIFIED' in html
         assert 'status-verified">VERIFIED' in html
 
-    def test_home_shows_archive_count(self, client):
-        resp = client.get("/home")
-        html = resp.data.decode("utf-8")
-        assert "Archived Records" in html
+    # The Archived Records and Intelligence Records counts were removed from
+    # Home by Mike on 2026-09-09. Neither is immediate operational awareness.
+    # Both tabs still work and still own their own records.
 
-    def test_home_shows_intel_count(self, client):
-        resp = client.get("/home")
-        html = resp.data.decode("utf-8")
-        assert "Intelligence Records" in html
+    def test_home_no_longer_shows_archive_or_intel_counts(self, client):
+        html = client.get("/home").data.decode("utf-8")
+        assert "Archived Records" not in html
+        assert "Intelligence Records" not in html
+
+    def test_archive_and_intelligence_tabs_still_load(self, client):
+        assert client.get("/archive").status_code == 200
+        assert client.get("/intelligence").status_code == 200
 
     def test_library_add_button(self, client):
         resp = client.get("/library")
@@ -2039,10 +2042,17 @@ class TestStage2PublisherProposalWriterBridge:
         assert "Proposal:" in html
 
 
-# ---------- Presentation-Layer Consolidation: /home "Attention Needed" panel ----------
-# PRESENTATION_LAYER_CONSOLIDATION_SCOPE_v1.md
+# ---------- Presentation-Layer Consolidation: reversed for /home ----------
+# PRESENTATION_LAYER_CONSOLIDATION_SCOPE_v1.md put an "Attention Needed Across
+# Departments" panel on Home. Mike removed it on 2026-09-09. Home is for
+# immediate operational awareness, not workflow administration, and under R4 the
+# department model is superseded anyway. The three source pages are untouched --
+# that was always the scope's own guarantee. Whether this composition belongs on
+# some other surface is parked -- docs/tab-walk/PARKING_LOT.md.
 class TestPresentationLayerConsolidation:
-    def test_attention_needed_composes_all_three_sources(self, client, mapped_contract, intelligence, flags):
+    def test_attention_panel_removed_from_home_with_all_three_sources_populated(
+        self, client, mapped_contract, intelligence, flags
+    ):
         from portal.models import publisher as pub_model
         from cin_lite import pending as cin_pending, archive as cin_archive
 
@@ -2064,15 +2074,13 @@ class TestPresentationLayerConsolidation:
             action_label="Flag for Review", summary="needs review",
         )
 
-        resp = client.get("/home")
-        html = resp.data.decode("utf-8")
-        assert "Attention Needed Across Departments" in html
-        assert "Broker Packet Required" in html
-        assert mapped_contract["title"] in html
-        assert "Zero Trust Cybersecurity Support" in html
-        assert 'href="/publisher"' in html
-        assert 'href="/pipeline"' in html
-        assert 'href="/queues"' in html
+        html = client.get("/home").data.decode("utf-8")
+        assert "Attention Needed Across Departments" not in html
+
+        # The work itself did not go anywhere. It is on the tabs that own it.
+        assert "Broker Packet Required" in client.get("/publisher").data.decode("utf-8")
+        assert mapped_contract["title"] in client.get("/pipeline").data.decode("utf-8")
+        assert "Zero Trust Cybersecurity Support" in client.get("/queues").data.decode("utf-8")
 
     def test_attention_needed_absent_when_all_queues_empty(self, client):
         resp = client.get("/home")

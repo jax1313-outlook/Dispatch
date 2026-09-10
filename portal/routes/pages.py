@@ -21,14 +21,18 @@ def index():
     return redirect(url_for("pages.home"))
 
 
+@pages_bp.route("/alerts")
 @pages_bp.route("/operations")
-def operations():
-    """Consequence-sorted decision feed -- one screen for everything open
-    across Publisher/Conflicts/Pipeline/Exceptions/Settlements/Stalled
-    Loads/Queues/Library gaps. See portal/models/operations_feed.py."""
+def alerts():
+    """Everything open across Publisher/Conflicts/Pipeline/Exceptions/
+    Settlements/Stalled Loads/Queues/Library gaps, on one screen, sorted into
+    Mike's four operational-consequence bands. See portal/models/operations_feed.py.
+
+    Renamed from Operations on 2026-09-09. The old /operations path still
+    resolves so nothing that already links here breaks."""
     from portal.models import operations_feed
     feed = operations_feed.build_feed()
-    return render_template("operations.html", **feed)
+    return render_template("alerts.html", **feed)
 
 
 @pages_bp.route("/home")
@@ -36,49 +40,38 @@ def home():
     from dispatch import services as dispatch_svc
 
     all_entries = sandbox.get_all()
-    sam_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "sam"}
+    # Freight only. SAM is divorced from Dispatch and is no longer surfaced on
+    # Home -- docs/tab-walk/PARKING_LOT.md. The /sam page still reads the same
+    # sandbox store; it is simply not linked from here or from the nav.
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
 
-    sam_sorted = sorted(sam_entries.values(), key=_priority_key, reverse=True)[:5]
     dispatch_sorted = sorted(dispatch_entries.values(), key=_priority_key, reverse=True)[:5]
 
-    unresolved = conflict.get_unresolved()
-    pub_queue = [a for a in publisher.get_queue() if a["status"] not in ("APPROVED", "ARCHIVED")]
-
-    pending_items = pending.list_pending()
+    # Every screened load, not the five that fit in the strip below. The old
+    # "Active Cards" number counted truncated top-5 slices and so silently
+    # capped.
+    screened_count = len(dispatch_entries)
 
     all_engine_loads = dispatch_svc.list_loads()
     active_engine = [l for l in all_engine_loads if l["status"] not in ("archived", "cancelled", "completed")]
 
-    fleet_summary = dispatch_svc.get_fleet_summary()
-    fin_dashboard = dispatch_svc.get_financial_dashboard()
-
-    stalled = dispatch_svc.check_stalled_loads()
-    from dispatch import store as dispatch_store
-    recent_activity = dispatch_store.get_recent_activity(limit=15)
-    chart_data = dispatch_svc.get_chart_data()
-    attention_needed = helpers.attention_needed()
-    # How much of what this page is about to show is rehearsal data. A row can
-    # carry a badge; a total cannot, so the page has to say it in words.
+    # The Financial Snapshot, stalled loads, recent activity, the load charts
+    # and the cross-department attention feed were all removed from Home. Their
+    # queries go with them -- this render no longer pays for data the screen
+    # does not show. Each one still lives on the tab that owns it, except the
+    # ones recorded in docs/tab-walk/PARKING_LOT.md.
+    #
+    # The rehearsal share survived that cut. How much of what this page shows is
+    # rehearsal data is not a metric, it is a warning: a row can carry a badge,
+    # a total cannot, so the page has to say it in words.
     rehearsal = dispatch_svc.rehearsal_share()
 
     return render_template(
         "home.html",
-        sam_cards=sam_sorted,
         dispatch_cards=dispatch_sorted,
         simulated_count=sandbox.simulated_count(),
-        conflict_count=len(unresolved),
-        publisher_count=len(pub_queue),
-        archive_count=arc_model.total_count(),
-        intel_count=intel_model.total_count(),
-        pending_count=len(pending_items),
+        screened_count=screened_count,
         engine_load_count=len(active_engine),
-        fleet_summary=fleet_summary,
-        fin_dashboard=fin_dashboard,
-        stalled_loads=stalled,
-        recent_activity=recent_activity,
-        chart_data=chart_data,
-        attention_needed=attention_needed,
         rehearsal=rehearsal,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
@@ -476,6 +469,13 @@ def compliance():
 
 @pages_bp.route("/fuel-estimator")
 def fuel_estimator():
+    """Parked for TOOLBOX on 2026-09-09, Mike's ruling. The nav entry is gone;
+    this path still resolves and the page still works.
+
+    TOOLBOX is the future home: a single screen of owner/operator calculators,
+    reference tables, federal links and utilities, none of which is workflow.
+    The inventory and what has to be settled first are in
+    docs/tab-walk/PARKING_LOT.md."""
     from dispatch import services as dispatch_svc
     defaults = {
         "avg_fuel_price": dispatch_svc.get_avg_fuel_price(),
@@ -486,7 +486,20 @@ def fuel_estimator():
 
 @pages_bp.route("/fleet")
 def fleet():
+    """Fleet moved inside Settings on 2026-09-09. Settings is where the shop is
+    set up, and the roster is part of setting up the shop.
+
+    The path still resolves so nothing that links or bookmarks here breaks, and
+    the roster's own filter links keep working -- they carry query arguments,
+    which the redirect preserves."""
+    return redirect(url_for("pages.settings", **request.args))
+
+
+def _fleet_context() -> dict:
+    """The roster, its filters and its vocabulary. Read by Settings, which now
+    renders it through _fleet_panel.html."""
     from dispatch import services as dispatch_svc
+    from dispatch import store as dispatch_store
     from dispatch.models import (
         DRIVER_STATUSES, LICENSE_CLASSES,
         EQUIPMENT_TYPES, EQUIPMENT_STATUSES,
@@ -498,35 +511,28 @@ def fleet():
     equip_type = request.args.get("equip_type")
     equip_search = request.args.get("unit_number", "").strip()
 
-    drivers = dispatch_svc.list_drivers(
-        status=driver_status or None,
-        name=driver_search or None,
-    )
-    equipment = dispatch_svc.list_equipment(
-        status=equip_status or None,
-        equipment_type=equip_type or None,
-        unit_number=equip_search or None,
-    )
-    summary = dispatch_svc.get_fleet_summary()
-    from dispatch import store as dispatch_store
-    assignments = dispatch_store.get_fleet_assignments()
-
-    return render_template(
-        "fleet.html",
-        drivers=drivers,
-        equipment=equipment,
-        summary=summary,
-        assignments=assignments,
-        driver_statuses=DRIVER_STATUSES,
-        license_classes=LICENSE_CLASSES,
-        equipment_types=EQUIPMENT_TYPES,
-        equipment_statuses=EQUIPMENT_STATUSES,
-        driver_status_filter=driver_status or "",
-        driver_search=driver_search,
-        equip_status_filter=equip_status or "",
-        equip_type_filter=equip_type or "",
-        equip_search=equip_search,
-    )
+    return {
+        "drivers": dispatch_svc.list_drivers(
+            status=driver_status or None,
+            name=driver_search or None,
+        ),
+        "equipment": dispatch_svc.list_equipment(
+            status=equip_status or None,
+            equipment_type=equip_type or None,
+            unit_number=equip_search or None,
+        ),
+        "summary": dispatch_svc.get_fleet_summary(),
+        "assignments": dispatch_store.get_fleet_assignments(),
+        "driver_statuses": DRIVER_STATUSES,
+        "license_classes": LICENSE_CLASSES,
+        "equipment_types": EQUIPMENT_TYPES,
+        "equipment_statuses": EQUIPMENT_STATUSES,
+        "driver_status_filter": driver_status or "",
+        "driver_search": driver_search,
+        "equip_status_filter": equip_status or "",
+        "equip_type_filter": equip_type or "",
+        "equip_search": equip_search,
+    }
 
 
 @pages_bp.route("/fleet/driver/<driver_id>")
@@ -1000,7 +1006,7 @@ def registration():
 def settings():
     import os
     from portal.config import Config, _DEFAULT_SECRET
-    from cin_lite import email_delivery
+    from dispatch import mail as email_delivery
 
     cin_config = {
         "sam_api_key": bool(os.environ.get("DISPATCH_SAM_API_KEY")),
@@ -1032,7 +1038,10 @@ def settings():
         "database": str(get_db_path().resolve()),
         "uploads": str(_get_upload_dir().resolve()),
         "archive": str(cin_archive.ARCHIVE_ROOT.resolve()),
-        "outbox": str((cin_archive.ARCHIVE_ROOT / "Outbox").resolve()),
+        # Dispatch's own outbox, not the contract archive's. They stopped being
+        # the same directory when the mail transport moved to dispatch/mail.py
+        # on 2026-09-09, and this row kept pointing at the contract one.
+        "outbox": str(email_delivery._OUTBOX.resolve()),
         "library_intel": str(get_memory_dir().resolve()),
         "archive_records": str(get_archive_dir().resolve()),
     }
@@ -1044,6 +1053,8 @@ def settings():
         stall_thresholds=_STALL_THRESHOLDS_HOURS,
         storage_paths=storage_paths,
         integration_entries=integrations_registry.list_entries(),
+        # The fleet roster now renders at the top of this page.
+        **_fleet_context(),
     )
 
 

@@ -53,7 +53,7 @@ hide. The attempt is still audited on the way out.
 
 What the boundary does **not** do is stop a connector writing a file or calling
 the network -- both are legitimate (the email transport connector writes ``.eml``
-files through ``cin_lite/email_delivery.py``; a real provider will make HTTP
+files through ``dispatch/mail.py``; a real provider will make HTTP
 calls). The prohibition is on owning operational truth, and in this codebase
 operational truth is the SQLite database.
 """

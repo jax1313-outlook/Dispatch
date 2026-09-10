@@ -47,7 +47,7 @@ def _notify_safe(send) -> None:
 
     Every notify_* call site here runs strictly after the DB write it's
     reporting on has already committed. An SMTP timeout/auth failure raised
-    from smtplib (cin_lite/email_delivery.py's transport, reused by
+    from smtplib (dispatch/mail.py's transport, reused by
     dispatch/notifications.py) is not the caller's problem to see as a 500 --
     the load *was* archived/delivered/invoiced; only the notification email
     failed. Log and continue rather than propagate.
@@ -1516,7 +1516,7 @@ def reviewer_contact_email() -> str:
     anywhere in this codebase (Email API is Dispatch's only communication channel
     per CLAUDE.md's tech stack), so surfacing a phone number here would be invented,
     not retrieved."""
-    from cin_lite import email_delivery
+    from dispatch import mail as email_delivery
     return email_delivery.reviewer_address()
 
 
@@ -2616,7 +2616,7 @@ def export_ifta_csv(report: dict) -> str:
 # (src/dispatch/ifta_clerk/prepare.py, src/dispatch/ifta/package.py,
 # src/dispatch/ifta_clerk/recommend.py), adapted to Dispatch's own
 # architecture: Dispatch has no Queue, so "submitted for approval" is
-# gated by an emailed, HMAC-signed link (reusing cin_lite.email_delivery's
+# gated by an emailed, HMAC-signed link (reusing dispatch.mail's
 # existing generic token functions) instead of a Queue item; Dispatch has
 # no persisted worksheet table, so the report snapshot is frozen into a
 # new IFTAReportApproval row at submission time instead of being read from
@@ -2877,7 +2877,7 @@ def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = 
     to resubmit a period, only to approve the one submission it got."""
     import os
 
-    from cin_lite import email_delivery
+    from dispatch import mail as email_delivery
 
     if quarter not in (1, 2, 3, 4):
         raise ValueError(f"Invalid quarter: {quarter}")
@@ -2930,7 +2930,7 @@ def approve_ifta_quarter(approval_id: str, token: str) -> dict:
     the same email link is a no-op success, matching Hold's
     attempt_seal()) -- the token is only re-checked when there is
     something left to do."""
-    from cin_lite import email_delivery
+    from dispatch import mail as email_delivery
 
     approval = store.get_ifta_report_approval(approval_id)
     if approval is None:

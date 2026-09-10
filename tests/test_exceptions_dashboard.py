@@ -244,8 +244,9 @@ class TestSettlementsAPIFilters:
 
 
 class TestSidebarNavigation:
-    def test_exceptions_link_in_sidebar(self, client):
-        resp = client.get("/")
-        assert resp.status_code in (200, 302)
-        resp = client.get("/home")
-        assert b"/exceptions" in resp.data
+    def test_parked_off_the_sidebar_but_still_reachable(self, client):
+        """Parked 2026-09-09. Exceptions reach Mike through Alerts now, which
+        carries them in the Exceptions band and links each one to its own page.
+        """
+        assert b"/exceptions" not in client.get("/home").data
+        assert client.get("/exceptions").status_code == 200

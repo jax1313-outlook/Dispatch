@@ -306,20 +306,60 @@ class TestLibraryGapCards:
 
 
 class TestSorting:
-    def test_highest_consequence_sorts_first(self):
+    def test_band_sorts_before_consequence_level(self):
+        """Mike's band is the outermost sort, set on 2026-09-09.
+
+        A stalled load is a committed load at risk, so it is an operational
+        blocker and outranks a publisher action even though the publisher card
+        carries the higher consequence level. Raw level no longer orders the
+        feed end to end -- it orders within a band.
+        """
         _satisfy_all_company_assets()
         conflict.create_notice(
             "missing_rate", "warning", sandbox_id="SBX-SORT",
             explanation="x", recommended_action="y",
-        )  # level 3
-        publisher.create_action("Rate Sheet Request", sandbox_id="SBX-SORT", trigger_reason="z")  # level 5
+        )  # level 3, exception band
+        publisher.create_action("Rate Sheet Request", sandbox_id="SBX-SORT", trigger_reason="z")  # level 5, decision band
         load = services.create_load(customer="Sort Order Co")
-        _age_load(load["load_id"], 30)  # level 2
+        _age_load(load["load_id"], 30)  # level 2, blocker band
 
         feed = operations_feed.build_feed()
-        levels = [c["card_level"] for c in feed["cards"]]
+
+        orders = [c["band_order"] for c in feed["cards"]]
+        assert orders == sorted(orders)
+
+        assert feed["cards"][0]["source"] == "stalled_load"
+        assert feed["cards"][0]["band"] == "blocker"
+        assert [c["band"] for c in feed["cards"]] == ["blocker", "decision", "exception"]
+
+    def test_level_still_orders_within_a_band(self):
+        """Two cards in the same band keep the old highest-level-first order."""
+        _satisfy_all_company_assets()
+        conflict.create_notice(
+            "missing_rate", "critical", sandbox_id="SBX-BAND",
+            explanation="x", recommended_action="y",
+        )  # level 4, exception band
+        conflict.create_notice(
+            "missing_rate", "info", sandbox_id="SBX-BAND-2",
+            explanation="x", recommended_action="y",
+        )  # level 2, exception band
+
+        band_cards = operations_feed.build_feed()["cards_by_band"]["exception"]
+        levels = [c["card_level"] for c in band_cards]
         assert levels == sorted(levels, reverse=True)
-        assert feed["cards"][0]["source"] == "publisher"
+
+    def test_every_card_lands_in_a_known_band(self):
+        _satisfy_all_company_assets()
+        publisher.create_action("Rate Sheet Request", sandbox_id="SBX-ALL", trigger_reason="z")
+        load = services.create_load(customer="Band Coverage Co")
+        _age_load(load["load_id"], 30)
+
+        feed = operations_feed.build_feed()
+        assert feed["cards"], "expected at least one card"
+        for card in feed["cards"]:
+            assert card["band"] in operations_feed.BAND_ORDER
+            assert card["band_label"] == operations_feed.BANDS[card["band"]]["label"]
+        assert sum(feed["counts_by_band"].values()) == feed["total"]
 
     def test_within_level_most_recent_first(self, monkeypatch):
         """create_notice()'s timestamp has only 1-second resolution, so two

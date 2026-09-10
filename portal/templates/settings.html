@@ -1,8 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Settings — Dispatch{% endblock %}
 {% block page_title %}Settings{% endblock %}
+{% block page_actions %}
+<button class="btn btn-sm btn-success" onclick="toggleForm('new-driver-form')">+ Add Driver</button>
+<button class="btn btn-sm btn-success" onclick="toggleForm('new-equipment-form')">+ Add Equipment</button>
+{% endblock %}
 
 {% block body %}
+{# The fleet roster comes first. Settings is where the shop is set up, and who
+   drives what is the first thing you set up. Everything below it is
+   configuration -- paths, keys, thresholds. #}
+{% include "_fleet_panel.html" %}
+
 <section class="card-section">
     <p style="margin:0;font-size:13px;">
         This page is what the <strong>machine</strong> needs in order to start

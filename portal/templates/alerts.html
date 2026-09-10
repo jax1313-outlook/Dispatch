@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Alerts — Dispatch{% endblock %}
+{% block page_title %}Alerts{% endblock %}
+
+{% block body %}
+{# Renamed from Operations and re-sorted by operational consequence on Mike's
+   instruction, tab 01 walk, 2026-09-09. The band answers "how does this stop
+   the truck". The old 0-5 consequence level still exists on each card and still
+   decides which cards carry the non-optional closing statement, but it is no
+   longer shown -- the band heading already says how much this matters, and the
+   source tag already says where it came from. #}
+<style>
+.op-band-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px; }
+.op-band-chip { padding:6px 14px; border-radius:16px; font-size:13px; font-weight:600; color:#fff; }
+.op-band-chip-blocker { background:#c62828; }
+.op-band-chip-decision { background:#e65100; }
+.op-band-chip-exception { background:#f9a825; color:#3a2f00; }
+.op-band-chip-admin { background:#1565c0; }
+.op-band-chip-empty { background:#eceff1; color:#78909c; }
+.op-band-heading { margin:26px 0 2px; font-size:17px; }
+.op-band-meaning { margin:0 0 12px; font-size:13px; color:#777; }
+.op-card { border:1px solid #ddd; border-left-width:5px; border-radius:4px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+.op-card-blocker { border-left-color:#c62828; }
+.op-card-decision { border-left-color:#e65100; }
+.op-card-exception { border-left-color:#f9a825; }
+.op-card-admin { border-left-color:#1565c0; }
+.op-card-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:4px; }
+.op-card-title { font-weight:600; }
+.op-card-summary { color:#555; font-size:13px; margin-bottom:6px; }
+.op-card-footer { display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#888; }
+.op-card-closing { font-size:12px; color:#6a1b9a; font-style:italic; margin-top:6px; }
+.op-source-tag { font-size:11px; color:#999; text-transform:uppercase; letter-spacing:0.03em; }
+</style>
+
+<p class="section-note">
+    Everything open across Publisher, Conflicts, Pipeline, Exceptions, Settlements,
+    Stalled Loads, Queues and Library gaps, in one feed, sorted by operational
+    consequence. Acting on an item still happens on its own page, linked below --
+    this view is read-only.
+</p>
+
+<div class="op-band-bar">
+    {% for band in band_order %}
+    <span class="op-band-chip {% if counts_by_band[band] %}op-band-chip-{{ band }}{% else %}op-band-chip-empty{% endif %}">{{ bands[band].marker }} {{ bands[band].label }}: {{ counts_by_band[band] }}</span>
+    {% endfor %}
+</div>
+
+{% if cards %}
+    {% for band in band_order %}
+    {% if cards_by_band[band] %}
+    <h2 class="op-band-heading">{{ bands[band].marker }} {{ bands[band].label }}</h2>
+    <p class="op-band-meaning">{{ bands[band].meaning }}</p>
+        {% for card in cards_by_band[band] %}
+        <div class="op-card op-card-{{ band }}">
+            <div class="op-card-header">
+                <span class="op-card-title">{{ card.title }}</span>
+            </div>
+            {% if card.summary %}<div class="op-card-summary">{{ card.summary }}</div>{% endif %}
+            <div class="op-card-footer">
+                <span class="op-source-tag">{{ card.source|replace('_', ' ') }}{% if card.created_at %} &middot; {{ card.created_at[:16] }}{% endif %}</span>
+                <a href="{{ card.url }}" class="btn btn-sm">Open</a>
+            </div>
+            {% if card.closing %}<div class="op-card-closing">{{ card.closing }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% endfor %}
+{% else %}
+<div class="empty-state">
+    <p>Nothing open right now. No blockers, no decisions waiting on you, no exceptions, nothing administrative.</p>
+</div>
+{% endif %}
+{% endblock %}
