@@ -243,13 +243,21 @@ def mission_intake_create():
     return redirect(url_for("joe_portal.mission_brief", record_id=record["id"]))
 
 
+@joe_bp.route("/loads")
 @joe_bp.route("/candidates")
 def candidate_queue():
     """The workbench: everything in Booking, waiting on a decision.
 
-    Candidates only. A committed mission has left Booking and belongs to
-    Dispatch, and a queue that keeps showing it is a queue he stops trusting
-    to mean "these need me".
+    **LOADS.** Decision D-LOADS, 2026-09-09: this is a freight operation and the
+    screen holds scored loads. It answers "show me the available loads", not
+    "show me the candidate records". The path says so now too. `/candidates`
+    still resolves so nothing already pointing here breaks, and the endpoint
+    keeps its name because renaming it would touch every `url_for` in the
+    program for no gain a driver would ever see.
+
+    Loads only. A committed mission has left Booking and belongs to Dispatch,
+    and a queue that keeps showing it is a queue he stops trusting to mean
+    "these need me".
     """
     from dispatch import commitment
 

@@ -465,49 +465,48 @@ class TestMaintenanceAPI:
 # ── Template Tests ──────────────────────────────────────────────────
 
 
-class TestMaintenanceTemplate:
-    def test_equipment_detail_shows_maintenance(self, client):
+class TestMaintenanceIsParked:
+    """Maintenance came off the portal on 2026-09-10, Mike's call: not needed
+    yet, and it should not have a home in the portal.
+
+    Parked, not removed. The service, the store and the API above are untouched
+    and every one of their tests still runs. What went away is the section on
+    the equipment page. These tests hold that line so the page does not quietly
+    grow it back, and so the capability is provably still there underneath.
+    """
+
+    def test_the_equipment_page_carries_no_maintenance_section(self, client):
         eqp = _make_equipment()
         services.add_maintenance_schedule(
-            eqp["equipment_id"], "oil_change",
-            description="Regular oil change",
-            next_due_date=_future(10),
+            eqp["equipment_id"], "oil_change", next_due_date=_future(10),
         )
-        r = client.get(f"/fleet/equipment/{eqp['equipment_id']}")
-        html = r.data.decode()
-        assert "Maintenance Schedule" in html
-        assert "Oil Change" in html
-        assert "Regular oil change" in html
+        html = client.get(f"/fleet/equipment/{eqp['equipment_id']}").data.decode()
 
-    def test_equipment_detail_has_add_form(self, client):
+        assert "Maintenance Schedule" not in html
+        assert "addMaintenance" not in html
+        assert "completeMaintenance" not in html
+
+    def test_the_page_still_works_and_still_shows_the_unit(self, client):
         eqp = _make_equipment()
-        r = client.get(f"/fleet/equipment/{eqp['equipment_id']}")
-        html = r.data.decode()
-        assert "Add Service" in html
-        assert "maint-type" in html
+        resp = client.get(f"/fleet/equipment/{eqp['equipment_id']}")
+        assert resp.status_code == 200
+        assert eqp["unit_number"] in resp.data.decode()
 
-    def test_equipment_detail_overdue_styling(self, client):
+    def test_the_schedules_are_still_there_underneath(self, client):
+        """The whole point of parking rather than deleting."""
         eqp = _make_equipment()
         services.add_maintenance_schedule(
-            eqp["equipment_id"], "brake_inspection",
-            next_due_date=_past(5),
+            eqp["equipment_id"], "oil_change", next_due_date=_future(10),
         )
-        r = client.get(f"/fleet/equipment/{eqp['equipment_id']}")
-        html = r.data.decode()
-        assert _past(5) in html
+        assert services.list_maintenance_schedules(equipment_id=eqp["equipment_id"])
 
-    def test_equipment_detail_empty_maintenance(self, client):
-        eqp = _make_equipment()
-        r = client.get(f"/fleet/equipment/{eqp['equipment_id']}")
-        html = r.data.decode()
-        assert "No maintenance schedules" in html
+        resp = client.get(f"/api/dispatch/maintenance?equipment_id={eqp['equipment_id']}")
+        assert resp.status_code == 200
+        assert len(resp.get_json()) == 1
 
-    def test_equipment_detail_complete_button(self, client):
+    def test_the_equipment_status_maintenance_is_a_different_thing_and_stays(self, client):
+        """Marking a unit out of service is how the roster tells the truth about
+        what can run today. It has nothing to do with scheduled servicing."""
         eqp = _make_equipment()
-        services.add_maintenance_schedule(
-            eqp["equipment_id"], "oil_change",
-            next_due_date=_future(5),
-        )
-        r = client.get(f"/fleet/equipment/{eqp['equipment_id']}")
-        html = r.data.decode()
-        assert "completeMaintenance" in html
+        html = client.get(f"/fleet/equipment/{eqp['equipment_id']}").data.decode()
+        assert "maintenance" in html.lower(), "the out-of-service status must remain"

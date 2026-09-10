@@ -601,16 +601,14 @@ def equipment_detail(equipment_id):
         return "Equipment not found", 404
     active_load = dispatch_store.get_active_load_for_equipment(equipment_id)
     load_history = dispatch_store.get_loads_for_equipment(equipment_id)
-    from dispatch.models import SERVICE_TYPES, MAINTENANCE_STATUSES
-    maint_schedules = dispatch_svc.list_maintenance_schedules(equipment_id=equipment_id)
+    # Maintenance was parked on 2026-09-10, so this render no longer looks up
+    # schedules the page does not show. The service and its API are untouched --
+    # see the note in equipment_detail.html.
     return render_template(
         "equipment_detail.html",
         equip=equip,
         active_load=active_load,
         load_history=load_history,
-        maint_schedules=maint_schedules,
-        service_types=SERVICE_TYPES,
-        maintenance_statuses=MAINTENANCE_STATUSES,
         equipment_types=EQUIPMENT_TYPES,
         equipment_statuses=EQUIPMENT_STATUSES,
     )
