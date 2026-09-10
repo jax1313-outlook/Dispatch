@@ -67,10 +67,18 @@ class TestItNeverManglesWhatHeSaid:
         assert f["destination"] == "Savannah"
 
     def test_the_destination_stops_at_the_sentence(self):
-        """"Tampa. One pallet" is two facts and only the first is a city."""
+        """"Tampa. One pallet" is two facts and only the first is a city.
+
+        "One pallet" used to land in notes, because nothing claimed it and
+        nothing he says is discarded. It lands in `pieces_weight` now, which is
+        the field it was always describing -- the quantity reader was added on
+        2026-09-10 so a weight said mid-sentence stops ending up inside the
+        destination. Notes stays the floor for text nothing can place.
+        """
         f = opp.parse_dictation(FULL)["fields"]
         assert f["destination"] == "Tampa"
-        assert "One pallet" in f["notes"]
+        assert f["pieces_weight"] == "One pallet"
+        assert f["notes"] == "detention after two hours"
 
     def test_nothing_he_said_is_discarded(self):
         """Text the parser cannot place goes to notes rather than the floor. A
@@ -147,3 +155,61 @@ class TestTheParserDecidesNothing:
         caller can hand the result straight to capture() without translation."""
         f = opp.parse_dictation(FULL)["fields"]
         assert set(f) <= set(opp.FIELDS), set(f) - set(opp.FIELDS)
+
+
+class TestReadingOffABoardNaturally:
+    """Mike asked whether he has to speak in a fixed order, reading listings off
+    a real board. He does not, and these are the five readings that proved it --
+    three of which lost the rate before 2026-09-10.
+
+    A lost rate is not a cosmetic miss. Rate is required, so the capture is
+    refused and the listing is gone by the time he looks up.
+    """
+
+    def test_a_rate_said_as_digits(self):
+        """Reading a board aloud, "eighteen fifty" and "1850" are the same act.
+        Only the spelled-out one was recognised."""
+        f = opp.parse_dictation("log this Atlanta to Charlotte flatbed 1850 pu 9/15")["fields"]
+        assert f["rate"] == 1850.0
+        assert f["destination"] == "Charlotte"
+
+    def test_a_rate_with_a_scale_at_the_end(self):
+        """"twenty two hundred" is three words and one number. The old reader
+        only ever looked at two of them, so it found nothing."""
+        f = opp.parse_dictation(
+            "log this one Ocala to Macon dry van twenty two hundred pickup tomorrow")["fields"]
+        assert f["rate"] == 2200.0
+        assert f["destination"] == "Macon"
+
+    def test_a_rate_with_a_scale_in_the_middle(self):
+        """"nine hundred fifty" read as nine hundred, and left "fifty" behind in
+        the city."""
+        f = opp.parse_dictation(
+            "new opportunity Tampa to Miami two pallets dry van nine hundred fifty")["fields"]
+        assert f["rate"] == 950.0
+        assert f["destination"] == "Miami"
+        assert f["pieces_weight"] == "two pallets"
+
+    def test_a_weight_before_the_rate_does_not_become_the_rate(self):
+        """The sharpest one. "forty four thousand pounds, twenty two hundred"
+        has two numbers in it and the first is not the money."""
+        f = opp.parse_dictation(
+            "capture this one Savannah GA to Orlando FL reefer forty four thousand "
+            "pounds twenty two hundred broker is TQL pick up tomorrow")["fields"]
+        assert f["rate"] == 2200.0
+        assert f["pieces_weight"] == "forty four thousand pounds"
+        assert f["destination"] == "Orlando FL"
+        assert f["contact"] == "TQL"
+
+    def test_capture_this_one_does_not_leave_its_one_in_the_origin(self):
+        """The opener matched "capture this" and left "one" at the front, so an
+        origin came out as "one Savannah GA"."""
+        f = opp.parse_dictation(
+            "capture this one Savannah to Orlando dry van nine hundred")["fields"]
+        assert f["origin"] == "Savannah"
+
+    def test_a_bare_number_outside_a_rate_range_is_not_a_rate(self):
+        """A bare number is also a unit number, a road and a year. This refuses
+        rather than guessing, which is why the range exists."""
+        f = opp.parse_dictation("log this Tampa to Miami dry van unit 13")["fields"]
+        assert "rate" not in f

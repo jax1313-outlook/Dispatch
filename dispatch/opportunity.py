@@ -380,7 +380,11 @@ def capture(payload: dict, *, driver: str, channel: str = "") -> dict:
 #: What the Owner says to start a capture. Matched loosely -- speech-to-text
 #: drops commas and mishears names, and a capture lost to a strict prefix is the
 #: exact failure OPP-CAPTURE was written to prevent.
-OPENERS = ("log this one", "log this", "capture this", "log a load", "new opportunity")
+#: Longest first, always. "capture this one" has to be tried before "capture
+#: this", or the opener matches the shorter one and leaves "one" behind at the
+#: front of the sentence -- which is how an origin came out as "one Savannah GA".
+OPENERS = ("log this one", "capture this one", "log this", "capture this",
+           "log a load", "new opportunity")
 
 #: Words that end one field and begin the next. **Anchors, not grammar.** The
 #: canonical order is the fast path, not a straitjacket (plan section 6), so the
@@ -407,6 +411,71 @@ _TENS = ("one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
          "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety")
 _SPOKEN_RATE_RE = r"\b(?:%s)\s+(?:hundred|%s)\b" % (_TENS, _TENS)
 
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+    "eighty": 80, "ninety": 90,
+}
+_SCALE_WORDS = {"hundred": 100, "thousand": 1000}
+
+#: A run of number words, however long. "twenty two hundred" is three words and
+#: one number; the old pattern only ever looked at two, so it read that as
+#: nothing at all.
+_NUMBER_RUN_RE = r"\b(?:%s|hundred|thousand)(?:[\s-]+(?:%s|hundred|thousand))*\b" % (
+    _TENS, _TENS)
+
+#: What a quantity is measuring, when he says. Pulled out before the rate,
+#: because "forty four thousand pounds, twenty two hundred" has two numbers in it
+#: and the first one is not the money.
+_QUANTITY_UNITS = ("pounds", "pound", "lbs", "lb", "pallets", "pallet",
+                   "pieces", "piece", "skids", "skid", "cases", "case",
+                   "boxes", "box", "crates", "crate", "bundles", "bundle")
+
+#: A rate a board would actually post. Outside this, a bare number is more
+#: likely a unit number, a road, or a year than money.
+_PLAUSIBLE_RATE = (100.0, 100000.0)
+
+
+def _words_to_number(phrase: str):
+    """A number said out loud, of any shape. None when it is not one.
+
+    Handles the three ways a rate gets spoken, which the two-word pattern this
+    replaces could only manage the first of:
+
+        seven fifty          -> 750     two words, telephone style
+        nine hundred fifty   -> 950     a scale in the middle
+        twenty two hundred   -> 2200    a scale at the end
+
+    The telephone reading only applies when no scale word appears at all, which
+    is what keeps "twenty two hundred" from being read as twenty, then two
+    hundred.
+    """
+    tokens = [t for t in re.split(r"[\s-]+", phrase.lower().strip()) if t]
+    if not tokens or any(t not in _NUMBER_WORDS and t not in _SCALE_WORDS for t in tokens):
+        return None
+
+    if not any(t in _SCALE_WORDS for t in tokens):
+        if (len(tokens) == 2
+                and _NUMBER_WORDS[tokens[0]] <= 20
+                and 20 <= _NUMBER_WORDS[tokens[1]] <= 99):
+            return float(_NUMBER_WORDS[tokens[0]] * 100 + _NUMBER_WORDS[tokens[1]])
+        return float(sum(_NUMBER_WORDS[t] for t in tokens))
+
+    total = current = 0
+    for token in tokens:
+        if token in _SCALE_WORDS:
+            scale = _SCALE_WORDS[token]
+            current = max(current, 1) * scale
+            if scale == 1000:
+                total += current
+                current = 0
+        else:
+            current += _NUMBER_WORDS[token]
+    return float(total + current)
+
 
 def _spoken_number(text: str):
     """A rate, however it was said. Returns a float or None -- **never zero as a
@@ -416,30 +485,35 @@ def _spoken_number(text: str):
     cannot read is left for the caller to ask about, because section 6 allows
     exactly one question and this is what it is for.
     """
-    import re
-
     t = text.lower().replace(",", "")
+
     m = re.search(r"\$\s*(\d+(?:\.\d+)?)", t)
     if m:
         return float(m.group(1))
     m = re.search(r"(\d+(?:\.\d+)?)\s*(?:dollars|bucks|usd)\b", t)
     if m:
         return float(m.group(1))
-    # "seven fifty" and friends -- common in speech, and a rate is the one field
-    # worth reaching for, because a capture without it costs a question.
-    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-             "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
-             "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
-             "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
-             "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
-             "seventy": 70, "eighty": 80, "ninety": 90}
-    m = re.search(r"\b(%s)\s+(%s|hundred)\b" % ("|".join(words), "|".join(words)), t)
-    if m:
-        first, second = m.group(1), m.group(2)
-        if second == "hundred":
-            return float(words[first] * 100)
-        if words[first] <= 20 and words[second] >= 20:
-            return float(words[first] * 100 + words[second])
+
+    # Spoken, of any shape. Longest run wins, because "twenty two hundred" and
+    # "twenty two" both match and only one of them is the number he said.
+    best = None
+    for match in re.finditer(_NUMBER_RUN_RE, t):
+        value = _words_to_number(match.group(0))
+        if value is None:
+            continue
+        if best is None or len(match.group(0)) > len(best[0]):
+            best = (match.group(0), value)
+    if best:
+        return best[1]
+
+    # A bare number, last, and only inside a range a board would post. Reading a
+    # listing aloud, "eighteen fifty" and "1850" are the same act -- but a bare
+    # number is also a unit number, a road and a year, so this refuses anything
+    # outside what a rate plausibly is rather than guessing.
+    for candidate in re.findall(r"\b\d+(?:\.\d+)?\b", t):
+        value = float(candidate)
+        if _PLAUSIBLE_RATE[0] <= value <= _PLAUSIBLE_RATE[1]:
+            return value
     return None
 
 
@@ -472,12 +546,15 @@ def parse_dictation(text: str) -> dict:
     body = heard
     low = body.lower()
 
-    # Strip the wake phrase and any name in front of it.
+    # Strip the wake phrase and any name in front of it. Longest match wins, so
+    # "capture this one" is taken whole rather than leaving its "one" behind.
+    hit = None
     for opener in OPENERS:
         i = low.find(opener)
-        if i >= 0:
-            body = body[i + len(opener):]
-            break
+        if i >= 0 and (hit is None or len(opener) > len(hit[1])):
+            hit = (i, opener)
+    if hit:
+        body = body[hit[0] + len(hit[1]):]
     body = body.lstrip(" :,.-")
 
     fields, low = {}, body.lower()
@@ -491,6 +568,22 @@ def parse_dictation(text: str) -> dict:
             low = body.lower()
             break
 
+    # --- pieces and weight, BEFORE the rate ---
+    #
+    # "forty four thousand pounds, twenty two hundred" carries two numbers and
+    # the first one is not the money. Taking the measured quantity out first
+    # means the rate reader never sees it, and it stops the weight ending up
+    # inside the destination, which is how "Orlando FL forty four thousand
+    # pounds" happened.
+    quantity = re.search(
+        r"((?:%s|\b[\d,]+(?:\.\d+)?)(?:[\s-]+(?:%s))*)\s*(%s)\b"
+        % (_NUMBER_RUN_RE, _TENS, "|".join(_QUANTITY_UNITS)),
+        body, flags=re.I)
+    if quantity:
+        fields["pieces_weight"] = quantity.group(0).strip(" :,.-")
+        body = body[:quantity.start()] + " " + body[quantity.end():]
+        low = body.lower()
+
     # --- rate ---
     rate = _spoken_number(body)
     if rate is not None:
@@ -498,8 +591,17 @@ def parse_dictation(text: str) -> dict:
         body = re.sub(r"\$\s*[\d,]+(?:\.\d+)?|\b[\d,]+(?:\.\d+)?\s*(?:dollars|bucks|usd)\b",
                       " ", body, flags=re.I)
         # Spoken numbers too -- "seven fifty" left in place ends up inside
-        # the destination, which is how "Savannah seven fifty" happens.
-        body = re.sub(_SPOKEN_RATE_RE, " ", body, count=1, flags=re.I)
+        # the destination, which is how "Savannah seven fifty" happens. The
+        # longest run goes, not the first two words of it, or "twenty two
+        # hundred" leaves "hundred" behind in the city.
+        runs = [m.group(0) for m in re.finditer(_NUMBER_RUN_RE, body, flags=re.I)]
+        if runs:
+            longest = max(runs, key=len)
+            body = body.replace(longest, " ", 1)
+        else:
+            # A bare number that was read as the rate has to go too, or it lands
+            # in whatever field claims the text around it.
+            body = re.sub(r"\b%s\b" % re.escape(("%g" % rate)), " ", body, count=1)
         low = body.lower()
 
     # --- anchored segments, taken from the end backwards so each one only ever
