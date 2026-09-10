@@ -54,17 +54,25 @@ CLOSED = "CLOSED"
 #: The week, by weekday number (Monday is 0). Change the business model here
 #: and the whole view follows; there is no migration because there is no data.
 #:
-#: Maintenance is Saturday only. Thursday and Friday are both held, on the
-#: operator's ruling: Friday afternoon is prime expedited freight -- the
-#: weekend deadline is what makes shippers pay premium -- and giving it up to
-#: maintenance would cost the best-paying loads of the week.
+#: Thursday and Friday are both held, on the operator's ruling: Friday afternoon
+#: is prime expedited freight -- the weekend deadline is what makes shippers pay
+#: premium -- and giving it up would cost the best-paying loads of the week.
+#:
+#: **Saturday opened on 2026-09-10, Mike's ruling:** *"just leave it open not
+#: committed so I can close or take a run."* It was MAINTENANCE, which reserved
+#: the day whether or not he wanted it reserved that week. Open is the honest
+#: state for a day he decides on when it arrives -- he can take the run or close
+#: it, and the board stops deciding for him.
+#:
+#: `MAINTENANCE` is kept as a state rather than deleted. No day uses it now, and
+#: the day Saturday goes back to being the shop day it is one line here.
 WEEK_PATTERN = {
     0: OPEN,          # Monday
     1: OPEN,          # Tuesday
     2: OPEN,          # Wednesday
     3: HELD,          # Thursday
     4: HELD,          # Friday
-    5: MAINTENANCE,   # Saturday
+    5: OPEN,          # Saturday -- his call each week, not the board's
     6: CLOSED,        # Sunday
 }
 

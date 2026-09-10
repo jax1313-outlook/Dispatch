@@ -9,7 +9,7 @@ The week is a business model, not a calendar:
 
     MON TUE WED     sellable
     THU FRI         held for high-value expedited
-    SAT             maintenance
+    SAT             sellable
     SUN             closed
 
 That pattern is policy and lives in four lines. What is booked is read from the
@@ -62,19 +62,30 @@ class TestTheWeekIsABusinessModel:
     @pytest.mark.parametrize("offset,expected", [
         (0, booking.OPEN), (1, booking.OPEN), (2, booking.OPEN),
         (3, booking.HELD), (4, booking.HELD),
-        (5, booking.MAINTENANCE), (6, booking.CLOSED),
+        (5, booking.OPEN), (6, booking.CLOSED),
     ])
     def test_the_pattern_is_the_operators_week(self, offset, expected):
         assert booking.pattern_for(MONDAY + timedelta(days=offset)) == expected
 
-    def test_maintenance_is_saturday_only(self):
-        """Ruled after weighing it: Friday afternoon is prime expedited
-        freight -- the weekend deadline is what makes shippers pay premium --
-        so giving Friday to maintenance would cost the best loads of the week."""
+    def test_saturday_is_open_and_no_day_is_reserved_for_the_shop(self):
+        """Mike's ruling, 2026-09-10: "just leave it open not committed so I can
+        close or take a run." Saturday was MAINTENANCE, which reserved the day
+        whether or not he wanted it reserved that week.
+
+        Thursday and Friday stay held for a different reason that has not
+        changed: Friday afternoon is prime expedited freight and the weekend
+        deadline is what makes shippers pay premium.
+        """
         values = list(booking.WEEK_PATTERN.values())
-        assert values.count(booking.MAINTENANCE) == 1
-        assert booking.WEEK_PATTERN[5] == booking.MAINTENANCE
+        assert booking.MAINTENANCE not in values
+        assert booking.WEEK_PATTERN[5] == booking.OPEN
         assert booking.WEEK_PATTERN[3] == booking.WEEK_PATTERN[4] == booking.HELD
+
+    def test_the_maintenance_state_is_kept_not_deleted(self):
+        """Parked, like everything else. The day Saturday goes back to being the
+        shop day it is one line in WEEK_PATTERN."""
+        assert booking.MAINTENANCE in booking.LABELS
+        assert booking.MAINTENANCE in booking.SUBTITLES
 
     def test_booked_is_resolved_never_planned(self):
         assert booking.BOOKED not in booking.WEEK_PATTERN.values()
@@ -97,7 +108,8 @@ class TestHeldIsAPositionNotAGap:
         """Thursday empty is success. Monday empty in four days is not."""
         book = _board()
         assert all(d["planned"] == booking.OPEN for d in book["unsold"])
-        assert book["unsold_count"] == book["sellable_count"] == 6
+        # Two weeks of Mon-Wed plus Saturday, since Mike opened it 2026-09-10.
+        assert book["unsold_count"] == book["sellable_count"] == 8
 
     def test_taking_an_expedited_load_on_a_held_day_is_marked(self):
         """Not a problem -- it is the position paying off -- but worth seeing."""
@@ -235,7 +247,8 @@ class TestTheScreen:
 class TestItRunsMondayToSunday:
     """A fortnight starting on whatever today happens to be splits the week
     pattern across rows and makes it unreadable. Mon-Wed sellable, Thu-Fri
-    held, Saturday maintenance only reads as a shape when the row is a week."""
+    held, Saturday open, Sunday closed only reads as a shape when the row is a
+    week."""
 
     def test_every_row_starts_on_monday_and_ends_on_sunday(self):
         for week in _board()["weeks"]:
@@ -260,7 +273,9 @@ class TestItRunsMondayToSunday:
         """A day that has gone is not unsold inventory. It is just gone."""
         wednesday = MONDAY + timedelta(days=2)
         book = _board(today=wednesday)
-        assert book["sellable_count"] == 4      # Wed, then Mon Tue Wed
+        # Wed and Sat, then Mon Tue Wed Sat. Saturday counts since Mike opened
+        # it on 2026-09-10.
+        assert book["sellable_count"] == 6
         assert all(not d["past"] for d in book["unsold"])
 
 
@@ -276,7 +291,8 @@ class TestTheHorizonSwitches:
         assert month["board"][:14] == fortnight["board"]
 
     def test_the_sellable_count_scales_with_the_horizon(self):
-        assert _board(weeks=4)["sellable_count"] == 12   # four weeks of Mon-Wed
+        # Four weeks of Mon-Wed plus Saturday.
+        assert _board(weeks=4)["sellable_count"] == 16
 
     def test_the_pattern_holds_at_any_depth(self):
         for day in _board(weeks=6)["board"]:
