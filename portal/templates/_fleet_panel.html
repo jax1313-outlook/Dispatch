@@ -350,6 +350,28 @@
                         <label style="font-size:0.8em;">Model<br><input type="text" name="model" value="{{ eqp.model or '' }}" style="padding:3px 6px;width:100px;"></label>
                         <label style="font-size:0.8em;">Year<br><input type="text" name="year" value="{{ eqp.year or '' }}" style="padding:3px 6px;width:60px;"></label>
                         <label style="font-size:0.8em;">Notes<br><input type="text" name="notes" value="{{ eqp.notes or '' }}" style="padding:3px 6px;width:160px;"></label>
+                        {# Type and the capacity numbers, added 2026-09-09. The
+                           add form has carried them since the day cargo van and
+                           enclosed trailer went on the list, but this one did
+                           not, so a unit filed under the wrong type could only
+                           be fixed by deleting it and starting again -- and the
+                           payload and dimensions that feed the capacity envelope
+                           could not be corrected at all.
+
+                           "Swapping the trailer is a Fleet edit, not a code
+                           change" is the rule this form was quietly breaking. #}
+                        <label style="font-size:0.8em;">Type<br>
+                            <select name="equipment_type" style="padding:3px 6px;width:130px;">
+                                {% for et in equipment_types %}
+                                <option value="{{ et }}" {% if eqp.equipment_type == et %}selected{% endif %}>{{ et|replace('_', ' ')|title }}</option>
+                                {% endfor %}
+                            </select></label>
+                        <label style="font-size:0.8em;">GVWR lb<br><input type="number" min="0" name="gvwr_lb" value="{{ eqp.gvwr_lb or '' }}" style="padding:3px 6px;width:80px;"></label>
+                        <label style="font-size:0.8em;">Payload lb<br><input type="number" min="0" name="payload_lb" value="{{ eqp.payload_lb or '' }}" style="padding:3px 6px;width:80px;"></label>
+                        <label style="font-size:0.8em;">Cargo L in<br><input type="number" min="0" name="cargo_length_in" value="{{ eqp.cargo_length_in or '' }}" style="padding:3px 6px;width:70px;"></label>
+                        <label style="font-size:0.8em;">Cargo W in<br><input type="number" min="0" name="cargo_width_in" value="{{ eqp.cargo_width_in or '' }}" style="padding:3px 6px;width:70px;"></label>
+                        <label style="font-size:0.8em;">Cargo H in<br><input type="number" min="0" name="cargo_height_in" value="{{ eqp.cargo_height_in or '' }}" style="padding:3px 6px;width:70px;"></label>
+                        <label style="font-size:0.8em;">Door W in<br><input type="number" min="0" name="door_width_in" value="{{ eqp.door_width_in or '' }}" style="padding:3px 6px;width:70px;"></label>
                         <button type="submit" class="btn btn-xs btn-success">Save</button>
                         <button type="button" class="btn btn-xs" onclick="toggleEquipmentEdit('{{ eqp.equipment_id }}')">Cancel</button>
                     </form>

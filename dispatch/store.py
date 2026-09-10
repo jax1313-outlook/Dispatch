@@ -983,6 +983,16 @@ def update_equipment(equipment_id: str, **fields) -> dict | None:
     allowed = {
         "unit_number", "equipment_type", "make", "model", "year",
         "vin", "license_plate", "status", "notes",
+        # The capacity envelope, added 2026-09-09. These columns arrived with
+        # the asset profile and this list did not learn about them, so an update
+        # carrying a payload or a dimension was silently dropped and the caller
+        # got a 200 and an unchanged record. A unit could be created with its
+        # numbers and never corrected.
+        #
+        # That defeated the rule the capacity builder states outright: swapping
+        # the trailer is a Fleet edit, not a code change.
+        "gvwr_lb", "payload_lb", "cargo_length_in", "cargo_width_in",
+        "cargo_height_in", "door_width_in",
     }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
