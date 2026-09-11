@@ -320,12 +320,18 @@ byte-identical to a file elsewhere (the mirrored Dispatch governance set at the 
 1. **The only assistant/JOE program in the ecosystem.** 34,000 lines of Python. No other
    repository contains any JOE code. Dispatch's `CLAUDE.md` §5.4 explicitly forbids embedding
    it there.
-2. **The only code in the ecosystem operationally proven against live external services.**
-   `JOE_CAPABILITY_TRUTH_MATRIX.md` records measured-by-running proofs of: live Outlook COM
-   reads, live M365 Copilot reasoning signed in as Ops@, MSAL+DPAPI token storage verified
-   byte-level, audible SAPI speech, and web research returning 11 real URL attributions.
-   Dispatch, by contrast, records in its own `CLAUDE.md` §8 that **nothing** in it has been
-   run on Mike's machine.
+2. **The only code in the ecosystem proven against live external services across a broad
+   capability set.** `JOE_CAPABILITY_TRUTH_MATRIX.md` records measured-by-running proofs of:
+   live Outlook COM reads, live M365 Copilot reasoning signed in as Ops@, MSAL+DPAPI token
+   storage verified byte-level, audible SAPI speech, and web research returning 11 real URL
+   attributions. Dispatch, by contrast, records in its own `CLAUDE.md` §8 that **nothing** in
+   it has been run on Mike's machine.
+   *Amended 2026-09-11:* this entry originally read "the only code in the ecosystem
+   operationally proven against live external services." That was too strong. `Hold` holds one
+   live-API proof of its own — its vision extractor, run against the real Anthropic API on
+   2026-08-05 on a synthesised image (`HOLD_DOSSIER.md` §7.11). JOE remains the only repository
+   proven broadly, and the only one proven against a live *Microsoft* service. See
+   `CORRECTIONS.md`.
 3. **Live Microsoft 365 integration code** — `m365_copilot.py`, `m365_copilot_auth.py`,
    `outlook_com.py`, `mailbox_registry.py`. Roughly 2,078 LOC of real Microsoft integration
    existing nowhere else. Dispatch has an `outlook_connector.py` interface with no provider.

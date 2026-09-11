@@ -173,6 +173,7 @@ children.push(table([2100, 7260],
     [t('Scope', { bold: true }),      t('All 14 repositories in the jax1313-outlook account. None skipped, none combined.')],
     [t('Location', { bold: true }),   mono('jax1313-outlook/Dispatch · docs/inventory/')],
     [t('Branch', { bold: true }),     mono('claude/repository-inventory-recovery-r0eiji')],
+    [t('Amended', { bold: true }),    t('2026-09-11 \u2014 three corrections applied (C-01 live proof, C-02 Hold test count, C-03 joe-portal divergence). Recorded in CORRECTIONS.md, not silently overwritten.')],
   ]));
 children.push(spacer(240));
 
@@ -208,7 +209,7 @@ children.push(table([2400, 6960],
     [t('117', { bold: true, size: 26 }),    t('branches examined, file by file, against their own default branch')],
     [t('692', { bold: true, size: 26, color: RISK }), t('files that exist on NO default branch anywhere')],
     [t('~127,000', { bold: true, size: 26 }), t('lines of Python across the ecosystem')],
-    [t('1', { bold: true, size: 26 }),      t('repository with capabilities proven against live external services')],
+    [t('2', { bold: true, size: 26 }),      t('repositories with proof against a live external service — only one of them broadly')],
   ]));
 children.push(spacer(200));
 
@@ -254,11 +255,12 @@ children.push(ev([
   'integration  267 files    148 python files   13,770 LOC    428 test functions',
 ]));
 
-children.push(finding('F-02', 'The newest work in the ecosystem sits unmerged, 48 commits ahead.'));
-children.push(body('Dispatch’s joe-portal branch tips at 2026-09-03 — newer than main (2026-08-31) — and carries roughly 14,000 lines that are on no default branch: a Driver Cockpit (982 lines, with a 956-line test file), a JOE Portal and API, mission and scheduling engines, a booking board, arrival notices, and an Outlook mail connector.'));
+children.push(finding('F-02', 'The newest work in the ecosystem sits unmerged \u2014 and is also a month-old fork.'));
+children.push(body('Dispatch\u2019s joe-portal branch tips at 2026-09-03 \u2014 newer than main (2026-08-31) \u2014 and carries roughly 14,000 lines that are on no default branch: a Driver Cockpit (982 lines, with a 956-line test file), a JOE Portal and API, mission and scheduling engines, a booking board, arrival notices, and an Outlook mail connector.'));
+children.push(body('It is 48 commits ahead of main and 188 commits behind it. It forked on 2026-08-03, one day after Dispatch\u2019s first commit, so nearly the entire freight platform was built on main after this branch left. Its merge cost was measured separately \u2014 see the companion Merge Risk Assessment.'));
 children.push(body('That connector matters. Dispatch’s main branch has only the Outlook interface, with no provider behind it.'));
 children.push(ev([
-  'branch joe-portal  ·  48 commits ahead of main  ·  tip 2026-09-03',
+  'branch joe-portal  ·  48 ahead / 188 behind main  ·  forked 2026-08-03  ·  tip 2026-09-03',
   '59 files not on main  ·  19 test files',
 ]));
 
@@ -278,8 +280,8 @@ children.push(bullet([mono('Hold'), t(' — a Manager queue with its own JSON sc
 children.push(bullet([mono('Dispatch/dispatch/manager/'), t(' — 7–8 modules, 767–866 lines, across five branches.')]));
 children.push(body('Manager is additionally documented in nine repositories, has its only constitution in Hold, and its only independent architectural review in Claude. Recorded as fact; no recommendation is offered.'));
 
-children.push(finding('F-05', 'Only one repository has been proven against anything real.'));
-children.push(body('Joe-Assistant is the sole repository whose capabilities were measured by running the program against live external services. Its own truth matrix records the measurement date and method, and is equally plain about what failed.'));
+children.push(finding('F-05', 'Almost nothing has been proven against anything real.'));
+children.push(body('Joe-Assistant is the repository whose capabilities were measured broadly by running the program against live external services, and the only one proven against a live Microsoft service. Its own truth matrix records the measurement date and method, and is equally plain about what failed.'));
 children.push(ev([
   'PROVEN   launch in 4.6s · live Outlook COM read (21 write calls refused)',
   '         live M365 Copilot reasoning · MSAL+DPAPI auth verified byte-level',
@@ -288,7 +290,8 @@ children.push(ev([
   'BLOCKED  voice input — no person has ever spoken to it',
   'ABSENT   audio-activity detection · the Dispatch connection itself',
 ]));
-children.push(body('Against that, Dispatch’s own CLAUDE.md §8 states that nothing in it has ever run on Mike’s Windows laptop, and that every external system is UNCONFIGURED — no ELD, GPS, traffic, weather, load board, mapping, accounting, scanner or Outlook connection exists.'));
+children.push(body('Hold carries one live proof of its own: docs/lanes/C/NOTES.md records its vision extractor exercised against the real Anthropic API on 2026-08-05, a run that found and fixed a bug. The limit is stated in the same note \u2014 the receipt image was synthesised, because no real scanned receipt existed in that build environment. Live-API proof, not real-document proof.'));
+children.push(body('Against that, Dispatch\u2019s own CLAUDE.md \u00a78 states that nothing in it has ever run on Mike\u2019s Windows laptop, and that every external system is UNCONFIGURED \u2014 no ELD, GPS, traffic, weather, load board, mapping, accounting, scanner or Outlook connection exists.'));
 
 children.push(finding('F-06', 'Named everywhere, existing nowhere.'));
 children.push(body('Four things are referenced by documents across the ecosystem and were not found on any branch of any repository:'));
@@ -319,8 +322,8 @@ children.push(table([2260, 1300, 780, 900, 4120],
   ['Repository', 'Python', 'Br.', 'Off-main', 'Standing'],
   [
     L('Dispatch', '82,699', '64', '245', 'Implemented', ACCENT, 'The freight platform. System of Record by its own doctrine. Never run on Mike’s laptop.'),
-    L('Joe-Assistant', '34,000', '1', '0', 'Proven', PROVEN, 'JOE. The only live-service integration in the ecosystem.'),
-    L('Hold', '0 / 13,770', '24', '224', 'On branch', RISK, 'Receipt/IFTA/Reports build. Zero code on main.'),
+    L('Joe-Assistant', '34,000', '1', '0', 'Proven', PROVEN, 'JOE. The only broadly proven repository; the only live Microsoft integration.'),
+    L('Hold', '0 / 13,770', '24', '224', 'On branch', RISK, 'Receipt/IFTA/Reports build. Zero code on main. Suite run 2026-09-11: 469 passed, 0 failed.'),
     L('Dispatch-Old', '3,906', '1', '0', 'Implemented', ACCENT, 'CIN-Lite predecessor. The only merged Manager and the only hosting config.'),
     L('L2-intelligence-agent.', '2,006', '3', '21', 'Implemented', ACCENT, 'Intelligence department. Integration-ready, unmerged since 2026-08-11.'),
     L('Library', '875', '3', '22', 'Implemented', ACCENT, 'Library department. Integration-ready, unmerged.'),
@@ -402,7 +405,7 @@ children.push(rule());
 children.push(eyebrow('06 · Limits'));
 children.push(h1('What this report does not establish'));
 
-children.push(bullet([t('No test suite was run. ', { bold: true }), t('Every test count here — roughly 5,150 across the ecosystem — is a static count of test functions. It is evidence that tests exist, not that they pass. The one exception: tests/test_repository_doctrine.py was run against the inventory’s own additions and passed, 44 tests.')]));
+children.push(bullet([t('Almost no test suite was run. ', { bold: true }), t('Every test count here \u2014 roughly 5,150 across the ecosystem \u2014 is a static count of test functions. It is evidence that tests exist, not that they pass. Two exceptions: tests/test_repository_doctrine.py passed (44 tests), and Hold\u2019s integration suite was executed on 2026-09-11 \u2014 469 passed, 0 failed.')]));
 children.push(bullet([t('Off-main code was enumerated, not read. ', { bold: true }), t('The branch pass established that 692 files exist outside default branches and identified the subsystems. It did not assess whether any of that work duplicates, supersedes or conflicts with what is on main.')]));
 children.push(bullet([t('Nothing here is operational proof. ', { bold: true }), t('Dispatch’s own doctrine draws the line: the repository test suite is evidence of software behaviour only. Every Dispatch capability in this report is IMPLEMENTED and not OPERATIONALLY PROVEN.')]));
 children.push(bullet([t('No recommendations are made. ', { bold: true }), t('This was commissioned as a recovery and inventory operation. It contains no design proposal, no refactor or cleanup proposal, no archive recommendation, and no ranking of repositories by importance. What to do about any finding is Mike’s call.')]));

@@ -51,8 +51,10 @@ none was combined with another. Each has its own dossier with identical sections
 1. **No test suite was run.** Every test count in these documents is a static count of
    `def test_` functions. It is evidence that tests exist, not that they pass.
 2. **`Dispatch/CLAUDE.md` §6: the repository test suite is evidence of software behaviour only.
-   It is never operational proof.** The only capabilities recorded as PROVEN anywhere in this
-   inventory are JOE's, measured on 2026-08-26 by running the program against live services.
+   It is never operational proof.** Capabilities recorded as PROVEN are JOE's, measured on
+   2026-08-26 by running the program against live services, and one in `Hold` — its vision
+   extractor, exercised live against the real API on 2026-08-05 on a synthesised image.
+   **Amended 2026-09-11** — see `CORRECTIONS.md`.
 
 ## Where this lives
 

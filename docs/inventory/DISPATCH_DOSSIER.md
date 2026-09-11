@@ -146,7 +146,7 @@ subsystems exist on branches only:
 
 | Subsystem | Files | Python LOC | Branch(es) | Tip |
 |---|---|---|---|---|
-| **`joe-portal`** — JOE Portal, Driver Cockpit, Mission Intake, Booking Board, Arrival Notice, Outlook mail connector | 59 not on `main` | ~14,000 | `joe-portal` (**48 commits ahead of `main`**) | **2026-09-03** |
+| **`joe-portal`** — JOE Portal, Driver Cockpit, Mission Intake, Booking Board, Arrival Notice, Outlook mail connector | 59 not on `main` | ~14,000 | `joe-portal` (**48 ahead of `main`, 188 behind it** — forked 2026-08-03) | **2026-09-03** |
 | **`cin-hybrid/`** — 16 agents, 7 intel modules, 11 services, 3 runtime modules, CLI, 3 test files | 42 | 1,125 | `feature/init-hybrid-structure`, `claude/sdvosb-contract-opportunities-76rgtu`, `claude/va-2026-541512-exec-summary-lpgno3` | 2026-07-03/04 |
 | **`l2_cos/`** — a freight-oriented CIN variant: 6 rules (`broker_risk`, `capacity_match`, `deadhead_cost`, `facility_risk`, `lane_fit`, `rate_anomaly`), a 5-module UI, workflows, models | 34 | 1,805 | `claude/l2-cos-dispatch-refactor-c1ett1` | 2026-07-27 |
 | **`dispatch/manager/`** — `classify`, `policy_candidates`, `priority`, `security_monitor`, `signals`, `staff_report`, `stage_gate` | 7–8 | 767–866 | `stage12-manager-foundation`, `stage12-manager-archive-wiring`, `stage12-manager-m7-policy-hook`, `stage13-testing-hold-review`, `stage6-archive-review-queue` | 2026-08-10/11 |
@@ -569,8 +569,9 @@ arrangement · accounting export · sandbox survey · CIN-Lite pipeline (9 rules
   **not** read that code, run it, or assess whether any of it duplicates, supersedes or
   conflicts with `main`. In particular the `joe-portal` branch's ~14,000 lines and 19 test
   files were enumerated, not reviewed.
-- **Why `joe-portal` (2026-09-03, 48 commits ahead) is unmerged.** No document in the
-  repository records a decision about it.
+- **Why `joe-portal` (2026-09-03, 48 ahead / 188 behind) is unmerged.** No document in the
+  repository records a decision about it. Its merge cost was measured on 2026-09-11 — see
+  `MERGE_RISK_ASSESSMENT.md` §1: 5 conflicts, two of them `add/add` on the connector boundary.
 - **Whether the suite currently passes.** `CLAUDE.md` §8 records 3,696 passed / 0 failed as
   of 2026-08-25; the suite was **not run** during this inventory.
 - **Everything about behaviour on Mike's laptop.** `CLAUDE.md` §8: laptop readiness is
@@ -621,7 +622,8 @@ exists here in a form found nowhere else. It also holds 63 branches of work that
 `main`, whose contents this inventory did not diff.
 
 Two recorded findings sit outside `main`. First, **245 files exist on branches and not on
-`main`** — including the `joe-portal` branch, which is 48 commits ahead, tips at 2026-09-03
+`main`** — including the `joe-portal` branch, which is 48 commits ahead of `main` and 188
+behind it (it forked 2026-08-03), tips at 2026-09-03
 (the newest work anywhere in the ecosystem), and carries roughly 14,000 lines: a Driver
 Cockpit, a JOE Portal and API, mission and scheduling engines, a booking board, an Outlook
 mail connector, and 19 test files. Also off `main`: a 42-file `cin-hybrid/` tree with sixteen

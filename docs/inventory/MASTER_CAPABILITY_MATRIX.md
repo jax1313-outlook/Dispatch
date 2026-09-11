@@ -63,7 +63,7 @@ evidence classes from `Joe-Assistant/Assistant_Plugin/docs/JOE_CAPABILITY_TRUTH_
 | Lane templates | Dispatch | `lane_templates` table | IMPLEMENTED | `dispatch/models.py:LaneTemplate` |
 | End-load / completion packet | Dispatch | `/loads/<id>/end-load`, `/completion-packet` | IMPLEMENTED | `portal/models/completion_packet.py` |
 | Stalled-load detection & notify | Dispatch | `/loads/stalled`, `/loads/stalled/notify` | IMPLEMENTED | `portal/routes/dispatch_api.py` |
-| **Mission intake / booking board / arrival notice** | Dispatch | `dispatch/{mission,mission_template,booking,arrival,scheduling}.py`; `MISSION_INTAKE_ARCHITECTURE.md`; `test_booking_board.py`, `test_arrival_notice.py`, `test_mission_intake.py` | **IMPLEMENTED (branch)** | `joe-portal` branch, 48 commits ahead, tip 2026-09-03 |
+| **Mission intake / booking board / arrival notice** | Dispatch | `dispatch/{mission,mission_template,booking,arrival,scheduling}.py`; `MISSION_INTAKE_ARCHITECTURE.md`; `test_booking_board.py`, `test_arrival_notice.py`, `test_mission_intake.py` | **IMPLEMENTED (branch)** | `joe-portal` branch, 48 ahead / 188 behind, tip 2026-09-03 |
 | **Driver Cockpit** | Dispatch | `portal/cockpit.py` (982 LOC), `test_driver_cockpit.py` (956 LOC), `DRIVER_COCKPIT_LOCKED_DIRECTION.md` | **IMPLEMENTED (branch)** | `joe-portal` branch |
 | Trip card / cockpit prototype | Claude-3 | `dispatch_build/{trip_card,cockpit}.py`, `test_cockpit.py` | **IMPLEMENTED (branch)** | `claude/dispatch-jules-arch-review-i87dru` |
 | **Load-board sweep (DAT / Truckstop)** | — | `Claude-3/CLONE_MAP.md`: "no working adapter to an actual load-board API was found anywhere… **Biggest genuine build gap**" | **ABSENT** | — |
@@ -325,8 +325,9 @@ weather, load board, mapping, accounting, scanner or Outlook client is connected
 
 **What has actually been built?**
 
-**One thing has been proven.** `Joe-Assistant` is the only repository in the ecosystem whose
-capabilities were measured by running the program against live external services. On 2026-08-26
+**Two repositories have been proven against a live external service, one of them broadly.**
+`Joe-Assistant` is the repository whose capabilities were measured, across the board, by running
+the program against live external services. On 2026-08-26
 it demonstrably launched in 4.6 seconds, read a real Outlook mailbox over COM while refusing 21
 write calls, reasoned through Microsoft 365 Copilot signed in as a real account, stored tokens
 via MSAL and DPAPI verified byte-level, retrieved real documents from a 34-document library,
@@ -348,10 +349,11 @@ does not know a driver's hours of service.
 **A great deal has been built and never merged.** This is the largest finding of the inventory:
 **692 files exist only on unmerged branches.**
 - `Hold`'s `main` contains **zero Python**; its `integration` branch contains **13,770 lines,
-  148 modules and 428 test functions** — a receipt and IFTA system with OCR extraction, a full
+  148 modules and **469 passing tests** — a receipt and IFTA system with OCR extraction, a full
   IFTA engine, an **IFTA Clerk** that exists nowhere else, a Reports lane with a fidelity gate,
   a Manager queue and a Librarian spine. Built in ~26 hours on 2026-08-04/05. Never merged.
-- `Dispatch`'s `joe-portal` branch is **48 commits ahead of `main`**, tips at **2026-09-03** —
+- `Dispatch`'s `joe-portal` branch is **48 commits ahead of `main` and 188 commits behind it**
+  (it forked 2026-08-03), tips at **2026-09-03** —
   the newest work in the entire ecosystem — and carries roughly 14,000 lines: a Driver Cockpit,
   a JOE Portal and API, mission and scheduling engines, a booking board, an Outlook mail
   connector, and 19 test files.

@@ -7,8 +7,8 @@ Recovery operation only. This dossier records what exists. It makes no design,
 archive, cleanup, or refactor recommendation.
 
 > **Read this first.** `Hold`'s default branch contains **no Python at all**. Its
-> `integration` branch contains **13,770 lines of Python, 148 modules and 428 test
-> functions**. A builder who read only `main` would conclude this repository is an empty
+> `integration` branch contains **13,770 lines of Python, 148 modules and 469 tests that
+> pass** (executed 2026-09-11; see `MERGE_RISK_ASSESSMENT.md`). A builder who read only `main` would conclude this repository is an empty
 > scaffold. That conclusion would be wrong.
 
 ---
@@ -34,7 +34,7 @@ archive, cleanup, or refactor recommendation.
 | Tracked files on `integration` | **267** | branch scan |
 | Python on `main` | **0 files, 0 lines** | `git ls-files '*.py'` |
 | Python on `integration` | **148 files, 13,770 lines** | branch scan |
-| Test functions on `integration` | **428** across 72 files | branch scan |
+| Tests on `integration` | **469 passed, 0 failed** across 72 files (executed 2026-09-11) | test run; static `def test_` count was 428 — parametrisation accounts for the difference |
 
 ### Every branch, measured
 
@@ -139,7 +139,7 @@ src/dispatch/
 └── pilot/       intake.py
 tools/           init_roots.py  init_pilot.py  seed_library.py
                  mileage_worksheet.py  export_audit_rolls.py
-tests/           72 files, 428 test functions — lane_a, lane_b, lane_c, lane_d,
+tests/           72 files, 469 passing tests — lane_a, lane_b, lane_c, lane_d,
                  conformance, golden/{ifta,receipts}, ifta_clerk, ifta_ui,
                  shell, pilot, fixtures, stubs
 docs/ifta-clerk/ 12 documents (blueprint + 5 feature note/walkthrough pairs)
@@ -195,7 +195,8 @@ hosts them).
 **Adapters / Connectors** — `receipt/extraction/vision.py` (OCR/vision) and the parser set.
 No external service connectors.
 
-**Tests** — 72 files, **428 `def test_` functions**, `pytest.ini`, `requirements.txt`,
+**Tests** — 72 files, **469 passing tests** (428 `def test_` statements; parametrisation
+accounts for the rest), `pytest.ini`, `requirements.txt`,
 `tests/conftest.py`. Lane-partitioned, plus conformance and golden-file suites
 (`tests/golden/ifta/`, `tests/golden/receipts/`). Named tests include
 `test_no_tax_math.py`, `test_no_delete_sql.py`, `test_readonly_enforcement.py`,
@@ -211,7 +212,7 @@ Status is given for `integration`, with `main` noted separately.
 | Capability | Exists | Evidence | Primary files | Status |
 |---|---|---|---|---|
 | Receipt intake | Yes (branch) | `tests/lane_c/` (25 files) | `receipt/intake.py`, `router.py` | IMPLEMENTED on `integration`; ABSENT on `main` |
-| OCR / vision extraction | Yes (branch) | `docs/governance/OCR_VISION_EXTRACTION_DOCTRINE_v1.md`; branch `build/ocr-fenced-json-fix` | `receipt/extraction/vision.py` | IMPLEMENTED on `integration`; ABSENT on `main` |
+| OCR / vision extraction | Yes (branch) | `docs/governance/OCR_VISION_EXTRACTION_DOCTRINE_v1.md`; branch `build/ocr-fenced-json-fix`; **`docs/lanes/C/NOTES.md` Session 3 — exercised live against the real Anthropic API on 2026-08-05, which found and fixed a bug** | `receipt/extraction/vision.py` | **PROVEN against the live API** — on a **synthesised** receipt image ("no real scanned receipt existed in this build environment"), so live-API proof, not real-document proof. ABSENT on `main` |
 | Receipt parsing (CSV, statement) | Yes (branch) | `tests/golden/receipts/` | `receipt/parsers/` | IMPLEMENTED on `integration` |
 | Receipt deduplication | Yes (branch) | `receipt/dedup.py` | that file | IMPLEMENTED on `integration` |
 | Controlled expense vocabulary | Yes (both) | `library_seed/Vocabulary/expense_vocabulary.v1.json` + schema | `receipt/vocabulary.py` | Schema on `main`; code on `integration` |
@@ -289,7 +290,7 @@ Preview Mode, and Mileage Entry.
 Python modules are unique — no other repository contains any of them.
 
 ### 1. A complete Receipt/IFTA/Reports build that exists on no default branch anywhere
-13,770 lines of Python, 148 modules, 428 test functions, built in ~26 hours on 2026-08-04–05
+13,770 lines of Python, 148 modules, 469 passing tests, built in ~26 hours on 2026-08-04–05
 across 22 branches, **never merged**. `main` has zero Python. This is the single largest body
 of work in the ecosystem that is invisible from a default-branch reading.
 
@@ -338,6 +339,19 @@ The only OCR/vision governance document in the ecosystem. Dispatch has receipt-v
 ### 10. The only repository with no human-authored commit on `main`
 All 10 `main` commits are authored by `Claude <noreply@anthropic.com>`.
 
+### 11. Live-API proof of the vision extractor
+`docs/lanes/C/NOTES.md` Session 3 (2026-08-05) records the OCR/vision extractor being run
+**against the real Anthropic API**, which found and fixed a real bug. Outside `Joe-Assistant`,
+this is the only place in the ecosystem where code was exercised against a live external
+service. Its limit is recorded with equal care in the same note: the receipt image was
+**synthesised with Pillow**, because *"no real scanned receipt existed in this build
+environment."* It is live-API proof, not real-document proof — Hold's OCR path has never seen
+an actual receipt. The note also records that the API key was *"never written to any file…
+used only as a transient environment variable… then discarded"*; a scan of the branch for
+committed secrets found none, corroborating it.
+
+*Added 2026-09-11 — see `CORRECTIONS.md`.*
+
 ---
 
 ## SECTION 8 — CROSS-REPOSITORY REFERENCES
@@ -372,7 +386,7 @@ worksheet, package, exceptions, live indicators, read-only enforcement · IFTA U
 **IFTA Clerk** review dashboard, prepare-this-quarter, payment recommendation · mileage
 entry UI · Reports queries, dates, rendering, snapshots, template engine, fidelity gate ·
 Manager queue · Librarian spine · evidence index and interface · shared audit, config, db,
-hashing, ids · Dispatch shell · pilot intake · 5 CLI tools · 428 test functions including
+hashing, ids · Dispatch shell · pilot intake · 5 CLI tools · 469 passing tests including
 golden-file and conformance suites · 8 JSON Schemas with conformance tests.
 
 ### Built In Code (on `main`)
@@ -396,7 +410,9 @@ Nothing. 8 JSON Schemas, 2 config schemas, 39 documents, and a `.gitkeep` skelet
   was performed.
 
 ### Unknown
-- Whether the 428 test functions pass — **not run** during this inventory.
+- ~~Whether the 428 test functions pass — **not run** during this inventory.~~
+  **RESOLVED 2026-09-11:** the suite was executed — **469 passed, 0 failed**. See
+  `MERGE_RISK_ASSESSMENT.md` §2.
 - Whether the two pilot runs (`RUN_1`, `RUN_2`) were executed against sandbox or real data.
   The reports were not read line-by-line in this inventory.
 - Why `integration` was never merged. No decision record exists.
