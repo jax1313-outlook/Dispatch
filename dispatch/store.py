@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 
-from dispatch import rehearsal
+from dispatch import money, rehearsal
 from dispatch.db import deserialize_json_fields, dict_from_row, get_connection
 from dispatch.models import (
     DetentionEvent,
@@ -29,6 +30,21 @@ from dispatch.models import (
     RetentionArchive,
     Settlement,
 )
+
+
+def _model_kwargs(cls, row: dict) -> dict:
+    """Keep only the fields the dataclass declares.
+
+    `SELECT *` now also returns the generated `<column>_cents` companions (see
+    dispatch/money_schema.py). They are a *view* of a column the dataclass
+    already has, not a field of the model, so handing them to the constructor
+    would be a TypeError on every read. Filtering here rather than naming every
+    column in every SELECT keeps the queries readable and means a column added
+    to a table later does not break a read before anyone has used it.
+    """
+    allowed = {f.name for f in dataclasses.fields(cls)}
+    return {k: v for k, v in row.items() if k in allowed}
+
 
 DEFAULT_PER_PAGE = 25
 MAX_PER_PAGE = 100
@@ -98,7 +114,7 @@ def _one_rate_confirmation_per_load() -> str:
     exactly, including in that broken case.
     """
     return """
-        SELECT load_id, rate_amount, rate_type, distance_miles
+        SELECT load_id, rate_amount, rate_amount_cents, rate_type, distance_miles
           FROM rate_confirmations
          WHERE rowid IN (SELECT MIN(rowid) FROM rate_confirmations GROUP BY load_id)
     """
@@ -122,20 +138,30 @@ def get_load_financial_rows(*, include_rehearsal: bool = True) -> list[dict]:
                rc.load_id IS NOT NULL AS has_rate,
                CASE
                    WHEN rc.rate_type = 'per_mile' AND COALESCE(rc.distance_miles, 0) != 0
-                       THEN rc.rate_amount * rc.distance_miles
-                   ELSE COALESCE(rc.rate_amount, 0)
-               END                  AS revenue,
-               COALESCE(ex.total, 0) AS expense_total
+                       THEN CAST(ROUND(rc.rate_amount_cents * rc.distance_miles) AS INTEGER)
+                   ELSE COALESCE(rc.rate_amount_cents, 0)
+               END                  AS revenue_cents,
+               COALESCE(ex.total_cents, 0) AS expense_total_cents
           FROM loads l
           LEFT JOIN ({_one_rate_confirmation_per_load()}) rc ON rc.load_id = l.load_id
           LEFT JOIN (
-                SELECT load_id, SUM(amount) AS total FROM expenses GROUP BY load_id
+                SELECT load_id, SUM(amount_cents) AS total_cents FROM expenses GROUP BY load_id
           ) ex ON ex.load_id = l.load_id
         {where}
     """
     with get_connection() as conn:
         rows = conn.execute(sql).fetchall()
-    return [dict_from_row(r) for r in rows]
+
+    out = []
+    for row in rows:
+        record = dict_from_row(row)
+        # Float views for the templates and JSON that still expect them,
+        # produced from the exact value at the last moment rather than
+        # accumulated. Callers doing arithmetic use the _cents fields.
+        record["revenue"] = money.to_float(record["revenue_cents"])
+        record["expense_total"] = money.to_float(record["expense_total_cents"])
+        out.append(record)
+    return out
 
 
 def get_settlement_rollup() -> dict:
@@ -148,9 +174,10 @@ def get_settlement_rollup() -> dict:
     sql = """
         SELECT
             COALESCE(SUM(CASE WHEN payment_status = 'paid'
-                              THEN payment_amount - factoring_fee ELSE 0 END), 0) AS total_paid,
+                              THEN payment_amount_cents - factoring_fee_cents
+                              ELSE 0 END), 0)                                     AS total_paid_cents,
             COALESCE(SUM(CASE WHEN payment_status IN ('invoiced', 'overdue')
-                              THEN invoice_amount ELSE 0 END), 0)                 AS total_outstanding,
+                              THEN invoice_amount_cents ELSE 0 END), 0)           AS total_outstanding_cents,
             COALESCE(SUM(CASE WHEN payment_status = 'invoiced' THEN 1 ELSE 0 END), 0) AS invoiced_count,
             COALESCE(SUM(CASE WHEN payment_status = 'paid'     THEN 1 ELSE 0 END), 0) AS paid_count,
             COALESCE(SUM(CASE WHEN payment_status = 'overdue'  THEN 1 ELSE 0 END), 0) AS overdue_count
@@ -158,7 +185,10 @@ def get_settlement_rollup() -> dict:
     """
     with get_connection() as conn:
         row = conn.execute(sql).fetchone()
-    return dict_from_row(row)
+    record = dict_from_row(row)
+    record["total_paid"] = money.to_float(record["total_paid_cents"])
+    record["total_outstanding"] = money.to_float(record["total_outstanding_cents"])
+    return record
 
 
 
@@ -678,7 +708,7 @@ def get_rate_confirmation(load_id: str) -> dict | None:
     if not row:
         return None
     d = dict_from_row(row)
-    rc = RateConfirmation(**d)
+    rc = RateConfirmation(**_model_kwargs(RateConfirmation, d))
     return rc.to_dict()
 
 
@@ -791,7 +821,7 @@ def get_settlement(load_id: str) -> dict | None:
     if not row:
         return None
     d = dict_from_row(row)
-    stl = Settlement(**d)
+    stl = Settlement(**_model_kwargs(Settlement, d))
     return stl.to_dict()
 
 
@@ -854,7 +884,7 @@ def list_settlements(
 
     def settlement_mapper(r):
         d = dict_from_row(r)
-        return Settlement(**d).to_dict()
+        return Settlement(**_model_kwargs(Settlement, d)).to_dict()
 
     with get_connection() as conn:
         return _paginate(sql, params, conn, page=page, per_page=per_page, row_mapper=settlement_mapper)
@@ -1162,7 +1192,7 @@ def get_detention(detention_id: str) -> dict | None:
     if not row:
         return None
     d = dict_from_row(row)
-    det = DetentionEvent(**d)
+    det = DetentionEvent(**_model_kwargs(DetentionEvent, d))
     return det.to_dict()
 
 
@@ -1184,7 +1214,7 @@ def list_detentions(load_id: str | None = None, status: str | None = None) -> li
     results = []
     for r in rows:
         d = dict_from_row(r)
-        det = DetentionEvent(**d)
+        det = DetentionEvent(**_model_kwargs(DetentionEvent, d))
         results.append(det.to_dict())
     return results
 
@@ -1406,7 +1436,7 @@ def global_search(query: str, limit: int = 50) -> dict:
         stl_results = []
         for r in rows:
             d = dict_from_row(r)
-            stl_results.append(Settlement(**d).to_dict())
+            stl_results.append(Settlement(**_model_kwargs(Settlement, d)).to_dict())
         results["settlements"] = stl_results
 
     results["brokers"] = list_broker_contacts(search=query)[:limit]
@@ -1529,7 +1559,7 @@ def get_ifta_fuel_purchase(purchase_id: str) -> dict | None:
     if not row:
         return None
     d = dict_from_row(row)
-    return IFTAFuelPurchase(**d).to_dict()
+    return IFTAFuelPurchase(**_model_kwargs(IFTAFuelPurchase, d)).to_dict()
 
 
 def list_ifta_fuel_purchases(
@@ -1558,7 +1588,7 @@ def list_ifta_fuel_purchases(
             f"SELECT * FROM ifta_fuel_purchases WHERE {where} ORDER BY date DESC",
             params,
         ).fetchall()
-    return [IFTAFuelPurchase(**dict_from_row(r)).to_dict() for r in rows]
+    return [IFTAFuelPurchase(**_model_kwargs(IFTAFuelPurchase, dict_from_row(r))).to_dict() for r in rows]
 
 
 def delete_ifta_fuel_purchase(purchase_id: str) -> bool:

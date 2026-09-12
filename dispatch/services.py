@@ -38,7 +38,7 @@ from dispatch.models import (
     Settlement,
     _utc_now,
 )
-from dispatch import db, notifications, store
+from dispatch import db, money, notifications, store
 
 
 import sys
@@ -1301,31 +1301,35 @@ def get_financial_dashboard() -> dict:
     rows = store.get_load_financial_rows()
     settlement_totals = store.get_settlement_rollup()
 
-    total_revenue = 0.0
-    total_expenses = 0.0
+    revenue_cents = 0
+    expenses_cents = 0
     loads_with_rate = 0
 
     for row in rows:
         if row["has_rate"]:
-            total_revenue += round(row["revenue"], 2)
+            revenue_cents += row["revenue_cents"]
             loads_with_rate += 1
-        total_expenses += round(row["expense_total"], 2)
+        expenses_cents += row["expense_total_cents"]
 
-    total_paid = settlement_totals["total_paid"]
-    total_outstanding = settlement_totals["total_outstanding"]
-
-    total_profit = total_revenue - total_expenses
-    margin_pct = (total_profit / total_revenue * 100) if total_revenue > 0 else 0.0
+    paid_cents = settlement_totals["total_paid_cents"]
+    outstanding_cents = settlement_totals["total_outstanding_cents"]
+    profit_cents = revenue_cents - expenses_cents
+    margin_pct = (profit_cents / revenue_cents * 100) if revenue_cents > 0 else 0.0
 
     return {
         "total_loads": len(rows),
         "loads_with_rate": loads_with_rate,
-        "total_revenue": round(total_revenue, 2),
-        "total_expenses": round(total_expenses, 2),
-        "total_profit": round(total_profit, 2),
+        "total_revenue": money.to_float(revenue_cents),
+        "total_expenses": money.to_float(expenses_cents),
+        "total_profit": money.to_float(profit_cents),
         "margin_pct": round(margin_pct, 1),
-        "total_paid": round(total_paid, 2),
-        "total_outstanding": round(total_outstanding, 2),
+        "total_paid": money.to_float(paid_cents),
+        "total_outstanding": money.to_float(outstanding_cents),
+        "total_revenue_cents": revenue_cents,
+        "total_expenses_cents": expenses_cents,
+        "total_profit_cents": profit_cents,
+        "total_paid_cents": paid_cents,
+        "total_outstanding_cents": outstanding_cents,
         "invoiced_count": settlement_totals["invoiced_count"],
         "paid_count": settlement_totals["paid_count"],
         "overdue_count": settlement_totals["overdue_count"],
@@ -1344,7 +1348,7 @@ def get_chart_data() -> dict:
     rows = store.get_load_financial_rows()
 
     status_counts: dict[str, int] = defaultdict(int)
-    monthly_revenue: dict[str, float] = defaultdict(float)
+    monthly_revenue: dict[str, int] = defaultdict(int)
     monthly_loads: dict[str, int] = defaultdict(int)
     for row in rows:
         status_counts[row["status"]] += 1
@@ -1352,14 +1356,15 @@ def get_chart_data() -> dict:
         month_key = created[:7] if len(created) >= 7 else "unknown"
         monthly_loads[month_key] += 1
         if row["has_rate"]:
-            monthly_revenue[month_key] += row["revenue"]
+            monthly_revenue[month_key] += row["revenue_cents"]
 
     months_sorted = sorted(set(monthly_revenue.keys()) | set(monthly_loads.keys()))
 
     return {
         "loads_by_status": dict(status_counts),
         "monthly_revenue": [
-            {"month": m, "revenue": round(monthly_revenue.get(m, 0), 2),
+            {"month": m, "revenue": money.to_float(monthly_revenue.get(m, 0)),
+             "revenue_cents": monthly_revenue.get(m, 0),
              "loads": monthly_loads.get(m, 0)}
             for m in months_sorted
         ],

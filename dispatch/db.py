@@ -505,6 +505,12 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     from dispatch.rehearsal import init_rehearsal_schema
 
     init_rehearsal_schema(conn)
+    # Exact whole-cent companions for every monetary REAL column. Generated
+    # columns, so there is no write path to forget and no backfill to interrupt.
+    # See dispatch/money_schema.py for why the REAL column stays.
+    from dispatch.money_schema import init_money_schema
+
+    init_money_schema(conn)
 
 
 #: How long a writer waits for another writer's lock before giving up.
@@ -522,7 +528,7 @@ BUSY_TIMEOUT_MS = int(os.environ.get("DISPATCH_SQLITE_BUSY_TIMEOUT_MS", "5000"))
 #: `schema_state` after a successful initialisation so a later connection can
 #: tell "already built, and built by this version of the code" from "built by
 #: an older one" with a single cheap read.
-SCHEMA_REVISION = 2
+SCHEMA_REVISION = 3
 
 #: Database paths this *process* has already initialised. The expensive part of
 #: `_init_db` is not the work, it is that it ran on every one of the ~160
