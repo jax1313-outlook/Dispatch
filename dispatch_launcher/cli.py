@@ -65,8 +65,14 @@ MENU_ITEMS: tuple[tuple[str, str, str, str], ...] = (
 #: all: `bootstrap_authority()` refuses once an identity exists, so the only way back
 #: in was deleting identity.json by hand. Ruling recorded in DECISION_LOG.md
 #: 2026-08-25.
+#: Back Up Now is lettered for the same reason Reset PIN is, and it is here at
+#: all because until now nothing in the product took a backup. 926 lines of
+#: backup engine, a verification system and this status reporter existed, and
+#: the only way to actually make one was to type a script path from memory.
 EXTRA_ITEMS: tuple[tuple[str, str, str, str], ...] = (
     ("P", glyphs.RESET_PIN, "Reset PIN", "reset-pin"),
+    ("B", glyphs.BACKUP, "Back Up Now", "backup"),
+    ("R", glyphs.BACKUP, "Prove a Restore", "prove-restore"),
 )
 
 #: Every spelling the menu accepts for each item, so an operator who types the
@@ -80,19 +86,27 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "restart": ("restart",),
     "reset-session": ("reset", "reset session", "reset-session"),
     "reset-pin": ("reset pin", "reset-pin", "pin", "forgot pin", "forgotten pin"),
+    "backup": ("backup", "back up", "back up now", "backup now"),
+    "prove-restore": ("prove", "prove restore", "prove-restore", "restore proof"),
     "stop": ("stop", "stop dispatch"),
 }
 
 #: Actions that change something. `status`, `settings` and `version` observe and
 #: are therefore not here -- the one-shot command line runs them without the
 #: launcher ever writing a file.
-_ACTIONS = ("start", "stop", "restart", "open", "reset-session", "reset-pin")
+_ACTIONS = (
+    "start", "stop", "restart", "open", "reset-session", "reset-pin",
+    "backup", "prove-restore",
+)
 
 #: Everything the command line accepts, including the read-only views.
 #: `start-here` is what DISPATCH_START_HERE.cmd calls. It is not on the menu:
 #: the menu is for somebody who already has Dispatch working, and this is the
 #: path for somebody who does not yet.
-_COMMANDS = ("menu", "status", "settings", "version", "start-here", *_ACTIONS)
+_COMMANDS = (
+    "menu", "status", "settings", "version", "start-here", "schedule-backup",
+    *_ACTIONS,
+)
 
 
 def render_menu() -> str:
@@ -167,6 +181,21 @@ def run_action(action: str) -> control.ControlResult:
         from dispatch_launcher import first_run as _first_run
 
         return _first_run.reset_pin()
+    if action in ("backup", "prove-restore"):
+        from dispatch_launcher import backup_actions
+
+        outcome = (
+            backup_actions.create() if action == "backup" else backup_actions.prove_restore()
+        )
+        # ControlResult is what the menu renders; the backup actions carry the
+        # same two facts under their own names rather than importing a control
+        # vocabulary they have nothing to do with.
+        return control.ControlResult(
+            action=action,
+            ok=outcome.ok,
+            message=outcome.summary,
+            details=outcome.detail.splitlines() if outcome.detail else [],
+        )
     raise ValueError(f"unknown action: {action}")
 
 
@@ -246,6 +275,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.action == "version":
         _print_version()
+        return 0
+
+    if args.action == "schedule-backup":
+        from dispatch_launcher import backup_actions
+
+        print(backup_actions.render_schedule())
         return 0
 
     if args.action == "start-here":

@@ -86,6 +86,29 @@ def _cmd_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_prove(args: argparse.Namespace) -> int:
+    """Restore into an isolated destination and record what was actually proven.
+
+    Step 20 of the operational proof path in command form. The destination is
+    checked before anything is written: it must be empty and must overlap
+    neither the live database nor the live evidence store.
+
+    Without --confirmed-by the record says Code-automated, and the launcher
+    keeps reporting UNVERIFIED. That is not a limitation to work around -- the
+    program can prove the archive restores and that every hash matches, and it
+    cannot prove the restored Dispatch works, because that is a person opening
+    it and looking at it.
+    """
+    from dispatch_launcher import backup_actions
+
+    result = backup_actions.prove_restore(
+        args.archive, args.destination,
+        confirmed_by=args.confirmed_by, keep=args.keep,
+    )
+    print(result.render())
+    return 0 if result.ok else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dispatch_backup", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -107,6 +130,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_restore.add_argument("--force", action="store_true", help="allow a non-empty destination")
     p_restore.add_argument("--dry-run", action="store_true", help="report what would be written, write nothing")
     p_restore.set_defaults(func=_cmd_restore)
+
+    p_prove = sub.add_parser(
+        "prove", help="restore into an isolated destination and record the result"
+    )
+    p_prove.add_argument("archive", type=Path, nargs="?", default=None,
+                         help="the archive to prove; defaults to the newest in DISPATCH_BACKUP_DIR")
+    p_prove.add_argument("destination", type=Path, nargs="?", default=None,
+                         help="an empty scratch directory; a temporary one is used if omitted")
+    p_prove.add_argument("--confirmed-by", default=None,
+                         help="your name, ONLY after you have opened the restored Dispatch "
+                              "and confirmed it works. Without it the record says Code-automated.")
+    p_prove.add_argument("--keep", action="store_true",
+                         help="keep the restored copy instead of deleting the scratch directory")
+    p_prove.set_defaults(func=_cmd_prove)
+
     return parser
 
 
