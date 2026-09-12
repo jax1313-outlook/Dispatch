@@ -105,6 +105,7 @@ _ACTIONS = (
 #: path for somebody who does not yet.
 _COMMANDS = (
     "menu", "status", "settings", "version", "start-here", "schedule-backup",
+    "connect-microsoft", "disconnect-microsoft", "transports",
     *_ACTIONS,
 )
 
@@ -276,6 +277,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "version":
         _print_version()
         return 0
+
+    if args.action in ("connect-microsoft", "disconnect-microsoft", "transports"):
+        from dispatch_launcher import microsoft
+
+        if args.action == "transports":
+            print(microsoft.status_text())
+            return 0
+        if args.action == "connect-microsoft":
+            return microsoft.connect()
+        return microsoft.disconnect()
 
     if args.action == "schedule-backup":
         from dispatch_launcher import backup_actions

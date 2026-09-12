@@ -35,6 +35,7 @@ def _status():
 
 @maintenance_bp.route("/maintenance")
 def maintenance():
+    from dispatch import delivery
     from dispatch.db import get_connection
     from dispatch.money_schema import money_column_report, verify_money_integrity
 
@@ -49,7 +50,28 @@ def maintenance():
         backup_dir=str(directory) if directory else None,
         money_report=money_report,
         money_integrity=money_integrity,
+        delivery_summary=delivery.summary(),
+        delivery_failures=delivery.open_failures(limit=50),
     )
+
+
+@maintenance_bp.route("/maintenance/retry-deliveries", methods=["POST"])
+def retry_deliveries():
+    """Resend everything whose backoff has elapsed.
+
+    A button rather than a background thread. Dispatch does not resend freight
+    email on a timer nobody can see; a resend is always something the operator
+    can point at and say when it happened.
+    """
+    from dispatch import notifications_retry
+
+    result = notifications_retry.run_due()
+    flash(
+        f"Retried {result['attempted']} message(s): {result['sent']} sent, "
+        f"{result['failed']} failed, {result['abandoned']} abandoned.",
+        "success" if result["failed"] == 0 else "error",
+    )
+    return redirect(url_for("maintenance.maintenance"))
 
 
 @maintenance_bp.route("/maintenance/backup", methods=["POST"])
