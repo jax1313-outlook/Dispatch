@@ -1,13 +1,39 @@
 [run]
+# Branch coverage, not just line coverage.
+#
+# The gate was line-only (`branch = False`), which counts a line as covered the
+# moment it runs once. Every `if` in this repository whose false path was never
+# taken read as fully covered -- and the false paths are where the refusals
+# live: the transition that is not allowed, the token that has expired, the
+# truck with no capacity profile, the transport that is UNCONFIGURED. A gate
+# that cannot see an untested refusal is not measuring the thing this program
+# is most careful about.
+branch = True
+
 source =
     cin_lite
     dispatch
-branch = False
+    portal
+    # dispatch_launcher was outside the gate entirely -- 3,943 lines, and the
+    # thing that actually starts the product on Mike's machine. It is in now.
+    # Its Windows-only branches are marked `pragma: no cover` individually
+    # rather than the whole package being exempt, so what is excluded is
+    # visible line by line instead of by omission.
+    dispatch_launcher
+
+omit =
+    */__pycache__/*
+    */tests/*
 
 [report]
 show_missing = True
+skip_covered = False
 fail_under = 90
 exclude_lines =
     pragma: no cover
     if __name__ == .__main__.:
     raise NotImplementedError
+    if TYPE_CHECKING:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    \.\.\.$
