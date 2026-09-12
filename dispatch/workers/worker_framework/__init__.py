@@ -3,7 +3,7 @@
 Provides core base classes, governance models, worker registry, and handoff execution engine.
 """
 
-from dispatch_operations.workers.worker_framework.base import (
+from dispatch.workers.worker_framework.base import (
     BaseWorker,
     HandoffEvent,
     HandoffRunner,
