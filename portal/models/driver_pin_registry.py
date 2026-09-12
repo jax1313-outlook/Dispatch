@@ -79,17 +79,28 @@ def _save(data: dict) -> None:
 
 
 def _public(record: dict) -> dict:
-    """Strip pin_hash and recovery_word_hash before returning a record to any caller
-    outside this module -- mirrors identity.py's _public()."""
-    return {k: v for k, v in record.items() if k not in ("pin_hash", "recovery_word_hash")}
+    """Strip pin_hash and recovery_word_hash, and read the lockout from where it
+    is authoritative -- mirrors identity.py's _public().
+
+    `failed_attempt_count` and `locked_until` are not in this file any more. A
+    lockout counter inside a whole-file read-modify-write store loses updates,
+    and a lost update on that particular field means concurrent PIN guesses
+    never trip MAX_FAILED_ATTEMPTS. See dispatch/authcounters.py.
+    """
+    from dispatch import authcounters
+
+    out = {k: v for k, v in record.items() if k not in ("pin_hash", "recovery_word_hash")}
+    if record.get("driver_id"):
+        state = authcounters.get_state(authcounters.KIND_DRIVER, record["driver_id"])
+        out["failed_attempt_count"] = state["failed_attempt_count"]
+        out["locked_until"] = state["locked_until"]
+    return out
 
 
 def _is_locked(record: dict) -> bool:
-    locked_until = record.get("locked_until")
-    if not locked_until:
-        return False
-    expiry = datetime.strptime(locked_until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc) < expiry
+    from dispatch import authcounters
+
+    return authcounters.is_locked(authcounters.KIND_DRIVER, record.get("driver_id", ""))
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────
@@ -135,8 +146,7 @@ def create_pin_card(driver_id: str, pin: str, recovery_word: str, created_by: st
         "created_at": now,
         "updated_at": now,
         "last_login_at": None,
-        "failed_attempt_count": 0,
-        "locked_until": None,
+        # failed_attempt_count / locked_until are NOT stored here; see _public().
     }
     data = _load()
     data[driver_id] = record
@@ -155,8 +165,9 @@ def reset_pin(driver_id: str, new_pin: str, reset_by: str) -> dict:
     if not record:
         raise DriverPinError(f"No PIN card for driver: {driver_id}")
     record["pin_hash"] = generate_password_hash(new_pin)
-    record["failed_attempt_count"] = 0
-    record["locked_until"] = None
+    from dispatch import authcounters
+
+    authcounters.clear(authcounters.KIND_DRIVER, driver_id)
     record["updated_at"] = _utc_now()
     _save(data)
     _log_event("DRIVER_PIN_CHANGED", driver_id, {"reason": "authority_reset", "reset_by": reset_by})
@@ -232,25 +243,24 @@ def verify_login(phone: str, pin: str) -> dict | None:
         _log_event("DRIVER_LOGIN_FAILURE", driver["driver_id"], {"reason": "locked"})
         return None
 
+    from dispatch import authcounters
+
+    driver_id = driver["driver_id"]
     if check_password_hash(record["pin_hash"], pin or ""):
-        record["failed_attempt_count"] = 0
-        record["locked_until"] = None
+        authcounters.record_success(authcounters.KIND_DRIVER, driver_id)
         record["last_login_at"] = _utc_now()
         record["updated_at"] = _utc_now()
         _save(data)
-        _log_event("DRIVER_LOGIN_SUCCESS", driver["driver_id"], {})
+        _log_event("DRIVER_LOGIN_SUCCESS", driver_id, {})
         return _public(record)
 
-    record["failed_attempt_count"] = record.get("failed_attempt_count", 0) + 1
-    if record["failed_attempt_count"] >= MAX_FAILED_ATTEMPTS:
-        record["locked_until"] = (
-            datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_MINUTES)
-        ).strftime("%Y-%m-%dT%H:%M:%SZ")
-    record["updated_at"] = _utc_now()
-    _save(data)
+    state = authcounters.record_failure(
+        authcounters.KIND_DRIVER, driver_id,
+        max_attempts=MAX_FAILED_ATTEMPTS, lockout_minutes=LOCKOUT_MINUTES,
+    )
     _log_event(
-        "DRIVER_LOGIN_FAILURE", driver["driver_id"],
-        {"reason": "bad_pin", "failed_attempt_count": record["failed_attempt_count"]},
+        "DRIVER_LOGIN_FAILURE", driver_id,
+        {"reason": "bad_pin", "failed_attempt_count": state["failed_attempt_count"]},
     )
     return None
 
@@ -292,8 +302,9 @@ def reset_pin_with_recovery_word(phone: str, recovery_word: str, new_pin: str) -
     data = _load()
     record = data[driver_id]
     record["pin_hash"] = generate_password_hash(new_pin)
-    record["failed_attempt_count"] = 0
-    record["locked_until"] = None
+    from dispatch import authcounters
+
+    authcounters.clear(authcounters.KIND_DRIVER, driver_id)
     record["updated_at"] = _utc_now()
     _save(data)
     _log_event("DRIVER_PIN_CHANGED", driver_id, {"reason": "self_service_recovery_word"})
