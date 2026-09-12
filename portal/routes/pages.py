@@ -206,9 +206,15 @@ def dispatch_detail(load_id):
     stakeholder_url = url_for(
         "stakeholder.stakeholder_view", load_id=load_id, token=stakeholder_token, _external=True
     )
+    # Does this load fit the truck it is on? Advisory, non-mutating, and
+    # UNCONFIGURED rather than silent when the truck has no profile on file --
+    # the capacity engine was unreachable from any screen until now.
+    capacity_view = dispatch_svc.assess_load_capacity(load_id)
+
     return render_template(
         "dispatch_detail.html",
         stakeholder_url=stakeholder_url,
+        capacity_view=capacity_view,
         load_statuses=LOAD_STATUSES,
         milestone_types=MILESTONE_TYPES,
         milestone_sources=MILESTONE_SOURCES,

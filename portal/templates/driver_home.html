@@ -102,7 +102,7 @@
 
     <table>
         <tr><td class="label">Customer</td><td><strong>{{ active_card.load.customer or '—' }}</strong></td></tr>
-        <tr><td class="label">Pickup Window</td><td>{{ active_card.load.pickup_datetime or '—' }}</td></tr>
+        <tr><td class="label">Pickup Window</td><td>{{ active_card.load.pickup_datetime|local_time or '—' }}</td></tr>
         <tr><td class="label">Delivery Window</td><td>{{ active_card.load.delivery_datetime or '—' }}</td></tr>
         <tr><td class="label">Next Milestone</td><td><strong>{{ active_card.mission_visibility.next_expected_milestone or '—' }}</strong></td></tr>
         <tr><td class="label">Route Risk</td><td>{{ active_card.route_risk.summary }}</td></tr>
@@ -282,7 +282,7 @@
             </h3>
             <table>
                 <tr><td class="label">Customer</td><td>{{ lc.load.customer or '—' }}</td></tr>
-                <tr><td class="label">Pickup</td><td>{{ lc.load.pickup_datetime or '—' }}</td></tr>
+                <tr><td class="label">Pickup</td><td>{{ lc.load.pickup_datetime|local_time or '—' }}</td></tr>
                 <tr><td class="label">Delivery</td><td>{{ lc.load.delivery_datetime or '—' }}</td></tr>
                 <tr><td class="label">Communications (COMI)</td><td>{{ lc.comi_status }}</td></tr>
                 <tr><td class="label">Next Expected</td><td>{{ lc.mission_visibility.next_expected_milestone or '—' }}</td></tr>

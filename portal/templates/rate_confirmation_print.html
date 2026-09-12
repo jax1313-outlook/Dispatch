@@ -80,8 +80,8 @@
             <div class="info-item"><span class="info-label">Broker / Shipper</span><span class="info-value">{{ load.broker_shipper or '—' }}</span></div>
             <div class="info-item"><span class="info-label">Pickup Location</span><span class="info-value">{{ load.pickup_location or '—' }}</span></div>
             <div class="info-item"><span class="info-label">Delivery Location</span><span class="info-value">{{ load.delivery_location or '—' }}</span></div>
-            <div class="info-item"><span class="info-label">Pickup Date/Time</span><span class="info-value">{{ load.pickup_datetime or '—' }}</span></div>
-            <div class="info-item"><span class="info-label">Delivery Date/Time</span><span class="info-value">{{ load.delivery_datetime or '—' }}</span></div>
+            <div class="info-item"><span class="info-label">Pickup Date/Time</span><span class="info-value">{{ load.pickup_datetime|local_time or '—' }}</span></div>
+            <div class="info-item"><span class="info-label">Delivery Date/Time</span><span class="info-value">{{ load.delivery_datetime|local_time or '—' }}</span></div>
             <div class="info-item"><span class="info-label">Equipment Type</span><span class="info-value">{{ load.equipment or '—' }}</span></div>
             {% if assigned_driver %}
             <div class="info-item"><span class="info-label">Driver</span><span class="info-value">{{ assigned_driver.name }}</span></div>

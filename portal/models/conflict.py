@@ -266,17 +266,24 @@ def _parse_window_end(window: str):
 
 
 def _parse_datetime(dt_str: str):
-    """Best-effort parse of a datetime string."""
+    """The instant, in UTC, or None when it cannot be read.
+
+    This was a fourth hand-rolled datetime parser with its own format list, and
+    none of the formats carried an offset -- so as soon as appointment times
+    started being stored unambiguously (dispatch/timestamps.py) every one of
+    them parsed as None and conflict detection silently stopped finding
+    anything. A detector that quietly returns "no conflicts" is worse than one
+    that is absent.
+
+    Delegating to dispatch.timestamps means one parser, one answer, and
+    comparisons in UTC -- comparing a naive 06:00 against an aware 06:00-04:00
+    is how an overlap gets missed by four hours.
+    """
     if not dt_str:
         return None
-    from datetime import datetime as dt_cls
-    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S",
-                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-        try:
-            return dt_cls.strptime(dt_str.strip(), fmt)
-        except ValueError:
-            continue
-    return None
+    from dispatch.timestamps import to_utc
+
+    return to_utc(dt_str)
 
 
 def _windows_overlap(start_a, end_a, start_b, end_b) -> bool:

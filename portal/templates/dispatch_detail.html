@@ -55,8 +55,35 @@
             <div><strong>Broker / Shipper:</strong> {{ load.broker_shipper or '—' }}</div>
             <div><strong>Pickup Location:</strong> {{ load.pickup_location or '—' }}</div>
             <div><strong>Delivery Location:</strong> {{ load.delivery_location or '—' }}</div>
-            <div><strong>Pickup Time:</strong> {{ load.pickup_datetime or '—' }}</div>
-            <div><strong>Delivery Time:</strong> {{ load.delivery_datetime or '—' }}</div>
+            <div><strong>Pickup Time:</strong> {{ load.pickup_datetime|local_time or '—' }}</div>
+        </div>
+        <div class="card-section" id="capacity-assessment">
+            <h3>Does this load fit the truck?</h3>
+            {% if capacity_view.status != 'LIVE' %}
+                <p><span class="truth truth-unconfigured">UNCONFIGURED</span>
+                   {{ capacity_view.reason }}</p>
+            {% else %}
+                {% set a = capacity_view.assessment %}
+                <p><span class="truth truth-live">LIVE</span>
+                   Assessed against truck {{ capacity_view.equipment_id }}.
+                   <strong>{{ a.status }}</strong></p>
+                {% if a.findings %}
+                <ul>
+                    {% for f in a.findings %}
+                    <li><strong>{{ f.severity }}</strong> · {{ f.dimension }} — {{ f.message }}
+                        {% if f.requires_human_review %}<em>(needs a person)</em>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p>No capacity findings.</p>
+                {% endif %}
+                <p class="muted">Advisory only. Nothing is reserved and nothing is recorded
+                   by looking at this.</p>
+            {% endif %}
+        </div>
+        <div>
+            <div><strong>Delivery Time:</strong> {{ load.delivery_datetime|local_time or '—' }}</div>
             <div><strong>Equipment:</strong> {{ load.equipment or '—' }}</div>
             <div><strong>Driver:</strong> {{ load.driver or '—' }}</div>
             <div><strong>Driver ID:</strong> {{ load.driver_id or '—' }}</div>
@@ -88,9 +115,9 @@
                 <div><label><strong>Delivery Location</strong><br>
                     <input type="text" name="delivery_location" value="{{ load.delivery_location or '' }}" style="width:100%;padding:4px 8px;"></label></div>
                 <div><label><strong>Pickup Time</strong><br>
-                    <input type="text" name="pickup_datetime" value="{{ load.pickup_datetime or '' }}" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+                    <input type="text" name="pickup_datetime" value="{{ load.pickup_datetime or '' }}" placeholder="YYYY-MM-DD HH:MM ({{ operating_timezone() }})" style="width:100%;padding:4px 8px;"></label></div>
                 <div><label><strong>Delivery Time</strong><br>
-                    <input type="text" name="delivery_datetime" value="{{ load.delivery_datetime or '' }}" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+                    <input type="text" name="delivery_datetime" value="{{ load.delivery_datetime or '' }}" placeholder="YYYY-MM-DD HH:MM ({{ operating_timezone() }})" style="width:100%;padding:4px 8px;"></label></div>
                 <div><label><strong>Source</strong><br>
                     <select name="source" style="width:100%;padding:4px 8px;">
                         <option value="">— None —</option>

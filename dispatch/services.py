@@ -38,7 +38,7 @@ from dispatch.models import (
     Settlement,
     _utc_now,
 )
-from dispatch import db, delivery, money, notifications, store
+from dispatch import db, delivery, money, notifications, store, timestamps
 
 
 import sys
@@ -182,8 +182,8 @@ def create_load(
         broker_shipper=broker_shipper,
         pickup_location=pickup_location,
         delivery_location=delivery_location,
-        pickup_datetime=pickup_datetime,
-        delivery_datetime=delivery_datetime,
+        pickup_datetime=timestamps.normalize(pickup_datetime)["value"],
+        delivery_datetime=timestamps.normalize(delivery_datetime)["value"],
         equipment=equipment,
         driver=driver,
         driver_id=driver_id,
@@ -275,6 +275,22 @@ def _record_status_change(
     ))
 
 
+def _normalize_appointment_fields(fields: dict) -> dict:
+    """Attach the operator's zone to an appointment time typed without one.
+
+    Not a guess: a dispatcher who types 08:00 means eight in the morning where
+    they are, and recording that is what makes the value usable. Attaching UTC
+    would be the guess. A value that already carries an offset is left alone,
+    and one that cannot be read at all is stored exactly as typed -- see
+    dispatch/timestamps.py for why both of those matter.
+    """
+    out = dict(fields)
+    for name in ("pickup_datetime", "delivery_datetime"):
+        if name in out:
+            out[name] = timestamps.normalize(out[name])["value"]
+    return out
+
+
 def update_load(load_id: str, **fields) -> dict | None:
     if "driver_id" in fields and fields["driver_id"]:
         _validate_driver_assignment(fields["driver_id"])
@@ -289,7 +305,7 @@ def update_load(load_id: str, **fields) -> dict | None:
         if current:
             old_status = current["status"]
             validate_status_transition(old_status, fields["status"])
-    result = store.update_load(load_id, **fields)
+    result = store.update_load(load_id, **_normalize_appointment_fields(fields))
     if result and old_status and "status" in fields:
         # Trigger condition deliberately unchanged from before C3, including
         # for a no-op write where old_status == fields["status"]. Preserving
@@ -2155,13 +2171,31 @@ def get_load_calendar(year: int, month: int) -> dict:
     delivery_by_day: dict[str, list[dict]] = defaultdict(list)
 
     month_prefix = f"{year:04d}-{month:02d}"
+    unreadable: list[dict] = []
     for ld in all_loads:
-        p = ld.get("pickup_datetime", "")
-        if p and p[:7] == month_prefix:
-            pickup_by_day[p[:10]].append(ld)
-        d = ld.get("delivery_datetime", "")
-        if d and d[:7] == month_prefix:
-            delivery_by_day[d[:10]].append(ld)
+        # Parsed, not string-sliced. `p[:7] == "2026-09"` on a free-text field
+        # meant a load typed as "9/14/2026 08:00" -- the format a US dispatcher
+        # writes by hand, and one the text input accepts without complaint --
+        # was silently absent from the calendar: no error, no warning, no row.
+        # It also read the day off the raw string, so a delivery at
+        # 2026-09-15T01:00Z landed on the 15th when for a dispatcher in Eastern
+        # time it is the evening of the 14th.
+        pickup_day = timestamps.local_date(ld.get("pickup_datetime"))
+        if pickup_day[:7] == month_prefix:
+            pickup_by_day[pickup_day].append(ld)
+        delivery_day = timestamps.local_date(ld.get("delivery_datetime"))
+        if delivery_day[:7] == month_prefix:
+            delivery_by_day[delivery_day].append(ld)
+
+        # A load whose appointment cannot be read is reported rather than
+        # dropped. Silent omission from the one view that is meant to show
+        # everything is the defect this replaces.
+        for field_name in ("pickup_datetime", "delivery_datetime"):
+            raw = ld.get(field_name) or ""
+            if raw and timestamps.normalize(raw)["status"] == timestamps.UNVERIFIED:
+                unreadable.append(
+                    {"load_id": ld["load_id"], "field": field_name, "value": raw}
+                )
 
     cal = calendar.Calendar(firstweekday=6)
     weeks = cal.monthdayscalendar(year, month)
@@ -2173,6 +2207,8 @@ def get_load_calendar(year: int, month: int) -> dict:
         "weeks": weeks,
         "pickups": dict(pickup_by_day),
         "deliveries": dict(delivery_by_day),
+        "unreadable": unreadable,
+        "timezone": timestamps.timezone_name(),
     }
 
 
@@ -3536,4 +3572,120 @@ def check_compliance_alerts() -> dict:
     return {
         "expired": expired_count,
         "expiring_soon": expiring_count,
+    }
+
+
+# ── Capacity ──────────────────────────────────────────────────────────
+#
+# The capacity engine reaches production here. Before this, `DynamicCapacity`
+# was never instantiated outside tests, there was no table for a profile, and
+# the one production call into scoring passed no capacity at all -- so 1,861
+# lines of the most careful reasoning in the repository evaluated nothing.
+
+
+@atomic
+def set_equipment_capacity_profile(
+    equipment_id: str,
+    *,
+    max_weight_lbs: float,
+    max_volume_cuft: float = 0.0,
+    max_linear_feet: float = 0.0,
+    max_pallets: int = 0,
+    equipment_type: str = "dry_van",
+    source: str,
+    verified_by: str | None = None,
+    has_liftgate: bool = False,
+    has_ramp: bool = False,
+    has_temp_control: bool = False,
+    driver_id: str = "",
+) -> dict:
+    """Record what a truck can physically carry.
+
+    `source` is required and `verified_by` has no default, because
+    `apply_asset_profile` refuses to manufacture a verification -- a
+    specification nobody signed for is CONFIGURED, not VERIFIED, and the
+    difference decides whether a refusal is trustworthy.
+    """
+    from dispatch import capacity_store
+    from dispatch.capacity import DynamicCapacity
+
+    equipment = store.get_equipment(equipment_id)
+    if not equipment:
+        raise ValueError(f"Equipment not found: {equipment_id}")
+
+    existing = capacity_store.load_capacity(equipment_id, driver_id=driver_id)
+    capacity = existing or DynamicCapacity(equipment_id=equipment_id, driver_id=driver_id)
+    capacity.apply_asset_profile(
+        asset_profile_id=f"AP-{equipment_id}",
+        max_weight_lbs=max_weight_lbs,
+        max_volume_cuft=max_volume_cuft,
+        max_linear_feet=max_linear_feet,
+        max_pallets=max_pallets,
+        source=source,
+        equipment_type=equipment_type or equipment.get("equipment_type", "dry_van"),
+        verified_by=verified_by,
+        has_liftgate=has_liftgate,
+        has_ramp=has_ramp,
+        has_temp_control=has_temp_control,
+    )
+    return capacity_store.save_profile(capacity)
+
+
+def get_equipment_capacity_profile(equipment_id: str) -> dict | None:
+    from dispatch import capacity_store
+
+    return capacity_store.get_profile_row(equipment_id)
+
+
+def capacity_coverage() -> dict:
+    """Which trucks can be assessed at all. UNCONFIGURED is a fact, not a gap."""
+    from dispatch import capacity_store
+
+    return capacity_store.profile_coverage()
+
+
+def assess_load_capacity(load_id: str) -> dict:
+    """Does this load fit the truck it is assigned to?
+
+    Advisory and non-mutating, exactly as `scoring.assess_capacity` promises: it
+    reserves nothing and records nothing. A load with no equipment assigned, or
+    a truck with no profile on file, is UNCONFIGURED -- never "probably fine".
+    Inventing a specification is how freight gets accepted onto a trailer that
+    cannot carry it.
+    """
+    from dispatch import capacity_store, scoring
+
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+
+    equipment_id = load.get("equipment_id") or ""
+    if not equipment_id:
+        return {
+            "status": "UNCONFIGURED",
+            "reason": "No truck is assigned to this load, so there is nothing to assess it against.",
+            "load_id": load_id,
+            "assessment": None,
+        }
+
+    capacity = capacity_store.load_capacity(equipment_id, driver_id=load.get("driver_id", ""))
+    if capacity is None:
+        return {
+            "status": "UNCONFIGURED",
+            "reason": (
+                f"Truck {equipment_id} has no capacity profile on file. "
+                "Record what it can carry on the equipment page before Dispatch can "
+                "say whether a load fits it."
+            ),
+            "load_id": load_id,
+            "equipment_id": equipment_id,
+            "assessment": None,
+        }
+
+    assessment = scoring.assess_capacity(load, capacity)
+    return {
+        "status": "LIVE",
+        "load_id": load_id,
+        "equipment_id": equipment_id,
+        "assessment": assessment.to_dict() if hasattr(assessment, "to_dict") else assessment,
     }
