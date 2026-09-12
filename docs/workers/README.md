@@ -1,0 +1,18 @@
+# WORKER GOVERNANCE DOCUMENTATION POINTER
+
+Per WORKER REPOSITORY AUTHORITY, all authoritative Worker Framework governance and design documents are located under:
+
+`dispatch operations/workers/Governance/` (`D:\Dispatch Operations\Workers\Governance\`)
+
+### Governance Document Inventory
+- `01_WORKER_FRAMEWORK_DESIGN.md`
+- `02_WORKER_INTEGRATION_PLAN.md`
+- `03_WORKER_HANDOFF_MATRIX.md`
+- `04_JOE_IMPLEMENTATION_PLAN.md`
+- `05_INTELLIGENCE_IMPLEMENTATION_PLAN.md`
+- `06_PUBLISHER_IMPLEMENTATION_PLAN.md`
+- `CANONICAL_WORKER_FILE_INVENTORY.md`
+- `COMMIT_TRANSACTION_TRACE.md`
+- `OUTLOOK_DRAFT_PROOF.md`
+- `PRE_SUBMISSION_CORRECTION_REPORT.md`
+- `REHEARSAL_ACCEPTANCE_TEST.md`
