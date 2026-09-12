@@ -1,24 +1,3 @@
-"""Dispatch Worker Framework Package.
+"""Proxy init re-exporting from authoritative workspace dispatch operations/workers/worker_framework."""
 
-Provides core base classes, governance models, worker registry, and handoff execution engine.
-"""
-
-from dispatch.workers.worker_framework.base import (
-    BaseWorker,
-    HandoffEvent,
-    HandoffRunner,
-    WorkerConstitution,
-    WorkerRegistry,
-    HumanCommitmentRequiredError,
-    WorkerBoundaryViolationError,
-)
-
-__all__ = [
-    "BaseWorker",
-    "HandoffEvent",
-    "HandoffRunner",
-    "WorkerConstitution",
-    "WorkerRegistry",
-    "HumanCommitmentRequiredError",
-    "WorkerBoundaryViolationError",
-]
+from dispatch_operations.workers.worker_framework import *  # noqa: F401, F403

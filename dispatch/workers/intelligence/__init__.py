@@ -1,8 +1,3 @@
-"""Intelligence Worker Package.
+"""Proxy init re-exporting from authoritative workspace dispatch operations/workers/Intelligence."""
 
-Pre-commit dynamic capacity analysis, load scoring, and calendar recommendation worker.
-"""
-
-from dispatch.workers.intelligence.worker import IntelligenceWorker
-
-__all__ = ["IntelligenceWorker"]
+from dispatch_operations.workers.Intelligence import *  # noqa: F401, F403

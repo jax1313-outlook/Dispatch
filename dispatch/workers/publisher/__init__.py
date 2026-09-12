@@ -1,8 +1,3 @@
-"""Publisher Worker Package.
+"""Proxy init re-exporting from authoritative workspace dispatch operations/workers/Publisher."""
 
-Commitment package lifecycle, rate confirmation production, and Outlook email draft generation worker.
-"""
-
-from dispatch.workers.publisher.worker import PublisherWorker
-
-__all__ = ["PublisherWorker"]
+from dispatch_operations.workers.Publisher import *  # noqa: F401, F403

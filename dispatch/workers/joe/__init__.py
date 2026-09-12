@@ -1,8 +1,3 @@
-"""Joe Worker Package.
+"""Proxy init re-exporting from authoritative workspace dispatch operations/workers/Joe."""
 
-Voice capture, driver communication, dictation parsing, and Opportunity Card creation worker.
-"""
-
-from dispatch.workers.joe.worker import JoeWorker
-
-__all__ = ["JoeWorker"]
+from dispatch_operations.workers.Joe import *  # noqa: F401, F403
