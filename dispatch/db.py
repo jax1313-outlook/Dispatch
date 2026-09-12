@@ -456,6 +456,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # lifecycle truth." The branch this was recovered from also initialised a
     # `dispatch.security` schema here; that stack is superseded by the Portal
     # PIN gate already on main (CF-03) and was deliberately not recovered.
+    from dispatch.authcounters import init_auth_counter_schema
     from dispatch.connectors.audit import init_connector_schema
     from dispatch.spine.db import init_spine_schema
     from dispatch.tokens import init_token_schema
@@ -463,6 +464,10 @@ def _init_db(conn: sqlite3.Connection) -> None:
     init_connector_schema(conn)
     init_spine_schema(conn)
     init_token_schema(conn)
+    # Failed-attempt counters. They live in SQLite rather than beside the PIN
+    # hash in its JSON store because a lost update on a lockout counter is not a
+    # cosmetic race -- see dispatch/authcounters.py.
+    init_auth_counter_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
@@ -517,7 +522,7 @@ BUSY_TIMEOUT_MS = int(os.environ.get("DISPATCH_SQLITE_BUSY_TIMEOUT_MS", "5000"))
 #: `schema_state` after a successful initialisation so a later connection can
 #: tell "already built, and built by this version of the code" from "built by
 #: an older one" with a single cheap read.
-SCHEMA_REVISION = 1
+SCHEMA_REVISION = 2
 
 #: Database paths this *process* has already initialised. The expensive part of
 #: `_init_db` is not the work, it is that it ran on every one of the ~160
@@ -669,15 +674,66 @@ def unit_of_work():
 
     conn = _open()
     _ACTIVE.conn = conn
+    _ACTIVE.after_commit = []
     try:
         yield conn
         conn.commit()
+        committed = True
     except Exception:
         conn.rollback()
+        committed = False
         raise
     finally:
+        callbacks = list(getattr(_ACTIVE, "after_commit", None) or ())
+        # Back to None, not to an empty list: `after_commit()` distinguishes
+        # "a unit of work is collecting callbacks" from "there is none, run it
+        # now" by exactly this, and leaving a drained list behind made every
+        # later call outside a transaction queue onto a list nobody would run.
+        _ACTIVE.after_commit = None
         _ACTIVE.conn = None
         conn.close()
+
+    if committed:
+        _run_after_commit(callbacks)
+
+
+def after_commit(callback) -> None:
+    """Run `callback` once the surrounding unit of work has committed.
+
+    Two things this exists for, and they are the same thing seen from either end.
+
+    An email must not be sent for a transaction that then rolls back. Announcing
+    a delivery to a broker for a milestone the database subsequently discarded is
+    the worst failure this system can have, and it is invisible -- the send
+    succeeded.
+
+    And a transaction must not be held open across a network call. smtplib's
+    timeout here is thirty seconds; a write lock held for thirty seconds turns
+    every other writer into a "database is locked" error, including the driver
+    reporting the next milestone.
+
+    With no unit of work open the callback runs immediately, which is what every
+    existing single-write call site already did.
+    """
+    pending = getattr(_ACTIVE, "after_commit", None)
+    if pending is None:
+        callback()
+        return
+    pending.append(callback)
+
+
+def _run_after_commit(callbacks) -> None:
+    """Never let a post-commit side effect undo a committed transaction."""
+    import sys as _sys
+
+    for callback in callbacks:
+        try:
+            callback()
+        except Exception as exc:  # noqa: BLE001 - a side effect, not the work
+            print(
+                f"[dispatch.db] after-commit callback failed, continuing: {exc}",
+                file=_sys.stderr,
+            )
 
 
 def in_unit_of_work() -> bool:
