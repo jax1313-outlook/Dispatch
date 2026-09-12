@@ -28,6 +28,13 @@ from cin_lite.email_delivery import (
     reviewer_address,
 )
 
+# Register the newer transports (Microsoft Graph, SMTP XOAUTH2) into cin_lite's
+# one send function. A no-op unless this machine is configured for one of them,
+# and cin_lite still imports nothing from dispatch -- see dispatch/outbound.py.
+from dispatch import outbound as _outbound
+
+_outbound.install()
+
 _LOAD_DECISION = "load_decision"
 _STAKEHOLDER = "stakeholder_view"
 
