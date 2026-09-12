@@ -761,3 +761,21 @@ body {
 .sample-data-banner .btn {
     margin-left: 10px;
 }
+
+/* Flashed messages — Maintenance actions report their outcome after the fact. */
+.flashes { list-style: none; margin: 0 0 16px; padding: 0; }
+.flash { padding: 10px 14px; border-radius: 4px; margin-bottom: 8px; font-size: 14px; }
+.flash-success { background: #eafaf1; color: #1e8449; border: 1px solid #a9dfbf; }
+.flash-error { background: #fdedec; color: #a93226; border: 1px solid #f5b7b1; }
+
+/* Truth vocabulary. The eight words are rendered as themselves everywhere; the
+   colour is the only thing that changes, never the word. */
+.truth { display:inline-block; padding:1px 8px; border-radius:3px; font-size:12px; font-weight:700; letter-spacing:.4px; }
+.truth-live { background:#eafaf1; color:#1e8449; }
+.truth-configured { background:#e8f4fd; color:#2471a3; }
+.truth-unconfigured { background:#f2f3f4; color:#707b7c; }
+.truth-simulated { background:#fef9e7; color:#b7950b; }
+.truth-unavailable { background:#fdedec; color:#a93226; }
+.truth-manual { background:#f4ecf7; color:#7d3c98; }
+.truth-absent { background:#f2f3f4; color:#566573; }
+.truth-unverified { background:#fdf2e9; color:#ca6f1e; }

@@ -44,12 +44,13 @@ RESTART = "↻"        # ↻
 RESET = "⎌"          # ⎌
 STOP = "■"           # ■
 RESET_PIN = "\U0001f511"  # 🔑
+BACKUP = "\U0001f4be"    # 💾
 
 #: Every glyph the menu uses. If the stream cannot encode all of them it gets
 #: none of them -- a menu where three rows have icons and five do not looks
 #: broken, and "looks broken" is indistinguishable from "is broken" to someone
 #: deciding whether to trust the thing with their business.
-ALL = (START, OPEN, REFRESH, SETTINGS, VERSION, RESTART, RESET, STOP, RESET_PIN)
+ALL = (START, OPEN, REFRESH, SETTINGS, VERSION, RESTART, RESET, STOP, RESET_PIN, BACKUP)
 
 
 def stream_supports(stream=None) -> bool:

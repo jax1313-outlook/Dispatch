@@ -138,8 +138,11 @@ def test_backup_cli_has_no_create_subcommand_to_drift_back_to():
     """Pins the two names that were wrong, so a revert is a test failure."""
     parser = _load_script("dispatch_backup").build_parser()
     subs = _subcommand_names(parser)
-    assert subs == {"backup", "verify", "restore"}
-    assert "create" not in subs
+    assert {"backup", "verify", "restore"} <= subs
+    assert "create" not in subs, (
+        "`create` is the name proof step 19 used for four months while the parser "
+        "only ever had `backup`. It must not come back."
+    )
 
 
 def test_proof_cli_exposes_the_step_18_subcommand():

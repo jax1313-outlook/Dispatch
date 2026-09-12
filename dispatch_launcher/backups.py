@@ -212,6 +212,37 @@ def backup_status(backup_dir: str | Path | None) -> BackupStatus:
             ),
         )
 
+    # Who performed the restore decides the state, and it always did -- what
+    # changed is that something in this program can now perform one. A machine
+    # can prove the archive restores into an isolated destination and that every
+    # hash matches. It cannot prove the restored Dispatch works, because that is
+    # a person opening it and looking. So a Code-automated record raises the
+    # detail and leaves the state at UNVERIFIED; only a named human reaches
+    # VERIFIED. Manufacturing the second from the first is the exact claim this
+    # module was written to refuse.
+    # An *absent* performed_by is not treated as a machine record. Until this
+    # program could perform a restore at all, the only way one of these files
+    # could exist was a person writing it, so an unlabelled record is that
+    # person's and keeping it VERIFIED is the honest reading of it. Going
+    # forward every record carries the field, so the ambiguity does not recur.
+    performed_by = str(verification.get("performed_by", "")).strip()
+    if performed_by == "Code-automated":
+        return BackupStatus(
+            state=UNVERIFIED,
+            location=str(newest),
+            created_at=created_at,
+            created_at_source=created_source,
+            verification=verification,
+            detail=(
+                "This backup was restored into an isolated destination by the program on "
+                f"{verification.get('restored_at', 'an unrecorded date')} and every hash "
+                "matched. Nobody has opened the restored Dispatch and confirmed it works, "
+                "so it is not VERIFIED. Do that and record it with:  "
+                "python -m dispatch_launcher prove-restore --confirmed-by \"Mike\""
+            ),
+        )
+
+    who = f"by {performed_by} " if performed_by else ""
     return BackupStatus(
         state=VERIFIED,
         location=str(newest),
@@ -219,7 +250,7 @@ def backup_status(backup_dir: str | Path | None) -> BackupStatus:
         created_at_source=created_source,
         verification=verification,
         detail=(
-            "A restore verification record exists for this backup: "
-            f"{verification.get('record_path')}"
+            f"A restore verification record exists for this backup, recorded {who}"
+            f"({verification.get('record_path')})."
         ),
     )

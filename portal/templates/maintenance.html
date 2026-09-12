@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Maintenance — Dispatch{% endblock %}
+{% block page_title %}Maintenance{% endblock %}
+
+{% block body %}
+<div class="card-section">
+    <h2>Backups</h2>
+
+    {# The truth vocabulary, rendered as-is. No screen restates a backup's state
+       in friendlier words: UNVERIFIED means nobody has restored it, and softening
+       that to "ready" is exactly how an unrestored backup becomes a assumption. #}
+    <p>
+        <strong>Status:</strong>
+        <span class="truth truth-{{ backup.state|lower }}">{{ backup.state }}</span>
+    </p>
+    <p>{{ backup.detail }}</p>
+
+    <table class="data-table">
+        <tr><td class="label">Backup location</td>
+            <td>{{ backup_dir or 'Not configured — set DISPATCH_BACKUP_DIR' }}</td></tr>
+        {% if backup.location %}
+        <tr><td class="label">Newest archive</td><td>{{ backup.location }}</td></tr>
+        {% endif %}
+        {% if backup.created_at %}
+        <tr><td class="label">Taken</td>
+            <td>{{ backup.created_at }}
+                {% if backup.created_at_source %}<em>(from the {{ backup.created_at_source }})</em>{% endif %}
+            </td></tr>
+        {% endif %}
+    </table>
+
+    <form method="post" action="{{ url_for('maintenance.run_backup') }}" style="display:inline-block;margin-right:12px;">
+        <label style="font-weight:normal;">
+            <input type="checkbox" name="compress" value="1"> compress
+        </label>
+        <button class="btn btn-success" type="submit">Back Up Now</button>
+    </form>
+
+    <form method="post" action="{{ url_for('maintenance.run_prove_restore') }}" style="display:inline-block;">
+        <input type="text" name="confirmed_by" placeholder="your name (only after you have checked it)"
+               style="width:280px;padding:4px 8px;">
+        <button class="btn" type="submit">Prove a Restore</button>
+    </form>
+
+    <p class="muted" style="margin-top:10px;">
+        Leave the name blank and the restore is recorded as <code>Code-automated</code>:
+        the archive restored into an isolated scratch directory and every hash matched.
+        The status stays UNVERIFIED until a person opens a restored copy and confirms
+        it works, and types their name here. Dispatch does not make that claim on
+        anyone's behalf.
+    </p>
+
+    <p class="muted">
+        To run one every night:
+        <code>python -m dispatch_launcher schedule-backup</code> prints the exact command.
+    </p>
+</div>
+
+<div class="card-section">
+    <h2>Stored money</h2>
+    <p>
+        Every monetary column carries an exact whole-cent companion, so totals are
+        added up in cents rather than in floating point.
+        <strong>{{ money_report.covered }} of {{ money_report.total }}</strong> columns covered.
+    </p>
+    {% if not money_integrity.ok %}
+    <p><strong>{{ money_integrity.findings|length }}</strong> stored amounts are not a whole
+       number of cents. These are reported, never corrected automatically — which way
+       a fractional cent should go is a decision about somebody's invoice.</p>
+    <table class="data-table">
+        <tr><th>Table</th><th>Column</th><th>Row</th><th>Stored</th><th>Rounds to</th></tr>
+        {% for f in money_integrity.findings[:25] %}
+        <tr><td>{{ f.table }}</td><td>{{ f.column }}</td><td>{{ f.rowid }}</td>
+            <td>{{ f.stored }}</td><td>{{ f.rounds_to_cents }}</td></tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p>Every stored amount is a whole number of cents.</p>
+    {% endif %}
+</div>
+{% endblock %}
