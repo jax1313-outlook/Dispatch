@@ -1,0 +1,22 @@
+{
+  "worker_id": "PUBLISHER",
+  "worker_name": "Commitment Package Publisher Worker",
+  "constitution_version": "1.0.0",
+  "enabled": true,
+  "responsibilities": [
+    "Consume Committed Mission Card",
+    "Retrieve Library Assets",
+    "Incorporate Archive Examples",
+    "Produce Rate Confirmation Packets",
+    "Generate Outlook Email Drafts"
+  ],
+  "boundaries": {
+    "may_commit": false,
+    "may_send_email_autonomously": false,
+    "requires_human_approval_for_send": true
+  },
+  "handoff_targets": [
+    "DISPATCH",
+    "HUMAN_OUTLOOK_REVIEW"
+  ]
+}

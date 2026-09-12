@@ -1,0 +1,22 @@
+{
+  "worker_id": "JOE",
+  "worker_name": "Joe Voice & Communication Worker",
+  "constitution_version": "1.0.0",
+  "enabled": true,
+  "responsibilities": [
+    "Voice Capture",
+    "Communication",
+    "Opportunity Card Creation",
+    "Human Interaction",
+    "Driver Routing"
+  ],
+  "boundaries": {
+    "may_commit": false,
+    "may_own_workflow": false,
+    "may_own_dispatch": false,
+    "max_70mph_cockpit_complexity": "MINIMAL"
+  },
+  "handoff_targets": [
+    "INTELLIGENCE"
+  ]
+}
