@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -431,12 +432,53 @@ _db_path_override: Path | None = None
 def set_db_path(path: Path | None) -> None:
     global _db_path_override
     _db_path_override = path
+    # Whoever redirects the database is starting over somewhere else. Forget
+    # what this process believes it has already built, so the next connection
+    # builds the schema against the new file rather than trusting a memo that
+    # was made about a different one.
+    forget_initialised_schemas()
 
 
 def get_db_path() -> Path:
     if _db_path_override is not None:
         return _db_path_override
     return _default_db_path()
+
+
+#: Databases whose schema this process has already built.
+#:
+#: `_init_db` is idempotent -- every statement in it is `IF NOT EXISTS` or a
+#: guarded `ALTER` -- so running it on every connection was correct. It was
+#: just wasteful: several hundred DDL statements, parsed and executed against
+#: SQLite's catalogue, before the connection could answer the question it was
+#: opened to answer. On a page that opens a handful of connections that is the
+#: page's whole cost.
+#:
+#: Keyed by path, so redirecting the database (a test, a second profile) still
+#: gets its schema built. Guarded by a lock, because the portal serves requests
+#: on threads and two of them may open the first connection at the same moment.
+_INITIALISED_SCHEMAS: set[str] = set()
+_INIT_LOCK = threading.Lock()
+
+
+def forget_initialised_schemas() -> None:
+    """Drop the memo of which schemas this process has built.
+
+    For anything that replaces the database underneath a running process --
+    a restore, a test fixture -- so the next connection rebuilds rather than
+    assuming.
+    """
+    with _INIT_LOCK:
+        _INITIALISED_SCHEMAS.clear()
+
+
+def _init_db_once(conn: sqlite3.Connection, path: Path, rebuild: bool = False) -> None:
+    key = str(path)
+    with _INIT_LOCK:
+        if key in _INITIALISED_SCHEMAS and not rebuild:
+            return
+        _init_db(conn)
+        _INITIALISED_SCHEMAS.add(key)
 
 
 def _init_db(conn: sqlite3.Connection) -> None:
@@ -551,6 +593,10 @@ def _ensure_wal(conn: sqlite3.Connection) -> None:
 def get_connection():
     path = get_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Asked before connect(), because connect() creates the file. If the
+    # database is not there, any memo this process holds about it is stale --
+    # the schema has to be built again whatever we think we did earlier.
+    missing = not path.exists()
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     # First, before anything that can take a lock. `journal_mode=WAL` is one:
@@ -566,7 +612,7 @@ def get_connection():
     conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     conn.execute("PRAGMA foreign_keys=ON")
     _ensure_wal(conn)
-    _init_db(conn)
+    _init_db_once(conn, path, rebuild=missing)
     try:
         yield conn
         conn.commit()
