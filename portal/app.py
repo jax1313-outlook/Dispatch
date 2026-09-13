@@ -25,6 +25,27 @@ from portal import errors
 from portal.routes import register_routes
 
 
+def _register_time_filters(app: Flask) -> None:
+    """`{{ value|local_time }}` — an appointment a person can read at a glance.
+
+    Every timestamp in this program was rendered raw: 2026-08-12T14:00:00-04:00
+    on a rate confirmation a broker receives, and on the driver's own screen.
+    That is a 70 MPH failure (DRIVER_FIRST_DOCTRINE_v2 D2) -- the driver is
+    moving, tired, and has one hand, and an ISO string makes them do arithmetic
+    to find out when the appointment is.
+
+    The filter renders the operator's local time with the zone named, so it is
+    unambiguous without being machine-shaped. A value that cannot be read is
+    printed exactly as typed rather than blanked: somebody wrote it for a
+    reason.
+    """
+    from dispatch import timestamps
+
+    app.jinja_env.filters["local_time"] = timestamps.describe
+    app.jinja_env.filters["local_date"] = timestamps.local_date
+    app.jinja_env.globals["operating_timezone"] = timestamps.timezone_name
+
+
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(
         __name__,
@@ -45,6 +66,7 @@ def create_app(config: dict | None = None) -> Flask:
         check_secrets()
     register_routes(app)
     init_csrf(app)
+    _register_time_filters(app)
 
     @app.before_request
     def _require_authority_login():

@@ -492,6 +492,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # `dispatch.security` schema here; that stack is superseded by the Portal
     # PIN gate already on main (CF-03) and was deliberately not recovered.
     from dispatch.authcounters import init_auth_counter_schema
+    from dispatch.capacity_store import init_capacity_schema
     from dispatch.connectors.audit import init_connector_schema
     from dispatch.delivery import init_delivery_schema
     from dispatch.spine.db import init_spine_schema
@@ -507,6 +508,10 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # Every outbound message attempt, recorded before it is tried. A failed
     # broker notification used to produce one line on stderr and nothing else.
     init_delivery_schema(conn)
+    # One capacity profile per truck. Without a table, dispatch/capacity.py --
+    # 1,861 lines with 1,000 lines of tests -- had no way to be reached from the
+    # running program at all. See dispatch/capacity_store.py.
+    init_capacity_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:

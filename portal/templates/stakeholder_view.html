@@ -50,7 +50,7 @@
             <tr><td class="label">Status</td><td><span class="status-tag">{{ load.status.replace('_', ' ').title() }}</span></td></tr>
             <tr><td class="label">Customer</td><td>{{ load.customer or '—' }}</td></tr>
             <tr><td class="label">Broker / Shipper</td><td>{{ load.broker_shipper or '—' }}</td></tr>
-            <tr><td class="label">Pickup</td><td>{{ load.pickup_location or '—' }}{% if load.pickup_datetime %} &middot; {{ load.pickup_datetime }}{% endif %}</td></tr>
+            <tr><td class="label">Pickup</td><td>{{ load.pickup_location or '—' }}{% if load.pickup_datetime %} &middot; {{ load.pickup_datetime|local_time }}{% endif %}</td></tr>
             <tr><td class="label">Delivery</td><td>{{ load.delivery_location or '—' }}{% if load.delivery_datetime %} &middot; {{ load.delivery_datetime }}{% endif %}</td></tr>
             <tr><td class="label">Equipment</td><td>{% if assigned_equipment %}{{ assigned_equipment.unit_number }} ({{ assigned_equipment.equipment_type.replace('_', ' ').title() }}){% else %}—{% endif %}</td></tr>
             <tr><td class="label">Driver</td><td>{% if assigned_driver %}{{ assigned_driver.name }}{% else %}Not yet assigned{% endif %}</td></tr>

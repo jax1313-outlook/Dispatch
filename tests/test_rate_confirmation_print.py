@@ -154,14 +154,18 @@ class TestRateConfirmationPrintContent:
         _confirm_rate(load["load_id"])
         resp = client.get(f"/dispatch/{load['load_id']}/rate-confirmation/print")
         html = resp.data.decode()
-        assert "2026-08-10 08:00" in html
+        assert "10 Aug 2026, 08:00" in html
 
     def test_shows_delivery_datetime(self, client):
         load = _make_load(delivery_datetime="2026-08-12 14:00")
         _confirm_rate(load["load_id"])
         resp = client.get(f"/dispatch/{load['load_id']}/rate-confirmation/print")
         html = resp.data.decode()
-        assert "2026-08-12 14:00" in html
+        # Rendered for a person, not as an ISO string. A broker receiving
+        # "2026-08-12T14:00:00-04:00" on a rate confirmation has to decode it,
+        # and so does the driver reading the same value on his own screen
+        # (DRIVER_FIRST_DOCTRINE_v2 D2, the 70 MPH Test).
+        assert "12 Aug 2026, 14:00" in html
 
     def test_shows_equipment_type(self, client):
         load = _make_load(equipment="Dry Van 53ft")
