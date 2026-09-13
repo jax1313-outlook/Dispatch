@@ -43,6 +43,9 @@ _ENV_VARS = [
     "DISPATCH_ARCHIVE_ROOT",
     "DISPATCH_MEMORY_ROOT",
     "DISPATCH_ARCHIVE_PATH",
+    # The Library catalog: a test that wants one names a temporary file itself. Inheriting the
+    # operator's would write test approvals into the real Library.
+    "DISPATCH_LIBRARY_CATALOG",
     "PORTAL_DATA_DIR",
     "PORTAL_UPLOAD_DIR",
 ]
