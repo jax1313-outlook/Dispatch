@@ -986,7 +986,7 @@ def settings():
         "uploads": str(_get_upload_dir().resolve()),
         "archive": str(cin_archive.ARCHIVE_ROOT.resolve()),
         "outbox": str((cin_archive.ARCHIVE_ROOT / "Outbox").resolve()),
-        "library_intel": str(get_memory_dir().resolve()),
+        "library_intel": str(get_data_dir().resolve()),
         "archive_records": str(get_archive_dir().resolve()),
     }
 

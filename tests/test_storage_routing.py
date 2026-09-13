@@ -228,16 +228,19 @@ class TestLibraryRouting:
         assert library.get_all() == {}
         assert list(shelf.iterdir()) == []
 
-    def test_intelligence_writes_to_memory(self, tmp_path, monkeypatch):
+    def test_intelligence_never_writes_into_the_memory_shelf(self, tmp_path, monkeypatch):
+        """Owner ruling 2026-09-13: D:\\Memory is the Library's shelf. Intelligence records are a
+        Portal store and live in the portal data directory."""
         memory_root = tmp_path / "Memory"
+        data_dir = tmp_path / "PortalData"
         memory_root.mkdir()
         monkeypatch.setenv("DISPATCH_MEMORY_ROOT", str(memory_root))
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(data_dir))
         from portal.models import intelligence
-        monkeypatch.setattr(intelligence, "_intel_path",
-                            lambda: memory_root / "intelligence.json")
         record = intelligence.create_record("broker", "Test Broker", "intel content")
         assert record["subject"] == "Test Broker"
-        assert (memory_root / "intelligence.json").exists()
+        assert (data_dir / "intelligence.json").exists()
+        assert list(memory_root.iterdir()) == []
 
 
 # ── Requirement 6: Completed archive records route to D:\\Archive ──────
