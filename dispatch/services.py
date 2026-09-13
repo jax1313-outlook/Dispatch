@@ -1237,47 +1237,38 @@ def list_settlements(
 
 
 def get_financial_dashboard() -> dict:
-    all_loads = store.list_loads()
-    settlements = store.list_settlements()
+    """Money across every load, in two queries rather than two per load.
+
+    This used to walk `store.list_loads()` and ask the database twice about each
+    one. On a 2,000-load database that was 4,000 connections and 5.0 s, and it
+    grew linearly, so /home got slower every month the business ran. The
+    arithmetic below is unchanged: per-load revenue and per-load expenses are
+    still rounded to cents *before* they are accumulated, because summing raw
+    floats and rounding once made this report and
+    `store.get_load_profitability_data()` disagree by pennies on identical data.
+    Round-then-sum is the one convention; only where the rows come from changed.
+    """
+    rows = store.get_load_financial_rows()
+    settlement_totals = store.get_settlement_rollup()
 
     total_revenue = 0.0
     total_expenses = 0.0
-    total_paid = 0.0
-    total_outstanding = 0.0
     loads_with_rate = 0
 
-    for load in all_loads:
-        rate = store.get_rate_confirmation(load["load_id"])
-        if rate:
-            # Round per-load before accumulating, matching
-            # store.get_load_profitability_data()'s convention -- summing raw
-            # unrounded floats here and store.get_load_profitability_data()
-            # rounding per-row before its own sum previously gave two
-            # financial reports different totals for the same underlying
-            # data (a real, demonstrable penny-level discrepancy, not
-            # hypothetical). Round-then-sum everywhere revenue/expenses are
-            # aggregated is the one convention to keep.
-            total_revenue += round(rate["revenue"], 2)
+    for row in rows:
+        if row["has_rate"]:
+            total_revenue += round(row["revenue"], 2)
             loads_with_rate += 1
+        total_expenses += round(row["expense_total"], 2)
 
-        expenses = store.list_expenses(load["load_id"])
-        total_expenses += round(sum(e["amount"] for e in expenses), 2)
-
-    for stl in settlements:
-        if stl["payment_status"] == "paid":
-            total_paid += stl["net_payment"]
-        elif stl["payment_status"] in ("invoiced", "overdue"):
-            total_outstanding += stl["invoice_amount"]
+    total_paid = settlement_totals["total_paid"]
+    total_outstanding = settlement_totals["total_outstanding"]
 
     total_profit = total_revenue - total_expenses
     margin_pct = (total_profit / total_revenue * 100) if total_revenue > 0 else 0.0
 
-    invoiced_count = sum(1 for s in settlements if s["payment_status"] == "invoiced")
-    paid_count = sum(1 for s in settlements if s["payment_status"] == "paid")
-    overdue_count = sum(1 for s in settlements if s["payment_status"] == "overdue")
-
     return {
-        "total_loads": len(all_loads),
+        "total_loads": len(rows),
         "loads_with_rate": loads_with_rate,
         "total_revenue": round(total_revenue, 2),
         "total_expenses": round(total_expenses, 2),
@@ -1285,31 +1276,33 @@ def get_financial_dashboard() -> dict:
         "margin_pct": round(margin_pct, 1),
         "total_paid": round(total_paid, 2),
         "total_outstanding": round(total_outstanding, 2),
-        "invoiced_count": invoiced_count,
-        "paid_count": paid_count,
-        "overdue_count": overdue_count,
+        "invoiced_count": settlement_totals["invoiced_count"],
+        "paid_count": settlement_totals["paid_count"],
+        "overdue_count": settlement_totals["overdue_count"],
     }
 
 
 def get_chart_data() -> dict:
-    """Aggregate data for dashboard charts: loads by status, revenue by month."""
+    """Aggregate data for dashboard charts: loads by status, revenue by month.
+
+    Same rows as `get_financial_dashboard`, same single query. This one used to
+    run its own per-load `get_rate_confirmation()` walk, which is why the charts
+    cost a further 2.5 s on a 2,000-load database on top of the dashboard's 5.0.
+    """
     from collections import defaultdict
 
-    all_loads = store.list_loads()
+    rows = store.get_load_financial_rows()
 
     status_counts: dict[str, int] = defaultdict(int)
-    for load in all_loads:
-        status_counts[load["status"]] += 1
-
     monthly_revenue: dict[str, float] = defaultdict(float)
     monthly_loads: dict[str, int] = defaultdict(int)
-    for load in all_loads:
-        rate = store.get_rate_confirmation(load["load_id"])
-        created = load.get("created_at", "")
+    for row in rows:
+        status_counts[row["status"]] += 1
+        created = row.get("created_at", "") or ""
         month_key = created[:7] if len(created) >= 7 else "unknown"
         monthly_loads[month_key] += 1
-        if rate:
-            monthly_revenue[month_key] += rate["revenue"]
+        if row["has_rate"]:
+            monthly_revenue[month_key] += row["revenue"]
 
     months_sorted = sorted(set(monthly_revenue.keys()) | set(monthly_loads.keys()))
 
