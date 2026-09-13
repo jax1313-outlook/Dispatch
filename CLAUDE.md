@@ -278,13 +278,13 @@ Do not mark an item verified without actual runtime evidence. Current readiness:
 
 ---
 
-## 8. Current build status (2026-09-12)
+## 8. Current build status (2026-09-13)
 
 | | |
 |---|---|
 | Version | `0.1.0` |
-| Suite | **4,171 passed** · 0 failed / 0 skipped / 0 warnings |
-| Gated coverage | **91.39%** with **branch coverage** over `cin_lite` + `dispatch` + `portal` + `dispatch_launcher` (floor 90%) |
+| Suite | **4,221 passed** · 0 failed / 0 skipped / 0 warnings |
+| Gated coverage | **91.48%** with **branch coverage** over `cin_lite` + `dispatch` + `portal` + `dispatch_launcher` (floor 90%) |
 | Ungated | nothing. `dispatch_launcher/` is inside the gate; its Windows-only branches are marked `pragma: no cover` line by line rather than the package being exempt |
 | Laptop readiness | **UNVERIFIED** — see below |
 
