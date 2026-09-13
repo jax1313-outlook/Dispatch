@@ -201,16 +201,32 @@ class TestPortalDataRouting:
 
 
 class TestLibraryRouting:
-    def test_library_writes_to_memory(self, tmp_path, monkeypatch):
+    def test_library_projection_never_writes_into_the_memory_shelf(self, tmp_path, monkeypatch):
+        """Owner ruling 2026-09-13: D:\\Memory is the Library's shelf. The Portal's JSON projection
+        of the Library lives in the portal data directory, never in the shelf root."""
         memory_root = tmp_path / "Memory"
+        data_dir = tmp_path / "PortalData"
         memory_root.mkdir()
         monkeypatch.setenv("DISPATCH_MEMORY_ROOT", str(memory_root))
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(data_dir))
         from portal.models import library
-        monkeypatch.setattr(library, "_library_path",
-                            lambda: memory_root / "library.json")
         record = library.add_record("company", "Test Doc", "content")
         assert record["name"] == "Test Doc"
-        assert (memory_root / "library.json").exists()
+        assert (data_dir / "library.json").exists()
+        assert not (memory_root / "library.json").exists()
+        assert list(memory_root.iterdir()) == []
+
+    def test_library_projection_refuses_when_the_data_dir_is_the_shelf(self, tmp_path, monkeypatch):
+        shelf = tmp_path / "Memory"
+        shelf.mkdir()
+        monkeypatch.setenv("DISPATCH_MEMORY_ROOT", str(shelf))
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(shelf))
+        from portal.models import library
+        import pytest as _pytest
+        with _pytest.raises(library.LibraryProjectionError):
+            library.add_record("company", "Test Doc", "content")
+        assert library.get_all() == {}
+        assert list(shelf.iterdir()) == []
 
     def test_intelligence_writes_to_memory(self, tmp_path, monkeypatch):
         memory_root = tmp_path / "Memory"
