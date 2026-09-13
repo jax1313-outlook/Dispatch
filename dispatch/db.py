@@ -540,6 +540,12 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     from dispatch.rehearsal import init_rehearsal_schema
 
     init_rehearsal_schema(conn)
+    # Exact whole-cent companions for every monetary REAL column. Generated
+    # columns, so there is no write path to forget and no backfill to interrupt.
+    # See dispatch/money_schema.py for why the REAL column stays.
+    from dispatch.money_schema import init_money_schema
+
+    init_money_schema(conn)
 
 
 #: How long a writer waits for another writer's lock before giving up.
