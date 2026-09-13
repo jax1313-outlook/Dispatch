@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_memory_dir, atomic_write_json
+from portal.models import get_memory_dir, atomic_write_json, guarded
 
 INTEL_TYPES = [
     "location",
@@ -75,6 +75,7 @@ def get_by_type(intel_type: str) -> list[dict]:
     return _load().get(intel_type, [])
 
 
+@guarded(_intel_path)
 def create_record(intel_type: str, subject: str, content: str,
                   source: str = "", metadata: dict | None = None) -> dict:
     if intel_type not in INTEL_TYPES:
@@ -107,6 +108,7 @@ def create_record(intel_type: str, subject: str, content: str,
     return record
 
 
+@guarded(_intel_path)
 def update_record(record_id: str, content: str | None = None,
                   metadata: dict | None = None,
                   verification_status: str | None = None) -> dict:

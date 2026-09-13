@@ -43,7 +43,7 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from portal.models import get_data_dir, get_memory_dir, atomic_write_json
+from portal.models import get_data_dir, get_memory_dir, atomic_write_json, guarded
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
@@ -115,6 +115,7 @@ def list_pin_cards() -> list[dict]:
     return [_public(rec) for rec in _load().values()]
 
 
+@guarded(_registry_path)
 def create_pin_card(driver_id: str, pin: str, recovery_word: str, created_by: str) -> dict:
     """Issue a new Driver PIN Card. Route-layer responsibility (not enforced here, same
     split identity.py uses) is to only expose this behind the Authority PIN gate -- there
@@ -155,6 +156,7 @@ def create_pin_card(driver_id: str, pin: str, recovery_word: str, created_by: st
     return _public(record)
 
 
+@guarded(_registry_path)
 def reset_pin(driver_id: str, new_pin: str, reset_by: str) -> dict:
     """Mike-initiated PIN reset (no recovery word needed -- Mike is Authority). Also
     clears any lockout, since a fresh PIN from Mike should not stay locked out."""
@@ -174,6 +176,7 @@ def reset_pin(driver_id: str, new_pin: str, reset_by: str) -> dict:
     return _public(record)
 
 
+@guarded(_registry_path)
 def set_recovery_word(driver_id: str, recovery_word: str, set_by: str) -> dict:
     if not recovery_word or len(recovery_word) < 3:
         raise DriverPinError("Recovery word must be at least 3 characters.")
@@ -188,6 +191,7 @@ def set_recovery_word(driver_id: str, recovery_word: str, set_by: str) -> dict:
     return _public(record)
 
 
+@guarded(_registry_path)
 def set_status(driver_id: str, status: str, changed_by: str) -> dict:
     """Active/Inactive control (independent of the driver's own roster `status` on
     dispatch/store.py's drivers table -- this one controls Driver Portal access only;
@@ -206,6 +210,7 @@ def set_status(driver_id: str, status: str, changed_by: str) -> dict:
     return _public(record)
 
 
+@guarded(_registry_path)
 def delete_pin_card(driver_id: str, deleted_by: str) -> bool:
     data = _load()
     if driver_id not in data:
@@ -219,6 +224,7 @@ def delete_pin_card(driver_id: str, deleted_by: str) -> bool:
 # ── Driver Portal authentication (Phone Number + PIN) ───────────────
 
 
+@guarded(_registry_path)
 def verify_login(phone: str, pin: str) -> dict | None:
     """Validate phone + PIN. Returns the public PIN card record (plus the matched
     driver_id) on success, None on failure. Phone is looked up live against the
@@ -287,6 +293,7 @@ def verify_recovery_word(phone: str, recovery_word: str) -> dict | None:
     return None
 
 
+@guarded(_registry_path)
 def reset_pin_with_recovery_word(phone: str, recovery_word: str, new_pin: str) -> dict | None:
     """Self-service PIN reset: recovery word stands in for the (forgotten) old PIN.
     Returns the updated public record on success, None if the recovery word didn't

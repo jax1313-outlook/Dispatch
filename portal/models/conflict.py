@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 
 CONFLICT_TYPES = [
     "missing_broker_email",
@@ -67,6 +67,7 @@ def get_unresolved() -> list[dict]:
     return [n for n in _load() if not n.get("resolved")]
 
 
+@guarded(_conflicts_path)
 def create_notice(
     conflict_type: str,
     severity: str,
@@ -102,6 +103,7 @@ def create_notice(
     return notice
 
 
+@guarded(_conflicts_path)
 def resolve_notice(notice_id: str, resolution_note: str = "") -> dict:
     notices = _load()
     for notice in notices:

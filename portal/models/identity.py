@@ -19,7 +19,7 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
@@ -95,6 +95,7 @@ def get_identity(user_id: str) -> dict | None:
     return _public(rec) if rec else None
 
 
+@guarded(_identity_path)
 def bootstrap_authority(user_id: str, display_name: str, pin: str) -> dict:
     """Create the first (and, in this build, only) Authority identity.
 
@@ -132,6 +133,7 @@ def bootstrap_authority(user_id: str, display_name: str, pin: str) -> dict:
     return _public(record)
 
 
+@guarded(_identity_path)
 def set_pin(user_id: str, pin: str) -> dict:
     """Replace an existing identity's PIN. The recovery path for a forgotten one.
 
@@ -178,6 +180,7 @@ def _is_locked(record: dict) -> bool:
     return authcounters.is_locked(authcounters.KIND_AUTHORITY, record.get("user_id", ""))
 
 
+@guarded(_identity_path)
 def verify_pin(user_id: str, pin: str) -> dict | None:
     """Validate a PIN. Returns the public identity record on success, None on failure.
 

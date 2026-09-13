@@ -17,7 +17,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 
 STATUSES = ["ASSEMBLED", "ROUTED", "CLUSTERED", "ARCHIVED"]
 
@@ -55,6 +55,7 @@ def list_packets() -> list[dict]:
     return _load()
 
 
+@guarded(_packets_path)
 def create_packet(
     load_id: str,
     closeout_data: dict,
@@ -85,6 +86,7 @@ def create_packet(
     return packet
 
 
+@guarded(_packets_path)
 def mark_routed(load_id: str, publisher_action_id: str) -> dict:
     packets = _load()
     for packet in packets:
@@ -97,6 +99,7 @@ def mark_routed(load_id: str, publisher_action_id: str) -> dict:
     raise KeyError(f"Completion packet not found for load: {load_id}")
 
 
+@guarded(_packets_path)
 def create_email_cluster(load_id: str, email_package: dict) -> dict:
     """D10: 'Email Sent -> Render Email to Business Document -> Attach Related Files ->
     Create Email Cluster -> Store With Completion Package.' Renders each sent email in a
@@ -147,6 +150,7 @@ def create_email_cluster(load_id: str, email_package: dict) -> dict:
     raise KeyError(f"Completion packet not found for load: {load_id}")
 
 
+@guarded(_packets_path)
 def mark_archived(load_id: str, retention_archive_id: str) -> dict:
     """D10's terminal step: 'Archive Takes Custody.' Records that the (existing,
     human-triggered) Archive Load action has taken custody of this packet's Email
