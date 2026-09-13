@@ -93,6 +93,36 @@ class TestTheOutboxFallback:
     def test_it_is_always_available_so_there_is_never_nowhere_to_put_a_message(self, tmp_path):
         assert FileOutboxTransport(tmp_path / "Outbox").status() == SIMULATED
 
+    def test_the_directory_it_names_is_the_directory_that_is_written(self):
+        """The status line and the file must be the same sentence.
+
+        With nothing configured, the writer is not this class. `install()`
+        engages only for the genuinely new transports -- Graph and XOAUTH2 --
+        so `cin_lite._send_or_write` runs its own fallback and writes under
+        `Archive/CIN/Outbox`. This transport used to compute its own answer,
+        `$DISPATCH_ARCHIVE_ROOT/Outbox`, and `describe()` is the only thing any
+        surface reads for the default transport. An operator who followed the
+        status to find their unsent mail found an empty directory.
+
+        Asking cin_lite is what keeps the two from drifting apart again, and
+        this test is what notices if someone stops asking.
+        """
+        from cin_lite import email_delivery
+
+        assert FileOutboxTransport().outbox() == email_delivery.outbox_dir()
+
+    def test_an_explicit_directory_still_wins(self, tmp_path):
+        """A constructor argument is a decision, not a hint."""
+        chosen = tmp_path / "Elsewhere"
+        assert FileOutboxTransport(chosen).outbox() == chosen
+
+    def test_the_described_path_is_the_path_it_would_write_to(self, tmp_path):
+        transport = FileOutboxTransport(tmp_path / "Outbox")
+        transport.send(MESSAGE)
+        written = next((tmp_path / "Outbox").glob("*.eml"))
+        assert str(transport.outbox()) in transport.describe()
+        assert written.parent == transport.outbox()
+
 
 class TestSmtpBasic:
     def test_it_is_unconfigured_without_a_host(self, monkeypatch):

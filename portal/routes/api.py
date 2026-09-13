@@ -257,15 +257,23 @@ def library_add():
     name = data.get("name")
     if not section or not name:
         return jsonify({"error": "section and name required"}), 400
+    metadata = dict(data.get("metadata") or {})
+    # The authoritative Library needs the person placing a document and what the document is.
+    # Accepted at the top level as well as inside metadata; never inferred.
+    for key in ("accepted_by", "object_type", "capture_channel"):
+        if data.get(key) and key not in metadata:
+            metadata[key] = data[key]
     try:
         record = lib_model.add_record(
             section=section,
             name=name,
             content=data.get("content", ""),
-            metadata=data.get("metadata"),
+            metadata=metadata or data.get("metadata"),
             submitted_by=data.get("submitted_by", "human"),
         )
         return jsonify({"status": "ok", "record": record})
+    except lib_model.LibraryProjectionError as exc:
+        return jsonify({"error": str(exc)}), 409
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -305,6 +313,8 @@ def library_update():
             metadata=data.get("metadata"),
         )
         return jsonify({"status": "ok", "record": record})
+    except lib_model.LibraryAuthorityError as exc:
+        return jsonify({"error": str(exc)}), 409
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
 
@@ -318,6 +328,8 @@ def library_delete():
     try:
         record = lib_model.delete_record(record_id)
         return jsonify({"status": "ok", "record": record})
+    except lib_model.LibraryAuthorityError as exc:
+        return jsonify({"error": str(exc)}), 409
     except KeyError as exc:
         return jsonify({"error": str(exc)}), 404
 

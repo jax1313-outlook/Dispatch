@@ -132,6 +132,19 @@ def _resolve_memory() -> Path:
     return get_memory_dir()
 
 
+#: The Library Department's catalog: a SQLite file in WAL mode, owned by the Library repository
+#: and named by this variable. It is captured like the operational database -- through the SQLite
+#: backup API, never as a raw file -- because a raw copy of a WAL database can silently lose the
+#: most recent approvals.
+LIBRARY_CATALOG_ENV = "DISPATCH_LIBRARY_CATALOG"
+LIBRARY_CATALOG_ARCHIVE_DIR = "LibraryCatalog"
+
+
+def _resolve_library_catalog() -> Path | None:
+    value = os.environ.get(LIBRARY_CATALOG_ENV, "").strip()
+    return _norm(Path(value)) if value else None
+
+
 def _resolve_cin_archive() -> Path:
     # Read as a module attribute, never imported by value: cin_lite.archive
     # computes ARCHIVE_ROOT once at import time and the test suite rebinds it,
@@ -321,6 +334,7 @@ def _iter_files(root: _Root) -> Iterator[Path]:
 
 def _plan_files(
     roots: list[_Root], db_path: Path, exclude_under: Path | None,
+    catalog_path: Path | None = None,
 ) -> tuple[list[_PlannedFile], list[str]]:
     """Walk every present root once, dropping duplicates by archive position."""
     claimed: dict[str, _PlannedFile] = {}
@@ -344,6 +358,12 @@ def _plan_files(
                 notes.append(
                     f"skipped {path.name}: the operational database is captured "
                     "through the SQLite backup API, not copied as a file"
+                )
+                continue
+            if catalog_path is not None and _is_db_artifact(_norm(path), catalog_path):
+                notes.append(
+                    f"skipped {path.name}: the Library catalog is captured through the SQLite "
+                    "backup API, not copied as a file"
                 )
                 continue
             if exclude_under is not None and path.is_relative_to(exclude_under):
@@ -435,6 +455,29 @@ def _read_database_shape(path: Path) -> dict[str, Any]:
 
 
 # ── environment capture ────────────────────────────────────────────────
+
+def _read_catalog_shape(path: Path) -> dict[str, Any]:
+    """Schema version, integrity and row counts of the Library catalog snapshot.
+
+    Read from the copy, like the database shape, so the manifest describes what the archive
+    actually holds. The catalog's schema belongs to the Library repository; this records it
+    without interpreting it.
+    """
+    conn = sqlite3.connect(str(path))
+    try:
+        tables = [r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+        version = None
+        if "schema_version" in tables:
+            version = conn.execute("SELECT max(version) FROM schema_version").fetchone()[0]
+        return {
+            "schema_version": version,
+            "integrity_check": conn.execute("PRAGMA integrity_check").fetchone()[0],
+            "row_counts": {t: int(conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0]) for t in tables},
+        }
+    finally:
+        conn.close()
+
 
 def _is_secret_name(name: str) -> bool:
     upper = name.upper()
@@ -558,7 +601,8 @@ def create_backup(
         (not r.error) and _norm(destination).is_relative_to(r.path) for r in roots
     ) else None
 
-    planned, notes = _plan_files(roots, db_path, exclude_under)
+    catalog_path = _resolve_library_catalog()
+    planned, notes = _plan_files(roots, db_path, exclude_under, catalog_path)
     absent = [
         {"roles": ",".join(r.roles), "path": str(r.path), "reason": r.absent_reason}
         for r in roots if not r.present
@@ -570,6 +614,25 @@ def create_backup(
             "roles": "database", "path": str(db_path),
             "reason": "database file does not exist",
         })
+
+    catalog_meta: dict[str, Any] = {"env_var": LIBRARY_CATALOG_ENV, "configured": catalog_path is not None}
+    if catalog_path is None:
+        notes.append(
+            f"Library catalog not configured ({LIBRARY_CATALOG_ENV} is unset): nothing to capture"
+        )
+    else:
+        catalog_meta.update(
+            source_path=str(catalog_path),
+            archive_path=f"{LIBRARY_CATALOG_ARCHIVE_DIR}/{catalog_path.name}",
+            present=catalog_path.is_file(),
+        )
+        if not catalog_meta["present"]:
+            # Configured and missing is the loud case: the Library's memory is not where the
+            # configuration says it is, and a backup that shrugged would be lost at restore time.
+            absent.append({
+                "roles": "library_catalog", "path": str(catalog_path),
+                "reason": "Library catalog file does not exist",
+            })
 
     source_summary = [
         {
@@ -597,6 +660,7 @@ def create_backup(
                 "archive_path": db_rel,
                 "present": db_present,
             },
+            "library_catalog": catalog_meta,
             "files": [
                 {"path": f.rel, "size": f.size, "sha256": None, "source": f.roles, "origin": str(f.source)}
                 for f in planned
@@ -629,6 +693,15 @@ def create_backup(
             "sha256": sha256_file(db_dest), "source": "database", "origin": str(db_path),
         })
 
+    if catalog_meta.get("present"):
+        catalog_dest = archive_dir / catalog_meta["archive_path"]
+        _snapshot_database(catalog_path, catalog_dest)
+        catalog_meta.update(_read_catalog_shape(catalog_dest))
+        entries.append({
+            "path": catalog_meta["archive_path"], "size": catalog_dest.stat().st_size,
+            "sha256": sha256_file(catalog_dest), "source": "library_catalog", "origin": str(catalog_path),
+        })
+
     for planned_file in planned:
         dest_file = archive_dir / planned_file.rel
         dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -654,6 +727,7 @@ def create_backup(
         "archive_name": archive_name,
         "sources": source_summary,
         "database": database_meta,
+        "library_catalog": catalog_meta,
         "files": sorted(entries, key=lambda e: e["path"]),
         "empty_directories": empty_roots,
         "absent": absent,
@@ -783,6 +857,9 @@ def _restored_env(manifest: dict[str, Any], destination: Path) -> dict[str, str]
         target = destination / source["archive_path"]
         for var in source.get("env_vars", []):
             env[var] = str(target)
+    catalog = manifest.get("library_catalog") or {}
+    if catalog.get("present"):
+        env[catalog["env_var"]] = str(destination / catalog["archive_path"])
     return env
 
 

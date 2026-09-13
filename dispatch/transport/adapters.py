@@ -67,10 +67,21 @@ class FileOutboxTransport:
         self._outbox = Path(outbox) if outbox else None
 
     def outbox(self) -> Path:
+        """The directory an unsent message actually lands in.
+
+        This used to compute its own answer -- `$DISPATCH_ARCHIVE_ROOT/Outbox`
+        -- and be wrong. With nothing configured the writer is not this class
+        at all: `dispatch.outbound.install()` engages only for Graph and
+        XOAUTH2 (see NEW_TRANSPORTS), so `cin_lite._send_or_write` runs its own
+        fallback and writes to `$DISPATCH_ARCHIVE_ROOT/CIN/Outbox`. Only
+        `describe()` was ever read for the default transport, and it named a
+        directory nothing writes to. Asking cin_lite is how the sentence and
+        the file stay the same sentence.
+        """
         if self._outbox:
             return self._outbox
-        root = os.environ.get("DISPATCH_ARCHIVE_ROOT")
-        return (Path(root) if root else Path.cwd() / "Archive") / "Outbox"
+        from cin_lite import email_delivery
+        return email_delivery.outbox_dir()
 
     def status(self) -> str:
         return SIMULATED

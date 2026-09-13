@@ -36,6 +36,19 @@ from cin_lite import archive, control
 _OUTBOX = archive.ARCHIVE_ROOT / "Outbox"
 
 
+def outbox_dir() -> Path:
+    """Where an unsent message is written when nothing is configured.
+
+    Public because something outside cin_lite has to be able to *say* it. The
+    transport layer's status line named its own default -- `Archive/Outbox` --
+    while every .eml this program has ever written landed here, under
+    `Archive/CIN/Outbox`. An operator who followed the status found an empty
+    directory. One function, asked by both, is what keeps them from drifting
+    apart again.
+    """
+    return _OUTBOX
+
+
 def _secret() -> bytes:
     return os.environ.get("DISPATCH_EMAIL_SECRET", "dispatch-dev-secret").encode()
 
