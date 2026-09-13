@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -493,14 +494,78 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     init_rehearsal_schema(conn)
 
 
+#: How long a writer waits for another writer's lock before giving up.
+#:
+#: SQLite's default is 0: the second writer raises "database is locked"
+#: immediately rather than waiting a millisecond. Dispatch runs the portal and
+#: the launcher as separate processes against one file, and WAL removes
+#: reader/writer contention but not writer/writer -- two writers still
+#: serialise. So a routine collision, of the kind that lasts microseconds,
+#: surfaced as an error page on a load a driver is standing next to.
+#:
+#: Five seconds is far longer than any write in this program takes and far
+#: shorter than a person's patience. Overridable, because the right number on a
+#: network share is not the right number on a laptop.
+BUSY_TIMEOUT_MS = int(os.environ.get("DISPATCH_SQLITE_BUSY_TIMEOUT_MS", "5000"))
+
+#: How many times to retry switching a database into WAL. See `_ensure_wal`.
+WAL_ATTEMPTS = 10
+
+
+def _ensure_wal(conn: sqlite3.Connection) -> None:
+    """Put the database in WAL, but only if it is not already.
+
+    `journal_mode` is a property of the database *file*, persisted in its
+    header -- not a property of the connection. Once a database is in WAL it
+    stays in WAL, so asking every connection to set it rewrites that header and
+    takes an exclusive lock every single time, for a value that was already
+    correct.
+
+    That matters beyond the wasted work, because `journal_mode` is the one
+    statement here that does **not** honour `busy_timeout`: SQLite returns
+    SQLITE_BUSY immediately for a journal-mode change rather than invoking the
+    busy handler, so as not to deadlock. No timeout can protect it. Several
+    connections opening at once collided on exactly this statement and raised
+    "database is locked" however patient the rest of the settings were.
+
+    Reading the mode first takes no lock and answers correctly on every
+    connection after the first. The write is left for the genuinely rare case
+    -- a brand-new database, or one left behind by a version that did not use
+    WAL -- and retried by hand, briefly, because the busy handler will not do
+    it for us. It converges fast: once any one contender wins, the statement is
+    a no-op for the rest.
+    """
+    if (conn.execute("PRAGMA journal_mode").fetchone()[0] or "").lower() == "wal":
+        return
+    for attempt in range(WAL_ATTEMPTS):
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError:
+            if attempt == WAL_ATTEMPTS - 1:
+                raise
+            time.sleep(0.02 * (attempt + 1))
+
+
 @contextmanager
 def get_connection():
     path = get_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    # First, before anything that can take a lock. `journal_mode=WAL` is one:
+    # it rewrites the database header, so two processes opening their first
+    # connection at the same moment contend -- and with SQLite's default
+    # timeout of zero, the loser gets "database is locked" instead of waiting
+    # the microsecond it would have taken. Setting the timeout afterwards
+    # leaves the one statement that most needs it unprotected.
+    #
+    # Per-connection, like foreign_keys below: SQLite resets both to their
+    # defaults on every new handle, so a pragma set once at startup protects
+    # nothing.
+    conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     conn.execute("PRAGMA foreign_keys=ON")
+    _ensure_wal(conn)
     _init_db(conn)
     try:
         yield conn
