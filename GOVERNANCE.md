@@ -1,0 +1,80 @@
+# GOVERNANCE — what actually governs Dispatch
+
+<!--
+A view of Governance/GOVERNANCE_REGISTRY.json, which lives in the sandbox
+repository (Joe-Assistant), not here. Regenerate it there with
+Governance/tools/write_pointers.py rather than editing this file: the registry
+is the record and this is a rendering of it.
+-->
+
+**Programme authority: `Dispatch/CLAUDE.md`.**
+
+Read that first. It is the only governance in this programme whose clauses are
+enforced by a test that fails a build (`Dispatch/tests/test_repository_doctrine.py`),
+which is what makes it the authority rather than one more document with an
+opinion.
+
+## What is current here
+
+- **`CLAUDE.md`** — Programme authority for everything that runs: boundaries, the truth vocabulary, what may and may not be built.
+  <br>Declares itself the first file to read, and its clauses are the only governance in the programme enforced by a test that fails a build (Dispatch/tests/test_repository_doctrine.py).
+- **`DECISION_LOG.md`** — Every adjudicated decision, in order, with its date and reasoning.
+  <br>The record CLAUDE.md section 7 requires a conflict to be reported into.
+- **`tests/test_repository_doctrine.py`** — The clauses of CLAUDE.md asserted against the repository rather than trusted.
+  <br>Governance that is executable. Where a document and this file disagree about what the code may contain, this file is what actually decides, because it is what refuses the merge.
+- **`DISPATCH_PURPOSE_STATEMENT.md`** — The four verbs every feature is measured against.
+- **`DRIVER_FIRST_DOCTRINE_v2.md`** — D1-D15, binding on every driver-facing surface.
+- **`docs/governance/DISPATCH_AUTHORITY_AND_BOUNDARIES.md`** — Human authority: who decides, and what software may never claim.
+- **`docs/architecture/DISPATCH_ARCHITECTURE.md`** — The architecture and the document map.
+
+## What is in this repository and does NOT govern
+
+These files are still here on purpose. `Dispatch/CLAUDE.md` section 7 forbids
+editing an old decision to hide its history — so they are kept, readable, and
+marked, rather than deleted.
+
+- Nothing.
+
+## The one that matters most
+
+`DISPATCH_CONSTITUTION_v2` names a **Manager / Control** department and forbids
+"bypassing Manager". `DISPATCH_CONSTITUTION_v3` describes Manager as the Run
+Office function. **Neither authorises building one.**
+
+`Dispatch/CLAUDE.md` §5.6: *"There is no Manager component in the current
+architecture. Do not create, restore, reference, or infer a Manager component,
+Manager agent, or Manager authority."* `Dispatch/docs/MANAGER.md` records why: it
+was named in planning and never built. `Dispatch/tests/test_repository_doctrine.py`
+enforces the ban with an allowlist of every permissible use of the word, so a
+build that introduces one fails.
+
+The constitutions describe an intended **organisational shape**. CLAUDE.md and
+its tests govern what the **running program** may contain. They are not in
+conflict once the question each answers is stated — and that statement is the
+registry.
+
+## Checking it yourself
+
+In **this** repository, the governance that is executable is a test. Run it:
+
+```
+python -m pytest tests/test_repository_doctrine.py -q
+```
+
+That is the whole check that matters here, because it is the one that refuses a
+merge. Everything above is a description of it.
+
+The cross-repository registry and its drift detector are **not in this
+repository** — they live in the sandbox repository (Joe-Assistant), which holds
+the clones of all seven and can therefore compare them:
+
+```
+python -m dispatch_governance show Dispatch
+python -m dispatch_governance answer "may a Manager component be built into Dispatch"
+python -m dispatch_governance check <directory holding the clones>
+```
+
+Those three will not run here, and that is not an oversight: a tool that
+compares seven repositories has to be somewhere that has seven repositories.
+
+Recorded 2026-09-12 from `Governance/GOVERNANCE_REGISTRY.json`.

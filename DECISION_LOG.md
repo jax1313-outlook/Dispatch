@@ -1099,3 +1099,50 @@ orphaned server — has still never been exercised.
 **Note:** JOE is unaffected. It cannot send at all — Article II of the Assistant Plugin Constitution has eight permitted functions and transmission is not one of them.
 
 ---
+
+---
+
+## 2026-09-12 — Governance authority recorded, and the Manager contradiction adjudicated
+
+**Conflict found.** Five repositories carry a constitution and they are not the
+same constitution: `DISPATCH_CONSTITUTION_v2` in `Claude`, `Joe-Assistant` and
+`Publisher` (byte-identical), `DISPATCH_CONSTITUTION_v3` in `Claude-3` and
+`Library` (byte-identical), and neither in this repository. Across the seven
+repositories there are 87 governance-shaped documents and 18 clusters of
+byte-identical duplicates.
+
+All of the constitutions name a **Manager**: v2 §6 lists "Manager / Control" as a
+core department and §14/§18 forbid "bypassing Manager"; v3 §7.1 describes Manager
+as the Run Office function. `CLAUDE.md` §5.6 forbids creating, restoring,
+referencing or inferring one, and `tests/test_repository_doctrine.py` fails a
+build over it.
+
+An agent cold-starting in one of those three repositories reads its constitution
+and builds toward a component this repository rejects. Reported here per §7
+rather than resolved by editing anything.
+
+**Adjudicated.** Manager is neither created nor removed.
+
+`docs/MANAGER.md` is the only document in any repository that states Manager's
+*implementation* status, and it is unambiguous: named in planning, never built,
+authorises no code, no route, no data model and no runtime behaviour. The
+constitutions describe an intended **organisational shape**; `CLAUDE.md` and its
+tests govern what the **running program** may contain. They answer different
+questions. The fork existed because nothing recorded which question each document
+answers.
+
+**Authority recorded.** From evidence, not recency: `CLAUDE.md` declares itself
+the entry point, its clauses are the only ones in the programme enforced by a
+test that fails a build, and this is the only repository containing the running
+program. `GOVERNANCE.md` (added by this commit) states that in one place, and the
+machine-readable record is `Governance/GOVERNANCE_REGISTRY.json` in the sandbox
+repository, with `python -m dispatch_governance check` as the drift detector.
+
+**Left open, requiring Mike.** `DISPATCH_CONSTITUTION_v3` is headed "Current
+Controlled Constitution - v3 Replacement Draft" — contradictory — and no
+repository holds an approval record for it. Registered ADVISORY, which is true
+under either reading, with no code decision resting on it. Inferring that it was
+ratified would be the manufactured approval §4 forbids outright.
+
+**Superseded, not deleted.** Per §7, every superseded document stays byte for
+byte where it is. What changes is that a pointer beside it says so.
