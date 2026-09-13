@@ -156,8 +156,38 @@ def _using_default_secret() -> bool:
     return not os.environ.get("DISPATCH_EMAIL_SECRET")
 
 
+
+#: An optional transport, installed from outside this module.
+#:
+#: cin_lite must not import dispatch -- the dependency points one way and THE
+#: MIKE RULE keeps it that way. So the newer transports (Microsoft Graph, SMTP
+#: XOAUTH2) register themselves here instead: `dispatch.outbound.install()` sets
+#: this, and with nothing installed every line below behaves exactly as it
+#: always has. That matters more than elegance, because this is the function
+#: every outbound message in the program passes through.
+_TRANSPORT = None
+
+
+def set_transport(sender) -> None:
+    """Route outbound mail through `sender(fallback_id, msg) -> receipt str`."""
+    global _TRANSPORT
+    _TRANSPORT = sender
+
+
+def clear_transport() -> None:
+    global _TRANSPORT
+    _TRANSPORT = None
+
+
+def installed_transport():
+    return _TRANSPORT
+
+
 def _send_or_write(fallback_id: str, msg: EmailMessage) -> str:
-    """Send via SMTP if configured, else write the message to Archive/Outbox."""
+    """Send via the installed transport, else SMTP, else Archive/Outbox."""
+    if _TRANSPORT is not None:
+        return _TRANSPORT(fallback_id, msg)
+
     host = os.environ.get("DISPATCH_SMTP_HOST")
     if not host:
         path = _write_fallback(fallback_id, msg)
