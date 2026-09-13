@@ -38,7 +38,7 @@ from dispatch.models import (
     Settlement,
     _utc_now,
 )
-from dispatch import db, money, notifications, store
+from dispatch import db, delivery, money, notifications, store
 
 
 import sys
@@ -70,28 +70,34 @@ def atomic(fn):
     return wrapper
 
 
-def _notify_safe(send) -> None:
+def _notify_safe(send, *, kind: str = "notification", subject_ref: str = "", recipient: str = "") -> None:
     """Run a notifications.notify_* call without letting an SMTP failure
-    turn an already-completed write into a false failure response.
+    turn an already-completed write into a false failure response -- and
+    without the failure disappearing.
 
-    Every notify_* call site here runs strictly after the DB write it's
-    reporting on has already committed. An SMTP timeout/auth failure raised
-    from smtplib (cin_lite/email_delivery.py's transport, reused by
-    dispatch/notifications.py) is not the caller's problem to see as a 500 --
-    the load *was* archived/delivered/invoiced; only the notification email
-    failed. Log and continue rather than propagate.
+    Every notify_* call site here runs strictly after the DB write it is
+    reporting on has already committed. An SMTP timeout or auth failure is not
+    the caller's problem to see as a 500: the load *was* archived, delivered or
+    invoiced, and only the notification email failed.
+
+    That reasoning was right and it stopped half way. The failure used to go to
+    one line on stderr -- no database row, no screen, no counter, no retry --
+    so a broker notification that failed authentication left Mike looking at a
+    successful Submit and a broker who never heard from him. Every attempt now
+    goes through `dispatch.delivery`, which writes the row *before* the send and
+    records the outcome after it. The exception is still swallowed. It is
+    swallowed into something somebody can see.
+
+    Deferred until the surrounding transaction commits, and run immediately
+    when there is none: an email must not go out for work that then rolled
+    back, and a thirty-second SMTP timeout must not be served while holding a
+    write lock every other writer is queued behind.
     """
     def _run():
-        try:
-            send()
-        except Exception as exc:  # noqa: BLE001 - any transport failure, not just SMTP
-            print(f"[dispatch.notifications] notify failed, continuing: {exc}", file=sys.stderr)
+        delivery.send_with_record(
+            kind, send, subject_ref=subject_ref, recipient=recipient,
+        )
 
-    # Deferred until the surrounding transaction commits, and run immediately
-    # when there is none. Both reasons only appeared once these operations
-    # became atomic: an email must not go out for work that then rolled back,
-    # and a thirty-second SMTP timeout must not be served while holding a write
-    # lock every other writer is queued behind.
     db.after_commit(_run)
 
 
@@ -399,7 +405,10 @@ def _try_auto_dispatch(load_id: str) -> None:
     store.upsert_visibility(vis)
     updated = store.get_load(load_id)
     if updated:
-        _notify_safe(lambda: notifications.notify_dispatched(updated))
+        _notify_safe(
+        lambda: notifications.notify_dispatched(updated),
+        kind="load_dispatched", subject_ref=updated.get("load_id", ""),
+    )
 
 
 def record_route_risk_event(
@@ -600,7 +609,10 @@ def add_milestone(
     # being broker-facing.
     if event_type == "delivered" and effective_status == "delivered":
         updated_load = store.get_load(load_id) or load
-        _notify_safe(lambda: notifications.notify_delivered(updated_load, result))
+        _notify_safe(
+        lambda: notifications.notify_delivered(updated_load, result),
+        kind="load_delivered", subject_ref=updated_load.get("load_id", ""),
+    )
 
     if refusal:
         result = dict(result)
@@ -772,7 +784,10 @@ def open_exception(
         store.upsert_visibility(updated)
 
     if severity in ("high", "critical"):
-        _notify_safe(lambda: notifications.notify_exception(load, result))
+        _notify_safe(
+        lambda: notifications.notify_exception(load, result),
+        kind="load_exception", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
@@ -868,7 +883,10 @@ def generate_pod(
             note=f"POD generated: {pod.pod_id}",
         )
 
-    _notify_safe(lambda: notifications.notify_pod_generated(load, result))
+    _notify_safe(
+        lambda: notifications.notify_pod_generated(load, result),
+        kind="pod_generated", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
@@ -975,7 +993,10 @@ def archive_load(load_id: str) -> dict:
         )
         store.upsert_visibility(updated)
 
-    _notify_safe(lambda: notifications.notify_archived(load, result))
+    _notify_safe(
+        lambda: notifications.notify_archived(load, result),
+        kind="load_archived", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
@@ -1225,7 +1246,10 @@ def create_settlement(
         notes=notes,
     )
     result = store.create_settlement(stl)
-    _notify_safe(lambda: notifications.notify_invoice_created(load, result))
+    _notify_safe(
+        lambda: notifications.notify_invoice_created(load, result),
+        kind="invoice_created", subject_ref=load.get("load_id", ""),
+    )
     return result
 
 
@@ -1257,7 +1281,10 @@ def record_payment(
 
     load = store.get_load(load_id)
     if load and result:
-        _notify_safe(lambda: notifications.notify_payment_received(load, result))
+        _notify_safe(
+        lambda: notifications.notify_payment_received(load, result),
+        kind="payment_received", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
@@ -1391,7 +1418,10 @@ def check_overdue_settlements() -> list[dict]:
         if updated:
             load = store.get_load(stl["load_id"])
             if load:
-                _notify_safe(lambda: notifications.notify_payment_overdue(load, updated))
+                _notify_safe(
+        lambda: notifications.notify_payment_overdue(load, updated),
+        kind="payment_overdue", subject_ref=load.get("load_id", ""),
+    )
             newly_overdue.append(updated)
 
     return newly_overdue
@@ -1416,7 +1446,10 @@ def dispute_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        _notify_safe(lambda: notifications.notify_settlement_disputed(load, result, reason))
+        _notify_safe(
+        lambda: notifications.notify_settlement_disputed(load, result, reason),
+        kind="settlement_disputed", subject_ref=load.get("load_id", ""),
+    )
     return result
 
 
@@ -1439,7 +1472,10 @@ def write_off_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        _notify_safe(lambda: notifications.notify_settlement_written_off(load, result, reason))
+        _notify_safe(
+        lambda: notifications.notify_settlement_written_off(load, result, reason),
+        kind="settlement_written_off", subject_ref=load.get("load_id", ""),
+    )
     return result
 
 
@@ -1495,7 +1531,10 @@ def notify_stalled_loads(thresholds: dict[str, int] | None = None) -> list[dict]
     """
     stalled = check_stalled_loads(thresholds)
     for load in stalled:
-        _notify_safe(lambda: notifications.notify_stalled(load))
+        _notify_safe(
+        lambda: notifications.notify_stalled(load),
+        kind="load_stalled", subject_ref=load.get("load_id", ""),
+    )
     return stalled
 
 
