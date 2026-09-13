@@ -36,7 +36,7 @@
         <div><strong>Broker / Shipper:</strong> {{ load.broker_shipper or '—' }}</div>
         <div><strong>Pickup Location:</strong> {{ load.pickup_location or '—' }}</div>
         <div><strong>Delivery Location:</strong> {{ load.delivery_location or '—' }}</div>
-        <div><strong>Pickup Time:</strong> {{ load.pickup_datetime or '—' }}</div>
+        <div><strong>Pickup Time:</strong> {{ load.pickup_datetime|local_time or '—' }}</div>
         <div><strong>Delivery Time:</strong> {{ load.delivery_datetime or '—' }}</div>
         <div><strong>Equipment:</strong> {{ load.equipment or '—' }}</div>
         <div><strong>Driver:</strong> {{ load.driver or '—' }}</div>

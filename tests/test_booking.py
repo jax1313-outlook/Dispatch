@@ -137,8 +137,16 @@ class TestBookAction:
         assert load["pickup_location"] == "Jacksonville, FL 32202"
         assert load["delivery_location"] == "Savannah, GA 31401"
         assert load["equipment"] == "Dry Van 53'"
-        assert "2026-07-30 06:00" in load["pickup_datetime"]
-        assert "2026-07-30 14:00" in load["delivery_datetime"]
+        # Stored with the operator's offset attached rather than as the bare
+        # text that was typed. A naive "2026-07-30 06:00" is ambiguous -- the
+        # capacity engine refuses it outright and the calendar could not place
+        # it -- so create_load() now records which 06:00 was meant. The
+        # appointment is unchanged; only the ambiguity is gone.
+        from dispatch.timestamps import to_utc
+
+        assert to_utc(load["pickup_datetime"]) == to_utc("2026-07-30 06:00")
+        assert to_utc(load["delivery_datetime"]) == to_utc("2026-07-30 14:00")
+        assert "2026-07-30T06:00" in load["pickup_datetime"]
 
     def test_book_includes_notes(self, client, dispatch_entry):
         resp = client.post("/api/action", json={
@@ -401,23 +409,39 @@ class TestBookingConflicts:
 
 
 class TestConflictDetectionUnit:
+    """These parsers now return an instant in UTC rather than a naive local hour.
+
+    They used to return whatever hour the string happened to say, with no zone,
+    and were then compared against load timestamps parsed the same way -- which
+    works only for as long as every value in the comparison is written in the
+    same unstated zone. Overlap detection is arithmetic on instants; doing it on
+    naive local times is how a conflict is missed by four hours. So the
+    assertions below check the instant, not the digits.
+    """
+
     def test_parse_window_start(self):
+        from dispatch.timestamps import to_utc
         from portal.models.conflict import _parse_window_start
+
         result = _parse_window_start("2026-07-30 06:00 - 10:00")
         assert result is not None
-        assert result.hour == 6
+        assert result == to_utc("2026-07-30 06:00")
 
     def test_parse_window_end_short(self):
+        from dispatch.timestamps import to_utc
         from portal.models.conflict import _parse_window_end
+
         result = _parse_window_end("2026-07-30 06:00 - 10:00")
         assert result is not None
-        assert result.hour == 10
+        assert result == to_utc("2026-07-30 10:00")
 
     def test_parse_window_end_full(self):
+        from dispatch.timestamps import to_utc
         from portal.models.conflict import _parse_window_end
+
         result = _parse_window_end("2026-07-30 06:00 - 2026-07-30 18:00")
         assert result is not None
-        assert result.hour == 18
+        assert result == to_utc("2026-07-30 18:00")
 
     def test_parse_window_empty(self):
         from portal.models.conflict import _parse_window_start, _parse_window_end
