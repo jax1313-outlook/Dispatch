@@ -1040,7 +1040,7 @@ def settings():
         # the same directory when the mail transport moved to dispatch/mail.py
         # on 2026-09-09, and this row kept pointing at the contract one.
         "outbox": str(email_delivery._OUTBOX.resolve()),
-        "library_intel": str(get_memory_dir().resolve()),
+        "library_intel": str(get_data_dir().resolve()),
         "archive_records": str(get_archive_dir().resolve()),
     }
 

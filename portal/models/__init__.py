@@ -65,6 +65,50 @@ def get_memory_dir() -> Path:
     return get_data_dir()
 
 
+class StoreInShelfError(RuntimeError):
+    """A Portal JSON store would have been written into the Library shelf."""
+
+
+def get_store_dir() -> Path:
+    """Where the Portal keeps its own JSON stores: the portal data directory, never the shelf.
+
+    Owner ruling, Mike Zachary, 2026-09-13: `DISPATCH_MEMORY_ROOT` (D:\\Memory) is the Library
+    Department's physical shelf. Operational stores -- intelligence records, the driver PIN
+    registry, the Portal's Library projection -- are not shelf documents, and a credential file
+    in particular does not belong beside documents that are scanned, catalogued and backed up
+    as Library assets. If the portal data directory *is* the shelf, this refuses rather than
+    writing there.
+    """
+    data = get_data_dir()
+    explicit = os.environ.get("DISPATCH_MEMORY_ROOT", "").strip()
+    if explicit and os.path.normcase(os.path.abspath(explicit)) == os.path.normcase(os.path.abspath(str(data))):
+        raise StoreInShelfError(
+            f"PORTAL_DATA_DIR and DISPATCH_MEMORY_ROOT are both {data}. That directory is the Library "
+            "shelf; the Portal's JSON stores may not be written into it. Point PORTAL_DATA_DIR at the "
+            "portal data directory."
+        )
+    data.mkdir(parents=True, exist_ok=True)
+    return data
+
+
+def legacy_shelf_store(filename: str) -> Path | None:
+    """A store file an earlier version wrote into the shelf root, if one is there.
+
+    Read once, only when the store has no file in its proper place yet, so nothing an operator
+    already recorded (a driver's PIN card) silently disappears. Never written, moved or deleted:
+    the next save lands in the portal data directory and the old file stays for the operator.
+    """
+    explicit = os.environ.get("DISPATCH_MEMORY_ROOT", "").strip()
+    if not explicit:
+        return None
+    candidate = Path(explicit) / filename
+    if not candidate.is_file():
+        return None
+    if os.path.normcase(os.path.abspath(explicit)) == os.path.normcase(os.path.abspath(str(get_data_dir()))):
+        return None
+    return candidate
+
+
 def get_archive_dir() -> Path:
     explicit = os.environ.get("DISPATCH_ARCHIVE_ROOT")
     if explicit:

@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_memory_dir, atomic_write_json
+from portal.models import get_store_dir, legacy_shelf_store, atomic_write_json
 
 INTEL_TYPES = [
     "location",
@@ -43,15 +43,16 @@ def _utc_now() -> str:
 
 
 def _intel_path() -> Path:
-    d = get_memory_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    return d / "intelligence.json"
+    # The portal data directory, never the Library shelf (owner ruling, 2026-09-13).
+    return get_store_dir() / "intelligence.json"
 
 
 def _load() -> dict:
     path = _intel_path()
     if not path.exists():
-        return {}
+        path = legacy_shelf_store("intelligence.json")
+        if path is None:
+            return {}
     data = json.loads(path.read_text(encoding="utf-8"))
     # Read-time default, not a migration: records written before verification_status existed
     # get it here, in memory, every load -- never written back to disk, never silently treated

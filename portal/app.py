@@ -277,7 +277,7 @@ def _print_storage_map() -> None:
     print(f"    Evidence uploads {_get_upload_dir().resolve()}")
     print(f"    Contract archive {cin_archive.ARCHIVE_ROOT.resolve()}")
     print(f"    Email outbox     {(cin_archive.ARCHIVE_ROOT / 'Outbox').resolve()}")
-    print(f"    Library/Intel    {get_memory_dir().resolve()}")
+    print(f"    Shelf (Memory)   {get_memory_dir().resolve()}")
     print(f"    Archive records  {get_archive_dir().resolve()}")
     print()
 

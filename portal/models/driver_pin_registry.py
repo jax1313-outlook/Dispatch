@@ -6,9 +6,13 @@ default". This module is that decision, made for the Driver role only --
 Authority's own PIN registry (identity.py) is untouched and still lives
 outside Library).
 
-Storage lives under `get_memory_dir()` -- the same root `library.json`
-uses -- so a Driver PIN Card is literally a Library asset on disk, not
-just administratively presented as one. It gets its own file
+Storage: originally under `get_memory_dir()`, beside `library.json`, so a
+Driver PIN Card was literally a Library asset on disk. **Changed 2026-09-13
+by Mike Zachary**: the memory root is the Library Department's physical
+shelf, and a credential file does not belong among shelf documents that
+are scanned, catalogued and backed up as Library assets. The registry now
+lives in the portal data directory (`get_store_dir()`); a file left in the
+shelf by an earlier version is read once and never modified. It gets its own file
 (`driver_pin_registry.json`) rather than folding into `library.py`'s
 generic `add_record()`/section schema, for the same reason identity.py
 gave for keeping Authority's PIN out of Library's generic schema in the
@@ -43,7 +47,7 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from portal.models import get_data_dir, get_memory_dir, atomic_write_json
+from portal.models import get_data_dir, get_store_dir, legacy_shelf_store, atomic_write_json
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
@@ -61,14 +65,15 @@ def _utc_now() -> str:
 
 
 def _registry_path() -> Path:
-    d = get_memory_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    return d / "driver_pin_registry.json"
+    # The portal data directory, never the Library shelf (owner ruling, 2026-09-13).
+    return get_store_dir() / "driver_pin_registry.json"
 
 
 def _load() -> dict:
     path = _registry_path()
-    if path.exists():
+    if not path.exists():
+        path = legacy_shelf_store("driver_pin_registry.json")
+    if path is not None and path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     return {}
 
