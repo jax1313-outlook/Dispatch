@@ -6,6 +6,8 @@ Business logic for the full load lifecycle: create -> dispatch -> pickup
 
 from __future__ import annotations
 
+import functools
+
 from pathlib import Path
 
 from dispatch.models import (
@@ -36,9 +38,36 @@ from dispatch.models import (
     Settlement,
     _utc_now,
 )
-from dispatch import notifications, store
+from dispatch import db, notifications, store
+
 
 import sys
+
+
+
+def atomic(fn):
+    """Run this service operation as one transaction.
+
+    An operation that writes twice was two transactions: `add_milestone()` wrote
+    the milestone, then the load's new status, then the visibility record, each
+    committing on its own. A crash, a lock timeout or a validation error between
+    them left a milestone recorded against a load whose status never advanced --
+    no rollback, no reconciliation pass, and nothing on any screen to say so. On
+    a laptop that gets closed mid-write that window opens routinely.
+
+    The decorator is the whole change at each call site. `db.unit_of_work()`
+    makes every nested `get_connection()` join one transaction instead of
+    opening its own, so the store functions below need no argument threading and
+    no awareness that they are now sharing. It is reentrant, so an atomic
+    operation may call another one.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with db.unit_of_work():
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _notify_safe(send) -> None:
@@ -52,10 +81,18 @@ def _notify_safe(send) -> None:
     the load *was* archived/delivered/invoiced; only the notification email
     failed. Log and continue rather than propagate.
     """
-    try:
-        send()
-    except Exception as exc:  # noqa: BLE001 - deliberately broad: any transport failure, not just SMTP
-        print(f"[dispatch.notifications] notify failed, continuing: {exc}", file=sys.stderr)
+    def _run():
+        try:
+            send()
+        except Exception as exc:  # noqa: BLE001 - any transport failure, not just SMTP
+            print(f"[dispatch.notifications] notify failed, continuing: {exc}", file=sys.stderr)
+
+    # Deferred until the surrounding transaction commits, and run immediately
+    # when there is none. Both reasons only appeared once these operations
+    # became atomic: an email must not go out for work that then rolled back,
+    # and a thirty-second SMTP timeout must not be served while holding a write
+    # lock every other writer is queued behind.
+    db.after_commit(_run)
 
 
 _MILESTONE_TO_STATUS = {
@@ -114,6 +151,7 @@ _MILESTONE_NEXT = {
 }
 
 
+@atomic
 def create_load(
     customer: str,
     broker_shipper: str = "",
@@ -271,6 +309,7 @@ def delete_load(load_id: str) -> bool:
     return store.delete_load(load_id)
 
 
+@atomic
 def assign_driver(load_id: str, driver_id: str) -> dict | None:
     """Assign an active driver to a load."""
     load = store.get_load(load_id)
@@ -283,6 +322,7 @@ def assign_driver(load_id: str, driver_id: str) -> dict | None:
     return store.get_load(load_id)
 
 
+@atomic
 def unassign_driver(load_id: str) -> dict | None:
     """Remove driver assignment from a load."""
     load = store.get_load(load_id)
@@ -291,6 +331,7 @@ def unassign_driver(load_id: str) -> dict | None:
     return store.update_load(load_id, driver_id="", driver="")
 
 
+@atomic
 def assign_equipment(load_id: str, equipment_id: str) -> dict | None:
     """Assign active equipment to a load."""
     load = store.get_load(load_id)
@@ -304,6 +345,7 @@ def assign_equipment(load_id: str, equipment_id: str) -> dict | None:
     return store.get_load(load_id)
 
 
+@atomic
 def unassign_equipment(load_id: str) -> dict | None:
     """Remove equipment assignment from a load."""
     load = store.get_load(load_id)
@@ -328,6 +370,7 @@ def _validate_equipment_assignment(equipment_id: str) -> None:
         raise ValueError(f"Equipment {equipment_id} is not active (status: {eqp['status']})")
 
 
+@atomic
 def _try_auto_dispatch(load_id: str) -> None:
     load = store.get_load(load_id)
     if not load or load["status"] != "created":
@@ -462,6 +505,7 @@ def _raise_transition_refusal_card(load_id: str, current: str, target: str, reas
         print(f"[dispatch.services] {explanation} (card not raised: {exc})", file=sys.stderr)
 
 
+@atomic
 def add_milestone(
     load_id: str,
     event_type: str,
@@ -693,6 +737,7 @@ def delete_evidence(evidence_id: str) -> bool:
     return store.delete_evidence(evidence_id)
 
 
+@atomic
 def open_exception(
     load_id: str,
     exception_type: str = "other",
@@ -732,6 +777,7 @@ def open_exception(
     return result
 
 
+@atomic
 def resolve_exception(
     exception_id: str,
     resolution_note: str = "",
@@ -782,6 +828,7 @@ def update_exception(exception_id: str, **fields) -> dict | None:
 _POD_ELIGIBLE_STATUSES = {"delivered", "completed", "archived"}
 
 
+@atomic
 def generate_pod(
     load_id: str,
     recipient: str = "",
@@ -871,6 +918,7 @@ def sanitize_payload_for_role(payload: dict, role: str) -> dict:
     return comi_routing.sanitize_payload_for_role(payload, role)
 
 
+@atomic
 def archive_load(load_id: str) -> dict:
     load = store.get_load(load_id)
     if not load:
@@ -993,6 +1041,7 @@ def build_completion_packet(load_id: str) -> dict:
     }
 
 
+@atomic
 def confirm_rate(
     load_id: str,
     rate_amount: float,
@@ -1184,6 +1233,7 @@ def update_settlement(load_id: str, **fields) -> dict | None:
     return store.update_settlement(load_id, **fields)
 
 
+@atomic
 def record_payment(
     load_id: str,
     payment_amount: float,
@@ -1905,6 +1955,7 @@ def start_detention(
     return store.create_detention(det)
 
 
+@atomic
 def stop_detention(
     detention_id: str,
     ended_at: str = "",
@@ -2295,6 +2346,7 @@ def list_suspect_ifta_fuel_purchases(
     ]
 
 
+@atomic
 def attach_ifta_fuel_evidence(
     purchase_id: str,
     file_data: bytes,
@@ -2793,6 +2845,7 @@ def run_ifta_exception_detectors(year: int, quarter: int, vehicle_id: str = "") 
     return _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
 
 
+@atomic
 def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = "") -> dict:
     """Freezes the current computed report for this period into a new
     IFTAReportApproval (status='draft') and emails the reviewer an

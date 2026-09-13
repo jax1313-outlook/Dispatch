@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -589,8 +590,12 @@ def _ensure_wal(conn: sqlite3.Connection) -> None:
             time.sleep(0.02 * (attempt + 1))
 
 
-@contextmanager
-def get_connection():
+#: The unit of work open on this thread, if any. See `unit_of_work`.
+_ACTIVE = threading.local()
+
+
+def _open() -> sqlite3.Connection:
+    """A configured connection with the schema guaranteed present."""
     path = get_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     # Asked before connect(), because connect() creates the file. If the
@@ -613,6 +618,26 @@ def get_connection():
     conn.execute("PRAGMA foreign_keys=ON")
     _ensure_wal(conn)
     _init_db_once(conn, path, rebuild=missing)
+    return conn
+
+
+@contextmanager
+def get_connection():
+    """A connection, committed on clean exit -- unless a unit of work owns it.
+
+    When `unit_of_work()` is open on this thread, every nested
+    `get_connection()` joins it and neither commits nor closes. That is what
+    makes a multi-step service operation atomic without editing the ~160 call
+    sites that each ask for a connection of their own: `store.create_milestone()`
+    followed by `store.update_load()` becomes one transaction because the
+    service wrapped them, not because either of them knows about the other.
+    """
+    joined = getattr(_ACTIVE, "conn", None)
+    if joined is not None:
+        yield joined
+        return
+
+    conn = _open()
     try:
         yield conn
         conn.commit()
@@ -621,6 +646,88 @@ def get_connection():
         raise
     finally:
         conn.close()
+
+
+@contextmanager
+def unit_of_work():
+    """One transaction across several store calls. Rolls the lot back on failure.
+
+    Reentrant: an inner `unit_of_work()` joins the outer one rather than opening
+    a second transaction, so a service operation composed of other service
+    operations still commits once. Only the outermost block decides the outcome,
+    which is the only way partial success can be excluded -- an inner commit
+    would make the failure of a later step unrecoverable.
+    """
+    existing = getattr(_ACTIVE, "conn", None)
+    if existing is not None:
+        yield existing
+        return
+
+    conn = _open()
+    _ACTIVE.conn = conn
+    _ACTIVE.after_commit = []
+    committed = False
+    try:
+        yield conn
+        conn.commit()
+        committed = True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        callbacks = list(getattr(_ACTIVE, "after_commit", None) or ())
+        # Back to None, not to an empty list: `after_commit()` tells "a unit of
+        # work is collecting callbacks" from "there is none, run it now" by
+        # exactly this, and leaving a drained list behind made every later call
+        # outside a transaction queue onto a list nobody would ever run.
+        _ACTIVE.after_commit = None
+        _ACTIVE.conn = None
+        conn.close()
+
+    if committed:
+        _run_after_commit(callbacks)
+
+
+def after_commit(callback) -> None:
+    """Run `callback` once the surrounding unit of work has committed.
+
+    Two things this exists for, and they are the same thing seen from either end.
+
+    An email must not be sent for a transaction that then rolls back. Announcing
+    a delivery to a broker for a milestone the database subsequently discarded is
+    the worst failure this system can have, and it is invisible -- the send
+    succeeded.
+
+    And a transaction must not be held open across a network call. smtplib's
+    timeout here is thirty seconds; a write lock held for thirty seconds turns
+    every other writer into a "database is locked" error, including the driver
+    reporting the next milestone.
+
+    With no unit of work open the callback runs immediately, which is what every
+    existing single-write call site already did.
+    """
+    pending = getattr(_ACTIVE, "after_commit", None)
+    if pending is None:
+        callback()
+        return
+    pending.append(callback)
+
+
+def _run_after_commit(callbacks) -> None:
+    """Never let a post-commit side effect undo a committed transaction."""
+    for callback in callbacks:
+        try:
+            callback()
+        except Exception as exc:  # noqa: BLE001 - a side effect, not the work
+            print(
+                f"[dispatch.db] after-commit callback failed, continuing: {exc}",
+                file=sys.stderr,
+            )
+
+
+def in_unit_of_work() -> bool:
+    """True while this thread is inside `unit_of_work()`."""
+    return getattr(_ACTIVE, "conn", None) is not None
 
 
 def dict_from_row(row: sqlite3.Row) -> dict:
