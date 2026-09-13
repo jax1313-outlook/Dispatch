@@ -590,12 +590,25 @@ class TestLetteredControls:
         assert not keys & {key for key, _g, _l, _a in cli.MENU_ITEMS}
         assert "Q" not in keys, "Q is Quit and must not be reused"
 
-    def test_the_menu_shows_it_between_the_eight_and_quit(self):
-        rendered = cli.render_menu().splitlines()
-        rows = [line for line in rendered if line.strip()]
-        assert "Stop Dispatch" in rows[7]
-        assert "Reset PIN" in rows[8]
-        assert "Quit" in rows[9]
+    def test_the_menu_shows_the_lettered_controls_between_the_eight_and_quit(self):
+        """Position by structure, not by row number.
+
+        This asserted rows[8] and rows[9] literally, so adding a second lettered
+        control failed it -- while the rule it exists to protect ("the eight are
+        settled; lettered controls go after them and before Quit") was never
+        broken. The eight numbered rows are still pinned by index, because that
+        ordering IS the specification.
+        """
+        rows = [line for line in cli.render_menu().splitlines() if line.strip()]
+        assert "Stop Dispatch" in rows[7], "the eighth numbered control must stay eighth"
+
+        lettered = [label for _k, _g, label, _a in cli.EXTRA_ITEMS]
+        positions = [next(i for i, r in enumerate(rows) if label in r) for label in lettered]
+        quit_row = next(i for i, r in enumerate(rows) if "Quit" in r)
+
+        assert min(positions) == 8, "a lettered control must follow the eighth numbered one"
+        assert max(positions) < quit_row, "Quit stays last"
+        assert quit_row == len(rows) - 1
 
     @pytest.mark.parametrize(
         "typed", ["P", "p", " p ", "reset pin", "reset-pin", "forgot pin", "forgotten pin"]

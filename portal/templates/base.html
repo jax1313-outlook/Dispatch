@@ -66,6 +66,7 @@
             <li><a href="{{ url_for('pages.conflicts') }}" class="{% if request.endpoint == 'pages.conflicts' %}active{% endif %}">Conflict Notices</a></li>
             <li><a href="{{ url_for('pages.driver_pay') }}" class="{% if request.endpoint == 'pages.driver_pay' %}active{% endif %}">Driver Pay</a></li>
             <li><a href="{{ url_for('pages.email_templates') }}" class="{% if request.endpoint == 'pages.email_templates' %}active{% endif %}">Email Templates</a></li>
+            <li><a href="{{ url_for('maintenance.maintenance') }}" class="{% if request.endpoint == 'maintenance.maintenance' %}active{% endif %}">Maintenance</a></li>
             <li><a href="{{ url_for('pages.settings') }}" class="{% if request.endpoint == 'pages.settings' %}active{% endif %}">Settings</a></li>
         </ul>
     </nav>
@@ -76,6 +77,18 @@
             {% block page_actions %}{% endblock %}
         </header>
         <div class="page-body">
+            {# Flashed messages. Added with the Maintenance page, which is the
+               first screen whose actions take long enough that "it worked" has
+               to be said afterwards rather than shown by the page reloading. #}
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                  <li class="flash flash-{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
             {% block body %}{% endblock %}
         </div>
     </main>
