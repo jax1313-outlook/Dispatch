@@ -493,6 +493,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # PIN gate already on main (CF-03) and was deliberately not recovered.
     from dispatch.authcounters import init_auth_counter_schema
     from dispatch.connectors.audit import init_connector_schema
+    from dispatch.delivery import init_delivery_schema
     from dispatch.spine.db import init_spine_schema
     from dispatch.tokens import init_token_schema
 
@@ -503,6 +504,9 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # hash in its JSON store because a lost update on a lockout counter is not a
     # cosmetic race -- see dispatch/authcounters.py.
     init_auth_counter_schema(conn)
+    # Every outbound message attempt, recorded before it is tried. A failed
+    # broker notification used to produce one line on stderr and nothing else.
+    init_delivery_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:

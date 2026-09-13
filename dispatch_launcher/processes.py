@@ -171,17 +171,42 @@ def parse_proc_stat_starttime(stat_text: str) -> str | None:
     return fields[19]
 
 
+#: How hard to try for a command line before accepting that there is none.
+#: Five attempts at 20 ms is 100 ms in the worst case, which is far longer than
+#: a fork-to-exec window and far shorter than anything a person would notice.
+_CMDLINE_READ_ATTEMPTS = 5
+_CMDLINE_RETRY_SECONDS = 0.02
+
+
 def _posix_facts(pid: int) -> ProcessFacts:
     _reap_if_own_child(pid)
     proc = Path("/proc") / str(pid)
     if proc.is_dir() and not _is_zombie(pid):
         command_line = None
         created = None
-        try:
-            raw = (proc / "cmdline").read_bytes()
+        # /proc/<pid>/cmdline is EMPTY between fork and exec. Reading it the
+        # instant after Popen -- which is exactly when control.start() records
+        # the identity it will later check -- can therefore return nothing on a
+        # loaded machine, and a null command_line silently weakens the check
+        # that decides whether a PID still belongs to Dispatch before stop()
+        # signals it. Observed as a rare failure of
+        # tests/test_launcher.py::test_start_records_the_identity_it_will_later_check
+        # under a full-suite run, and never in isolation.
+        #
+        # A few short retries, bounded, and only while the process is alive: an
+        # exited process legitimately has an empty cmdline and waiting for it
+        # would be waiting forever.
+        for attempt in range(_CMDLINE_READ_ATTEMPTS):
+            try:
+                raw = (proc / "cmdline").read_bytes()
+            except OSError:
+                break
             command_line = raw.replace(b"\x00", b" ").decode("utf-8", "replace").strip() or None
-        except OSError:
-            pass
+            if command_line is not None or attempt == _CMDLINE_READ_ATTEMPTS - 1:
+                break
+            if not proc.is_dir():
+                break
+            time.sleep(_CMDLINE_RETRY_SECONDS)
         try:
             created = parse_proc_stat_starttime((proc / "stat").read_text(encoding="utf-8"))
         except OSError:

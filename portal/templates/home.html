@@ -44,6 +44,21 @@
     {% endif %}
 </div>
 
+{% if delivery_summary and delivery_summary.needs_attention %}
+{# A message that never reached anyone had no surface at all until now: the
+   failure went to stderr, the write had already committed, and the screen said
+   the operation succeeded. This is the smallest honest correction -- the count,
+   on the page Mike opens first. #}
+<div class="card-section" id="undelivered">
+    <h2>Messages that have not reached anyone</h2>
+    <p>
+        <span class="truth truth-unavailable">{{ delivery_summary.needs_attention }}</span>
+        outbound message(s) are queued, failed or abandoned.
+        <a href="{{ url_for('maintenance.maintenance') }}">See them on Maintenance</a>.
+    </p>
+</div>
+{% endif %}
+
 {% if attention_needed %}
 <div class="card-section" id="attention-needed">
     <h2>Attention Needed Across Departments</h2>

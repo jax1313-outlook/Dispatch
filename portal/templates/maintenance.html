@@ -57,6 +57,61 @@
 </div>
 
 <div class="card-section">
+    <h2>Outbound messages</h2>
+    {# The state that had nowhere to be displayed. A notification that failed
+       authentication used to produce one line on stderr: no row, no counter,
+       no screen. Mike saw Submit succeed and the broker heard nothing. #}
+    <p>
+        {% if delivery_summary.needs_attention %}
+            <span class="truth truth-unavailable">{{ delivery_summary.needs_attention }}</span>
+            outbound message(s) have not reached anyone.
+            {% if delivery_summary.abandoned %}
+                <strong>{{ delivery_summary.abandoned }}</strong> gave up after five attempts
+                and need a decision.
+            {% endif %}
+        {% else %}
+            Every outbound message has been accepted by a transport.
+        {% endif %}
+    </p>
+
+    <table class="data-table">
+        <tr>
+            {% for state, n in delivery_summary.counts.items() %}
+            <td class="label">{{ state }}</td><td>{{ n }}</td>
+            {% endfor %}
+        </tr>
+    </table>
+
+    {% if delivery_summary.retry_due %}
+    <form method="post" action="{{ url_for('maintenance.retry_deliveries') }}">
+        <button class="btn" type="submit">
+            Retry {{ delivery_summary.retry_due }} due message(s)
+        </button>
+    </form>
+    <p class="muted">
+        Nothing is resent on a timer. A resend is always something you did, at a
+        time you can point at.
+    </p>
+    {% endif %}
+
+    {% if delivery_failures %}
+    <table class="data-table">
+        <tr><th>When</th><th>What</th><th>Load</th><th>Tries</th><th>State</th><th>Why it failed</th></tr>
+        {% for a in delivery_failures %}
+        <tr>
+            <td>{{ a.updated_at }}</td>
+            <td>{{ a.kind }}</td>
+            <td>{{ a.subject_ref or '—' }}</td>
+            <td>{{ a.attempt_count }}</td>
+            <td><span class="truth truth-{{ a.status|lower }}">{{ a.status }}</span></td>
+            <td>{{ a.last_error or '—' }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+</div>
+
+<div class="card-section">
     <h2>Stored money</h2>
     <p>
         Every monetary column carries an exact whole-cent companion, so totals are
