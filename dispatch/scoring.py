@@ -440,7 +440,7 @@ def _requested_drive_hours(load: dict) -> float:
     return float(distance) / _DRIVE_SPEED_MPH
 
 
-def assess_capacity(load: dict, capacity) -> "CapacityAssessment":
+def assess_capacity(load: dict, capacity, stops=None) -> "CapacityAssessment":
     """Ask the capacity engine whether this load fits the asset.
 
     `capacity` is a `dispatch.capacity.DynamicCapacity`. The call is advisory
@@ -450,6 +450,11 @@ def assess_capacity(load: dict, capacity) -> "CapacityAssessment":
     request for none of that dimension -- not a claim that the load needs none.
     The capacity engine raises its own data-gap findings for anything the asset
     cannot answer, which is why this function does not invent values.
+
+    `stops` is the load's own pickup and delivery, built by
+    `dispatch.load_stops.stops_for_load()`. Passing it turns on the engine's
+    stop-sequence and appointment checks, which had no caller until it existed.
+    Left out, the behaviour is exactly what it was before.
     """
     return capacity.evaluate(
         weight_lbs=float(load.get("weight_lbs") or 0.0),
@@ -459,6 +464,7 @@ def assess_capacity(load: dict, capacity) -> "CapacityAssessment":
         drive_hours=_requested_drive_hours(load),
         requires_liftgate=bool(load.get("requires_liftgate")),
         stacking_policy=str(load.get("stacking_policy") or "UNKNOWN"),
+        stops=stops,
     )
 
 

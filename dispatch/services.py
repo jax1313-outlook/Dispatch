@@ -7,6 +7,7 @@ Business logic for the full load lifecycle: create -> dispatch -> pickup
 from __future__ import annotations
 
 import functools
+import os
 
 from pathlib import Path
 
@@ -3644,6 +3645,25 @@ def capacity_coverage() -> dict:
     return capacity_store.profile_coverage()
 
 
+def default_dwell_hours() -> float | None:
+    """How long a truck sits at a stop, if anybody has said.
+
+    Unset by default, and that is the point. With no dwell recorded the capacity
+    engine declines to project arrival times, which is the honest answer;
+    defaulting to zero would make every appointment look reachable. Set
+    DISPATCH_DEFAULT_DWELL_HOURS once the real figure is known and the forward
+    walk turns on with no other change.
+    """
+    raw = os.environ.get("DISPATCH_DEFAULT_DWELL_HOURS", "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
 def assess_load_capacity(load_id: str) -> dict:
     """Does this load fit the truck it is assigned to?
 
@@ -3653,7 +3673,7 @@ def assess_load_capacity(load_id: str) -> dict:
     Inventing a specification is how freight gets accepted onto a trailer that
     cannot carry it.
     """
-    from dispatch import capacity_store, scoring
+    from dispatch import capacity_store, load_stops, scoring
 
     load = store.get_load(load_id)
     if not load:
@@ -3682,10 +3702,21 @@ def assess_load_capacity(load_id: str) -> dict:
             "assessment": None,
         }
 
-    assessment = scoring.assess_capacity(load, capacity)
+    # The load's own two stops, so the engine's appointment and stop-sequence
+    # checks run against a real load rather than sitting unreachable. Anything
+    # the load does not record comes back as a gap in plain language instead of
+    # a guess -- see dispatch/load_stops.py for why a dwell of zero is refused.
+    stops, stop_gaps = load_stops.stops_for_load(
+        load,
+        drive_hours=load_stops.transit_hours(load),
+        default_service_hours=default_dwell_hours(),
+    )
+
+    assessment = scoring.assess_capacity(load, capacity, stops=stops)
     return {
         "status": "LIVE",
         "load_id": load_id,
         "equipment_id": equipment_id,
         "assessment": assessment.to_dict() if hasattr(assessment, "to_dict") else assessment,
+        "stop_gaps": stop_gaps,
     }
