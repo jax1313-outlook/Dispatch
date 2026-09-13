@@ -177,19 +177,24 @@ PROOF_PATH: tuple[StepDefinition, ...] = (
     StepDefinition(
         18, "Load, milestones, and evidence remain", "Code-automated",
         "python scripts/dispatch_proof.py verify --load-id <LOAD_ID>",
-        "Compares record identifiers and evidence SHA-256 hashes against step 12/14.",
+        "Compares record identifiers and evidence SHA-256 hashes against step 12/14. The "
+        "checksums written at upload live in the database, so this needs no prior snapshot; "
+        "add --snapshot <FILE> from `dispatch_proof.py snapshot` for the stricter "
+        "before-and-after comparison.",
     ),
     StepDefinition(
         19, "Backup is created", "Code-automated",
-        r'python scripts/dispatch_backup.py create --destination "D:\Backups\Dispatch"',
-        "",
+        r'python scripts/dispatch_backup.py backup "D:\Backups\Dispatch"',
+        "Exit code 2 means one or more configured sources were missing and the archive is "
+        "incomplete. Pinned to the real CLI by tests/test_proof_command_contract.py.",
     ),
     StepDefinition(
         20, "Restore is proven in an isolated destination", "Code-automated",
-        r'python scripts/dispatch_backup.py restore --archive <ARCHIVE> '
-        r'--destination "D:\Restore Proof" --verify',
+        r'python scripts/dispatch_backup.py restore <ARCHIVE> "D:\Restore Proof"',
         "Never the live database or the live evidence store. The readiness check refuses "
-        "a destination that overlaps either.",
+        "a destination that overlaps either. restore recomputes every hash in the archive "
+        "before it writes anything and refuses on a mismatch, so the proof is in the "
+        "command itself -- there is no separate verify flag.",
     ),
 )
 
@@ -422,6 +427,149 @@ def compare_record_ids(original: dict, restored: dict) -> dict:
             }
         )
     return {"rows": rows, "identical": identical}
+
+
+# --------------------------------------------------------------- step 18: verify
+
+
+#: Default file name for the pre-stop snapshot, written beside the proof report.
+SNAPSHOT_NAME_TEMPLATE = "proof_snapshot_{load_id}.json"
+
+
+def snapshot_persistence(load_id: str) -> dict:
+    """Capture what step 18 will later compare against.
+
+    Optional. ``verify_persistence`` is deliberately usable without one -- the
+    database already carries the SHA-256 recorded at steps 12/14, so a restart
+    can be proven against the application's own record. A snapshot adds the
+    stricter comparison (identifiers that *appeared* as well as identifiers that
+    vanished), which is the one thing a self-comparison cannot see.
+    """
+    return {
+        "load_id": load_id,
+        "captured_at": _now(),
+        "record_ids": collect_record_ids(load_id),
+        "evidence_hashes": collect_evidence_hashes(load_id),
+    }
+
+
+def verify_persistence(load_id: str, snapshot: dict | None = None) -> dict:
+    """Step 18: the load, its milestones and its evidence are still here, unchanged.
+
+    Two checks, and the first one needs nothing but the running application:
+
+    **Recorded-vs-recomputed.** Every evidence row carries the SHA-256 that
+    ``attach_evidence`` computed from the bytes at upload (steps 12/14). This
+    re-reads the file off disk now and recomputes. A mismatch means the bytes
+    changed under the record; an ``ABSENT`` means the file the record points at
+    is gone. Either is a failed persistence proof, and neither shows up as an
+    error anywhere else -- the row still reads fine.
+
+    **Before-vs-after**, when a snapshot from ``snapshot_persistence`` is passed:
+    identifiers and hashes side by side, per Section 4.5.
+
+    Returns a structured result; ``ok`` is the whole answer and every row that
+    contributed to it is in the payload, because Section 0 is explicit that a
+    statement that something worked is not proof of it.
+    """
+    current_ids = collect_record_ids(load_id)
+    current_hashes = collect_evidence_hashes(load_id)
+
+    integrity_rows = []
+    integrity_ok = True
+    for evidence_id in sorted(current_hashes):
+        entry = current_hashes[evidence_id]
+        recorded = entry.get("recorded_checksum", "")
+        recomputed = entry.get("sha256", "")
+        if entry.get("status") == "ABSENT":
+            verdict = "ABSENT"
+        elif not recorded:
+            # No checksum was ever recorded for this row. That is a gap in the
+            # record, not a match, and calling it a match would be the exact
+            # false pass this step exists to prevent.
+            verdict = "UNVERIFIED"
+        elif recorded == recomputed:
+            verdict = "LIVE"
+        else:
+            verdict = "UNAVAILABLE"
+        integrity_ok = integrity_ok and verdict == "LIVE"
+        integrity_rows.append(
+            {
+                "evidence_id": evidence_id,
+                "file_path": entry.get("file_path", ""),
+                "recorded_checksum": recorded,
+                "recomputed_sha256": recomputed,
+                "verdict": verdict,
+            }
+        )
+
+    load_present = bool(current_ids.get("loads"))
+    result = {
+        "load_id": load_id,
+        "checked_at": _now(),
+        "load_present": load_present,
+        "record_ids": current_ids,
+        "evidence_integrity": {"rows": integrity_rows, "ok": integrity_ok},
+        "snapshot_comparison": None,
+        "ok": load_present and integrity_ok,
+    }
+
+    if snapshot is not None:
+        ids_cmp = compare_record_ids(snapshot.get("record_ids", {}), current_ids)
+        hash_cmp = compare_hashes(snapshot.get("evidence_hashes", {}), current_hashes)
+        result["snapshot_comparison"] = {
+            "captured_at": snapshot.get("captured_at", ""),
+            "record_ids": ids_cmp,
+            "evidence_hashes": hash_cmp,
+            "identical": ids_cmp["identical"] and hash_cmp["identical"],
+        }
+        result["ok"] = result["ok"] and result["snapshot_comparison"]["identical"]
+
+    return result
+
+
+def render_verify_result(result: dict) -> str:
+    """The side-by-side text Section 4.5 asks for, not a verdict on its own."""
+    lines = [
+        f"Load {result['load_id']} — persistence verification {result['checked_at']}",
+        "",
+        f"  load record present: {'yes' if result['load_present'] else 'NO'}",
+        "",
+        "  Evidence: checksum recorded at upload vs recomputed from disk now",
+    ]
+    if not result["evidence_integrity"]["rows"]:
+        lines.append("    (no evidence attached to this load)")
+    for row in result["evidence_integrity"]["rows"]:
+        lines.append(f"    {row['evidence_id']}  {row['verdict']}")
+        lines.append(f"      recorded:   {row['recorded_checksum'] or '(none recorded)'}")
+        lines.append(f"      recomputed: {row['recomputed_sha256'] or '(file absent)'}")
+        lines.append(f"      path:       {row['file_path']}")
+
+    lines.append("")
+    lines.append("  Record identifiers now on file")
+    for table in sorted(result["record_ids"]):
+        ids = result["record_ids"][table]
+        lines.append(f"    {table:<14} {len(ids)}  {', '.join(ids) if ids else '—'}")
+
+    cmp_ = result.get("snapshot_comparison")
+    if cmp_:
+        lines.append("")
+        lines.append(f"  Compared against snapshot taken {cmp_['captured_at']}")
+        for row in cmp_["record_ids"]["rows"]:
+            mark = "ok" if row["match"] else "DRIFT"
+            lines.append(f"    {row['table']:<14} {mark}")
+            if row["missing"]:
+                lines.append(f"      missing after restart:    {', '.join(row['missing'])}")
+            if row["unexpected"]:
+                lines.append(f"      appeared after restart:   {', '.join(row['unexpected'])}")
+        for row in cmp_["evidence_hashes"]["rows"]:
+            mark = "ok" if row["match"] else "DRIFT"
+            lines.append(f"    evidence {row['evidence_id']}  {mark}")
+
+    lines.append("")
+    lines.append(f"  RESULT: {'PASSED' if result['ok'] else 'FAILED'}")
+    return "\n".join(lines) + "\n"
+
 
 
 # --------------------------------------------------------------------------- report

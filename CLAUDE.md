@@ -278,15 +278,20 @@ Do not mark an item verified without actual runtime evidence. Current readiness:
 
 ---
 
-## 8. Current build status (2026-08-25)
+## 8. Current build status (2026-09-13)
 
 | | |
 |---|---|
 | Version | `0.1.0` |
-| Suite | **3,696 passed** · 0 failed / 0 skipped / 0 warnings |
-| Gated coverage | **94.74%** over `cin_lite` + `dispatch` + `portal` (floor 90%) |
-| Ungated | `dispatch_launcher/` at 87.75% — Windows-only branches; see `docs/readiness/OPERATIONAL_PROOF.md` §2.1 |
+| Suite | **4,221 passed** · 0 failed / 0 skipped / 0 warnings |
+| Gated coverage | **91.48%** with **branch coverage** over `cin_lite` + `dispatch` + `portal` + `dispatch_launcher` (floor 90%) |
+| Ungated | nothing. `dispatch_launcher/` is inside the gate; its Windows-only branches are marked `pragma: no cover` line by line rather than the package being exempt |
 | Laptop readiness | **UNVERIFIED** — see below |
+
+The coverage figure went *down* and the gate got stronger. It was line-only, so
+every `if` whose false path was never taken read as covered — and the false
+paths are where the refusals live. Branch coverage counts them, and
+`dispatch_launcher/` is no longer outside the measurement.
 
 **IMPLEMENTED:** the Spine lifecycle engine; loads, drivers, equipment, capacity,
 milestones, evidence and POD; the Driver Portal; IFTA through finalization, exception

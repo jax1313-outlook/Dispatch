@@ -22,7 +22,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_memory_dir, atomic_write_json
+from portal.models import get_memory_dir, atomic_write_json, guarded
 
 SECTIONS = [
     "company",
@@ -89,6 +89,7 @@ def get_section(section: str) -> list[dict]:
     return _load().get(section, [])
 
 
+@guarded(_library_path)
 def add_record(section: str, name: str, content: str = "",
                metadata: dict | None = None, submitted_by: str = "human") -> dict:
     """Add a Library record.
@@ -129,6 +130,7 @@ def add_record(section: str, name: str, content: str = "",
     return record
 
 
+@guarded(_library_path)
 def review_candidate(record_id: str, approve: bool, reviewed_by: str) -> dict:
     """Promote or reject a machine-submitted (`pending_review`) record.
 
@@ -190,6 +192,7 @@ def _trigger_publisher_on_approval(rec: dict) -> None:
     )
 
 
+@guarded(_library_path)
 def update_record(record_id: str, name: str | None = None,
                   content: str | None = None,
                   metadata: dict | None = None) -> dict:
@@ -209,6 +212,7 @@ def update_record(record_id: str, name: str | None = None,
     raise KeyError(f"Library record not found: {record_id}")
 
 
+@guarded(_library_path)
 def delete_record(record_id: str) -> dict:
     data = _load()
     for section, section_records in data.items():

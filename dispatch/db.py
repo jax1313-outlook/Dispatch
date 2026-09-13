@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -428,8 +429,16 @@ _db_path_override: Path | None = None
 
 
 def set_db_path(path: Path | None) -> None:
+    """Point the process at a different database file.
+
+    Also drops the schema-initialised cache. A test that points at a fresh tmp
+    file, or deletes and recreates one at a path this process already
+    initialised, must get a real initialisation rather than the cached "already
+    done" answer -- otherwise the first query hits a table that is not there.
+    """
     global _db_path_override
     _db_path_override = path
+    _SCHEMA_READY.clear()
 
 
 def get_db_path() -> Path:
@@ -447,6 +456,9 @@ def _init_db(conn: sqlite3.Connection) -> None:
     # lifecycle truth." The branch this was recovered from also initialised a
     # `dispatch.security` schema here; that stack is superseded by the Portal
     # PIN gate already on main (CF-03) and was deliberately not recovered.
+    from dispatch.authcounters import init_auth_counter_schema
+    from dispatch.capacity_store import init_capacity_schema
+    from dispatch.delivery import init_delivery_schema
     from dispatch.connectors.audit import init_connector_schema
     from dispatch.spine.db import init_spine_schema
     from dispatch.tokens import init_token_schema
@@ -454,6 +466,17 @@ def _init_db(conn: sqlite3.Connection) -> None:
     init_connector_schema(conn)
     init_spine_schema(conn)
     init_token_schema(conn)
+    # Failed-attempt counters. They live in SQLite rather than beside the PIN
+    # hash in its JSON store because a lost update on a lockout counter is not a
+    # cosmetic race -- see dispatch/authcounters.py.
+    init_auth_counter_schema(conn)
+    # Every outbound message attempt, recorded before it is tried. A failed
+    # broker notification used to produce one line on stderr and nothing else.
+    init_delivery_schema(conn)
+    # One capacity profile per truck. Without a table, dispatch/capacity.py --
+    # 1,861 lines with 1,000 lines of tests -- had no way to be reached from the
+    # running program at all. See dispatch/capacity_store.py.
+    init_capacity_schema(conn)
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
@@ -491,17 +514,154 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     from dispatch.rehearsal import init_rehearsal_schema
 
     init_rehearsal_schema(conn)
+    # Exact whole-cent companions for every monetary REAL column. Generated
+    # columns, so there is no write path to forget and no backfill to interrupt.
+    # See dispatch/money_schema.py for why the REAL column stays.
+    from dispatch.money_schema import init_money_schema
+
+    init_money_schema(conn)
+
+
+#: How long a writer waits for another writer's lock before giving up.
+#:
+#: SQLite's default is 0: the second writer raises "database is locked"
+#: immediately rather than waiting a millisecond. Dispatch runs the portal and
+#: the launcher as separate processes against one file, and WAL only removes
+#: reader/writer contention -- two writers still serialise. Five seconds is far
+#: longer than any write here takes and far shorter than a person's patience,
+#: so a normal collision waits and succeeds instead of surfacing as an error
+#: page on a load a driver is standing next to.
+BUSY_TIMEOUT_MS = int(os.environ.get("DISPATCH_SQLITE_BUSY_TIMEOUT_MS", "5000"))
+
+#: Bumped whenever `_init_db` would produce a different schema. Stamped into
+#: `schema_state` after a successful initialisation so a later connection can
+#: tell "already built, and built by this version of the code" from "built by
+#: an older one" with a single cheap read.
+SCHEMA_REVISION = 5
+
+#: Database paths this *process* has already initialised. The expensive part of
+#: `_init_db` is not the work, it is that it ran on every one of the ~160
+#: `get_connection()` call sites: a full `executescript` of the schema, every
+#: guarded migration, and three sub-schema initialisers, measured at 1.22 ms
+#: against 0.006 ms for the query the caller actually wanted. A dashboard that
+#: touches two tables per load paid that 4,000 times on a 2,000-load database.
+_SCHEMA_READY: set[str] = set()
+
+#: The open unit of work, per thread. See `unit_of_work`.
+_ACTIVE = threading.local()
+
+
+def _configure(conn: sqlite3.Connection) -> None:
+    """Per-connection settings only.
+
+    `journal_mode` is deliberately not here. It is a property of the database
+    *file*, persisted in its header, so setting it per connection re-writes
+    that header and takes a lock every time -- it was the single most expensive
+    statement on the connection path. It is set once in `_set_journal_mode`,
+    during initialisation, and every later connection inherits WAL from the file.
+
+    `foreign_keys` and `busy_timeout` are genuinely per-connection: SQLite
+    resets both to their defaults (OFF, 0) on every new handle, so leaving
+    either out would silently drop referential integrity or turn a momentary
+    write collision into an error page.
+    """
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+
+
+def _set_journal_mode(conn: sqlite3.Connection) -> str:
+    """Put the file into WAL once. Returns the mode actually in force.
+
+    A database on a filesystem that cannot support WAL (some network shares)
+    refuses and stays in its previous mode. That is reported, not overridden:
+    Dispatch still works in rollback-journal mode, just with readers and writers
+    blocking each other, and pretending otherwise would hide a real deployment
+    fact behind a pragma that quietly did nothing.
+    """
+    row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+    return (row[0] if row else "") or ""
+
+
+def _schema_is_current(conn: sqlite3.Connection) -> bool:
+    """One read, no DDL. False whenever anything is unknown."""
+    try:
+        row = conn.execute(
+            "SELECT revision FROM schema_state WHERE id = 1"
+        ).fetchone()
+    except sqlite3.Error:
+        return False
+    return bool(row) and int(row["revision"] if isinstance(row, sqlite3.Row) else row[0]) >= SCHEMA_REVISION
+
+
+def _stamp_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS schema_state ("
+        " id INTEGER PRIMARY KEY CHECK (id = 1),"
+        " revision INTEGER NOT NULL,"
+        " stamped_at TEXT NOT NULL)"
+    )
+    conn.execute(
+        "INSERT INTO schema_state (id, revision, stamped_at) VALUES (1, ?, ?)"
+        " ON CONFLICT(id) DO UPDATE SET revision = excluded.revision,"
+        " stamped_at = excluded.stamped_at",
+        (SCHEMA_REVISION, _utc_now_text()),
+    )
+
+
+def _utc_now_text() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _ensure_schema(conn: sqlite3.Connection, key: str) -> None:
+    """Build the schema at most once per path per process.
+
+    Three layers, cheapest first: an in-process set, then a single-row read from
+    `schema_state`, then the full build. The middle layer matters because
+    another process may have created the file since this one started -- the
+    in-process set cannot know that, and re-running the build would take a write
+    lock on every connection for no reason.
+    """
+    if key in _SCHEMA_READY:
+        return
+    if _schema_is_current(conn):
+        _SCHEMA_READY.add(key)
+        return
+    _set_journal_mode(conn)
+    _init_db(conn)
+    _stamp_schema(conn)
+    conn.commit()
+    _SCHEMA_READY.add(key)
+
+
+def _open() -> sqlite3.Connection:
+    path = get_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    _configure(conn)
+    _ensure_schema(conn, str(path.resolve() if path.exists() else path))
+    return conn
 
 
 @contextmanager
 def get_connection():
-    path = get_db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    _init_db(conn)
+    """A connection, committed on clean exit -- unless a unit of work owns it.
+
+    When `unit_of_work()` is open on this thread every nested `get_connection()`
+    joins it and neither commits nor closes. That is what makes a multi-step
+    service operation atomic without editing the ~160 call sites that each ask
+    for a connection of their own: `store.create_milestone()` followed by
+    `store.update_load()` becomes one transaction because the service wrapped
+    them, not because either of them knows about the other.
+    """
+    joined = getattr(_ACTIVE, "conn", None)
+    if joined is not None:
+        yield joined
+        return
+
+    conn = _open()
     try:
         yield conn
         conn.commit()
@@ -510,6 +670,90 @@ def get_connection():
         raise
     finally:
         conn.close()
+
+
+@contextmanager
+def unit_of_work():
+    """One transaction across several store calls. Rolls the lot back on failure.
+
+    Reentrant: an inner `unit_of_work()` joins the outer one rather than opening
+    a second transaction, so a service operation composed of other service
+    operations still commits once. Only the outermost block decides the outcome,
+    which is the only way partial success can be excluded -- an inner commit
+    would make the failure of a later step unrecoverable.
+    """
+    existing = getattr(_ACTIVE, "conn", None)
+    if existing is not None:
+        yield existing
+        return
+
+    conn = _open()
+    _ACTIVE.conn = conn
+    _ACTIVE.after_commit = []
+    try:
+        yield conn
+        conn.commit()
+        committed = True
+    except Exception:
+        conn.rollback()
+        committed = False
+        raise
+    finally:
+        callbacks = list(getattr(_ACTIVE, "after_commit", None) or ())
+        # Back to None, not to an empty list: `after_commit()` distinguishes
+        # "a unit of work is collecting callbacks" from "there is none, run it
+        # now" by exactly this, and leaving a drained list behind made every
+        # later call outside a transaction queue onto a list nobody would run.
+        _ACTIVE.after_commit = None
+        _ACTIVE.conn = None
+        conn.close()
+
+    if committed:
+        _run_after_commit(callbacks)
+
+
+def after_commit(callback) -> None:
+    """Run `callback` once the surrounding unit of work has committed.
+
+    Two things this exists for, and they are the same thing seen from either end.
+
+    An email must not be sent for a transaction that then rolls back. Announcing
+    a delivery to a broker for a milestone the database subsequently discarded is
+    the worst failure this system can have, and it is invisible -- the send
+    succeeded.
+
+    And a transaction must not be held open across a network call. smtplib's
+    timeout here is thirty seconds; a write lock held for thirty seconds turns
+    every other writer into a "database is locked" error, including the driver
+    reporting the next milestone.
+
+    With no unit of work open the callback runs immediately, which is what every
+    existing single-write call site already did.
+    """
+    pending = getattr(_ACTIVE, "after_commit", None)
+    if pending is None:
+        callback()
+        return
+    pending.append(callback)
+
+
+def _run_after_commit(callbacks) -> None:
+    """Never let a post-commit side effect undo a committed transaction."""
+    import sys as _sys
+
+    for callback in callbacks:
+        try:
+            callback()
+        except Exception as exc:  # noqa: BLE001 - a side effect, not the work
+            print(
+                f"[dispatch.db] after-commit callback failed, continuing: {exc}",
+                file=_sys.stderr,
+            )
+
+
+def in_unit_of_work() -> bool:
+    """True while this thread is inside `unit_of_work()`."""
+    return getattr(_ACTIVE, "conn", None) is not None
 
 
 def dict_from_row(row: sqlite3.Row) -> dict:

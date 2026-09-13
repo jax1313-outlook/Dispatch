@@ -27,7 +27,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_archive_dir, atomic_write_json
+from portal.models import get_archive_dir, atomic_write_json, guarded
 
 # Same reserved-identity set as portal.models.publisher.RESERVED_SYSTEM_IDENTITIES. Duplicated
 # rather than imported to keep this module's only real dependency (portal.models) unchanged --
@@ -93,6 +93,7 @@ def get_section(section: str) -> list[dict]:
     return _load().get(section, [])
 
 
+@guarded(_archive_path)
 def create_record(section: str, source_id: str, title: str,
                   record_data: dict, decision_summary: str = "",
                   evidence: dict | None = None) -> dict:
@@ -241,6 +242,7 @@ def list_review_queue(age_days: int = REVIEW_AGE_DAYS) -> list[dict]:
     return queue
 
 
+@guarded(_archive_path)
 def mark_reviewed(record_id: str, section: str, disposition: str,
                   reason: str = "", reviewed_by: str | None = None) -> dict:
     """Records a Keep/Delete decision.

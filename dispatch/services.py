@@ -6,6 +6,9 @@ Business logic for the full load lifecycle: create -> dispatch -> pickup
 
 from __future__ import annotations
 
+import functools
+import os
+
 from pathlib import Path
 
 from dispatch.models import (
@@ -36,26 +39,67 @@ from dispatch.models import (
     Settlement,
     _utc_now,
 )
-from dispatch import notifications, store
+from dispatch import db, delivery, money, notifications, store, timestamps
+
 
 import sys
 
 
-def _notify_safe(send) -> None:
-    """Run a notifications.notify_* call without letting an SMTP failure
-    turn an already-completed write into a false failure response.
 
-    Every notify_* call site here runs strictly after the DB write it's
-    reporting on has already committed. An SMTP timeout/auth failure raised
-    from smtplib (cin_lite/email_delivery.py's transport, reused by
-    dispatch/notifications.py) is not the caller's problem to see as a 500 --
-    the load *was* archived/delivered/invoiced; only the notification email
-    failed. Log and continue rather than propagate.
+def atomic(fn):
+    """Run this service operation as one transaction.
+
+    An operation that writes twice was two transactions: `add_milestone()` wrote
+    the milestone, then the load's new status, then the visibility record, each
+    committing on its own. A crash, a lock timeout or a validation error between
+    them left a milestone recorded against a load whose status never advanced --
+    no rollback, no reconciliation pass, and nothing on any screen to say so. On
+    a laptop that gets closed mid-write that window opens routinely.
+
+    The decorator is the whole change at each call site. `db.unit_of_work()`
+    makes every nested `get_connection()` join one transaction instead of
+    opening its own, so the store functions below need no argument threading and
+    no awareness that they are now sharing. It is reentrant, so an atomic
+    operation may call another one.
     """
-    try:
-        send()
-    except Exception as exc:  # noqa: BLE001 - deliberately broad: any transport failure, not just SMTP
-        print(f"[dispatch.notifications] notify failed, continuing: {exc}", file=sys.stderr)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with db.unit_of_work():
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def _notify_safe(send, *, kind: str = "notification", subject_ref: str = "", recipient: str = "") -> None:
+    """Run a notifications.notify_* call without letting an SMTP failure
+    turn an already-completed write into a false failure response -- and
+    without the failure disappearing.
+
+    Every notify_* call site here runs strictly after the DB write it is
+    reporting on has already committed. An SMTP timeout or auth failure is not
+    the caller's problem to see as a 500: the load *was* archived, delivered or
+    invoiced, and only the notification email failed.
+
+    That reasoning was right and it stopped half way. The failure used to go to
+    one line on stderr -- no database row, no screen, no counter, no retry --
+    so a broker notification that failed authentication left Mike looking at a
+    successful Submit and a broker who never heard from him. Every attempt now
+    goes through `dispatch.delivery`, which writes the row *before* the send and
+    records the outcome after it. The exception is still swallowed. It is
+    swallowed into something somebody can see.
+
+    Deferred until the surrounding transaction commits, and run immediately
+    when there is none: an email must not go out for work that then rolled
+    back, and a thirty-second SMTP timeout must not be served while holding a
+    write lock every other writer is queued behind.
+    """
+    def _run():
+        delivery.send_with_record(
+            kind, send, subject_ref=subject_ref, recipient=recipient,
+        )
+
+    db.after_commit(_run)
 
 
 _MILESTONE_TO_STATUS = {
@@ -114,6 +158,7 @@ _MILESTONE_NEXT = {
 }
 
 
+@atomic
 def create_load(
     customer: str,
     broker_shipper: str = "",
@@ -138,8 +183,8 @@ def create_load(
         broker_shipper=broker_shipper,
         pickup_location=pickup_location,
         delivery_location=delivery_location,
-        pickup_datetime=pickup_datetime,
-        delivery_datetime=delivery_datetime,
+        pickup_datetime=timestamps.normalize(pickup_datetime)["value"],
+        delivery_datetime=timestamps.normalize(delivery_datetime)["value"],
         equipment=equipment,
         driver=driver,
         driver_id=driver_id,
@@ -231,6 +276,22 @@ def _record_status_change(
     ))
 
 
+def _normalize_appointment_fields(fields: dict) -> dict:
+    """Attach the operator's zone to an appointment time typed without one.
+
+    Not a guess: a dispatcher who types 08:00 means eight in the morning where
+    they are, and recording that is what makes the value usable. Attaching UTC
+    would be the guess. A value that already carries an offset is left alone,
+    and one that cannot be read at all is stored exactly as typed -- see
+    dispatch/timestamps.py for why both of those matter.
+    """
+    out = dict(fields)
+    for name in ("pickup_datetime", "delivery_datetime"):
+        if name in out:
+            out[name] = timestamps.normalize(out[name])["value"]
+    return out
+
+
 def update_load(load_id: str, **fields) -> dict | None:
     if "driver_id" in fields and fields["driver_id"]:
         _validate_driver_assignment(fields["driver_id"])
@@ -245,7 +306,7 @@ def update_load(load_id: str, **fields) -> dict | None:
         if current:
             old_status = current["status"]
             validate_status_transition(old_status, fields["status"])
-    result = store.update_load(load_id, **fields)
+    result = store.update_load(load_id, **_normalize_appointment_fields(fields))
     if result and old_status and "status" in fields:
         # Trigger condition deliberately unchanged from before C3, including
         # for a no-op write where old_status == fields["status"]. Preserving
@@ -271,6 +332,7 @@ def delete_load(load_id: str) -> bool:
     return store.delete_load(load_id)
 
 
+@atomic
 def assign_driver(load_id: str, driver_id: str) -> dict | None:
     """Assign an active driver to a load."""
     load = store.get_load(load_id)
@@ -283,6 +345,7 @@ def assign_driver(load_id: str, driver_id: str) -> dict | None:
     return store.get_load(load_id)
 
 
+@atomic
 def unassign_driver(load_id: str) -> dict | None:
     """Remove driver assignment from a load."""
     load = store.get_load(load_id)
@@ -291,6 +354,7 @@ def unassign_driver(load_id: str) -> dict | None:
     return store.update_load(load_id, driver_id="", driver="")
 
 
+@atomic
 def assign_equipment(load_id: str, equipment_id: str) -> dict | None:
     """Assign active equipment to a load."""
     load = store.get_load(load_id)
@@ -304,6 +368,7 @@ def assign_equipment(load_id: str, equipment_id: str) -> dict | None:
     return store.get_load(load_id)
 
 
+@atomic
 def unassign_equipment(load_id: str) -> dict | None:
     """Remove equipment assignment from a load."""
     load = store.get_load(load_id)
@@ -328,6 +393,7 @@ def _validate_equipment_assignment(equipment_id: str) -> None:
         raise ValueError(f"Equipment {equipment_id} is not active (status: {eqp['status']})")
 
 
+@atomic
 def _try_auto_dispatch(load_id: str) -> None:
     load = store.get_load(load_id)
     if not load or load["status"] != "created":
@@ -356,7 +422,10 @@ def _try_auto_dispatch(load_id: str) -> None:
     store.upsert_visibility(vis)
     updated = store.get_load(load_id)
     if updated:
-        _notify_safe(lambda: notifications.notify_dispatched(updated))
+        _notify_safe(
+        lambda: notifications.notify_dispatched(updated),
+        kind="load_dispatched", subject_ref=updated.get("load_id", ""),
+    )
 
 
 def record_route_risk_event(
@@ -462,6 +531,7 @@ def _raise_transition_refusal_card(load_id: str, current: str, target: str, reas
         print(f"[dispatch.services] {explanation} (card not raised: {exc})", file=sys.stderr)
 
 
+@atomic
 def add_milestone(
     load_id: str,
     event_type: str,
@@ -556,7 +626,10 @@ def add_milestone(
     # being broker-facing.
     if event_type == "delivered" and effective_status == "delivered":
         updated_load = store.get_load(load_id) or load
-        _notify_safe(lambda: notifications.notify_delivered(updated_load, result))
+        _notify_safe(
+        lambda: notifications.notify_delivered(updated_load, result),
+        kind="load_delivered", subject_ref=updated_load.get("load_id", ""),
+    )
 
     if refusal:
         result = dict(result)
@@ -693,6 +766,7 @@ def delete_evidence(evidence_id: str) -> bool:
     return store.delete_evidence(evidence_id)
 
 
+@atomic
 def open_exception(
     load_id: str,
     exception_type: str = "other",
@@ -727,11 +801,15 @@ def open_exception(
         store.upsert_visibility(updated)
 
     if severity in ("high", "critical"):
-        _notify_safe(lambda: notifications.notify_exception(load, result))
+        _notify_safe(
+        lambda: notifications.notify_exception(load, result),
+        kind="load_exception", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
 
+@atomic
 def resolve_exception(
     exception_id: str,
     resolution_note: str = "",
@@ -782,6 +860,7 @@ def update_exception(exception_id: str, **fields) -> dict | None:
 _POD_ELIGIBLE_STATUSES = {"delivered", "completed", "archived"}
 
 
+@atomic
 def generate_pod(
     load_id: str,
     recipient: str = "",
@@ -821,7 +900,10 @@ def generate_pod(
             note=f"POD generated: {pod.pod_id}",
         )
 
-    _notify_safe(lambda: notifications.notify_pod_generated(load, result))
+    _notify_safe(
+        lambda: notifications.notify_pod_generated(load, result),
+        kind="pod_generated", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
@@ -871,6 +953,7 @@ def sanitize_payload_for_role(payload: dict, role: str) -> dict:
     return comi_routing.sanitize_payload_for_role(payload, role)
 
 
+@atomic
 def archive_load(load_id: str) -> dict:
     load = store.get_load(load_id)
     if not load:
@@ -927,7 +1010,10 @@ def archive_load(load_id: str) -> dict:
         )
         store.upsert_visibility(updated)
 
-    _notify_safe(lambda: notifications.notify_archived(load, result))
+    _notify_safe(
+        lambda: notifications.notify_archived(load, result),
+        kind="load_archived", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
@@ -993,6 +1079,7 @@ def build_completion_packet(load_id: str) -> dict:
     }
 
 
+@atomic
 def confirm_rate(
     load_id: str,
     rate_amount: float,
@@ -1176,7 +1263,10 @@ def create_settlement(
         notes=notes,
     )
     result = store.create_settlement(stl)
-    _notify_safe(lambda: notifications.notify_invoice_created(load, result))
+    _notify_safe(
+        lambda: notifications.notify_invoice_created(load, result),
+        kind="invoice_created", subject_ref=load.get("load_id", ""),
+    )
     return result
 
 
@@ -1184,6 +1274,7 @@ def update_settlement(load_id: str, **fields) -> dict | None:
     return store.update_settlement(load_id, **fields)
 
 
+@atomic
 def record_payment(
     load_id: str,
     payment_amount: float,
@@ -1207,7 +1298,10 @@ def record_payment(
 
     load = store.get_load(load_id)
     if load and result:
-        _notify_safe(lambda: notifications.notify_payment_received(load, result))
+        _notify_safe(
+        lambda: notifications.notify_payment_received(load, result),
+        kind="payment_received", subject_ref=load.get("load_id", ""),
+    )
 
     return result
 
@@ -1237,86 +1331,84 @@ def list_settlements(
 
 
 def get_financial_dashboard() -> dict:
-    all_loads = store.list_loads()
-    settlements = store.list_settlements()
+    """Money across every load, in two queries rather than two per load.
 
-    total_revenue = 0.0
-    total_expenses = 0.0
-    total_paid = 0.0
-    total_outstanding = 0.0
+    This used to walk `store.list_loads()` and ask the database twice about each
+    one. On a 2,000-load database that was 4,000 connections and 5.0 s, and it
+    grew linearly, so /home got slower every month the business ran. The
+    arithmetic below is unchanged: per-load revenue and per-load expenses are
+    still rounded to cents *before* they are accumulated, because summing raw
+    floats and rounding once made this report and
+    `store.get_load_profitability_data()` disagree by pennies on identical data.
+    Round-then-sum is the one convention; only where the rows come from changed.
+    """
+    rows = store.get_load_financial_rows()
+    settlement_totals = store.get_settlement_rollup()
+
+    revenue_cents = 0
+    expenses_cents = 0
     loads_with_rate = 0
 
-    for load in all_loads:
-        rate = store.get_rate_confirmation(load["load_id"])
-        if rate:
-            # Round per-load before accumulating, matching
-            # store.get_load_profitability_data()'s convention -- summing raw
-            # unrounded floats here and store.get_load_profitability_data()
-            # rounding per-row before its own sum previously gave two
-            # financial reports different totals for the same underlying
-            # data (a real, demonstrable penny-level discrepancy, not
-            # hypothetical). Round-then-sum everywhere revenue/expenses are
-            # aggregated is the one convention to keep.
-            total_revenue += round(rate["revenue"], 2)
+    for row in rows:
+        if row["has_rate"]:
+            revenue_cents += row["revenue_cents"]
             loads_with_rate += 1
+        expenses_cents += row["expense_total_cents"]
 
-        expenses = store.list_expenses(load["load_id"])
-        total_expenses += round(sum(e["amount"] for e in expenses), 2)
-
-    for stl in settlements:
-        if stl["payment_status"] == "paid":
-            total_paid += stl["net_payment"]
-        elif stl["payment_status"] in ("invoiced", "overdue"):
-            total_outstanding += stl["invoice_amount"]
-
-    total_profit = total_revenue - total_expenses
-    margin_pct = (total_profit / total_revenue * 100) if total_revenue > 0 else 0.0
-
-    invoiced_count = sum(1 for s in settlements if s["payment_status"] == "invoiced")
-    paid_count = sum(1 for s in settlements if s["payment_status"] == "paid")
-    overdue_count = sum(1 for s in settlements if s["payment_status"] == "overdue")
+    paid_cents = settlement_totals["total_paid_cents"]
+    outstanding_cents = settlement_totals["total_outstanding_cents"]
+    profit_cents = revenue_cents - expenses_cents
+    margin_pct = (profit_cents / revenue_cents * 100) if revenue_cents > 0 else 0.0
 
     return {
-        "total_loads": len(all_loads),
+        "total_loads": len(rows),
         "loads_with_rate": loads_with_rate,
-        "total_revenue": round(total_revenue, 2),
-        "total_expenses": round(total_expenses, 2),
-        "total_profit": round(total_profit, 2),
+        "total_revenue": money.to_float(revenue_cents),
+        "total_expenses": money.to_float(expenses_cents),
+        "total_profit": money.to_float(profit_cents),
         "margin_pct": round(margin_pct, 1),
-        "total_paid": round(total_paid, 2),
-        "total_outstanding": round(total_outstanding, 2),
-        "invoiced_count": invoiced_count,
-        "paid_count": paid_count,
-        "overdue_count": overdue_count,
+        "total_paid": money.to_float(paid_cents),
+        "total_outstanding": money.to_float(outstanding_cents),
+        "total_revenue_cents": revenue_cents,
+        "total_expenses_cents": expenses_cents,
+        "total_profit_cents": profit_cents,
+        "total_paid_cents": paid_cents,
+        "total_outstanding_cents": outstanding_cents,
+        "invoiced_count": settlement_totals["invoiced_count"],
+        "paid_count": settlement_totals["paid_count"],
+        "overdue_count": settlement_totals["overdue_count"],
     }
 
 
 def get_chart_data() -> dict:
-    """Aggregate data for dashboard charts: loads by status, revenue by month."""
+    """Aggregate data for dashboard charts: loads by status, revenue by month.
+
+    Same rows as `get_financial_dashboard`, same single query. This one used to
+    run its own per-load `get_rate_confirmation()` walk, which is why the charts
+    cost a further 2.5 s on a 2,000-load database on top of the dashboard's 5.0.
+    """
     from collections import defaultdict
 
-    all_loads = store.list_loads()
+    rows = store.get_load_financial_rows()
 
     status_counts: dict[str, int] = defaultdict(int)
-    for load in all_loads:
-        status_counts[load["status"]] += 1
-
-    monthly_revenue: dict[str, float] = defaultdict(float)
+    monthly_revenue: dict[str, int] = defaultdict(int)
     monthly_loads: dict[str, int] = defaultdict(int)
-    for load in all_loads:
-        rate = store.get_rate_confirmation(load["load_id"])
-        created = load.get("created_at", "")
+    for row in rows:
+        status_counts[row["status"]] += 1
+        created = row.get("created_at", "") or ""
         month_key = created[:7] if len(created) >= 7 else "unknown"
         monthly_loads[month_key] += 1
-        if rate:
-            monthly_revenue[month_key] += rate["revenue"]
+        if row["has_rate"]:
+            monthly_revenue[month_key] += row["revenue_cents"]
 
     months_sorted = sorted(set(monthly_revenue.keys()) | set(monthly_loads.keys()))
 
     return {
         "loads_by_status": dict(status_counts),
         "monthly_revenue": [
-            {"month": m, "revenue": round(monthly_revenue.get(m, 0), 2),
+            {"month": m, "revenue": money.to_float(monthly_revenue.get(m, 0)),
+             "revenue_cents": monthly_revenue.get(m, 0),
              "loads": monthly_loads.get(m, 0)}
             for m in months_sorted
         ],
@@ -1343,7 +1435,10 @@ def check_overdue_settlements() -> list[dict]:
         if updated:
             load = store.get_load(stl["load_id"])
             if load:
-                _notify_safe(lambda: notifications.notify_payment_overdue(load, updated))
+                _notify_safe(
+        lambda: notifications.notify_payment_overdue(load, updated),
+        kind="payment_overdue", subject_ref=load.get("load_id", ""),
+    )
             newly_overdue.append(updated)
 
     return newly_overdue
@@ -1368,7 +1463,10 @@ def dispute_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        _notify_safe(lambda: notifications.notify_settlement_disputed(load, result, reason))
+        _notify_safe(
+        lambda: notifications.notify_settlement_disputed(load, result, reason),
+        kind="settlement_disputed", subject_ref=load.get("load_id", ""),
+    )
     return result
 
 
@@ -1391,7 +1489,10 @@ def write_off_settlement(
     )
     load = store.get_load(load_id)
     if load and result:
-        _notify_safe(lambda: notifications.notify_settlement_written_off(load, result, reason))
+        _notify_safe(
+        lambda: notifications.notify_settlement_written_off(load, result, reason),
+        kind="settlement_written_off", subject_ref=load.get("load_id", ""),
+    )
     return result
 
 
@@ -1447,7 +1548,10 @@ def notify_stalled_loads(thresholds: dict[str, int] | None = None) -> list[dict]
     """
     stalled = check_stalled_loads(thresholds)
     for load in stalled:
-        _notify_safe(lambda: notifications.notify_stalled(load))
+        _notify_safe(
+        lambda: notifications.notify_stalled(load),
+        kind="load_stalled", subject_ref=load.get("load_id", ""),
+    )
     return stalled
 
 
@@ -1912,6 +2016,7 @@ def start_detention(
     return store.create_detention(det)
 
 
+@atomic
 def stop_detention(
     detention_id: str,
     ended_at: str = "",
@@ -2067,13 +2172,31 @@ def get_load_calendar(year: int, month: int) -> dict:
     delivery_by_day: dict[str, list[dict]] = defaultdict(list)
 
     month_prefix = f"{year:04d}-{month:02d}"
+    unreadable: list[dict] = []
     for ld in all_loads:
-        p = ld.get("pickup_datetime", "")
-        if p and p[:7] == month_prefix:
-            pickup_by_day[p[:10]].append(ld)
-        d = ld.get("delivery_datetime", "")
-        if d and d[:7] == month_prefix:
-            delivery_by_day[d[:10]].append(ld)
+        # Parsed, not string-sliced. `p[:7] == "2026-09"` on a free-text field
+        # meant a load typed as "9/14/2026 08:00" -- the format a US dispatcher
+        # writes by hand, and one the text input accepts without complaint --
+        # was silently absent from the calendar: no error, no warning, no row.
+        # It also read the day off the raw string, so a delivery at
+        # 2026-09-15T01:00Z landed on the 15th when for a dispatcher in Eastern
+        # time it is the evening of the 14th.
+        pickup_day = timestamps.local_date(ld.get("pickup_datetime"))
+        if pickup_day[:7] == month_prefix:
+            pickup_by_day[pickup_day].append(ld)
+        delivery_day = timestamps.local_date(ld.get("delivery_datetime"))
+        if delivery_day[:7] == month_prefix:
+            delivery_by_day[delivery_day].append(ld)
+
+        # A load whose appointment cannot be read is reported rather than
+        # dropped. Silent omission from the one view that is meant to show
+        # everything is the defect this replaces.
+        for field_name in ("pickup_datetime", "delivery_datetime"):
+            raw = ld.get(field_name) or ""
+            if raw and timestamps.normalize(raw)["status"] == timestamps.UNVERIFIED:
+                unreadable.append(
+                    {"load_id": ld["load_id"], "field": field_name, "value": raw}
+                )
 
     cal = calendar.Calendar(firstweekday=6)
     weeks = cal.monthdayscalendar(year, month)
@@ -2085,6 +2208,8 @@ def get_load_calendar(year: int, month: int) -> dict:
         "weeks": weeks,
         "pickups": dict(pickup_by_day),
         "deliveries": dict(delivery_by_day),
+        "unreadable": unreadable,
+        "timezone": timestamps.timezone_name(),
     }
 
 
@@ -2302,6 +2427,7 @@ def list_suspect_ifta_fuel_purchases(
     ]
 
 
+@atomic
 def attach_ifta_fuel_evidence(
     purchase_id: str,
     file_data: bytes,
@@ -2800,6 +2926,7 @@ def run_ifta_exception_detectors(year: int, quarter: int, vehicle_id: str = "") 
     return _run_ifta_exception_detectors_on_snapshot(snapshot, year, quarter, vehicle_id)
 
 
+@atomic
 def submit_ifta_quarter_for_approval(year: int, quarter: int, vehicle_id: str = "") -> dict:
     """Freezes the current computed report for this period into a new
     IFTAReportApproval (status='draft') and emails the reviewer an
@@ -3446,4 +3573,150 @@ def check_compliance_alerts() -> dict:
     return {
         "expired": expired_count,
         "expiring_soon": expiring_count,
+    }
+
+
+# ── Capacity ──────────────────────────────────────────────────────────
+#
+# The capacity engine reaches production here. Before this, `DynamicCapacity`
+# was never instantiated outside tests, there was no table for a profile, and
+# the one production call into scoring passed no capacity at all -- so 1,861
+# lines of the most careful reasoning in the repository evaluated nothing.
+
+
+@atomic
+def set_equipment_capacity_profile(
+    equipment_id: str,
+    *,
+    max_weight_lbs: float,
+    max_volume_cuft: float = 0.0,
+    max_linear_feet: float = 0.0,
+    max_pallets: int = 0,
+    equipment_type: str = "dry_van",
+    source: str,
+    verified_by: str | None = None,
+    has_liftgate: bool = False,
+    has_ramp: bool = False,
+    has_temp_control: bool = False,
+    driver_id: str = "",
+) -> dict:
+    """Record what a truck can physically carry.
+
+    `source` is required and `verified_by` has no default, because
+    `apply_asset_profile` refuses to manufacture a verification -- a
+    specification nobody signed for is CONFIGURED, not VERIFIED, and the
+    difference decides whether a refusal is trustworthy.
+    """
+    from dispatch import capacity_store
+    from dispatch.capacity import DynamicCapacity
+
+    equipment = store.get_equipment(equipment_id)
+    if not equipment:
+        raise ValueError(f"Equipment not found: {equipment_id}")
+
+    existing = capacity_store.load_capacity(equipment_id, driver_id=driver_id)
+    capacity = existing or DynamicCapacity(equipment_id=equipment_id, driver_id=driver_id)
+    capacity.apply_asset_profile(
+        asset_profile_id=f"AP-{equipment_id}",
+        max_weight_lbs=max_weight_lbs,
+        max_volume_cuft=max_volume_cuft,
+        max_linear_feet=max_linear_feet,
+        max_pallets=max_pallets,
+        source=source,
+        equipment_type=equipment_type or equipment.get("equipment_type", "dry_van"),
+        verified_by=verified_by,
+        has_liftgate=has_liftgate,
+        has_ramp=has_ramp,
+        has_temp_control=has_temp_control,
+    )
+    return capacity_store.save_profile(capacity)
+
+
+def get_equipment_capacity_profile(equipment_id: str) -> dict | None:
+    from dispatch import capacity_store
+
+    return capacity_store.get_profile_row(equipment_id)
+
+
+def capacity_coverage() -> dict:
+    """Which trucks can be assessed at all. UNCONFIGURED is a fact, not a gap."""
+    from dispatch import capacity_store
+
+    return capacity_store.profile_coverage()
+
+
+def default_dwell_hours() -> float | None:
+    """How long a truck sits at a stop, if anybody has said.
+
+    Unset by default, and that is the point. With no dwell recorded the capacity
+    engine declines to project arrival times, which is the honest answer;
+    defaulting to zero would make every appointment look reachable. Set
+    DISPATCH_DEFAULT_DWELL_HOURS once the real figure is known and the forward
+    walk turns on with no other change.
+    """
+    raw = os.environ.get("DISPATCH_DEFAULT_DWELL_HOURS", "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
+def assess_load_capacity(load_id: str) -> dict:
+    """Does this load fit the truck it is assigned to?
+
+    Advisory and non-mutating, exactly as `scoring.assess_capacity` promises: it
+    reserves nothing and records nothing. A load with no equipment assigned, or
+    a truck with no profile on file, is UNCONFIGURED -- never "probably fine".
+    Inventing a specification is how freight gets accepted onto a trailer that
+    cannot carry it.
+    """
+    from dispatch import capacity_store, load_stops, scoring
+
+    load = store.get_load(load_id)
+    if not load:
+        raise ValueError(f"Load not found: {load_id}")
+
+    equipment_id = load.get("equipment_id") or ""
+    if not equipment_id:
+        return {
+            "status": "UNCONFIGURED",
+            "reason": "No truck is assigned to this load, so there is nothing to assess it against.",
+            "load_id": load_id,
+            "assessment": None,
+        }
+
+    capacity = capacity_store.load_capacity(equipment_id, driver_id=load.get("driver_id", ""))
+    if capacity is None:
+        return {
+            "status": "UNCONFIGURED",
+            "reason": (
+                f"Truck {equipment_id} has no capacity profile on file. "
+                "Record what it can carry on the equipment page before Dispatch can "
+                "say whether a load fits it."
+            ),
+            "load_id": load_id,
+            "equipment_id": equipment_id,
+            "assessment": None,
+        }
+
+    # The load's own two stops, so the engine's appointment and stop-sequence
+    # checks run against a real load rather than sitting unreachable. Anything
+    # the load does not record comes back as a gap in plain language instead of
+    # a guess -- see dispatch/load_stops.py for why a dwell of zero is refused.
+    stops, stop_gaps = load_stops.stops_for_load(
+        load,
+        drive_hours=load_stops.transit_hours(load),
+        default_service_hours=default_dwell_hours(),
+    )
+
+    assessment = scoring.assess_capacity(load, capacity, stops=stops)
+    return {
+        "status": "LIVE",
+        "load_id": load_id,
+        "equipment_id": equipment_id,
+        "assessment": assessment.to_dict() if hasattr(assessment, "to_dict") else assessment,
+        "stop_gaps": stop_gaps,
     }

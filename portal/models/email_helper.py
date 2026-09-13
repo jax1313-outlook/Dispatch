@@ -34,7 +34,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 from portal.models.publisher import RESERVED_SYSTEM_IDENTITIES
 
 STATUSES = ["DRAFT", "REVIEWED", "SUBMITTED"]
@@ -194,6 +194,7 @@ def _draft_customer_email(load: dict, closeout_data: dict | None = None) -> tupl
     return to, subject, body
 
 
+@guarded(_packages_path)
 def create_draft(
     load_id: str,
     load: dict,
@@ -244,6 +245,7 @@ def create_draft(
     return package
 
 
+@guarded(_packages_path)
 def update_draft(load_id: str, **fields) -> dict:
     packages = _load()
     for package in packages:
@@ -260,6 +262,7 @@ def update_draft(load_id: str, **fields) -> dict:
     raise KeyError(f"Email package not found for load: {load_id}")
 
 
+@guarded(_packages_path)
 def submit_package(load_id: str, submitted_by: str | None) -> dict:
     """Send (or write a local fallback for) every recipient with a non-empty address.
 

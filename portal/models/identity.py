@@ -19,7 +19,7 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
@@ -53,8 +53,24 @@ def _save(data: dict) -> None:
 
 
 def _public(record: dict) -> dict:
-    """Strip pin_hash before returning a record to any caller outside this module."""
-    return {k: v for k, v in record.items() if k != "pin_hash"}
+    """Strip pin_hash, and read the lockout state from where it is authoritative.
+
+    `failed_attempt_count` and `locked_until` are no longer stored in this file.
+    They are counters under contention, and every store in this package does
+    read-modify-write on the whole file, so two concurrent failures wrote 1 and 1
+    instead of 1 and 2 -- the lockout was defeated by sending the guesses at the
+    same time. They live in `dispatch.authcounters` now, where the increment is a
+    single UPDATE inside a transaction. The shape returned to callers is
+    unchanged, which is why this reads them back in here.
+    """
+    from dispatch import authcounters
+
+    out = {k: v for k, v in record.items() if k != "pin_hash"}
+    if record.get("user_id"):
+        state = authcounters.get_state(authcounters.KIND_AUTHORITY, record["user_id"])
+        out["failed_attempt_count"] = state["failed_attempt_count"]
+        out["locked_until"] = state["locked_until"]
+    return out
 
 
 def has_any_identity() -> bool:
@@ -79,6 +95,7 @@ def get_identity(user_id: str) -> dict | None:
     return _public(rec) if rec else None
 
 
+@guarded(_identity_path)
 def bootstrap_authority(user_id: str, display_name: str, pin: str) -> dict:
     """Create the first (and, in this build, only) Authority identity.
 
@@ -108,8 +125,7 @@ def bootstrap_authority(user_id: str, display_name: str, pin: str) -> dict:
         "created_at": now,
         "updated_at": now,
         "last_login_at": None,
-        "failed_attempt_count": 0,
-        "locked_until": None,
+        # failed_attempt_count / locked_until are NOT stored here; see _public().
     }
     data[user_id] = record
     _save(data)
@@ -117,6 +133,7 @@ def bootstrap_authority(user_id: str, display_name: str, pin: str) -> dict:
     return _public(record)
 
 
+@guarded(_identity_path)
 def set_pin(user_id: str, pin: str) -> dict:
     """Replace an existing identity's PIN. The recovery path for a forgotten one.
 
@@ -146,8 +163,9 @@ def set_pin(user_id: str, pin: str) -> dict:
         raise IdentityError("PIN must be at least 4 characters.")
 
     record["pin_hash"] = generate_password_hash(pin)
-    record["failed_attempt_count"] = 0
-    record["locked_until"] = None
+    from dispatch import authcounters
+
+    authcounters.clear(authcounters.KIND_AUTHORITY, user_id)
     record["updated_at"] = _utc_now()
     _save(data)
     # PIN_CHANGED is the event type this build already emits for a bootstrap; the reason
@@ -157,13 +175,12 @@ def set_pin(user_id: str, pin: str) -> dict:
 
 
 def _is_locked(record: dict) -> bool:
-    locked_until = record.get("locked_until")
-    if not locked_until:
-        return False
-    expiry = datetime.strptime(locked_until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc) < expiry
+    from dispatch import authcounters
+
+    return authcounters.is_locked(authcounters.KIND_AUTHORITY, record.get("user_id", ""))
 
 
+@guarded(_identity_path)
 def verify_pin(user_id: str, pin: str) -> dict | None:
     """Validate a PIN. Returns the public identity record on success, None on failure.
 
@@ -182,25 +199,26 @@ def verify_pin(user_id: str, pin: str) -> dict | None:
         _log_event("LOGIN_FAILURE", user_id, {"reason": "locked"})
         return None
 
+    from dispatch import authcounters
+
     if check_password_hash(record["pin_hash"], pin):
-        record["failed_attempt_count"] = 0
-        record["locked_until"] = None
+        authcounters.record_success(authcounters.KIND_AUTHORITY, user_id)
         record["last_login_at"] = _utc_now()
         record["updated_at"] = _utc_now()
         _save(data)
         _log_event("LOGIN_SUCCESS", user_id, {})
         return _public(record)
 
-    record["failed_attempt_count"] = record.get("failed_attempt_count", 0) + 1
-    if record["failed_attempt_count"] >= MAX_FAILED_ATTEMPTS:
-        record["locked_until"] = (
-            datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_MINUTES)
-        ).strftime("%Y-%m-%dT%H:%M:%SZ")
-    record["updated_at"] = _utc_now()
-    _save(data)
+    state = authcounters.record_failure(
+        authcounters.KIND_AUTHORITY, user_id,
+        max_attempts=MAX_FAILED_ATTEMPTS, lockout_minutes=LOCKOUT_MINUTES,
+    )
     _log_event(
         "LOGIN_FAILURE", user_id,
-        {"reason": "bad_pin", "failed_attempt_count": record["failed_attempt_count"]},
+        # The count the attempt actually reached, read back from the statement
+        # that incremented it -- not the number this process believed it was
+        # setting, which is precisely what went wrong under concurrency.
+        {"reason": "bad_pin", "failed_attempt_count": state["failed_attempt_count"]},
     )
     return None
 

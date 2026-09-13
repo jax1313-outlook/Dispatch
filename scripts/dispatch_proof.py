@@ -119,6 +119,59 @@ def _cmd_rehearse(args: argparse.Namespace) -> int:
     return 1 if run.first_failure is not None else 0
 
 
+def _snapshot_default_path(load_id: str) -> Path:
+    return DEFAULT_REPORT.parent / proof_engine.SNAPSHOT_NAME_TEMPLATE.format(load_id=load_id)
+
+
+def _cmd_snapshot(args: argparse.Namespace) -> int:
+    """Capture the pre-stop state step 18 can be compared against.
+
+    Optional by design: `verify` works without it. This exists for the stricter
+    comparison, and for the case where the operator wants the before-picture in
+    a file he can read himself rather than trusting a later summary of it.
+    """
+    snapshot = proof_engine.snapshot_persistence(args.load_id)
+    if not snapshot["record_ids"].get("loads"):
+        print(f"No load {args.load_id} on this machine; nothing to snapshot.", file=sys.stderr)
+        return 1
+    out = args.output or _snapshot_default_path(args.load_id)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(snapshot, indent=2, sort_keys=True), encoding="utf-8")
+    counts = {k: len(v) for k, v in sorted(snapshot["record_ids"].items())}
+    print(f"snapshot written: {out}")
+    for table, n in counts.items():
+        print(f"  {table:<14} {n}")
+    return 0
+
+
+def _cmd_verify(args: argparse.Namespace) -> int:
+    """Step 18. Exit 0 only when the load, its records and its bytes all survived."""
+    snapshot = None
+    snapshot_path = args.snapshot
+    if snapshot_path is None:
+        default = _snapshot_default_path(args.load_id)
+        if default.is_file():
+            snapshot_path = default
+    if snapshot_path is not None:
+        if not snapshot_path.is_file():
+            print(f"snapshot not found: {snapshot_path}", file=sys.stderr)
+            return 2
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        if snapshot.get("load_id") != args.load_id:
+            print(
+                f"snapshot is for load {snapshot.get('load_id')!r}, not {args.load_id!r}",
+                file=sys.stderr,
+            )
+            return 2
+
+    result = proof_engine.verify_persistence(args.load_id, snapshot=snapshot)
+    if args.json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print(proof_engine.render_verify_result(result))
+    return 0 if result["ok"] else 1
+
+
 def _cmd_sessions(args: argparse.Namespace) -> int:
     from dispatch import rehearsal
 
@@ -200,6 +253,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="rehearse even when a readiness condition is not CONFIGURED",
     )
     p_reh.set_defaults(func=_cmd_rehearse)
+
+    p_snap = sub.add_parser(
+        "snapshot", help="capture a load's records and evidence hashes before the restart"
+    )
+    p_snap.add_argument("--load-id", required=True)
+    p_snap.add_argument(
+        "--output", type=Path, default=None,
+        help="where to write it; defaults beside the proof report",
+    )
+    p_snap.set_defaults(func=_cmd_snapshot)
+
+    p_ver = sub.add_parser(
+        "verify", help="step 18: prove the load, milestones and evidence survived the restart"
+    )
+    p_ver.add_argument("--load-id", required=True)
+    p_ver.add_argument(
+        "--snapshot", type=Path, default=None,
+        help="a snapshot from `snapshot`; the default path is used when it exists",
+    )
+    p_ver.add_argument("--json", action="store_true", help="machine-readable output")
+    p_ver.set_defaults(func=_cmd_verify)
 
     p_sess = sub.add_parser("sessions", help="list rehearsal sessions")
     p_sess.add_argument("--status", default=None, choices=["OPEN", "PASSED", "FAILED", "ABANDONED"])

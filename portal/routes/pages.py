@@ -58,6 +58,11 @@ def home():
     recent_activity = dispatch_store.get_recent_activity(limit=15)
     chart_data = dispatch_svc.get_chart_data()
     attention_needed = helpers.attention_needed()
+    # Messages that never reached anyone. This had no surface at all: a failed
+    # broker notification produced one line on stderr and a successful-looking
+    # Submit. The count is two indexed queries, cheap enough for every page load.
+    from dispatch import delivery as dispatch_delivery
+    delivery_summary = dispatch_delivery.summary()
 
     return render_template(
         "home.html",
@@ -76,6 +81,7 @@ def home():
         recent_activity=recent_activity,
         chart_data=chart_data,
         attention_needed=attention_needed,
+        delivery_summary=delivery_summary,
         card_visual=helpers.card_visual,
         format_score=helpers.format_score,
     )
@@ -200,9 +206,15 @@ def dispatch_detail(load_id):
     stakeholder_url = url_for(
         "stakeholder.stakeholder_view", load_id=load_id, token=stakeholder_token, _external=True
     )
+    # Does this load fit the truck it is on? Advisory, non-mutating, and
+    # UNCONFIGURED rather than silent when the truck has no profile on file --
+    # the capacity engine was unreachable from any screen until now.
+    capacity_view = dispatch_svc.assess_load_capacity(load_id)
+
     return render_template(
         "dispatch_detail.html",
         stakeholder_url=stakeholder_url,
+        capacity_view=capacity_view,
         load_statuses=LOAD_STATUSES,
         milestone_types=MILESTONE_TYPES,
         milestone_sources=MILESTONE_SOURCES,

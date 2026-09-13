@@ -33,7 +33,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 
 # The seven integration types specified by D4. Fixed set -- this is a generic container, not a
 # per-vendor model, so callers must pick one of these rather than inventing new types.
@@ -112,6 +112,7 @@ def get_entry(integration_type: str) -> dict:
     return data.get(integration_type, _default_entry(integration_type))
 
 
+@guarded(_registry_path)
 def upsert_entry(
     integration_type: str,
     api_key: str | None = None,
@@ -149,6 +150,7 @@ def upsert_entry(
     return entry
 
 
+@guarded(_registry_path)
 def clear_entry(integration_type: str) -> dict:
     """Reset all four credential fields for a type back to None, keeping the row (and its
     created_at) rather than deleting it -- lets a reviewer wipe stored secrets without losing

@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 
 STATUSES = [
     "OPEN",
@@ -99,6 +99,7 @@ def get(sandbox_id: str) -> dict | None:
     return _load().get(sandbox_id)
 
 
+@guarded(_sandbox_path)
 def update_scoring(sandbox_id: str, scoring: dict) -> dict | None:
     """Update Position/HOS fields and score from a scoring result dict."""
     data = _load()
@@ -120,6 +121,7 @@ def update_scoring(sandbox_id: str, scoring: dict) -> dict | None:
     return entry
 
 
+@guarded(_sandbox_path)
 def create_entry(
     source_type: str,
     source_id: str,
@@ -188,6 +190,7 @@ def create_entry(
     return entry
 
 
+@guarded(_sandbox_path)
 def update_status(sandbox_id: str, new_status: str, note: str = "") -> dict:
     if new_status not in STATUSES:
         raise ValueError(f"Invalid status: {new_status}")
@@ -207,6 +210,7 @@ def update_status(sandbox_id: str, new_status: str, note: str = "") -> dict:
     return entry
 
 
+@guarded(_sandbox_path)
 def set_inquiry_draft(sandbox_id: str, draft: dict) -> dict:
     data = _load()
     if sandbox_id not in data:
@@ -217,6 +221,7 @@ def set_inquiry_draft(sandbox_id: str, draft: dict) -> dict:
     return data[sandbox_id]
 
 
+@guarded(_sandbox_path)
 def link_engine_load(sandbox_id: str, engine_load_id: str) -> dict:
     """Store an engine load_id on a sandbox entry after booking."""
     data = _load()
@@ -234,6 +239,7 @@ def link_engine_load(sandbox_id: str, engine_load_id: str) -> dict:
     return data[sandbox_id]
 
 
+@guarded(_sandbox_path)
 def update_engine_status(sandbox_id: str, engine_status: str) -> dict | None:
     """Sync engine load status back to the sandbox entry's card_data."""
     data = _load()
@@ -245,6 +251,7 @@ def update_engine_status(sandbox_id: str, engine_status: str) -> dict | None:
     return data[sandbox_id]
 
 
+@guarded(_sandbox_path)
 def add_note(sandbox_id: str, note: str) -> dict:
     data = _load()
     if sandbox_id not in data:
@@ -256,6 +263,7 @@ def add_note(sandbox_id: str, note: str) -> dict:
     return data[sandbox_id]
 
 
+@guarded(_sandbox_path)
 def start_hold(sandbox_id: str, now: datetime | None = None) -> dict:
     """Start the HOLD_HOURS clock on one sandbox entry.
 
@@ -280,6 +288,7 @@ def start_hold(sandbox_id: str, now: datetime | None = None) -> dict:
     return entry
 
 
+@guarded(_sandbox_path)
 def run_hold_sweep(source_type: str = SANDBOX_SOURCE_FREIGHT, now: datetime | None = None) -> list[str]:
     """Delete (not archive) every entry, IN THE GIVEN PROGRAM ONLY, whose
     HOLD clock has expired.
@@ -308,6 +317,7 @@ def run_hold_sweep(source_type: str = SANDBOX_SOURCE_FREIGHT, now: datetime | No
     return expired_ids
 
 
+@guarded(_sandbox_path)
 def clear_simulated(source_type: str | None = None) -> list[str]:
     """Remove every SIMULATED entry. Returns the ids removed.
 

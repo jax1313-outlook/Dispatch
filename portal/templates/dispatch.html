@@ -91,9 +91,9 @@
             <div><label><strong>Delivery Location</strong><br>
                 <input type="text" name="delivery_location" style="width:100%;padding:4px 8px;"></label></div>
             <div><label><strong>Pickup Date/Time</strong><br>
-                <input type="text" name="pickup_datetime" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+                <input type="text" name="pickup_datetime" placeholder="YYYY-MM-DD HH:MM ({{ operating_timezone() }})" style="width:100%;padding:4px 8px;"></label></div>
             <div><label><strong>Delivery Date/Time</strong><br>
-                <input type="text" name="delivery_datetime" placeholder="YYYY-MM-DD HH:MM" style="width:100%;padding:4px 8px;"></label></div>
+                <input type="text" name="delivery_datetime" placeholder="YYYY-MM-DD HH:MM ({{ operating_timezone() }})" style="width:100%;padding:4px 8px;"></label></div>
             <div><label><strong>Equipment</strong><br>
                 <input type="text" name="equipment" style="width:100%;padding:4px 8px;"></label></div>
             <div><label><strong>Driver</strong><br>

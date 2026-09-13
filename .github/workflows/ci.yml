@@ -38,12 +38,16 @@ jobs:
           pip install -r portal/requirements.txt
           pip install pytest pytest-cov
 
+      # The packages and the branch setting come from .coveragerc alone.
+      # Naming them here as well meant the gate CI enforced and the gate a
+      # contributor got from `pytest --cov` locally were two different gates:
+      # .coveragerc listed cin_lite and dispatch, this file added portal, and
+      # neither included dispatch_launcher -- 3,943 lines, and the thing that
+      # actually starts the product.
       - name: Run test suite with coverage
         run: |
           python -m pytest \
-            --cov=cin_lite \
-            --cov=dispatch \
-            --cov=portal \
+            --cov \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml \

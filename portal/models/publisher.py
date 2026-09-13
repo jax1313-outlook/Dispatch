@@ -16,7 +16,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from portal.models import get_data_dir, atomic_write_json
+from portal.models import get_data_dir, atomic_write_json, guarded
 
 # Identities that may never be used as an approver -- Publisher may not approve itself. Matches
 # dispatch_publisher.models.RESERVED_SYSTEM_IDENTITIES from the tri-department build.
@@ -92,6 +92,7 @@ def _manifest_for(action_type: str) -> list[str]:
     return []
 
 
+@guarded(_publisher_path)
 def create_action(
     action_type: str,
     sandbox_id: str,
@@ -125,6 +126,7 @@ def create_action(
     return action
 
 
+@guarded(_publisher_path)
 def update_action_status(action_id: str, new_status: str, approved_by: str | None = None) -> dict:
     """Update a Publisher action's status.
 

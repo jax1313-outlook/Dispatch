@@ -222,6 +222,74 @@ def notify_stalled():
 
 # ── Visibility ────────────────────────────────────────────────────────
 
+@dispatch_bp.route("/loads/<load_id>/capacity", methods=["GET"])
+def load_capacity(load_id):
+    """Whether this load fits the truck it is assigned to.
+
+    Advisory. It reserves nothing, records nothing, and returns UNCONFIGURED --
+    never a guess -- when there is no truck or no profile for it.
+    """
+    try:
+        result = services.assess_load_capacity(load_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+    # Nested, not merged: the assessment carries its own `status` in the truth
+    # vocabulary and spreading it here would overwrite the envelope's "ok" with
+    # "UNCONFIGURED" -- two different questions answered by one key.
+    return jsonify({"status": "ok", "capacity": result})
+
+
+@dispatch_bp.route("/equipment/<equipment_id>/capacity", methods=["GET"])
+def get_equipment_capacity(equipment_id):
+    profile = services.get_equipment_capacity_profile(equipment_id)
+    if not profile:
+        return jsonify({
+            "status": "ok", "profile": None, "capacity_status": "UNCONFIGURED",
+            "detail": "No capacity profile is on file for this truck.",
+        })
+    return jsonify({"status": "ok", "profile": profile, "capacity_status": "CONFIGURED"})
+
+
+@dispatch_bp.route("/equipment/<equipment_id>/capacity", methods=["PUT"])
+def set_equipment_capacity(equipment_id):
+    """Record what this truck can carry.
+
+    `source` is required and `verified_by` is not defaulted: the engine refuses
+    to manufacture a verification, and a specification nobody signed for is
+    CONFIGURED rather than VERIFIED.
+    """
+    data = _json_body()
+    source = (data.get("source") or "").strip()
+    if not source:
+        return jsonify({
+            "error": "source is required -- where this specification came from "
+                     "(a spec sheet, a door sticker, a scale ticket)"
+        }), 400
+    try:
+        profile = services.set_equipment_capacity_profile(
+            equipment_id,
+            max_weight_lbs=float(data.get("max_weight_lbs") or 0),
+            max_volume_cuft=float(data.get("max_volume_cuft") or 0),
+            max_linear_feet=float(data.get("max_linear_feet") or 0),
+            max_pallets=int(data.get("max_pallets") or 0),
+            equipment_type=data.get("equipment_type") or "dry_van",
+            source=source,
+            verified_by=(data.get("verified_by") or None),
+            has_liftgate=bool(data.get("has_liftgate")),
+            has_ramp=bool(data.get("has_ramp")),
+            has_temp_control=bool(data.get("has_temp_control")),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"status": "ok", "profile": profile})
+
+
+@dispatch_bp.route("/capacity/coverage", methods=["GET"])
+def capacity_coverage():
+    """How many trucks can be assessed. A gap stated is a gap somebody can close."""
+    return jsonify({"status": "ok", "coverage": services.capacity_coverage()})
+
+
 @dispatch_bp.route("/loads/<load_id>/visibility", methods=["GET"])
 def get_visibility(load_id):
     vis = services.get_visibility(load_id)
