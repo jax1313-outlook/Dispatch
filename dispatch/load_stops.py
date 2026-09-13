@@ -143,6 +143,24 @@ def parse_appointment(value: str | None) -> Appointment:
 PLANNING_SPEED_MPH = 50.0
 
 
+def _confirmed_distance(load_id: str):
+    """The miles on the load's rate confirmation, if it has one.
+
+    Import-local and failure-tolerant: a capacity assessment is advisory, and a
+    store that cannot answer should cost the caller a projected arrival time,
+    never an exception on a page they were reading for something else.
+    """
+    if not load_id:
+        return None
+    try:
+        from dispatch import store
+
+        confirmation = store.get_rate_confirmation(load_id)
+    except Exception:  # noqa: BLE001 - advisory path, never the caller's problem
+        return None
+    return (confirmation or {}).get("distance_miles")
+
+
 def transit_hours(load: dict) -> float | None:
     """Recorded pickup-to-delivery drive time, or None when nobody recorded it.
 
@@ -156,12 +174,21 @@ def transit_hours(load: dict) -> float | None:
     None is the honest answer, and the engine already knows what to do with it:
     it declines to walk the sequence and says why.
 
-    Worth recording: no Dispatch load carries `distance_miles` today. `Load` has
-    no such field and `create_load()` refuses the keyword. So this returns None
-    for every load currently in the system, the forward walk stays off, and it
-    turns on by itself the day a distance is recorded.
+    Where the distance comes from matters. `Load` has no `distance_miles` field
+    and `create_load()` refuses the keyword -- so reading only the load record,
+    as the first version of this did, returns None for every load in the system
+    and the forward walk never runs. The distance is recorded one join away, on
+    the load's **rate confirmation**, which is the document that states the
+    miles the rate was agreed against. That is the right source anyway: it is
+    the distance somebody committed to, not an estimate.
+
+    A load dict that already carries `distance_miles` wins, so a caller holding
+    a joined row or a candidate that is not yet a load is not forced through
+    the database.
     """
     distance = load.get("distance_miles")
+    if distance in (None, "", 0, 0.0):
+        distance = _confirmed_distance(load.get("load_id") or "")
     if distance in (None, "", 0, 0.0):
         return None
     try:

@@ -93,11 +93,51 @@ class TestTransitHours:
         assert load_stops.transit_hours({"distance_miles": 600}) == 12.0
         assert load_stops.transit_hours({"distance_miles": "250"}) == 5.0
 
-    def test_no_load_in_dispatch_records_a_distance_today(self):
-        """Recorded so the day someone adds the field, this test says so."""
+    def test_the_load_record_itself_has_no_distance(self):
+        """Which is why reading only the load, as the first version did, meant
+        the forward walk never ran for anybody."""
         from dispatch.models import Load
 
         assert not hasattr(Load(), "distance_miles")
+
+    def test_it_falls_back_to_the_rate_confirmation(self, tmp_path, monkeypatch):
+        """The distance is one join away, on the document that states the miles
+        the rate was agreed against -- which is the better source anyway: it is
+        the distance somebody committed to, not an estimate."""
+        from dispatch import services
+        from dispatch.db import set_db_path
+
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path / "portal"))
+        set_db_path(tmp_path / "dispatch.db")
+        try:
+            created = services.create_load(customer="Join Co")
+            assert load_stops.transit_hours({"load_id": created["load_id"]}) is None
+
+            services.confirm_rate(
+                created["load_id"], rate_amount=2.35, confirmed_by="Mike",
+                rate_type="per_mile", distance_miles=600,
+            )
+            assert load_stops.transit_hours({"load_id": created["load_id"]}) == 12.0
+        finally:
+            set_db_path(None)
+
+    def test_a_distance_on_the_load_dict_wins(self):
+        """A caller holding a joined row, or a candidate that is not a load yet,
+        is not forced through the database."""
+        assert load_stops.transit_hours(
+            {"load_id": "LOAD-NOPE", "distance_miles": 250}
+        ) == 5.0
+
+    def test_a_store_that_cannot_answer_costs_an_arrival_time_not_an_exception(self, monkeypatch):
+        """A capacity assessment is advisory. It must never take down a page
+        somebody opened to read something else."""
+        from dispatch import store
+
+        def explode(_load_id):
+            raise RuntimeError("database is gone")
+
+        monkeypatch.setattr(store, "get_rate_confirmation", explode)
+        assert load_stops.transit_hours({"load_id": "LOAD-X"}) is None
 
 
 # ── building the two stops ───────────────────────────────────────────────
