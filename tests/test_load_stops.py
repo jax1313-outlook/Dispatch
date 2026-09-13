@@ -333,3 +333,59 @@ class TestTheServiceCall:
         for rubbish in ("", "  ", "not-a-number", "-3"):
             monkeypatch.setenv("DISPATCH_DEFAULT_DWELL_HOURS", rubbish)
             assert services.default_dwell_hours() is None
+
+
+class TestItStaysAdvisory:
+    """`docs/DISPATCH_CAPACITY_PLAN_DOCTRINE.md`, issued by the operator:
+
+        Day plans, stop sequences, and capacity allocations remain
+        recommendations until approved by human authority.
+
+    That doctrine was found *after* this code was written, during the Phase 3
+    governance screen -- it had never been in the registry. The code complied
+    already, and complying by luck is not the same as complying, so this pins
+    it: an assessment reserves nothing and records nothing.
+    """
+
+    def test_assessing_a_load_changes_no_row_anywhere(self, tmp_path, monkeypatch):
+        import hashlib
+
+        from dispatch import capacity_store, db, services
+        from dispatch.db import set_db_path
+
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path / "portal"))
+        set_db_path(tmp_path / "dispatch.db")
+        try:
+            truck = services.create_equipment(unit_number="T-A", equipment_type="dry_van")
+            capacity = DynamicCapacity(equipment_id=truck["equipment_id"])
+            capacity.physical = PhysicalCapacity(max_weight_lbs=44000)
+            capacity_store.save_profile(capacity)
+            created = services.create_load(
+                customer="Advisory Co", equipment_id=truck["equipment_id"],
+                pickup_location="Dallas TX", delivery_location="Houston TX",
+                pickup_datetime="2026-07-30 06:00 - 10:00",
+                delivery_datetime="2026-07-30 16:00 - 20:00",
+            )
+            services.confirm_rate(
+                created["load_id"], rate_amount=2.0, confirmed_by="Mike",
+                rate_type="per_mile", distance_miles=240,
+            )
+
+            def fingerprint():
+                with db.get_connection() as conn:
+                    tables = [r[0] for r in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                    )]
+                    counts = [f"{t}={conn.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]}"
+                              for t in tables]
+                return hashlib.sha256("|".join(counts).encode()).hexdigest()
+
+            before = fingerprint()
+            for _ in range(3):
+                services.assess_load_capacity(created["load_id"])
+            assert fingerprint() == before, (
+                "assessing a load changed the database; the capacity plan doctrine "
+                "says an assessment is a recommendation, not an allocation"
+            )
+        finally:
+            set_db_path(None)
