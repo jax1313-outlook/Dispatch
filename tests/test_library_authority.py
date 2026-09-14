@@ -266,7 +266,7 @@ class TestTheCatalogIsBackedUp:
         lib.close()
         assert result.ok, result.absent_sources
         meta = result.manifest["library_catalog"]
-        assert (meta["present"], meta["schema_version"], meta["integrity_check"]) == (True, 2, "ok")
+        assert (meta["present"], meta["schema_version"], meta["integrity_check"]) == (True, 3, "ok")
         assert meta["row_counts"]["library_version"] == 2
         paths = [e["path"] for e in result.manifest["files"]]
         assert meta["archive_path"] in paths
