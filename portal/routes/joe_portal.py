@@ -435,14 +435,19 @@ def mission_commit(record_id: str):
         "at": now,
     }
 
-    # The load number becomes the Mission Visibility Key, and the portal access email
-    # from the Onboarding Packet goes to the customer's email on file
-    # (portal/portal_access.py). The record says what happened, or why not.
+    # Mission Visibility Communication Flow (portal/portal_access.py, playbook
+    # Section 4A): Joe makes the load number the Mission Visibility Key and
+    # decides the customer must be told; Publisher creates the portal access
+    # email; COMI routes it; Email Helper sends it. The record says what
+    # happened at each step, or why not.
     from portal import portal_access
 
     stored["portal_access"] = portal_access.issue(
         dict(stored), committed_by=session.get("display_name") if session.get("user_id") else None,
         mail_connector=_mail_connector, url_root=request.url_root)
+    if stored["portal_access"]["flow"].get("joe", {}).get("mission_visibility") == "OPENED":
+        stored["events"].append({"action": "mission_visibility_opened", "via": "JOE", "timestamp": now,
+                                 "publisher_action_id": stored["portal_access"]["flow"].get("publisher", {}).get("action_id")})
 
     data[record_id] = stored
     sandbox._save(data)

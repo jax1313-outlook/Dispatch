@@ -130,6 +130,16 @@ Mission Visibility tracks the sequential lifecycle of a freight movement through
 ### Purpose
 Provide customers a curated window into their mission.
 
+**Mission Visibility is not a tracking feature. Mission Visibility is a trust-building function.** (Clarification, Mike Zachary, 2026-09-13.)
+
+*Mission Visibility and Route Risk exist to create trust.*
+*Trust creates direct shipper relationships.*
+*Direct shipper relationships create recurring planned routes.*
+*Recurring planned routes reduce dependence on brokers and load boards.*
+*Dispatch is the operational system that makes this level of visibility, communication, documentation, and consistency possible.*
+
+Level 1 Transport is not building a trucking company; it is building a planned regional delivery-capacity business (Company Library, Marketing, *Mission Visibility™*).
+
 ### Core Statement
 *"The customer is getting a curated window into their mission."*
 
@@ -188,11 +198,13 @@ Mission Record Updates
 
 Joe owns Mission Visibility communication. The Mission Record remains the source of truth.
 
+**In the code, first use — the portal access email at COMMIT** (`portal/portal_access.py`): Joe makes the Customer Load Number the Mission Visibility Key and decides the customer must be told → Publisher creates the communication from `templates/onboarding/customer_portal_access.txt` on a *Customer Portal Access* card → COMI evaluates trigger `mission_visibility_opened` and routes it to the `customer_email` channel → Email Helper sends it (`send_communication`) and the result is recorded on the card and the Mission Record. It is sent without human review, by Mike Zachary's direction that the key is "auto sent to the email on file at the time of the load commital"; a send that fails leaves the card READY in front of Operations.
+
 ### Customer Portal and Customer Alerts
 Customer Portal and Customer Alerts are complementary views of the same mission.
 
-* **Customer Portal = Pull Communication**
-* **Customer Alerts = Push Communication**
+* **Customer Portal = Pull visibility**
+* **Customer Alerts = Push visibility**
 
 Both surfaces communicate information derived from the same Mission Record.
 

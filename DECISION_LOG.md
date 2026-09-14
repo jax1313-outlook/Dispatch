@@ -1333,3 +1333,18 @@ Resolves the first conflict recorded in the Mission Visibility entry above. A Mi
 The other conflicts listed above remain open.
 
 ---
+
+## 2026-09-13 — Portal access email routed through Joe, Publisher, COMI and Email Helper; Mission Visibility clarified as trust-building
+
+**PR:** (this change)
+**Capability:** `portal/portal_access.py`, `portal/models/publisher.py` (`create_customer_communication`, `record_communication_result`, action type *Customer Portal Access*), `dispatch/comi_routing.py` (trigger `mission_visibility_opened`, channel `customer_email`, `route_communication`), `portal/models/email_helper.py` (`send_communication`); playbook Section 4A.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"route the access email through Joe, Publisher, COMI and Email Helper"* and *"go ahead and build it"*; clarification, verbatim (excerpt): *"Mission Visibility is not a tracking feature. Mission Visibility is a trust-building function."* *"Customer Portal = Pull visibility. Customer Alerts = Push visibility."*
+
+Resolves the second conflict recorded in the Mission Visibility entry above: the portal access email no longer goes straight from COMMIT to the mail connector. Each step is recorded on `portal_access.flow` on the Mission Record, plus a `mission_visibility_opened` event via JOE.
+
+**Delivery, stated plainly:** Email Helper sends through the operator's mail connector (Outlook, as the Arrival Notice does) when there is one. Without it, it uses `dispatch.mail`, and on a machine with no `DISPATCH_SMTP_HOST` that writes an `.eml` to the outbox **without delivering it** — recorded as not sent, and the Publisher card stays READY.
+
+Still open: playbook Section 5 has COMI generating Publisher drafts and `docs/connectors/PROVIDER_INSERTION.md` orders COMI before Publisher; M6A internal vs securement photos; GPS-verified events vs no GPS integration.
+
+---

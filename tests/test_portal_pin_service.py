@@ -280,6 +280,19 @@ class TestCustomerPortalAccessAtCommit:
         created = next(e for e in pins.events() if e["action"] == "CREATE_PIN")
         assert (created["actor"], created["channel"]) == (MIKE, "LOAD_COMMIT")
 
+        # The Mission Visibility Communication Flow, step by step (playbook Section 4A).
+        flow = access["flow"]
+        assert flow["joe"] == {"mission_visibility": "OPENED", "communication_required": True}
+        assert any(e["action"] == "mission_visibility_opened" and e["via"] == "JOE" for e in record["events"])
+        from portal.models import publisher
+        card = next(a for a in publisher.get_queue() if a["id"] == flow["publisher"]["action_id"])
+        assert (card["action_type"], card["status"], card["requested_for"]) == ("Customer Portal Access", "ARCHIVED", MIKE)
+        assert card["communication"]["to"] == "loads@xpo.example" and card["communication"]["body"] == email["body"]
+        assert flow["comi"]["channel"] == "customer_email" and flow["comi"]["status"] == "routed"
+        assert flow["comi"]["communication_event_id"].startswith("comi-")
+        assert flow["email_helper"] == {"transport": "mail_connector", "sent": True}
+        assert card["communication_result"]["sent_by"] == MIKE
+
         client.post("/logout")
         assert client.post("/portal/login", data={"pin": "8842193"}).status_code == 302
         resp = client.get("/portal/mission")
@@ -314,13 +327,46 @@ class TestCustomerPortalAccessAtCommit:
         assert (record["portal_access"]["pin"], record["portal_access"]["sent"]) == ("CREATED", False)
         assert "no customer email on file" in record["portal_access"]["note"] and not mail.sent
 
-    def test_a_failed_send_is_recorded_as_not_sent(self, client, pins, monkeypatch):
+    def test_a_failed_send_is_recorded_as_not_sent_and_stays_in_front_of_operations(self, client, pins, monkeypatch):
+        from portal.models import publisher
         from portal.routes import joe_portal
         monkeypatch.setattr(joe_portal, "_mail_connector", lambda: FakeMail(ok=False))
         sign_in_operations(client, pins)
         record = committed_mission(client)
         assert record["portal_access"]["sent"] is False
         assert "Outlook is not open" in record["portal_access"]["note"]
+        card = next(a for a in publisher.get_queue() if a["id"] == record["portal_access"]["flow"]["publisher"]["action_id"])
+        assert card["status"] == "READY"  # not ARCHIVED: Operations still sees it
+
+    def test_without_a_mail_connector_email_helper_writes_the_outbox_and_says_it_was_not_sent(
+            self, client, pins, monkeypatch, tmp_path):
+        from dispatch import mail as dispatch_mail
+        from portal.routes import joe_portal
+        monkeypatch.setattr(joe_portal, "_mail_connector", lambda: None)
+        sign_in_operations(client, pins)
+        record = committed_mission(client)
+        access = record["portal_access"]
+        assert access["sent"] is False and access["flow"]["email_helper"]["transport"] == "dispatch_mail"
+        assert "not sent (SMTP not configured)" in access["note"]
+        written = list(Path(dispatch_mail._OUTBOX).glob("portal-access-comi-*.eml"))
+        assert len(written) == 1 and b"8842193" in written[0].read_bytes()
+
+    def test_comi_routes_only_what_it_should(self):
+        from dispatch import comi_routing
+        evaluation = comi_routing.evaluate_comi_routing("R-1", comi_routing.MISSION_VISIBILITY_OPENED)
+        assert evaluation["recommended_channel"] == "customer_email" and "customer" in evaluation["recipient_roles"]
+        card = {"id": "PUB-1", "status": "READY", "human_approval_required": False,
+                "communication": {"recipient_role": "customer", "to": "a@b.example", "subject": "s", "body": "b"}}
+        assert comi_routing.route_communication(evaluation, card)["status"] == "routed"
+        assert comi_routing.route_communication(evaluation, dict(card, status="PENDING"))["status"] == "not_routed"
+        milestone = comi_routing.evaluate_comi_routing("R-1", "milestone_update")
+        assert comi_routing.route_communication(milestone, card)["status"] == "not_routed"
+
+    def test_email_helper_sends_for_a_person_never_a_system(self):
+        from portal.models import email_helper
+        route = {"status": "routed", "to": ["a@b.example"], "subject": "s", "body": "b"}
+        for who in ("", None, "SYSTEM", "publisher"):
+            assert email_helper.send_communication(route, sent_by=who, mail_connector=lambda: FakeMail())["sent"] is False
 
     def test_the_template_is_part_of_the_onboarding_packet(self):
         from portal import portal_access

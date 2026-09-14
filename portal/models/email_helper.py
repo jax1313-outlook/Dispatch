@@ -310,3 +310,40 @@ def submit_package(load_id: str, submitted_by: str | None) -> dict:
             _save(packages)
             return stored
     raise KeyError(f"Email package not found for load: {load_id}")
+
+
+def send_communication(route: dict, *, sent_by: str | None, mail_connector) -> dict:
+    """Email Helper Sends Communications -- the last step of the Mission Visibility
+    Communication Flow (playbook Section 4A), for a communication COMI has routed.
+
+    Sends through the operator's mail connector (Outlook, as the Arrival Notice does) when
+    there is one; otherwise through dispatch.mail, which uses SMTP when configured and
+    otherwise writes the message to the outbox without delivering it. The result says which,
+    and never claims a delivery that did not happen. `sent_by` is the person the send is
+    done for, never a system identity.
+    """
+    now = _utc_now()
+    to = list(route.get("to") or [])
+    base = {"to": to, "sent_by": sent_by, "at": now, "communication_event_id": route.get("communication_event_id")}
+    if route.get("status") != "routed":
+        return dict(base, sent=False, transport=None, detail=f"not routed by COMI: {route.get('reason', '')}")
+    if not sent_by or sent_by.strip().upper() in RESERVED_SYSTEM_IDENTITIES:
+        return dict(base, sent=False, transport=None,
+                    detail="Email Helper sends for a named person, never a system identity")
+
+    subject, body = route.get("subject", ""), route.get("body", "")
+    mail = mail_connector() if mail_connector else None
+    if mail is not None:
+        try:
+            result = mail.send(to, subject, body)
+        except Exception as exc:  # noqa: BLE001 - reported, never raised through COMMIT
+            result = {"ok": False, "blocker": str(exc)}
+        if result.get("ok"):
+            return dict(base, sent=True, transport="mail_connector", detail="sent")
+        return dict(base, sent=False, transport="mail_connector",
+                    detail=result.get("blocker") or "the mail connector said no")
+
+    from dispatch import mail as email_delivery
+
+    outcome = email_delivery.send(subject, body, to, f"portal-access-{route.get('communication_event_id')}")
+    return dict(base, sent=outcome.startswith("sent"), transport="dispatch_mail", detail=outcome)

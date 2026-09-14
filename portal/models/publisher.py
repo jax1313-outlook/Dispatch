@@ -31,6 +31,10 @@ class PublisherApprovalError(ValueError):
 # action type -- bridges Publisher to cin_lite's proposal_writer.py. See _trigger_govcon_draft().
 GOVCON_PROPOSAL_ACTION_TYPE = "GovCon Proposal Draft Required"
 
+# The Mission Visibility Key's portal access email (playbook Section 4A): Publisher creates the
+# customer-facing communication; COMI routes it; Email Helper sends it.
+CUSTOMER_PORTAL_ACCESS_ACTION_TYPE = "Customer Portal Access"
+
 # A field update is not among these. ACTION_TYPES are documents Publisher
 # produces and a human approves; changing a phone number on a record is neither.
 # See apply_mission_update below, which makes the change directly and leaves a
@@ -45,6 +49,7 @@ ACTION_TYPES = [
     "POD/BOL Document Package Draft",
     "Detention Evidence Draft",
     GOVCON_PROPOSAL_ACTION_TYPE,
+    CUSTOMER_PORTAL_ACCESS_ACTION_TYPE,
 ]
 
 PUBLISHER_STATUSES = ["PENDING", "DRAFT", "READY", "APPROVED", "ARCHIVED"]
@@ -156,6 +161,54 @@ def update_action_status(action_id: str, new_status: str, approved_by: str | Non
                 action["approved_by"] = approved_by
                 action["approved_at"] = _utc_now()
             action["status"] = new_status
+            action["updated_at"] = _utc_now()
+            _save(queue)
+            return action
+    raise KeyError(f"Publisher action not found: {action_id}")
+
+
+# ---- Customer-facing communications ------------------------------------------
+#
+# Mission Visibility Communication Flow (playbook Section 4A):
+#   Mission Record Updates -> Joe Updates Mission Visibility -> Joe Evaluates Communication
+#   Requirements -> Publisher Creates Customer-Facing Communications -> COMI Routes
+#   Communications -> Email Helper Sends Communications
+#
+# This is the "Publisher Creates" step. Publisher renders the approved template with facts
+# already on the Mission Record and holds the result on its card. It sends nothing.
+
+#: Mike Zachary, 2026-09-13: the Customer Load Number is "auto sent to the email on file at the
+#: time of the load commital". No human review stands between COMMIT and this email.
+PORTAL_ACCESS_AUTO_SEND = "auto sent to the email on file at the time of the load commital"
+
+
+def create_customer_communication(sandbox_id: str, *, template: str, to: str, subject: str, body: str,
+                                  trigger_reason: str, requested_for: str) -> dict:
+    """Publisher creates the customer-facing communication. READY to route; nothing is sent here."""
+    create_action(CUSTOMER_PORTAL_ACCESS_ACTION_TYPE, sandbox_id, trigger_reason, available_data=[template])
+    queue = _load()
+    action = queue[-1]
+    action.update({
+        "status": "READY",
+        "human_approval_required": False,
+        "auto_send_basis": PORTAL_ACCESS_AUTO_SEND,
+        "requested_for": requested_for,
+        "communication": {"template": template, "recipient_role": "customer", "to": to,
+                          "subject": subject, "body": body},
+        "updated_at": _utc_now(),
+    })
+    _save(queue)
+    return action
+
+
+def record_communication_result(action_id: str, result: dict) -> dict:
+    """What Email Helper reported. A sent communication is ARCHIVED; one not sent stays READY,
+    in front of Operations."""
+    queue = _load()
+    for action in queue:
+        if action["id"] == action_id:
+            action["communication_result"] = result
+            action["status"] = "ARCHIVED" if result.get("sent") else "READY"
             action["updated_at"] = _utc_now()
             _save(queue)
             return action

@@ -1,6 +1,6 @@
 {{ customer }},
 
-Thank you for your load with Level 1 Transport. You can follow your mission in our Customer Portal -- a window into your load as it moves.
+Thank you for your load with Level 1 Transport. Mission Visibility is our commitment to you: a curated window into your mission, so you know where it stands without having to ask.
 
 HOW TO GET IN
 

@@ -32,6 +32,12 @@ INTERNAL_ONLY_KEYS = {
 }
 
 
+#: Trigger: COMMIT opened Mission Visibility for the customer (playbook Section 4A).
+MISSION_VISIBILITY_OPENED = "mission_visibility_opened"
+#: Channel: an email to the customer, sent by Email Helper.
+CUSTOMER_EMAIL = "customer_email"
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -129,12 +135,20 @@ def evaluate_comi_routing(
         if consequence_level >= 2:
             stakeholder_update_required = True
             recipient_roles.extend(["broker", "customer"])
+    elif trigger_type == MISSION_VISIBILITY_OPENED:
+        # COMMIT gave the customer a Mission Visibility Key; the customer is told by email.
+        mission_visibility_update_required = True
+        publisher_required = True
+        stakeholder_update_required = True
+        recipient_roles.append("customer")
 
     # Deduplicate roles preserving order
     unique_roles = list(dict.fromkeys(recipient_roles))
 
     recommended_channel = "operations_feed_only"
-    if publisher_required:
+    if trigger_type == MISSION_VISIBILITY_OPENED:
+        recommended_channel = CUSTOMER_EMAIL
+    elif publisher_required:
         recommended_channel = "publisher_draft"
     elif stakeholder_update_required:
         recommended_channel = "stakeholder_portal_update"
@@ -159,3 +173,33 @@ def evaluate_comi_routing(
         "source_refs": source_refs,
         "evaluated_at": _utc_now(),
     }
+
+
+def route_communication(evaluation: dict, publisher_action: dict) -> dict:
+    """COMI routes a communication Publisher created. Decides; sends nothing.
+
+    Routed only when the evaluation calls for a customer email, Publisher's card is ready (or
+    approved, when approval is required), and there is somewhere to send it. The payload is
+    sanitized for the recipient's role.
+    """
+    communication = publisher_action.get("communication") or {}
+    role = communication.get("recipient_role") or "customer"
+    base = {"communication_event_id": evaluation.get("communication_event_id"),
+            "publisher_action_id": publisher_action.get("id"), "recipient_role": role,
+            "routed_at": _utc_now()}
+
+    def not_routed(reason):
+        return dict(base, status="not_routed", reason=reason)
+
+    if evaluation.get("recommended_channel") != CUSTOMER_EMAIL:
+        return not_routed(f"COMI recommends {evaluation.get('recommended_channel')}, not a customer email")
+    if role not in evaluation.get("recipient_roles", []):
+        return not_routed(f"{role} is not a recipient of this communication")
+    ready = "APPROVED" if publisher_action.get("human_approval_required") else "READY"
+    if publisher_action.get("status") not in (ready, "APPROVED"):
+        return not_routed(f"Publisher's communication is {publisher_action.get('status')}, not {ready}")
+    if not communication.get("to"):
+        return not_routed("there is no address to send it to")
+    payload = sanitize_payload_for_role(
+        {"subject": communication.get("subject", ""), "body": communication.get("body", "")}, role)
+    return dict(base, status="routed", channel=CUSTOMER_EMAIL, to=[communication["to"]], **payload)
