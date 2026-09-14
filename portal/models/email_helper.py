@@ -337,6 +337,13 @@ def send_communication(route: dict, *, sent_by: str | None, mail_connector) -> d
         return dict(base, sent=False, transport=None,
                     detail="Email Helper sends for a named person, never a system identity")
 
+    if route.get("channel") == "customer_text":
+        # No text-message sender exists in Dispatch. Said plainly; the message waits on the
+        # Publisher card (READY, in the Operations Feed) to be texted by hand.
+        return dict(base, sent=False, transport=None,
+                    detail=f"Dispatch has no text-message sender set up; the message is on the Publisher card "
+                           f"in the Operations Feed to text to {', '.join(to)}")
+
     subject, body = route.get("subject", ""), route.get("body", "")
     mail = mail_connector() if mail_connector else None
     if mail is not None:

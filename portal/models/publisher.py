@@ -192,7 +192,7 @@ ACTION_TYPES.append(MISSION_EVIDENCE_ALERT_ACTION_TYPE)
 def create_customer_communication(sandbox_id: str, *, template: str, to: str, subject: str, body: str,
                                   trigger_reason: str, requested_for: str,
                                   action_type: str = CUSTOMER_PORTAL_ACCESS_ACTION_TYPE,
-                                  auto_send_basis: str = PORTAL_ACCESS_AUTO_SEND) -> dict:
+                                  auto_send_basis: str = PORTAL_ACCESS_AUTO_SEND, channel: str = "email") -> dict:
     """Publisher creates the customer-facing communication. READY to route; nothing is sent here."""
     create_action(action_type, sandbox_id, trigger_reason, available_data=[template])
     queue = _load()
@@ -202,7 +202,7 @@ def create_customer_communication(sandbox_id: str, *, template: str, to: str, su
         "human_approval_required": False,
         "auto_send_basis": auto_send_basis,
         "requested_for": requested_for,
-        "communication": {"template": template, "recipient_role": "customer", "to": to,
+        "communication": {"template": template, "recipient_role": "customer", "to": to, "channel": channel,
                           "subject": subject, "body": body},
         "updated_at": _utc_now(),
     })

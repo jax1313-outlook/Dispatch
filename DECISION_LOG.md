@@ -1400,3 +1400,18 @@ Implementation: the driver adds securement or freight condition photos from the 
 Fills the one number the Visibility SOP left open (and the entry above declined to invent). A Normal Commercial archive record's earliest purge is 3 years after archiving; `purge_check` now also reports `purge_due`. A record inside its 3 years is the normal rule working and raises no Retention Alert. Nothing is deleted automatically. `D:\Library\Library Department Core Object Model.docx` places retention status on the Archive record and links Library objects to it by `retention_class`; it sets no period.
 
 ---
+
+## 2026-09-14 — Operations PIN 1313 registered; customer phone number when no email
+
+**PR:** (this change)
+**Capability:** `portal/portal_access.py` (`customer_contact`), `dispatch/comi_routing.py` (channel `customer_text`), `portal/models/email_helper.py`, `portal/models/publisher.py`. Library catalog record (not code).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** Operations sign-in: *"Keep PIN, make 1313 it"*. Recipient: *"the customer email address will be provided information on the load card when created. if no address then use customer Phone Number. Example: 888-745-1234"*.
+
+**Operations PIN.** Mike's sign-in with 1313 was denied because no Operations PIN existed in the Library (1313 was the older identity.json PIN). On his answer above, 1313 was registered in the operator's Library catalog as Mike Zachary's Operations PIN, channel DIALOG, and the laptop's lockout was cleared.
+
+**Phone fallback.** The Mission Visibility communications (portal access at COMMIT, mission evidence alerts) go to the customer email on the load card; when there is none, to the customer phone number. Joe picks the channel, Publisher writes a short text, COMI routes `customer_text`. **Dispatch has no text-message sender**, so Email Helper records it as not sent and the Publisher card stays READY in the Operations Feed with the number and the message, to be texted by hand until a text provider is chosen (docs/connectors/PROVIDER_INSERTION.md, Step 1).
+
+**Still open:** `DISPATCH_PORTAL_URL` — no public address is set, so links carry the address Dispatch is browsed on.
+
+---

@@ -255,12 +255,13 @@ def mail(monkeypatch):
 
 
 def committed_mission(client, *, customer="XPO Logistics", load_number="8842193", email="loads@xpo.example",
-                      origin="Jacksonville, FL", destination="Atlanta, GA"):
+                      origin="Jacksonville, FL", destination="Atlanta, GA", phone=""):
     from portal.models import sandbox
     entry = sandbox.create_entry(source_type="dispatch", source_id=load_number, title="Portal probe",
                                  card_data={"origin": origin, "destination": destination}, summary="")
     data = sandbox._load()
-    data[entry["id"]].update({"customer": customer, "load_number": load_number, "customer_email": email})
+    data[entry["id"]].update({"customer": customer, "load_number": load_number, "customer_email": email,
+                              "customer_phone": phone})
     sandbox._save(data)
     resp = client.post(f"/brief/mission/{entry['id']}/commit")
     assert resp.status_code == 302
@@ -323,11 +324,29 @@ class TestCustomerPortalAccessAtCommit:
         assert not mail.sent
         assert pins.validate("Customer", "8842193", client_key="c").display_name == "Werner"
 
-    def test_no_email_on_file_makes_the_pin_and_says_nothing_was_sent(self, client, pins, mail):
+    def test_no_email_or_phone_on_file_makes_the_pin_and_says_nothing_was_sent(self, client, pins, mail):
         sign_in_operations(client, pins)
         record = committed_mission(client, email="")
         assert (record["portal_access"]["pin"], record["portal_access"]["sent"]) == ("CREATED", False)
-        assert "no customer email on file" in record["portal_access"]["note"] and not mail.sent
+        assert "no customer email or phone number on file" in record["portal_access"]["note"] and not mail.sent
+
+    def test_no_email_uses_the_customer_phone_number(self, client, pins, mail):
+        # Mike Zachary, 2026-09-14: "if no address then use customer Phone Number. Example: 888-745-1234".
+        from portal.models import publisher
+        sign_in_operations(client, pins)
+        record = committed_mission(client, email="", phone="888-745-1234")
+        access = record["portal_access"]
+        assert access["pin"] == "CREATED" and access["to"] == ["888-745-1234"] and not mail.sent
+        assert access["flow"]["comi"] == dict(access["flow"]["comi"], channel="customer_text", status="routed")
+        assert access["sent"] is False and "no text-message sender" in access["note"]
+        card = next(a for a in publisher.get_queue() if a["id"] == access["flow"]["publisher"]["action_id"])
+        assert card["status"] == "READY" and card["communication"]["channel"] == "text"
+        assert "8842193" in card["communication"]["body"] and "/portal/login" in card["communication"]["body"]
+
+    def test_email_wins_over_phone(self, client, pins, mail):
+        sign_in_operations(client, pins)
+        record = committed_mission(client, phone="888-745-1234")
+        assert record["portal_access"]["to"] == ["loads@xpo.example"] and record["portal_access"]["sent"] is True
 
     def test_a_failed_send_is_recorded_as_not_sent_and_stays_in_front_of_operations(self, client, pins, monkeypatch):
         from portal.models import publisher
@@ -574,7 +593,7 @@ class TestMissionEvidence:
         record, load = self.mission_with_open_load(client, pins, email="")
         self.upload(client, load["load_id"], count=1)
         alert = sandbox.get(record["id"])["customer_alerts"][-1]
-        assert alert["sent"] is False and "no customer email on file" in alert["note"]
+        assert alert["sent"] is False and "no customer email or phone number on file" in alert["note"]
 
     def test_only_customer_facing_types_are_accepted_here(self, client, pins, mail):
         _, load = self.mission_with_open_load(client, pins)

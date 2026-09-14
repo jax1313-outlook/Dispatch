@@ -40,6 +40,8 @@ MISSION_EVIDENCE_ADDED = "mission_evidence_added"
 CUSTOMER_EMAIL_TRIGGERS = (MISSION_VISIBILITY_OPENED, MISSION_EVIDENCE_ADDED)
 #: Channel: an email to the customer, sent by Email Helper.
 CUSTOMER_EMAIL = "customer_email"
+#: Channel: a text message to the customer's phone, when no email is on the load card.
+CUSTOMER_TEXT = "customer_text"
 
 
 def _utc_now() -> str:
@@ -152,7 +154,7 @@ def evaluate_comi_routing(
 
     recommended_channel = "operations_feed_only"
     if trigger_type in CUSTOMER_EMAIL_TRIGGERS:
-        recommended_channel = CUSTOMER_EMAIL
+        recommended_channel = CUSTOMER_TEXT if custom_notes.get("recipient_channel") == "text" else CUSTOMER_EMAIL
     elif publisher_required:
         recommended_channel = "publisher_draft"
     elif stakeholder_update_required:
@@ -196,8 +198,12 @@ def route_communication(evaluation: dict, publisher_action: dict) -> dict:
     def not_routed(reason):
         return dict(base, status="not_routed", reason=reason)
 
-    if evaluation.get("recommended_channel") != CUSTOMER_EMAIL:
-        return not_routed(f"COMI recommends {evaluation.get('recommended_channel')}, not a customer email")
+    channel = evaluation.get("recommended_channel")
+    wanted = CUSTOMER_TEXT if communication.get("channel") == "text" else CUSTOMER_EMAIL
+    if channel not in (CUSTOMER_EMAIL, CUSTOMER_TEXT):
+        return not_routed(f"COMI recommends {channel}, not a customer email or text")
+    if channel != wanted:
+        return not_routed(f"COMI recommends {channel}, but Publisher's communication is for {wanted}")
     if role not in evaluation.get("recipient_roles", []):
         return not_routed(f"{role} is not a recipient of this communication")
     ready = "APPROVED" if publisher_action.get("human_approval_required") else "READY"
@@ -207,4 +213,4 @@ def route_communication(evaluation: dict, publisher_action: dict) -> dict:
         return not_routed("there is no address to send it to")
     payload = sanitize_payload_for_role(
         {"subject": communication.get("subject", ""), "body": communication.get("body", "")}, role)
-    return dict(base, status="routed", channel=CUSTOMER_EMAIL, to=[communication["to"]], **payload)
+    return dict(base, status="routed", channel=channel, to=[communication["to"]], **payload)

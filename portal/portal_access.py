@@ -97,21 +97,35 @@ def joe_update_mission_visibility(record: dict, *, committed_by: str | None) -> 
             "customer": customer, "load_number": number, "requested_for": person}
 
 
+def customer_contact(record: dict) -> tuple[str | None, str]:
+    """Where the customer is told: the email on the load card, else the customer phone number.
+
+    Mike Zachary, 2026-09-14: "the customer email address will be provided information on the
+    load card when created. if no address then use customer Phone Number."
+    """
+    email = customer_email(record)
+    if email:
+        return "email", email
+    phone = brief._record_value(record, "customer_phone")
+    return ("text", phone) if phone else (None, "")
+
+
 def joe_evaluate_communication(record: dict, visibility: dict) -> dict:
     """Joe Evaluates Communication Requirements: tell the customer how to open their window."""
     if not visibility.get("opened"):
         return {"required": False, "note": visibility["note"]}
-    email = customer_email(record)
-    if not email:
+    channel, to = customer_contact(record)
+    if not channel:
         return {"required": False,
                 "note": f"The load number now opens {visibility['customer']}'s Mission Visibility View, but there "
-                        "is no customer email on file, so the portal email was not sent."}
-    return {"required": True, "template": "customer_portal_access", "recipient_role": "customer", "to": email}
+                        "is no customer email or phone number on file, so the portal access message was not sent."}
+    return {"required": True, "template": "customer_portal_access", "recipient_role": "customer", "to": to,
+            "channel": channel}
 
 
 def _publish_route_send(outcome: dict, record: dict, *, trigger: str, template: str, to: str, subject: str,
                         body: str, trigger_reason: str, requested_for: str, action_type: str, auto_send_basis: str,
-                        mail_connector) -> dict:
+                        mail_connector, channel: str = "email") -> dict:
     """Publisher Creates -> COMI Routes -> Email Helper Sends. Fills outcome["flow"] and outcome["to"]."""
     from dispatch import comi_routing
     from portal.models import email_helper, publisher
@@ -120,12 +134,13 @@ def _publish_route_send(outcome: dict, record: dict, *, trigger: str, template: 
     action = publisher.create_customer_communication(
         record.get("id") or "", template=template, to=to, subject=subject, body=body,
         trigger_reason=trigger_reason, requested_for=requested_for, action_type=action_type,
-        auto_send_basis=auto_send_basis)
+        auto_send_basis=auto_send_basis, channel=channel)
     outcome["flow"]["publisher"] = {"action_id": action["id"], "status": action["status"]}
 
     # COMI
     evaluation = comi_routing.evaluate_comi_routing(record.get("id") or "", trigger,
-                                                    source_refs={"publisher_action_id": action["id"]})
+                                                    source_refs={"publisher_action_id": action["id"]},
+                                                    custom_notes={"recipient_channel": channel})
     route = comi_routing.route_communication(evaluation, action)
     outcome["flow"]["comi"] = {"communication_event_id": evaluation["communication_event_id"],
                                "channel": route.get("channel"), "status": route["status"]}
@@ -168,16 +183,22 @@ def issue(record: dict, *, committed_by: str | None, mail_connector, url_root: s
         return stop(requirement["note"])
 
     number = visibility["load_number"]
+    channel = requirement["channel"]
+    if channel == "text":
+        body = (f"Level 1 Transport: follow your mission, load {number}, in our Customer Portal: "
+                f"{portal_url(url_root)} - sign in with your load number.")
+    else:
+        body = render_template(TEMPLATE, customer=visibility["customer"], load_number=number,
+                               portal_url=portal_url(url_root))
     sent = _publish_route_send(
         outcome, record, trigger=comi_routing.MISSION_VISIBILITY_OPENED, template=requirement["template"],
-        to=requirement["to"], subject=f"Your Level 1 Transport Customer Portal - Load {number}",
-        body=render_template(TEMPLATE, customer=visibility["customer"], load_number=number,
-                             portal_url=portal_url(url_root)),
+        to=requirement["to"], subject=f"Your Level 1 Transport Customer Portal - Load {number}", body=body,
         trigger_reason="COMMIT opened Mission Visibility for the customer", requested_for=visibility["requested_for"],
         action_type=publisher.CUSTOMER_PORTAL_ACCESS_ACTION_TYPE, auto_send_basis=publisher.PORTAL_ACCESS_AUTO_SEND,
-        mail_connector=mail_connector)
+        mail_connector=mail_connector, channel=channel)
+    kind = "text message" if channel == "text" else "email"
     if not sent["sent"]:
-        return stop(f"The load number now opens the Mission Visibility View, but the email to "
+        return stop(f"The load number now opens the Mission Visibility View, but the portal access {kind} to "
                     f"{', '.join(outcome['to'])} did not go out: {sent['detail']}.")
     return stop(f"Portal access sent to {', '.join(outcome['to'])}.")
 
@@ -238,11 +259,11 @@ def alert_mission_evidence(load_id: str, photos: list[dict], *, mail_connector, 
 
     # Joe Evaluates Communication Requirements.
     access = stored.get("portal_access") or {}
-    email = customer_email(stored)
+    channel, to = customer_contact(stored)
     requested_for = access.get("requested_for")
     reason = (None if access.get("pin") in ("CREATED", "ALREADY_PRESENT") else
               "the customer has no Mission Visibility Key for this mission")
-    reason = reason or (None if email else "there is no customer email on file")
+    reason = reason or (None if channel else "there is no customer email or phone number on file")
     reason = reason or (None if requested_for else "no Operations person is on record for this mission's Mission Visibility")
     outcome["flow"]["joe"]["communication_required"] = reason is None
     if reason:
@@ -250,14 +271,18 @@ def alert_mission_evidence(load_id: str, photos: list[dict], *, mail_connector, 
 
     labels = sorted({p["label"] for p in photos})
     number = load_number(stored)
+    if channel == "text":
+        body = (f"Level 1 Transport: new {', '.join(l.lower() + 's' for l in labels)} for load {number} "
+                f"are in your Customer Portal: {portal_url(url_root)}")
+    else:
+        body = render_template(EVIDENCE_ALERT_TEMPLATE, customer=brief._record_value(stored, "customer"),
+                               load_number=number, labels=labels, count=len(photos), portal_url=portal_url(url_root))
     sent = _publish_route_send(
         outcome, dict(stored, id=record_id), trigger=comi_routing.MISSION_EVIDENCE_ADDED, template="evidence_alert",
-        to=email, subject=f"Level 1 Transport - Load {number}: {', '.join(labels)}",
-        body=render_template(EVIDENCE_ALERT_TEMPLATE, customer=brief._record_value(stored, "customer"),
-                             load_number=number, labels=labels, count=len(photos), portal_url=portal_url(url_root)),
+        to=to, subject=f"Level 1 Transport - Load {number}: {', '.join(labels)}", body=body,
         trigger_reason="Customer-facing mission evidence was added", requested_for=requested_for,
         action_type=publisher.MISSION_EVIDENCE_ALERT_ACTION_TYPE, auto_send_basis=publisher.MISSION_EVIDENCE_AUTO_SEND,
-        mail_connector=mail_connector)
+        mail_connector=mail_connector, channel=channel)
     if not sent["sent"]:
         return finish(stop(f"The photos are in the Mission Visibility View, but the Customer Alert to "
                            f"{', '.join(outcome['to'])} did not go out: {sent['detail']}."))
