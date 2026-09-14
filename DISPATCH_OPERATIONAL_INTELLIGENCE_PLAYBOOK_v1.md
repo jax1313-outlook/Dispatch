@@ -163,14 +163,14 @@ Mission Visibility may include:
 * Load status
 * Pickup information
 * Delivery information
-* GPS-verified events
+* GPS-verified events — once a trusted GPS/telematics source is connected. None is today (see the HOS / ELD boundary at the top of this playbook); until then no event is shown as GPS-verified.
 * ETA updates
 * Delay notifications
 * Weather impacts
 * POP
 * POD
 * Freight condition photos
-* Load securement photos
+* Load securement photos — photos approved for the Mission Visibility View. The M6A Mid-Route Securement Check stays an internal checkpoint: its findings, issues and corrective actions are never shown (see the M6A Addendum).
 * Mission communications
 * Customer-facing operational updates
 * Other approved mission-specific information
@@ -292,7 +292,11 @@ The following parties do **NOT** receive M6A details:
 
 *(Unless a related Route Risk event escalates to a consequence level requiring external communication).*
 
+*Mission Visibility (Section 4A):* securement photos that Operations approves for the Mission Visibility View may be shown to the customer, as the Archive Requirements below already anticipate for customer confidence packages. M6A findings, issues observed, corrective actions, driver notes and status indicators are not shown.
+
 ### COMI Routing Rules for M6A
+
+*(Communication follows the Section 4A flow: Joe evaluates the communication requirement, Publisher creates any customer-facing draft, COMI routes it, Email Helper sends it.)*
 
 * **Normal Check** (Result: Load Secure / No Issues / Continue Transit):
   * *COMI Action*: Operations Feed update only. No Publisher Draft. No Customer Communication. No Stakeholder Update.
@@ -301,10 +305,10 @@ The following parties do **NOT** receive M6A details:
   * *COMI Action*: Operations Feed card generated, Archive notation added, No external communication.
 * **Significant Securement Issue** (Examples: Cargo shift, broken straps, load instability, potential cargo damage):
   * *Consequence Level*: Level 2–3.
-  * *COMI Action*: Operations Review required, Route Risk Entry generated, Mission Visibility Internal Alert created, Publisher Draft Candidate initiated.
+  * *COMI Action*: Operations Review required, Route Risk Entry generated, Mission Visibility Internal Alert created; Joe evaluates whether a customer communication is required, and if so Publisher creates a draft candidate for COMI to route.
 * **Cargo Integrity Threat** (Examples: Product damage, cargo collapse, compromised food safety, temperature excursion, seal breach):
   * *Consequence Level*: Level 4–5.
-  * *COMI Action*: Immediate Operations Alert, Publisher Draft Generated, Management Escalation, Claims Preparation initiated, Mission Visibility Update executed.
+  * *COMI Action*: Immediate Operations Alert, Management Escalation, Claims Preparation initiated, Mission Visibility Update executed; Joe evaluates the communication requirement, Publisher creates the draft, COMI routes it.
 
 ### Operations Feed Card Format for M6A
 
@@ -345,9 +349,11 @@ Operational roles are categorized as **Internal** or **External**:
 * **Consequence Level 0**: Logged to audit database. No external alert. Operations Feed remains clean.
 * **Consequence Level 1**: Operations Feed card created (Low Priority). Driver Portal informational banner. No customer alert.
 * **Consequence Level 2**: Operations Feed card created (Medium Priority). Direct Driver Portal push notification. Customer portal status updated with calculated ETA buffer.
-* **Consequence Level 3**: Operations Feed card created (High Priority). Immediate Driver action required notice. COMI generates a **Publisher Draft** for customer notification (requires dispatcher approval before sending).
-* **Consequence Level 4**: Operations Feed card highlighted urgent. Automatic Publisher Draft generation for customer, broker, and management. Escalation badge attached.
-* **Consequence Level 5**: Critical Emergency banner pushed across all internal feeds. Immediate voice/SMS dispatch protocol. Urgent Publisher Draft drafted for all stakeholders.
+* **Consequence Level 3**: Operations Feed card created (High Priority). Immediate Driver action required notice. Joe evaluates the customer communication requirement; Publisher creates a **Publisher Draft** for customer notification (requires dispatcher approval before sending); COMI routes the approved draft.
+* **Consequence Level 4**: Operations Feed card highlighted urgent. Joe evaluates; Publisher creates drafts for customer, broker, and management; COMI routes them. Escalation badge attached.
+* **Consequence Level 5**: Critical Emergency banner pushed across all internal feeds. Immediate voice/SMS dispatch protocol. Joe evaluates; Publisher creates urgent drafts for all stakeholders; COMI routes them.
+
+*Order of communication (Section 4A):* Joe evaluates communication requirements → Publisher creates → COMI routes → Email Helper sends. In the code, `dispatch/comi_routing.py::evaluate_comi_routing` computes the requirement flags that feed Joe's evaluation; COMI's routing of a created communication is `route_communication`.
 
 ---
 

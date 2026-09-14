@@ -54,8 +54,10 @@ From Section 6.2, and enforced rather than requested:
 > truth, or operational doctrine.
 
 The chain stays: Intelligence acquires → Intelligence Analyst reasons → Route Risk
-evaluates mission consequence → COMI routes communications → Publisher produces approved
-communications → Spine owns lifecycle truth → **Mike decides**.
+evaluates mission consequence → Joe evaluates communication requirements → Publisher
+produces approved communications → COMI routes communications → Email Helper sends →
+Spine owns lifecycle truth → **Mike decides**. (Communication order per the Mission
+Visibility Communication Flow, playbook Section 4A.)
 
 Three mechanisms hold that in place, and a provider insertion must not weaken any of
 them:

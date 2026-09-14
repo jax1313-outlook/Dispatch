@@ -1348,3 +1348,18 @@ Resolves the second conflict recorded in the Mission Visibility entry above: the
 Still open: playbook Section 5 has COMI generating Publisher drafts and `docs/connectors/PROVIDER_INSERTION.md` orders COMI before Publisher; M6A internal vs securement photos; GPS-verified events vs no GPS integration.
 
 ---
+
+## 2026-09-13 — Remaining Mission Visibility doctrine conflicts resolved
+
+**PR:** (this change — doctrine only)
+**Capability:** `DISPATCH_OPERATIONAL_INTELLIGENCE_PLAYBOOK_v1.md` (Section 4A list, Section 5 Rule 2, M6A Addendum), `docs/connectors/PROVIDER_INSERTION.md` §2.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"fix the open doctrine conflicts"*
+
+1. **Order of communication.** Section 5 Rule 2 (Levels 3–5), the M6A COMI actions and the provider-insertion chain put COMI ahead of Publisher. They now follow Section 4A: Joe evaluates communication requirements → Publisher creates → COMI routes → Email Helper sends. `evaluate_comi_routing` is described as computing the requirement flags that feed Joe's evaluation; no code was renamed.
+2. **M6A vs load securement photos.** M6A stays an internal checkpoint: findings, issues, corrective actions, driver notes and status indicators are never shown to customers. Securement photos Operations approves for the Mission Visibility View may be shown — as M6A's own Archive Requirements already anticipate for customer confidence packages.
+3. **GPS-verified events vs no GPS integration.** Listed in Section 4A as available once a trusted GPS/telematics source is connected; none is today, and until then no event is shown as GPS-verified.
+
+No code changed. No open Mission Visibility doctrine conflicts remain on record.
+
+---
