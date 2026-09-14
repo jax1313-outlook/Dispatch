@@ -282,8 +282,8 @@ class TestCustomerPortalAccessAtCommit:
 
         client.post("/logout")
         assert client.post("/portal/login", data={"pin": "8842193"}).status_code == 302
-        listing = client.get("/portal/loads").data.decode()
-        assert "8842193" in listing and "Jacksonville, FL" in listing
+        resp = client.get("/portal/mission")
+        assert b"8842193" in resp.data and b"Jacksonville, FL" in resp.data
 
     def test_the_portal_address_comes_from_the_setting_when_there_is_one(self, client, pins, mail, monkeypatch):
         monkeypatch.setenv("DISPATCH_PORTAL_URL", "https://portal.l1truck.example/")
@@ -328,58 +328,97 @@ class TestCustomerPortalAccessAtCommit:
         assert (Path(portal_access.__file__).parent / "templates" / portal_access.TEMPLATE).is_file()
 
 
-class TestCustomerPortal:
-    def _world(self, pins):
-        xpo_a = services.create_load(customer="XPO Logistics")
-        xpo_b = services.create_load(customer="xpo  logistics")
-        werner = services.create_load(customer="Werner")
-        xpo_like = services.create_load(customer="XPO Logistics Canada")
-        pins.add_customer_load("XPO Logistics", "8842193", requested_by=MIKE)
-        pins.add_customer_load("Werner", "5500211", requested_by=MIKE)
-        return xpo_a, xpo_b, werner, xpo_like
+class TestMissionVisibilityKey:
+    """Playbook Section 4A: the Customer Load Number is a Mission Visibility Key, and it is
+    mission-scoped -- it opens the one mission whose Mission Record carries it, nothing else."""
 
-    def test_signs_in_with_a_load_number_and_sees_only_their_loads(self, client, pins):
-        xpo_a, xpo_b, werner, xpo_like = self._world(pins)
+    def open_load_for(self, record, **load_fields):
+        """Dispatch opens the committed mission as a load (engine_load_id)."""
+        from portal.models import sandbox
+        load = services.create_load(**load_fields)
+        data = sandbox._load()
+        data[record["id"]]["engine_load_id"] = load["load_id"]
+        sandbox._save(data)
+        return load
+
+    def world(self, client, pins):
+        sign_in_operations(client, pins)
+        xpo = committed_mission(client, customer="XPO Logistics", load_number="8842193")
+        xpo_sister = committed_mission(client, customer="XPO Logistics", load_number="8842204",
+                                       origin="Savannah, GA")
+        werner = committed_mission(client, customer="Werner", load_number="5500211", origin="Omaha, NE")
+        loads = (self.open_load_for(xpo, customer="XPO Logistics", pickup_location="Jacksonville, FL"),
+                 self.open_load_for(xpo_sister, customer="XPO Logistics", pickup_location="Savannah, GA"),
+                 self.open_load_for(werner, customer="Werner", pickup_location="Omaha, NE"))
+        client.post("/logout")
+        return loads
+
+    def test_the_key_opens_its_one_mission_and_nothing_else(self, client, pins, mail):
+        xpo, xpo_sister, werner = self.world(client, pins)
 
         resp = client.post("/portal/login", data={"pin": "8842193"})
-        assert resp.status_code == 302 and resp.headers["Location"].endswith("/portal/loads")
-        listing = client.get("/portal/loads").data.decode()
-        assert xpo_a["load_id"] in listing and xpo_b["load_id"] in listing
-        assert werner["load_id"] not in listing and xpo_like["load_id"] not in listing
+        assert resp.status_code == 302 and resp.headers["Location"].endswith("/portal/mission")
+        view = client.get("/portal/mission").data.decode()
+        assert xpo["load_id"] in view and "Jacksonville, FL" in view
+        assert xpo_sister["load_id"] not in view and "Savannah" not in view  # same customer, other mission
+        assert werner["load_id"] not in view and "Omaha" not in view
 
-        assert client.get(f"/portal/loads/{xpo_a['load_id']}").status_code == 200
-        assert client.get(f"/portal/loads/{werner['load_id']}").status_code == 403
-        assert client.get(f"/portal/loads/{xpo_like['load_id']}?format=json").status_code == 403
-        assert client.get(f"/portal/loads/{werner['load_id']}/evidence/EV-1").status_code == 403
-        assert client.get("/home").status_code == 302  # a Customer session is not an Operations session
+        assert client.get(f"/portal/loads/{xpo['load_id']}").status_code == 200
+        assert client.get(f"/portal/loads/{xpo_sister['load_id']}").status_code == 403
+        assert client.get(f"/portal/loads/{werner['load_id']}?format=json").status_code == 403
+        assert client.get(f"/portal/loads/{xpo_sister['load_id']}/evidence/EV-1").status_code == 403
+        assert client.get("/home").status_code == 302  # not an Operations session
 
-    def test_another_customers_committed_mission_is_not_listed(self, client, pins, mail):
+    def test_a_committed_mission_not_yet_opened_shows_its_summary(self, client, pins, mail):
         sign_in_operations(client, pins)
-        committed_mission(client, customer="Werner", load_number="5500999", origin="Omaha, NE")
         committed_mission(client, customer="XPO Logistics", load_number="8842193")
+        committed_mission(client, customer="XPO Logistics", load_number="8842204", origin="Savannah, GA")
         client.post("/logout")
+        client.post("/portal/login", data={"pin": "88 42 193"})
+        view = client.get("/portal/mission").data.decode()
+        assert "8842193" in view and "Jacksonville, FL" in view
+        assert "8842204" not in view and "Savannah" not in view
+
+    def test_the_old_list_address_shows_the_mission(self, client, pins, mail):
+        self.world(client, pins)
         client.post("/portal/login", data={"pin": "8842193"})
-        listing = client.get("/portal/loads").data.decode()
-        assert "8842193" in listing and "5500999" not in listing and "Omaha" not in listing
+        assert client.get("/portal/loads").headers["Location"].endswith("/portal/mission")
 
-    def test_denied_for_an_unknown_number(self, client, pins):
-        self._world(pins)
+    def test_a_key_with_no_mission_record_opens_nothing(self, client, pins):
+        pins.add_customer_load("XPO Logistics", "7700001", requested_by=MIKE)
+        other = services.create_load(customer="XPO Logistics")
+        assert client.post("/portal/login", data={"pin": "7700001"}).status_code == 302
+        view = client.get("/portal/mission").data.decode()
+        assert "not available" in view and other["load_id"] not in view
+        assert client.get(f"/portal/loads/{other['load_id']}").status_code == 403
+
+    def test_a_record_for_another_customer_is_never_opened(self, client, pins, mail):
+        sign_in_operations(client, pins)
+        committed_mission(client, customer="Werner", load_number="5500211", origin="Omaha, NE")
+        client.post("/logout")
+        pins.add_customer_load("XPO Logistics", "55 00 211x", requested_by=MIKE)  # not the same key
+        client.post("/portal/login", data={"pin": "5500211X"})
+        assert "Omaha" not in client.get("/portal/mission").data.decode()
+
+    def test_denied_for_an_unknown_key(self, client, pins, mail):
+        self.world(client, pins)
         assert client.post("/portal/login", data={"pin": "1111111"}).status_code == 401
-        assert client.get("/portal/loads").status_code == 302
+        assert client.get("/portal/mission").status_code == 302
 
-    def test_signing_out_ends_the_customer_view(self, client, pins):
-        xpo_a, *_ = self._world(pins)
+    def test_signing_out_ends_the_view(self, client, pins, mail):
+        xpo, *_ = self.world(client, pins)
         client.post("/portal/login", data={"pin": "8842193"})
         client.post("/portal/logout")
-        assert client.get(f"/portal/loads/{xpo_a['load_id']}").status_code == 403
+        assert client.get(f"/portal/loads/{xpo['load_id']}").status_code == 403
+        assert client.get("/portal/mission").status_code == 302
 
-    def test_token_links_still_work_without_a_pin(self, client, pins):
-        _, _, werner, _ = self._world(pins)
+    def test_token_links_still_work_without_a_key(self, client, pins, mail):
+        *_, werner = self.world(client, pins)
         token = notifications.make_stakeholder_token(werner["load_id"])
         assert client.get(f"/portal/loads/{werner['load_id']}?token={token}").status_code == 200
 
-    def test_repeated_misses_lock_the_device_out_of_that_portal(self, client, pins):
-        self._world(pins)
+    def test_repeated_misses_lock_the_device_out_of_that_portal(self, client, pins, mail):
+        self.world(client, pins)
         for _ in range(5):
             client.post("/portal/login", data={"pin": "0000000"})
         assert client.post("/portal/login", data={"pin": "8842193"}).status_code == 401

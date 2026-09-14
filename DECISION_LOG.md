@@ -1320,3 +1320,16 @@ The full doctrine text is in the playbook, Section 4A.
 **Conflicts found and left for the Owner, not resolved here:** the Customer Portal as built on 2026-09-13 shows every load recorded for the key's customer, where the doctrine is mission-scoped; the portal access email is sent directly at COMMIT, where the doctrine's flow runs Joe -> Publisher -> COMI -> Email Helper; the playbook's Section 5 has COMI generating Publisher drafts; M6A (load securement) is internal in Section 5 Rule 1 while Section 4A lists load securement photos as customer-visible; Section 4A lists GPS-verified events while the playbook's header states no GPS integration exists.
 
 ---
+
+## 2026-09-13 — Customer Portal made mission-scoped
+
+**PR:** (this change)
+**Capability:** Customer Portal (`portal/routes/stakeholder.py`, `portal/templates/customer_mission.html`).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"yes make it mission-scoped"*
+
+Resolves the first conflict recorded in the Mission Visibility entry above. A Mission Visibility Key now opens the Mission Visibility View of the one committed Mission Record whose load number equals the key and whose customer is the customer the Library holds the key for — `/portal/mission` — and no other mission, including the same customer's other loads. `/portal/loads` redirects there. A key with no matching Mission Record opens nothing. Token links are unchanged.
+
+The other conflicts listed above remain open.
+
+---

@@ -1,8 +1,8 @@
 """External stakeholder portal -- read-only. Token links, and the Customer Portal.
 
-The Customer Portal (/portal/login, /portal/loads) signs a customer in through
-the Library PIN Service with one of their load numbers; see the section below
-the blueprint. Everything that follows describes the token links, which keep
+The Customer Portal (/portal/login, /portal/mission) opens the Mission
+Visibility View of one mission with its Mission Visibility Key, the customer
+load number; see the section below the blueprint. Everything that follows describes the token links, which keep
 working for a recipient with no PIN.
 
 Broker/shipper/customer view of a single load (D11: Manufacturer -> Shipper
@@ -48,31 +48,56 @@ from portal.models import pin_service
 
 stakeholder_bp = Blueprint("stakeholder", __name__)
 
-# ── Customer Portal -> Library PIN Service ───────────────────────────────────
+# ── Customer Portal: the Mission Visibility Key ──────────────────────────────
 #
-# A customer signs in with one of their load numbers (portal/models/
-# pin_service.py). The answer names the customer, and the session sees every
-# load recorded for that customer and nothing else: security within one
-# customer does not matter, but one customer seeing another's work does
-# (Mike Zachary, 2026-09-13). A load belongs to the customer when its
-# `customer` field matches the identity's subject_ref, or its display name
-# when no subject_ref was given -- ignoring case and spacing, never partially.
-# The token links above keep working for recipients who have no PIN.
+# Doctrine: DISPATCH_OPERATIONAL_INTELLIGENCE_PLAYBOOK_v1.md, Section 4A (Mike
+# Zachary, 2026-09-13). "The customer is getting a curated window into their
+# mission." The Customer Load Number is a Mission Visibility Key -- not a
+# username, account, company login or organizational credential -- and it is
+# mission-scoped: it opens the Mission Visibility View of the one mission whose
+# Mission Record carries that load number, and nothing else. The Library PIN
+# Service says whether the key is good; the Mission Record says which mission.
+# The token links above keep working for recipients who have no key.
 
 
-def _customer() -> str:
-    return session.get("customer") or ""
+def _normalize_key(value) -> str:
+    """How a key is compared: spaces removed, letters upper-cased (as the Library does)."""
+    return "".join(str(value or "").split()).upper()
 
 
-def _belongs_to_session_customer(load: dict | None) -> bool:
-    customer = _customer()
-    return bool(customer and load and pin_service.customer_key(load.get("customer")) == customer)
+def _mission_for_key(key: str, customer: str | None) -> dict | None:
+    """The one committed Mission Record this key opens, or None.
+
+    The record's load number must equal the key, and its customer must be the
+    customer the Library holds the key for. Returns the record id and, when
+    Dispatch has opened the load, its load_id.
+    """
+    from dispatch import commitment
+    from portal import brief
+    from portal.models import sandbox
+
+    wanted = _normalize_key(key)
+    for record_id, record in sandbox.get_all().items():
+        record = dict(record, id=record.get("id") or record_id)
+        if (not wanted or _normalize_key(brief._record_value(record, "load_number")) != wanted
+                or not commitment.is_committed(record) or record.get("data_origin") == "SIMULATED"
+                or pin_service.customer_key(brief._record_value(record, "customer")) != pin_service.customer_key(customer)):
+            continue
+        load_id = next((candidate for candidate in (record.get("engine_load_id"), record["id"])
+                        if candidate and services.get_load(candidate)), None)
+        return {"record_id": record["id"], "load_id": load_id}
+    return None
+
+
+def _session_mission() -> dict | None:
+    return session.get("mission")
 
 
 def _may_view(load_id: str, token: str) -> bool:
     if token and notifications.verify_stakeholder_token(load_id, token):
         return True
-    return _belongs_to_session_customer(services.get_load(load_id)) if _customer() else False
+    mission = _session_mission()
+    return bool(mission and mission.get("load_id") and mission["load_id"] == load_id)
 
 
 @stakeholder_bp.route("/login", methods=["GET", "POST"])
@@ -82,18 +107,19 @@ def customer_login():
                                error="Customer sign-in is not set up on this server yet."), 503
     if request.method == "GET":
         return render_template("customer_login.html", error=None)
+    key = request.form.get("pin", "")
     try:
-        answer = pin_service.validate(pin_service.CUSTOMER, request.form.get("pin", ""), request.remote_addr)
+        answer = pin_service.validate(pin_service.CUSTOMER, key, request.remote_addr)
     except pin_service.PinServiceUnavailable as exc:
         return render_template("customer_login.html", error=str(exc)), 503
-    customer = pin_service.customer_key((answer or {}).get("subject_ref") or (answer or {}).get("display_name"))
-    if not answer or not customer:
+    if not answer:
         return render_template("customer_login.html", error="Denied."), 401
+    mission = _mission_for_key(key, answer.get("subject_ref") or answer.get("display_name"))
     session.clear()
-    session["customer"] = customer
+    session["mission"] = mission or {"record_id": None, "load_id": None}
     session["customer_name"] = answer["display_name"]
     session["role"] = answer["role"]
-    return redirect(url_for("stakeholder.customer_loads"))
+    return redirect(url_for("stakeholder.customer_mission"))
 
 
 @stakeholder_bp.route("/logout", methods=["POST"])
@@ -104,42 +130,35 @@ def customer_logout():
 
 @stakeholder_bp.route("/loads")
 def customer_loads():
-    if not _customer():
-        return redirect(url_for("stakeholder.customer_login"))
-    loads = [dict(load, linked=True) for load in services.list_loads(include_rehearsal=False)
-             if _belongs_to_session_customer(load)]
-    return render_template("customer_loads.html", customer_name=session.get("customer_name"),
-                           loads=loads + _committed_missions(exclude={l["load_id"] for l in loads}))
+    """Kept for links already sent: the key's mission, not a list."""
+    return redirect(url_for("stakeholder.customer_mission"))
 
 
-def _committed_missions(exclude: set) -> list[dict]:
-    """Committed loads for this customer that Dispatch has not opened as a load yet.
-
-    COMMIT is when the customer is given the portal, which can be before the
-    load exists in the dispatch tables. Only the fields a customer is shown
-    anywhere else are carried: load number, status, pickup and delivery.
-    """
-    from dispatch import commitment
+@stakeholder_bp.route("/mission")
+def customer_mission():
+    """The Mission Visibility View of the key's one mission."""
     from portal import brief
     from portal.models import sandbox
 
-    rows = []
-    for record_id, record in sandbox.get_all().items():
-        record = dict(record, id=record.get("id") or record_id)
-        if (not commitment.is_committed(record) or record.get("data_origin") == "SIMULATED"
-                or pin_service.customer_key(brief._record_value(record, "customer")) != _customer()
-                or {record["id"], record.get("engine_load_id")} & exclude):
-            continue
-        rows.append({
-            "load_id": brief._record_value(record, "load_number") or record["id"],
+    mission = _session_mission()
+    if not mission:
+        return redirect(url_for("stakeholder.customer_login"))
+    if mission.get("load_id"):
+        view = services.build_stakeholder_view(mission["load_id"])
+        if view:
+            return render_template("stakeholder_view.html", error=None, signed_in=True, **view)
+    record = sandbox.get(mission["record_id"]) if mission.get("record_id") else None
+    summary = None
+    if record:
+        summary = {
+            "load_number": brief._record_value(record, "load_number"),
             "status": "committed",
             "pickup_location": brief._record_value(record, "pickup_location"),
-            "pickup_datetime": brief._record_value(record, "pickup_window"),
+            "pickup_window": brief._record_value(record, "pickup_window"),
             "delivery_location": brief._record_value(record, "delivery_location"),
-            "delivery_datetime": brief._record_value(record, "delivery_window"),
-            "linked": False,
-        })
-    return rows
+            "delivery_window": brief._record_value(record, "delivery_window"),
+        }
+    return render_template("customer_mission.html", customer_name=session.get("customer_name"), mission=summary)
 
 
 @stakeholder_bp.route("/loads/<load_id>")

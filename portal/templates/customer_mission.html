@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Mission — Level 1 Transport</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; background: #f4f4f4; color: #333; margin: 0; padding: 24px 16px; }
+        .wrap { max-width: 780px; margin: 0 auto; }
+        .header { background: #1a237e; color: #fff; padding: 20px 24px; border-radius: 6px 6px 0 0;
+                  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .header h1 { margin: 0; font-size: 20px; }
+        .card { background: #fff; border: 1px solid #ddd; border-top: none; padding: 20px 24px; border-radius: 0 0 6px 6px; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 6px 0; vertical-align: top; }
+        td.label { color: #666; width: 160px; }
+        .status-tag { display: inline-block; background: #e8eaf6; color: #1a237e; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+        button { padding: 6px 12px; font-size: 13px; background: #fff; color: #1a237e; border: none; border-radius: 4px; cursor: pointer; }
+        .empty { color: #666; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="header">
+        <h1>Level 1 Transport — Your Mission</h1>
+        <form method="POST" action="{{ url_for('stakeholder.customer_logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit">Sign out</button>
+        </form>
+    </div>
+    <div class="card">
+    {% if mission %}
+        <table>
+            <tr><td class="label">Load</td><td>{{ mission.load_number }}</td></tr>
+            <tr><td class="label">Status</td><td><span class="status-tag">{{ mission.status|title }}</span></td></tr>
+            <tr><td class="label">Pickup</td><td>{{ mission.pickup_location or '—' }}{% if mission.pickup_window %} &middot; {{ mission.pickup_window }}{% endif %}</td></tr>
+            <tr><td class="label">Delivery</td><td>{{ mission.delivery_location or '—' }}{% if mission.delivery_window %} &middot; {{ mission.delivery_window }}{% endif %}</td></tr>
+        </table>
+        <p class="empty" style="font-size:13px;margin-top:14px;">Your mission is committed. Tracking appears here as it moves.</p>
+    {% else %}
+        <p class="empty">Your mission is not available to view yet. Contact Level 1 Transport dispatch.</p>
+    {% endif %}
+    </div>
+</div>
+</body>
+</html>

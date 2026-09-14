@@ -42,6 +42,12 @@
     <div class="header">
         <h1>Level 1 Transport — Shipment Status</h1>
         <div class="sub">Load {{ load.load_id }}{{ rehearsal_badge(load) }}</div>
+        {% if signed_in %}
+        <form method="POST" action="{{ url_for('stakeholder.customer_logout') }}" style="margin-top:8px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" style="padding:4px 10px;font-size:12px;background:#fff;color:#1a237e;border:none;border-radius:3px;cursor:pointer;">Sign out</button>
+        </form>
+        {% endif %}
     </div>
 
     <div class="card">
