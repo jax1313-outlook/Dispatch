@@ -1,0 +1,26 @@
+{{ customer }},
+
+Thank you for your load with Level 1 Transport. You can follow your mission in our Customer Portal -- a window into your load as it moves.
+
+HOW TO GET IN
+
+  1. Open the Customer Portal: {{ portal_url }}
+  2. Enter your load number: {{ load_number }}
+  3. Select Sign In.
+
+Your load number is your Mission Visibility Key. There is no account, username or password to set up. The key opens the view of your mission only -- never another customer's.
+
+WHAT YOU WILL SEE
+
+  - Load status
+  - Pickup and delivery information
+  - Milestones and updates as your mission moves
+
+KEEP IN MIND
+
+  - Share your load number only with people who should see this shipment.
+  - After five wrong entries in a row, the portal pauses sign-in from that device for 15 minutes.
+  - The portal is read-only. For changes, reply to this email or call dispatch.
+
+Mike Zachary
+Level 1 Transport Inc.

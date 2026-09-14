@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
 from dispatch import mission as mission_svc
 from dispatch import scheduling, sweep
@@ -434,6 +434,15 @@ def mission_commit(record_id: str):
         "note": held.get("note", ""),
         "at": now,
     }
+
+    # The load number becomes the Mission Visibility Key, and the portal access email
+    # from the Onboarding Packet goes to the customer's email on file
+    # (portal/portal_access.py). The record says what happened, or why not.
+    from portal import portal_access
+
+    stored["portal_access"] = portal_access.issue(
+        dict(stored), committed_by=session.get("display_name") if session.get("user_id") else None,
+        mail_connector=_mail_connector, url_root=request.url_root)
 
     data[record_id] = stored
     sandbox._save(data)

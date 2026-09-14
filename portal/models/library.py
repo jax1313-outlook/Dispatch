@@ -172,6 +172,9 @@ def _catalog_configured() -> bool:
 
 
 def _open_library():
+    from portal.models import ensure_library_importable
+
+    ensure_library_importable()
     try:
         from dispatch_library.catalog import open_library
     except ImportError as exc:

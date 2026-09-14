@@ -83,6 +83,9 @@
                    placeholder="PIN" autofocus required>
             <button type="submit">Sign In</button>
         </form>
+        {% if pin_service_configured %}
+        <p style="text-align:center;margin:14px 0 0;font-size:0.85rem;"><a style="color:#4b5563" href="{{ url_for('auth.operations_pin') }}">Operations PIN — authorized by Mike Zachary with Joe</a></p>
+        {% endif %}
     </div>
 </body>
 </html>

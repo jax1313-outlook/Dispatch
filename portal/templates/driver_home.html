@@ -206,12 +206,11 @@
 
 {# Mission 4: Truck Stop Fuel Scanner.
 
-   Scoped, never gated on a mission. Mike's ruling of 2026-08-23: the receipt
-   must carry Driver, Truck, Timestamp, Jurisdiction and Receipt Evidence, and
-   "Association with an active load is preferred but not required." An
-   owner/operator fuels between loads, so this card is always available -- the
-   truck is what it is scoped to, and the load rides along only when one
-   exists. No artificial load association is ever created. #}
+   Never gated on a mission: an owner/operator fuels between loads, so this
+   card is always available -- the truck is what it is scoped to, and the load
+   rides along only when one exists. No artificial load association is ever
+   created. (An earlier comment here attributed a 2026-08-23 ruling to Mike
+   Zachary; he made no such ruling -- DECISION_LOG.md, 2026-09-13.) #}
 <div class="card">
     <h2>Truck Stop & Fuel Scanner</h2>
     {% if trucks %}

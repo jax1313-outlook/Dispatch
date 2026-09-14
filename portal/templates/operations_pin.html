@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joe — Operations PIN</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f5f7; display: flex;
+               align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 0 16px; }
+        .dialog { background: #fff; border: 1px solid #d9dce1; border-radius: 8px; padding: 28px;
+                  width: 360px; max-width: 100%; box-sizing: border-box; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+        h1 { font-size: 1.15rem; margin: 0 0 4px 0; }
+        p.subtitle { color: #6b7280; font-size: 0.85rem; margin: 0 0 18px 0; }
+        label { display: block; font-size: 0.8rem; color: #4b5563; margin-bottom: 4px; }
+        input[type=text], input[type=password] { width: 100%; box-sizing: border-box; padding: 10px; font-size: 1rem;
+                                                 border: 1px solid #ccd0d6; border-radius: 4px; margin-bottom: 12px; }
+        .choice { display: flex; gap: 16px; font-size: 0.9rem; margin-bottom: 14px; }
+        button { width: 100%; padding: 10px; font-size: 0.95rem; font-weight: 600; background: #1f2937;
+                 color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .error-message { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px;
+                         padding: 8px 10px; font-size: 0.85rem; margin-bottom: 12px; }
+        .done-message { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px;
+                        padding: 8px 10px; font-size: 0.85rem; margin-bottom: 12px; }
+        a { color: #4b5563; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="dialog">
+        <h1>Joe — Operations PIN</h1>
+        <p class="subtitle">
+            {% if first %}No one can sign in to Operations yet. Mike Zachary authorizes the first PIN here, at the server.
+            {% elif signed_in_as %}Authorizing as {{ signed_in_as }}.
+            {% else %}Only Mike Zachary authorizes an Operations PIN.{% endif %}
+        </p>
+        {% if error %}<div class="error-message">{{ error }}</div>{% endif %}
+        {% if done %}<div class="done-message">Joe: {{ done }}</div>{% endif %}
+        {% if first or signed_in_as %}
+        <form method="POST" action="{{ url_for('auth.operations_pin') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if first %}
+            <label for="authorized_by">Authorized by</label>
+            <input type="text" id="authorized_by" name="authorized_by" autocomplete="off" required>
+            {% endif %}
+            <label for="name">PIN for</label>
+            <input type="text" id="name" name="name" autocomplete="off" required>
+            <div class="choice">
+                <label><input type="radio" name="action" value="create" checked> New PIN</label>
+                <label><input type="radio" name="action" value="reset"> Change PIN</label>
+            </div>
+            <label for="pin">PIN</label>
+            <input type="password" id="pin" name="pin" autocomplete="off" required>
+            <label for="pin_again">PIN again</label>
+            <input type="password" id="pin_again" name="pin_again" autocomplete="off" required>
+            <button type="submit">Authorize</button>
+        </form>
+        {% endif %}
+        <p><a href="{{ url_for('auth.login') }}">Back to sign in</a></p>
+    </div>
+</body>
+</html>

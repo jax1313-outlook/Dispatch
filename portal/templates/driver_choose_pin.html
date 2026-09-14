@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose Your PIN — Level 1 Transport</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f5f7; display: flex;
+               align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 0 16px; }
+        .login-box { background: #fff; border: 1px solid #d9dce1; border-radius: 8px; padding: 32px;
+                     width: 320px; max-width: 100%; box-sizing: border-box; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+        .login-box h1 { font-size: 1.2rem; margin: 0 0 4px 0; }
+        .login-box p.subtitle { color: #6b7280; font-size: 0.85rem; margin: 0 0 20px 0; }
+        .login-box input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 1rem; letter-spacing: 0.2em;
+                           border: 1px solid #ccd0d6; border-radius: 4px; margin-bottom: 12px; }
+        .login-box button { width: 100%; padding: 10px; font-size: 0.95rem; font-weight: 600; background: #1f2937;
+                            color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .error-message { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px;
+                         padding: 8px 10px; font-size: 0.85rem; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>Set up a PIN</h1>
+        <p class="subtitle">Enter {{ pin_length }} characters, then enter them again.</p>
+        {% if error %}
+        <div class="error-message">{{ error }}</div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('driver_portal.driver_choose_pin') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="password" name="pin" minlength="{{ pin_length }}" maxlength="{{ pin_length }}" autocomplete="off" placeholder="PIN" autofocus required>
+            <input type="password" name="pin_again" minlength="{{ pin_length }}" maxlength="{{ pin_length }}" autocomplete="off" placeholder="PIN again" required>
+            <button type="submit">Save PIN</button>
+        </form>
+        <p style="text-align:center;margin:14px 0 0;font-size:0.85rem;"><a style="color:#4b5563" href="{{ url_for('driver_portal.driver_login') }}">Back to sign in</a></p>
+    </div>
+</body>
+</html>

@@ -101,6 +101,11 @@ def create_app(config: dict | None = None) -> Flask:
         Authority gate below would redirect every driver_portal request to /login (Authority's
         login) before driver_portal's own before_request ever ran, since Flask calls app-level
         before_request handlers before blueprint-level ones.
+
+        When DISPATCH_LIBRARY_CATALOG is set, all three sign-ins (auth.login, driver_portal,
+        stakeholder.customer_login) ask the Library PIN Service instead of identity.json and
+        driver_pin_registry.json -- portal/models/pin_service.py. The session keys stay
+        separate: user_id (Operations), driver_id (Driver), customer (Customer).
         """
         login_disabled = app.config.get("LOGIN_DISABLED")
         if login_disabled is None:
@@ -133,7 +138,9 @@ def create_app(config: dict | None = None) -> Flask:
         # docs/DISPATCH_SECURITY_DEFERRAL.md.
         if request.blueprint == "joe_api":
             return None
-        if request.endpoint in ("auth.login", "auth.logout"):
+        # auth.operations_pin decides for itself who is at the dialog (Mike's own
+        # Operations sign-in, or the server laptop before any Operations PIN exists).
+        if request.endpoint in ("auth.login", "auth.logout", "auth.operations_pin"):
             return None
         if not session.get("user_id"):
             return redirect(url_for("auth.login"))

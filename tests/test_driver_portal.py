@@ -196,10 +196,10 @@ class TestDriverPortalMission4:
 
 
 class TestDriverFuelReceiptOwnershipChain:
-    """Mike's ruling, 2026-08-23: "Fuel receipt ownership shall remain scoped.
-    Fuel receipts shall never be anonymous." Minimum chain: Driver Identity,
-    Truck Identity, Timestamp, Jurisdiction, Receipt Evidence. Load association
-    preferred but NOT required, and never fabricated."""
+    """A phone-and-PIN driver session: the receipt carries that driver, truck,
+    timestamp, jurisdiction and receipt evidence. Load association is not
+    required, and never fabricated. (No Mike Zachary ruling requires driver
+    identity on a receipt; see DECISION_LOG.md, 2026-09-13.)"""
 
     def test_logged_without_a_load_and_no_load_is_invented(self, client, driver, truck):
         _login(client, driver)

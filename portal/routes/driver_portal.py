@@ -23,6 +23,7 @@ from dispatch import route_risk as route_risk_model
 from dispatch import services as dispatch_svc
 from dispatch.models import ALLOWED_EXTENSIONS, IFTA_JURISDICTIONS, MAX_FILE_SIZE
 from portal.models import driver_pin_registry as pin_registry
+from portal.models import pin_service
 
 driver_portal_bp = Blueprint("driver_portal", __name__)
 
@@ -33,11 +34,22 @@ def _utc_today() -> str:
 _ACTIVE_LOAD_STATUSES_EXCLUDED = ("archived", "cancelled", "completed")
 
 
+#: Who a Driver-portal action is recorded against when the portal was opened
+#: with a driver PIN, which names no driver (see _driver_login_with_pin_service).
+OPEN_DRIVER = "driver-pin"
+
+
+def _session_driver_id() -> str | None:
+    """The signed-in driver: a driver_id, OPEN_DRIVER for a driver-PIN session, or None."""
+    return session.get("driver_id") or (OPEN_DRIVER if session.get("driver_open") else None)
+
+
 @driver_portal_bp.before_request
 def _require_driver_login():
-    if request.endpoint in ("driver_portal.driver_login", "driver_portal.driver_forgot_pin"):
+    if request.endpoint in ("driver_portal.driver_login", "driver_portal.driver_forgot_pin",
+                            "driver_portal.driver_choose_pin"):
         return None
-    if not session.get("driver_id"):
+    if not _session_driver_id():
         return redirect(url_for("driver_portal.driver_login"))
     return None
 
@@ -45,7 +57,10 @@ def _require_driver_login():
 @driver_portal_bp.route("/login", methods=["GET", "POST"])
 def driver_login():
     if request.method == "GET":
-        return render_template("driver_login.html", error=None)
+        return render_template("driver_login.html", error=None, pin_only=pin_service.configured())
+
+    if pin_service.configured():
+        return _driver_login_with_pin_service()
 
     phone = request.form.get("phone", "")
     pin = request.form.get("pin", "")
@@ -61,6 +76,59 @@ def driver_login():
     return redirect(url_for("driver_portal.driver_home"))
 
 
+def _driver_login_with_pin_service():
+    """Driver Portal -> Library PIN Service (portal/models/pin_service.py).
+
+    Mike Zachary, 2026-09-13: "it does not matter who is assigned what. as long
+    as those 4 characters are entered access is given." A driver PIN names no
+    driver, so the session is a driver-PIN session (driver_open): the cockpit
+    shows the fleet's active loads rather than one driver's.
+    """
+    try:
+        answer = pin_service.validate(pin_service.DRIVER, request.form.get("pin", ""), request.remote_addr)
+    except pin_service.PinServiceUnavailable as exc:
+        return render_template("driver_login.html", error=str(exc), pin_only=True), 503
+    if not answer:
+        return render_template("driver_login.html", error="Denied.", pin_only=True), 401
+    return _open_driver_portal()
+
+
+def _open_driver_portal():
+    session.clear()
+    session["driver_open"] = True
+    session["role"] = "Driver"
+    return redirect(url_for("driver_portal.driver_home"))
+
+
+@driver_portal_bp.route("/choose-pin", methods=["GET", "POST"])
+def driver_choose_pin():
+    """The PIN window. Mike Zachary, 2026-09-13, in his words:
+
+        1) the PIN window opens 2) Driver enters 4 characters 3) the system
+        ask them to repeat the entry. 4) The saved the entry ... No other
+        information or verification is needed.
+    """
+    if not pin_service.configured():
+        return redirect(url_for("driver_portal.driver_login"))
+
+    def window(error=None, status=200):
+        return render_template("driver_choose_pin.html", error=error,
+                               pin_length=pin_service.DRIVER_PIN_LENGTH), status
+
+    if request.method == "GET":
+        return window()
+    pin, again = request.form.get("pin", ""), request.form.get("pin_again", "")
+    if "".join(pin.split()).upper() != "".join(again.split()).upper():
+        return window("The two entries are not the same. Try again.", 400)
+    try:
+        pin_service.add_driver_pin(pin)
+    except pin_service.PinRefused as exc:
+        return window(str(exc)[:1].upper() + str(exc)[1:] + ".", 400)
+    except pin_service.PinServiceUnavailable as exc:
+        return window(str(exc), 503)
+    return _open_driver_portal()
+
+
 @driver_portal_bp.route("/logout", methods=["POST"])
 def driver_logout():
     session.clear()
@@ -69,6 +137,14 @@ def driver_logout():
 
 @driver_portal_bp.route("/forgot-pin", methods=["GET", "POST"])
 def driver_forgot_pin():
+    if pin_service.configured():
+        # Driver PINs live in the Library now; a new one is entered at the PIN window.
+        return render_template(
+            "driver_forgot_pin.html",
+            error="Use Set up a PIN on the sign-in page to enter a new one.",
+            success=False,
+        ), (200 if request.method == "GET" else 400)
+
     if request.method == "GET":
         return render_template("driver_forgot_pin.html", error=None, success=False)
 
@@ -93,17 +169,21 @@ def driver_forgot_pin():
 
 @driver_portal_bp.route("/home")
 def driver_home():
-    driver_id = session.get("driver_id")
+    driver_id = _session_driver_id()
     if not driver_id:
         return redirect(url_for("driver_portal.driver_login"))
 
-    driver = dispatch_svc.get_driver(driver_id)
+    if driver_id == OPEN_DRIVER:
+        # A driver PIN names no driver: the fleet's active loads, no one driver's pay.
+        driver = {"name": "Driver", "driver_id": None}
+    else:
+        driver = dispatch_svc.get_driver(driver_id)
     if not driver:
         # Driver record was deleted after the session was established -- fail closed.
         session.clear()
         return redirect(url_for("driver_portal.driver_login"))
 
-    all_loads = dispatch_svc.list_loads(driver_id=driver_id)
+    all_loads = dispatch_svc.list_loads(**({} if driver_id == OPEN_DRIVER else {"driver_id": driver_id}))
     active_loads = [l for l in all_loads if l["status"] not in _ACTIVE_LOAD_STATUSES_EXCLUDED]
 
     load_cards = []
@@ -127,7 +207,7 @@ def driver_home():
     active_card = load_cards[0] if load_cards else None
 
     # Pay Summary for Mission 4 Driver Settlement Glance
-    pay_summary = dispatch_svc.get_driver_pay_summary(driver_id)
+    pay_summary = None if driver_id == OPEN_DRIVER else dispatch_svc.get_driver_pay_summary(driver_id)
 
     # Truck identity for the fuel scanner. Required by the fuel-receipt
     # ownership chain, and deliberately NOT dependent on there being an active
@@ -151,9 +231,16 @@ def driver_home():
 
 
 def _verify_driver_load(load_id: str, driver_id: str):
-    """Verify that the given load exists and is assigned to the authenticated driver (IDOR protection)."""
+    """Verify that the given load exists and is assigned to the authenticated driver (IDOR protection).
+
+    A driver-PIN session names no driver, so any active load is its own.
+    """
     load = dispatch_svc.get_load(load_id)
-    if not load or load.get("driver_id") != driver_id:
+    if not load:
+        return None
+    if driver_id == OPEN_DRIVER:
+        return load if load.get("status") not in _ACTIVE_LOAD_STATUSES_EXCLUDED else None
+    if load.get("driver_id") != driver_id:
         return None
     return load
 
@@ -179,7 +266,7 @@ def _tell_driver(message: str, category: str = "error"):
 # --- Mission 2: 1-Tap Milestone Progression Controls ---
 @driver_portal_bp.route("/loads/<load_id>/milestone", methods=["POST"])
 def driver_step_milestone(load_id: str):
-    driver_id = session.get("driver_id")
+    driver_id = _session_driver_id()
     if not driver_id:
         return redirect(url_for("driver_portal.driver_login"))
 
@@ -226,7 +313,7 @@ def driver_step_milestone(load_id: str):
 # --- Mission 3: POD Evidence Photo Upload & Dock Exception Timers ---
 @driver_portal_bp.route("/loads/<load_id>/pod", methods=["POST"])
 def driver_upload_pod(load_id: str):
-    driver_id = session.get("driver_id")
+    driver_id = _session_driver_id()
     if not driver_id:
         return redirect(url_for("driver_portal.driver_login"))
 
@@ -262,7 +349,7 @@ def driver_upload_pod(load_id: str):
 
 @driver_portal_bp.route("/loads/<load_id>/exception", methods=["POST"])
 def driver_log_exception(load_id: str):
-    driver_id = session.get("driver_id")
+    driver_id = _session_driver_id()
     if not driver_id:
         return redirect(url_for("driver_portal.driver_login"))
 
@@ -317,33 +404,36 @@ def _validate_receipt_file(upload):
 def driver_fuel_receipt():
     """Log a fuel purchase into the IFTA ledger from a receipt photo.
 
-    OWNERSHIP -- Mike's ruling of 2026-08-23, verbatim: "Fuel receipt ownership
-    shall remain scoped. Fuel receipts shall never be anonymous." The minimum
-    chain is Driver Identity, Truck Identity, Timestamp, Jurisdiction, Receipt
-    Evidence. All five are required here, and a receipt that cannot supply all
-    five is refused rather than filed thin.
+    A receipt is logged with its truck, timestamp, jurisdiction and receipt
+    evidence. The driver is recorded when the session names one; a driver-PIN
+    session names none and asks for none. No Mike Zachary ruling requires
+    driver identity on a fuel receipt -- an earlier docstring here quoted one,
+    and on 2026-09-13 he said he never made it (DECISION_LOG.md). The Driver
+    Portal is a workspace entry control, not identity verification.
 
     LOAD ASSOCIATION IS OPTIONAL, and that is deliberate. An owner/operator
     fuels between loads; requiring a mission would make Dispatch refuse a real
-    operational event. When a load is named it must belong to this driver
-    (IDOR, same check the other three routes use). When none is named the
-    receipt is still fully owned, still auditable, and still available for IFTA
-    reporting -- and NO ARTIFICIAL LOAD ASSOCIATION IS CREATED. Dispatch
-    enforces ownership; it does not require a mission that operational reality
-    does not have.
+    operational event. When a load is named it must be one this session may
+    act on (the same check the other three routes use). When none is named NO
+    ARTIFICIAL LOAD ASSOCIATION IS CREATED.
 
     This replaces an earlier, stricter reading that required an active load.
     That was over-tight and is recorded as such in the walkthrough report.
     """
-    driver_id = session.get("driver_id")
+    driver_id = _session_driver_id()
     if not driver_id:
         return redirect(url_for("driver_portal.driver_login"))
 
     # 1. DRIVER IDENTITY -- from the session, and it must still be a real driver.
-    driver = dispatch_svc.get_driver(driver_id)
-    if not driver:
-        session.clear()
-        return redirect(url_for("driver_portal.driver_login"))
+    # A driver-PIN session names no driver, and none is asked for: the Driver
+    # Portal is a workspace entry control, not identity verification, and the
+    # scanner workflow supplies the operational context (Mike Zachary,
+    # 2026-09-13). Such a receipt is recorded as entered through a driver PIN.
+    if driver_id != OPEN_DRIVER:
+        driver = dispatch_svc.get_driver(driver_id)
+        if not driver:
+            session.clear()
+            return redirect(url_for("driver_portal.driver_login"))
 
     # 2. TRUCK IDENTITY -- required, and it must name real, active equipment.
     equipment_id = request.form.get("equipment_id", "").strip()

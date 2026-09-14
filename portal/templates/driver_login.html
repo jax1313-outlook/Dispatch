@@ -65,18 +65,26 @@
 </div>{% endif %}
     <div class="login-box">
         <h1>Level 1 Transport — Driver Portal</h1>
-        <p class="subtitle">Enter your phone number and PIN</p>
+        <p class="subtitle">{% if pin_only %}Enter your 4-character PIN{% else %}Enter your phone number and PIN{% endif %}</p>
         {% if error %}
         <div class="error-message">{{ error }}</div>
         {% endif %}
         <form method="POST" action="{{ url_for('driver_portal.driver_login') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if pin_only %}
+            <input type="password" name="pin" minlength="4" maxlength="4"
+                   autocomplete="off" placeholder="PIN" autofocus required>
+            {% else %}
             <input type="tel" name="phone" inputmode="tel" autocomplete="tel"
                    placeholder="Phone number" autofocus required>
             <input type="password" name="pin" inputmode="numeric" autocomplete="off"
                    placeholder="PIN" required>
+            {% endif %}
             <button type="submit">Sign In</button>
         </form>
+        {% if pin_only %}
+        <a class="forgot-link" href="{{ url_for('driver_portal.driver_choose_pin') }}">Set up a PIN</a>
+        {% endif %}
         <a class="forgot-link" href="{{ url_for('driver_portal.driver_forgot_pin') }}">Forgot your PIN?</a>
     </div>
 </body>

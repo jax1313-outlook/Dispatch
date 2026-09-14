@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -107,6 +108,17 @@ def legacy_shelf_store(filename: str) -> Path | None:
     if os.path.normcase(os.path.abspath(explicit)) == os.path.normcase(os.path.abspath(str(get_data_dir()))):
         return None
     return candidate
+
+
+def ensure_library_importable() -> None:
+    """Put the Library checkout (DISPATCH_LIBRARY_SRC) on the import path, when it names one.
+
+    The Library is not installed into Python; on the operator's machine it is a
+    checkout, named by this variable, the same way Joe's worker host finds it.
+    """
+    src = os.environ.get("DISPATCH_LIBRARY_SRC", "").strip()
+    if src and (Path(src) / "dispatch_library").is_dir() and src not in sys.path:
+        sys.path.insert(0, src)
 
 
 def get_archive_dir() -> Path:

@@ -72,6 +72,11 @@
     <p class="gate-note">{{ record.calendar_hold.note }}</p>
   {% endif %}
 
+  {% if record.portal_access %}
+    {# Customer Portal access from COMMIT: sent, or why not. #}
+    <p class="gate-note">Customer Portal: {{ record.portal_access.note }}</p>
+  {% endif %}
+
   {# Counted, never scored. It is the number of questions worth asking while
      somebody is on the phone, and nothing reads it to decide anything. #}
   {% if card.empty_count %}
