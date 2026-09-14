@@ -77,7 +77,17 @@ MILESTONE_TYPES = [
 
 MILESTONE_SOURCES = ["driver", "dispatcher", "system", "customer", "eld", "email"]
 
-EVIDENCE_TYPES = ["bol", "pod", "photo", "screenshot", "message", "document", "other"]
+EVIDENCE_TYPES = ["bol", "pod", "photo", "screenshot", "message", "document", "other",
+                  "securement_photo", "freight_condition_photo"]
+
+#: Customer-facing Mission Visibility artifacts (playbook Section 4A; Mike Zachary,
+#: 2026-09-13): "A customer cannot see load securement. A customer can see evidence of load
+#: securement. The evidence is the value." Shown in the Mission Visibility View, sent as
+#: Customer Alerts, kept in Mission Record history and the final mission package.
+CUSTOMER_FACING_PHOTO_TYPES = {
+    "securement_photo": "Load securement photo",
+    "freight_condition_photo": "Freight condition photo",
+}
 
 EXCEPTION_TYPES = [
     "delay",

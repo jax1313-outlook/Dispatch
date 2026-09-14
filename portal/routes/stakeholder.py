@@ -189,7 +189,7 @@ def stakeholder_view(load_id: str):
 
     if as_json:
         return jsonify(view)
-    return render_template("stakeholder_view.html", error=None, **view)
+    return render_template("stakeholder_view.html", error=None, evidence_token=token or None, **view)
 
 
 @stakeholder_bp.route("/loads/<load_id>/evidence/<evidence_id>")
@@ -211,4 +211,8 @@ def stakeholder_evidence_download(load_id: str, evidence_id: str):
         return jsonify({"error": "Evidence not found."}), 404
 
     file_path, download_name = result
-    return send_file(file_path, download_name=download_name, as_attachment=True)
+    # Mission Visibility photos are shown in the page itself; everything else downloads.
+    from dispatch.models import CUSTOMER_FACING_PHOTO_TYPES
+
+    inline = evidence.get("evidence_type") in CUSTOMER_FACING_PHOTO_TYPES
+    return send_file(file_path, download_name=download_name, as_attachment=not inline)

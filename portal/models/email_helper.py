@@ -139,6 +139,12 @@ def _closeout_summary_lines(closeout_data: dict | None) -> list[str]:
     else:
         lines.append("POD: not yet generated")
 
+    photos = closeout_data.get("mission_photos") or []
+    for label in ("Load securement photo", "Freight condition photo"):
+        count = sum(1 for p in photos if p.get("label") == label)
+        if count:
+            lines.append(f"{label}s: {count} on file")
+
     return lines
 
 

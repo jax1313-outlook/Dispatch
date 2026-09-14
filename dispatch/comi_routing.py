@@ -34,6 +34,10 @@ INTERNAL_ONLY_KEYS = {
 
 #: Trigger: COMMIT opened Mission Visibility for the customer (playbook Section 4A).
 MISSION_VISIBILITY_OPENED = "mission_visibility_opened"
+#: Trigger: customer-facing mission evidence (securement / freight condition photos) was added.
+MISSION_EVIDENCE_ADDED = "mission_evidence_added"
+#: Triggers that tell the customer by email (Customer Alerts = push visibility).
+CUSTOMER_EMAIL_TRIGGERS = (MISSION_VISIBILITY_OPENED, MISSION_EVIDENCE_ADDED)
 #: Channel: an email to the customer, sent by Email Helper.
 CUSTOMER_EMAIL = "customer_email"
 
@@ -135,8 +139,9 @@ def evaluate_comi_routing(
         if consequence_level >= 2:
             stakeholder_update_required = True
             recipient_roles.extend(["broker", "customer"])
-    elif trigger_type == MISSION_VISIBILITY_OPENED:
-        # COMMIT gave the customer a Mission Visibility Key; the customer is told by email.
+    elif trigger_type in CUSTOMER_EMAIL_TRIGGERS:
+        # COMMIT gave the customer a Mission Visibility Key, or customer-facing mission evidence
+        # arrived; the customer is told by email.
         mission_visibility_update_required = True
         publisher_required = True
         stakeholder_update_required = True
@@ -146,7 +151,7 @@ def evaluate_comi_routing(
     unique_roles = list(dict.fromkeys(recipient_roles))
 
     recommended_channel = "operations_feed_only"
-    if trigger_type == MISSION_VISIBILITY_OPENED:
+    if trigger_type in CUSTOMER_EMAIL_TRIGGERS:
         recommended_channel = CUSTOMER_EMAIL
     elif publisher_required:
         recommended_channel = "publisher_draft"

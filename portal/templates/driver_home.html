@@ -175,6 +175,25 @@
                 </label>
             </form>
 
+            {# Customer-facing Mission Visibility evidence (playbook Section 4A). #}
+            <form method="POST" action="{{ url_for('driver_portal.driver_upload_mission_photos', load_id=active_card.load.load_id) }}" enctype="multipart/form-data" id="securement-form-{{ active_card.load.load_id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="photo_type" value="securement_photo">
+                <label class="file-label">
+                    🔗 LOAD SECUREMENT PHOTOS
+                    <input type="file" name="photos" accept="image/*" capture="environment" multiple class="file-input" onchange="document.getElementById('securement-form-{{ active_card.load.load_id }}').submit()">
+                </label>
+            </form>
+
+            <form method="POST" action="{{ url_for('driver_portal.driver_upload_mission_photos', load_id=active_card.load.load_id) }}" enctype="multipart/form-data" id="condition-form-{{ active_card.load.load_id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="photo_type" value="freight_condition_photo">
+                <label class="file-label">
+                    📦 FREIGHT CONDITION PHOTOS
+                    <input type="file" name="photos" accept="image/*" capture="environment" multiple class="file-input" onchange="document.getElementById('condition-form-{{ active_card.load.load_id }}').submit()">
+                </label>
+            </form>
+
             <form method="POST" action="{{ url_for('driver_portal.driver_log_exception', load_id=active_card.load.load_id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="exception_type" value="detention">

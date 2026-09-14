@@ -1,0 +1,13 @@
+{{ customer }},
+
+New evidence from your mission with Level 1 Transport, load {{ load_number }}:
+
+{% for label in labels %}  - {{ label }}s
+{% endfor %}
+{{ count }} photo{{ 's' if count != 1 else '' }} {{ 'were' if count != 1 else 'was' }} added to your Mission Visibility View. You cannot stand at the dock with us, so we show you the evidence.
+
+See them in the Customer Portal: {{ portal_url }}
+Sign in with your load number.
+
+Mike Zachary
+Level 1 Transport Inc.

@@ -4,8 +4,9 @@ Mike Zachary, 2026-09-13:
   * Operations Portal -> PIN Service; Driver Portal -> PIN Service; Customer
     Portal -> PIN Service. The answer is Authenticated with a role, or Denied.
   * "Driver PINS should be no more that 4 digits/characters long and
-    unassigned, created by a driver." Five drivers, no further security:
-    "Keep only 4 digits" (drivers use the last four of their SSN).
+    unassigned, created by a driver." Then: "the PIN window opens ... Driver
+    enters 4 characters ... repeat the entry ... No other information or
+    verification is needed." Any 4 characters; no identity.
   * "Customer Load Number from Load card will be the Customer PIN and auto sent
     to the email on file at the time of the load commital as a separate email
     template explaining the use of the Portal and it's entry system. This is
@@ -16,6 +17,7 @@ Mike Zachary, 2026-09-13:
 
 from __future__ import annotations
 
+import io
 import os
 import sys
 from pathlib import Path
@@ -472,3 +474,110 @@ class TestMissionVisibilityKey:
     def test_without_the_catalog_the_customer_login_says_it_is_not_set_up(self, client, monkeypatch):
         monkeypatch.delenv("DISPATCH_LIBRARY_CATALOG")
         assert client.get("/portal/login").status_code == 503
+
+
+# ── Mission evidence: load securement and freight condition photos ───────────
+
+PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+       b"\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
+
+
+class TestMissionEvidence:
+    """Mike Zachary, 2026-09-13: "Load securement photos are a customer-facing Mission Visibility
+    artifact." They become part of Mission Visibility, Customer Alerts, Mission Record history and
+    the final mission package."""
+
+    def mission_with_open_load(self, client, pins, **kw):
+        from portal.models import sandbox
+        sign_in_operations(client, pins)
+        record = committed_mission(client, **kw)
+        load = services.create_load(customer=kw.get("customer", "XPO Logistics"), pickup_location="Jacksonville, FL")
+        data = sandbox._load()
+        data[record["id"]]["engine_load_id"] = load["load_id"]
+        sandbox._save(data)
+        client.post("/logout")
+        return record, load
+
+    def upload(self, client, load_id, photo_type="securement_photo", count=2):
+        client.post("/driver/choose-pin", data={"pin": "4418", "pin_again": "4418"})
+        files = [(io.BytesIO(PNG), f"strap{i}.png") for i in range(count)]
+        resp = client.post(f"/driver/loads/{load_id}/mission-photos",
+                           data={"photo_type": photo_type, "photos": files},
+                           content_type="multipart/form-data", follow_redirects=True)
+        client.post("/driver/logout")
+        return resp
+
+    def test_securement_photos_reach_every_mission_visibility_surface(self, client, pins, mail):
+        from portal.models import publisher, sandbox
+        record, load = self.mission_with_open_load(client, pins)
+        resp = self.upload(client, load["load_id"])
+        assert b"added to Mission Visibility" in resp.data and b"Customer Alert" in resp.data
+
+        # Evidence on the load, and the final mission package.
+        photos = services.customer_facing_photos(load["load_id"])
+        assert [p["evidence_type"] for p in photos] == ["securement_photo", "securement_photo"]
+        from portal.models.email_helper import _closeout_summary_lines
+        assert "Load securement photos: 2 on file" in _closeout_summary_lines(
+            {"load": {}, "mission_photos": photos})
+
+        # Mission Record history.
+        stored = sandbox.get(record["id"])
+        event = next(e for e in stored["events"] if e["action"] == "mission_evidence_added")
+        assert event["via"] == "JOE" and len(event["evidence"]) == 2
+
+        # Customer Alert: Joe -> Publisher -> COMI -> Email Helper.
+        alert = stored["customer_alerts"][-1]
+        assert alert["sent"] is True and alert["flow"]["comi"]["channel"] == "customer_email"
+        card = next(a for a in publisher.get_queue() if a["id"] == alert["flow"]["publisher"]["action_id"])
+        assert (card["action_type"], card["status"], card["requested_for"]) == \
+            ("Customer Mission Evidence Alert", "ARCHIVED", MIKE)
+        assert len(mail.sent) == 2 and "Load securement photo" in mail.sent[1]["subject"]
+        assert "8842193" in mail.sent[1]["body"]
+
+        # Mission Visibility View: shown to the key holder, inline.
+        client.post("/portal/login", data={"pin": "8842193"})
+        view = client.get("/portal/mission").data.decode()
+        assert "Load Securement" in view and photos[0]["evidence_id"] in view
+        shown = client.get(f"/portal/loads/{load['load_id']}/evidence/{photos[0]['evidence_id']}")
+        assert shown.status_code == 200 and "attachment" not in shown.headers.get("Content-Disposition", "")
+
+    def test_another_customer_never_sees_the_photos(self, client, pins, mail):
+        _, load = self.mission_with_open_load(client, pins)
+        self.upload(client, load["load_id"], count=1)
+        photo = services.customer_facing_photos(load["load_id"])[0]
+        self.mission_with_open_load(client, pins, customer="Werner", load_number="5500211")
+        client.post("/portal/login", data={"pin": "5500211"})
+        assert photo["evidence_id"] not in client.get("/portal/mission").data.decode()
+        assert client.get(f"/portal/loads/{load['load_id']}/evidence/{photo['evidence_id']}").status_code == 403
+
+    def test_freight_condition_photos_are_customer_facing_too(self, client, pins, mail):
+        _, load = self.mission_with_open_load(client, pins)
+        self.upload(client, load["load_id"], photo_type="freight_condition_photo", count=1)
+        assert services.customer_facing_photos(load["load_id"])[0]["label"] == "Freight condition photo"
+        assert "Freight condition photo" in mail.sent[-1]["subject"]
+
+    def test_token_links_show_the_photos(self, client, pins, mail):
+        _, load = self.mission_with_open_load(client, pins)
+        self.upload(client, load["load_id"], count=1)
+        token = notifications.make_stakeholder_token(load["load_id"])
+        view = client.get(f"/portal/loads/{load['load_id']}?token={token}").data.decode()
+        assert f"token={token}" in view and "Load Securement" in view
+
+    def test_without_a_mission_record_the_photos_stay_on_the_load_and_no_alert_is_sent(self, client, pins, mail):
+        load = services.create_load(customer="XPO Logistics")
+        resp = self.upload(client, load["load_id"], count=1)
+        assert b"No Customer Alert went out" in resp.data and not mail.sent
+        assert len(services.customer_facing_photos(load["load_id"])) == 1
+
+    def test_no_email_on_file_records_why_no_alert_went(self, client, pins, mail):
+        from portal.models import sandbox
+        record, load = self.mission_with_open_load(client, pins, email="")
+        self.upload(client, load["load_id"], count=1)
+        alert = sandbox.get(record["id"])["customer_alerts"][-1]
+        assert alert["sent"] is False and "no customer email on file" in alert["note"]
+
+    def test_only_customer_facing_types_are_accepted_here(self, client, pins, mail):
+        _, load = self.mission_with_open_load(client, pins)
+        resp = self.upload(client, load["load_id"], photo_type="m6a_findings", count=1)
+        assert b"Pick securement or freight condition" in resp.data
+        assert services.customer_facing_photos(load["load_id"]) == []

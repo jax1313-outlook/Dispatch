@@ -1363,3 +1363,16 @@ Still open: playbook Section 5 has COMI generating Publisher drafts and `docs/co
 No code changed. No open Mission Visibility doctrine conflicts remain on record.
 
 ---
+
+## 2026-09-13 — Doctrine correction: load securement photos are customer-facing Mission Visibility artifacts
+
+**PR:** (this change)
+**Capability:** playbook Section 4A and M6A Addendum; `dispatch/models.py` (`securement_photo`, `freight_condition_photo`, `CUSTOMER_FACING_PHOTO_TYPES`), `dispatch/services.py` (`customer_facing_photos`, stakeholder view, completion packet), `portal/routes/driver_portal.py` (`/driver/loads/<id>/mission-photos`), `portal/routes/stakeholder.py`, `portal/portal_access.py` (`alert_mission_evidence`), `portal/models/publisher.py` (*Customer Mission Evidence Alert*), `dispatch/comi_routing.py` (trigger `mission_evidence_added`), `portal/models/email_helper.py` (closeout summary).
+**Approved by:** Mike (owner)
+**Approval, verbatim (excerpt):** *"DOCTRINE CORRECTION — Load securement photos are NOT internal-only. Load securement photos are a customer-facing Mission Visibility artifact."* *"A customer cannot see load securement. A customer can see evidence of load securement. The evidence is the value."* *"Load securement photos become part of: Mission Visibility, Customer Alerts, Mission Record history, Final mission package."* *"The M6A securement check may remain an internal operational activity. The resulting securement photos and customer-approved evidence are customer-facing Mission Visibility artifacts. Update doctrine and implementation accordingly."*
+
+**Supersedes** item 2 of the entry *Remaining Mission Visibility doctrine conflicts resolved* above, which had limited securement photos to ones Operations approves; that reading was mine and is corrected.
+
+Implementation: the driver adds securement or freight condition photos from the Driver Portal; they are load evidence shown inline in the mission-scoped Mission Visibility View (and token links), a `mission_evidence_added` event via JOE on the Mission Record, a Customer Alert through Joe → Publisher → COMI → Email Helper (recorded on `customer_alerts`; not sent, with the reason, when no Mission Visibility Key, email or Operations person is on record), and counted in the completion packet's closeout summary. M6A findings, issues, corrective actions and driver notes stay internal.
+
+---

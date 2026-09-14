@@ -347,6 +347,55 @@ def driver_upload_pod(load_id: str):
     return _tell_driver("POD uploaded.", "success")
 
 
+@driver_portal_bp.route("/loads/<load_id>/mission-photos", methods=["POST"])
+def driver_upload_mission_photos(load_id: str):
+    """Load securement and freight condition photos -- customer-facing Mission Visibility
+    artifacts (playbook Section 4A; Mike Zachary, 2026-09-13): "A customer cannot see load
+    securement. A customer can see evidence of load securement. The evidence is the value."
+
+    The photos join the load's evidence (and so the Mission Visibility View and the final
+    mission package), the Mission Record history, and a Customer Alert that travels Joe ->
+    Publisher -> COMI -> Email Helper. The M6A check itself stays an internal activity.
+    """
+    from dispatch.models import CUSTOMER_FACING_PHOTO_TYPES
+    from portal import portal_access
+    from portal.routes.joe_portal import _mail_connector
+
+    driver_id = _session_driver_id()
+    if not driver_id:
+        return redirect(url_for("driver_portal.driver_login"))
+    load = _verify_driver_load(load_id, driver_id)
+    if not load:
+        return redirect(url_for("driver_portal.driver_home"))
+
+    photo_type = request.form.get("photo_type", "securement_photo").strip()
+    if photo_type not in CUSTOMER_FACING_PHOTO_TYPES:
+        return _tell_driver("Pick securement or freight condition.")
+    uploads = [f for f in request.files.getlist("photos") if f and f.filename]
+    if not uploads:
+        return _tell_driver("No photo was attached.")
+
+    label = CUSTOMER_FACING_PHOTO_TYPES[photo_type]
+    added = []
+    for upload in uploads:
+        data = upload.read()
+        if not data:
+            return _tell_driver("That photo came through empty. Try again.")
+        try:
+            evidence = dispatch_svc.attach_evidence(
+                load_id, evidence_type=photo_type, description=label, file_data=data,
+                original_filename=upload.filename, uploaded_by=f"driver:{driver_id}")
+        except ValueError as exc:
+            return _tell_driver(str(exc))
+        added.append({"evidence_id": evidence["evidence_id"], "evidence_type": photo_type, "label": label})
+
+    alert = portal_access.alert_mission_evidence(load_id, added, mail_connector=_mail_connector,
+                                                 url_root=request.url_root)
+    told = "The customer was sent a Customer Alert." if alert["sent"] else "No Customer Alert went out; dispatch can see why."
+    return _tell_driver(f"{len(added)} {label.lower()}{'s' if len(added) != 1 else ''} added to Mission Visibility. {told}",
+                        "success")
+
+
 @driver_portal_bp.route("/loads/<load_id>/exception", methods=["POST"])
 def driver_log_exception(load_id: str):
     driver_id = _session_driver_id()

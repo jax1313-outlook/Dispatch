@@ -987,6 +987,8 @@ def build_completion_packet(load_id: str) -> dict:
         "settlement": bundle["settlement"],
         "pods": bundle["pods"],
         "evidence": bundle["evidence"],
+        # Part of the final mission package (playbook Section 4A).
+        "mission_photos": customer_facing_photos(load_id),
         "broker_contact": broker_contact,
         "available": available,
         "missing": missing,
@@ -1820,6 +1822,23 @@ def get_publisher_status(load_id: str) -> dict:
     }
 
 
+def customer_facing_photos(load_id: str) -> list[dict]:
+    """The load's securement and freight condition photos, oldest first."""
+    from dispatch.models import CUSTOMER_FACING_PHOTO_TYPES
+
+    return [
+        {
+            "evidence_id": e["evidence_id"],
+            "evidence_type": e["evidence_type"],
+            "label": CUSTOMER_FACING_PHOTO_TYPES[e["evidence_type"]],
+            "description": e.get("description", ""),
+            "capture_time": e.get("capture_time", ""),
+        }
+        for e in sorted(store.list_evidence(load_id), key=lambda e: e.get("capture_time", ""))
+        if e.get("evidence_type") in CUSTOMER_FACING_PHOTO_TYPES and e.get("file_path")
+    ]
+
+
 def build_stakeholder_view(load_id: str) -> dict | None:
     """Assemble the read-only payload shown to an external stakeholder
     (broker/shipper/customer -- per D11 these are genuinely distinct
@@ -1902,6 +1921,10 @@ def build_stakeholder_view(load_id: str) -> dict | None:
             }
             for e in store.list_evidence(load_id)
         ],
+        # Securement and freight condition photos are customer-facing Mission Visibility
+        # artifacts (playbook Section 4A): listed with their ids so the view can show them
+        # through the mission-scoped evidence route. Never a file path.
+        "mission_photos": customer_facing_photos(load_id),
         "exceptions": [
             {
                 "exception_type": x.get("exception_type", ""),

@@ -109,13 +109,44 @@ def joe_evaluate_communication(record: dict, visibility: dict) -> dict:
     return {"required": True, "template": "customer_portal_access", "recipient_role": "customer", "to": email}
 
 
+def _publish_route_send(outcome: dict, record: dict, *, trigger: str, template: str, to: str, subject: str,
+                        body: str, trigger_reason: str, requested_for: str, action_type: str, auto_send_basis: str,
+                        mail_connector) -> dict:
+    """Publisher Creates -> COMI Routes -> Email Helper Sends. Fills outcome["flow"] and outcome["to"]."""
+    from dispatch import comi_routing
+    from portal.models import email_helper, publisher
+
+    # Publisher
+    action = publisher.create_customer_communication(
+        record.get("id") or "", template=template, to=to, subject=subject, body=body,
+        trigger_reason=trigger_reason, requested_for=requested_for, action_type=action_type,
+        auto_send_basis=auto_send_basis)
+    outcome["flow"]["publisher"] = {"action_id": action["id"], "status": action["status"]}
+
+    # COMI
+    evaluation = comi_routing.evaluate_comi_routing(record.get("id") or "", trigger,
+                                                    source_refs={"publisher_action_id": action["id"]})
+    route = comi_routing.route_communication(evaluation, action)
+    outcome["flow"]["comi"] = {"communication_event_id": evaluation["communication_event_id"],
+                               "channel": route.get("channel"), "status": route["status"]}
+    outcome["to"] = route.get("to") or [to]
+
+    # Email Helper
+    sent = email_helper.send_communication(route, sent_by=requested_for, mail_connector=mail_connector)
+    outcome["flow"]["email_helper"] = {"transport": sent["transport"], "sent": sent["sent"]}
+    action = publisher.record_communication_result(action["id"], sent)
+    outcome["flow"]["publisher"]["status"] = action["status"]
+    outcome["sent"] = bool(sent["sent"])
+    return sent
+
+
 def issue(record: dict, *, committed_by: str | None, mail_connector, url_root: str) -> dict:
     """Run the Mission Visibility Communication Flow for a committed load. Returns what happened.
 
     `mail_connector` is called only when there is an email to send.
     """
     from dispatch import comi_routing
-    from portal.models import email_helper, publisher
+    from portal.models import publisher
 
     outcome = {"template": "customer_portal_access", "at": datetime.now(timezone.utc).isoformat(),
                "pin": "NOT_CREATED", "sent": False, "to": [], "flow": {}}
@@ -128,36 +159,106 @@ def issue(record: dict, *, committed_by: str | None, mail_connector, url_root: s
     visibility = joe_update_mission_visibility(record, committed_by=committed_by)
     outcome["pin"] = visibility["pin"]
     outcome["flow"]["joe"] = {"mission_visibility": "OPENED" if visibility.get("opened") else "NOT_OPENED"}
+    if visibility.get("opened"):
+        # Who opened the window: later Customer Alerts for this mission are sent for this person.
+        outcome["requested_for"] = visibility["requested_for"]
     requirement = joe_evaluate_communication(record, visibility)
     outcome["flow"]["joe"]["communication_required"] = requirement["required"]
     if not requirement["required"]:
         return stop(requirement["note"])
 
-    # Publisher
     number = visibility["load_number"]
-    action = publisher.create_customer_communication(
-        record.get("id") or "", template=requirement["template"], to=requirement["to"],
-        subject=f"Your Level 1 Transport Customer Portal - Load {number}",
+    sent = _publish_route_send(
+        outcome, record, trigger=comi_routing.MISSION_VISIBILITY_OPENED, template=requirement["template"],
+        to=requirement["to"], subject=f"Your Level 1 Transport Customer Portal - Load {number}",
         body=render_template(TEMPLATE, customer=visibility["customer"], load_number=number,
                              portal_url=portal_url(url_root)),
-        trigger_reason="COMMIT opened Mission Visibility for the customer", requested_for=visibility["requested_for"])
-    outcome["flow"]["publisher"] = {"action_id": action["id"], "status": action["status"]}
-
-    # COMI
-    evaluation = comi_routing.evaluate_comi_routing(record.get("id") or "", comi_routing.MISSION_VISIBILITY_OPENED,
-                                                    source_refs={"publisher_action_id": action["id"]})
-    route = comi_routing.route_communication(evaluation, action)
-    outcome["flow"]["comi"] = {"communication_event_id": evaluation["communication_event_id"],
-                               "channel": route.get("channel"), "status": route["status"]}
-    outcome["to"] = route.get("to") or [requirement["to"]]
-
-    # Email Helper
-    sent = email_helper.send_communication(route, sent_by=visibility["requested_for"], mail_connector=mail_connector)
-    outcome["flow"]["email_helper"] = {"transport": sent["transport"], "sent": sent["sent"]}
-    action = publisher.record_communication_result(action["id"], sent)
-    outcome["flow"]["publisher"]["status"] = action["status"]
+        trigger_reason="COMMIT opened Mission Visibility for the customer", requested_for=visibility["requested_for"],
+        action_type=publisher.CUSTOMER_PORTAL_ACCESS_ACTION_TYPE, auto_send_basis=publisher.PORTAL_ACCESS_AUTO_SEND,
+        mail_connector=mail_connector)
     if not sent["sent"]:
         return stop(f"The load number now opens the Mission Visibility View, but the email to "
                     f"{', '.join(outcome['to'])} did not go out: {sent['detail']}.")
-    outcome["sent"] = True
     return stop(f"Portal access sent to {', '.join(outcome['to'])}.")
+
+
+# ── Customer Alerts: mission evidence ─────────────────────────────────────────
+#
+# Mike Zachary, 2026-09-13: "Load securement photos are a customer-facing Mission Visibility
+# artifact." They "become part of: Mission Visibility, Customer Alerts, Mission Record history,
+# Final mission package." Customer Portal = pull visibility; Customer Alerts = push visibility.
+
+EVIDENCE_ALERT_TEMPLATE = "mission_visibility/evidence_alert.txt"
+
+
+def mission_record_for_load(load_id: str) -> tuple[str, dict] | tuple[None, None]:
+    """The committed Mission Record Dispatch opened as this load."""
+    from dispatch import commitment
+    from portal.models import sandbox
+
+    for record_id, record in sandbox.get_all().items():
+        if load_id in (record.get("engine_load_id"), record.get("id") or record_id) and commitment.is_committed(record):
+            return record_id, record
+    return None, None
+
+
+def alert_mission_evidence(load_id: str, photos: list[dict], *, mail_connector, url_root: str) -> dict:
+    """New securement / freight condition photos: Mission Record history, then a Customer Alert
+    through Joe -> Publisher -> COMI -> Email Helper. Returns what happened; never raises."""
+    from dispatch import comi_routing
+    from portal.models import publisher, sandbox
+
+    now = datetime.now(timezone.utc).isoformat()
+    outcome = {"template": "evidence_alert", "at": now, "sent": False, "to": [], "flow": {},
+               "evidence_ids": [p["evidence_id"] for p in photos]}
+
+    def stop(note):
+        outcome["note"] = note
+        return outcome
+
+    record_id, record = mission_record_for_load(load_id)
+    if record is None:
+        return stop("No committed Mission Record is linked to this load, so no Customer Alert was sent.")
+
+    # Joe Updates Mission Visibility: the evidence joins the Mission Record history.
+    data = sandbox._load()
+    stored = data.get(record_id) or {}
+    stored.setdefault("events", []).append({
+        "action": "mission_evidence_added", "via": "JOE", "timestamp": now, "load_id": load_id,
+        "evidence": [{"evidence_id": p["evidence_id"], "type": p["evidence_type"]} for p in photos]})
+    data[record_id] = stored
+    sandbox._save(data)
+    outcome["flow"]["joe"] = {"mission_visibility": "UPDATED"}
+
+    def finish(result):
+        data = sandbox._load()
+        data[record_id].setdefault("customer_alerts", []).append(result)
+        sandbox._save(data)
+        return result
+
+    # Joe Evaluates Communication Requirements.
+    access = stored.get("portal_access") or {}
+    email = customer_email(stored)
+    requested_for = access.get("requested_for")
+    reason = (None if access.get("pin") in ("CREATED", "ALREADY_PRESENT") else
+              "the customer has no Mission Visibility Key for this mission")
+    reason = reason or (None if email else "there is no customer email on file")
+    reason = reason or (None if requested_for else "no Operations person is on record for this mission's Mission Visibility")
+    outcome["flow"]["joe"]["communication_required"] = reason is None
+    if reason:
+        return finish(stop(f"The photos are in the Mission Visibility View; no Customer Alert was sent: {reason}."))
+
+    labels = sorted({p["label"] for p in photos})
+    number = load_number(stored)
+    sent = _publish_route_send(
+        outcome, dict(stored, id=record_id), trigger=comi_routing.MISSION_EVIDENCE_ADDED, template="evidence_alert",
+        to=email, subject=f"Level 1 Transport - Load {number}: {', '.join(labels)}",
+        body=render_template(EVIDENCE_ALERT_TEMPLATE, customer=brief._record_value(stored, "customer"),
+                             load_number=number, labels=labels, count=len(photos), portal_url=portal_url(url_root)),
+        trigger_reason="Customer-facing mission evidence was added", requested_for=requested_for,
+        action_type=publisher.MISSION_EVIDENCE_ALERT_ACTION_TYPE, auto_send_basis=publisher.MISSION_EVIDENCE_AUTO_SEND,
+        mail_connector=mail_connector)
+    if not sent["sent"]:
+        return finish(stop(f"The photos are in the Mission Visibility View, but the Customer Alert to "
+                           f"{', '.join(outcome['to'])} did not go out: {sent['detail']}."))
+    return finish(stop(f"Customer Alert sent to {', '.join(outcome['to'])}."))

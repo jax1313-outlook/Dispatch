@@ -86,6 +86,24 @@
         {% endif %}
     </div>
 
+    {% if mission_photos %}
+    {# Evidence of load securement and freight condition: customer-facing Mission Visibility
+       artifacts (playbook Section 4A). "The evidence is the value." #}
+    <div class="card">
+        <h2>Load Securement &amp; Freight Condition</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;">
+        {% for p in mission_photos %}
+            {% set src = url_for('stakeholder.stakeholder_evidence_download', load_id=load.load_id, evidence_id=p.evidence_id, token=evidence_token) if evidence_token else url_for('stakeholder.stakeholder_evidence_download', load_id=load.load_id, evidence_id=p.evidence_id) %}
+            <a href="{{ src }}" style="display:block;width:180px;max-width:100%;text-decoration:none;color:#333;">
+                <img src="{{ src }}" alt="{{ p.label }}" style="width:100%;height:130px;object-fit:cover;border-radius:4px;border:1px solid #ddd;">
+                <div style="font-size:12px;font-weight:600;margin-top:4px;">{{ p.label }}</div>
+                {% if p.capture_time %}<div style="font-size:11px;color:#777;">{{ p.capture_time }}</div>{% endif %}
+            </a>
+        {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     {% if exceptions %}
     <div class="card">
         <h2>Exceptions</h2>

@@ -161,19 +161,38 @@ Mission Visibility is **mission-scoped**. The Customer Load Number grants visibi
 
 Mission Visibility may include:
 * Load status
-* Pickup information
-* Delivery information
+* Pickup confirmation and pickup information
+* Delivery confirmation and delivery information
 * GPS-verified events — once a trusted GPS/telematics source is connected. None is today (see the HOS / ELD boundary at the top of this playbook); until then no event is shown as GPS-verified.
 * ETA updates
+* Route updates
 * Delay notifications
 * Weather impacts
 * POP
 * POD
 * Freight condition photos
-* Load securement photos — photos approved for the Mission Visibility View. The M6A Mid-Route Securement Check stays an internal checkpoint: its findings, issues and corrective actions are never shown (see the M6A Addendum).
-* Mission communications
+* Load securement photos
+* Mission communications and customer-facing communications
 * Customer-facing operational updates
-* Other approved mission-specific information
+* Other approved mission-related evidence
+
+### Mission Evidence: Load Securement Photos (Doctrine Correction)
+
+> Mike Zachary, 2026-09-13 (`DECISION_LOG.md`). **Load securement photos are NOT internal-only. Load securement photos are a customer-facing Mission Visibility artifact.**
+
+*"A customer cannot see load securement. A customer can see evidence of load securement. The evidence is the value."*
+
+Load securement photos become part of:
+* Mission Visibility
+* Customer Alerts
+* Mission Record history
+* Final mission package
+
+These photos are intended to build confidence, transparency, trust, and repeat business.
+
+The M6A securement check may remain an internal operational activity. **The resulting securement photos and customer-approved evidence are customer-facing Mission Visibility artifacts.**
+
+In the code: evidence types `securement_photo` and `freight_condition_photo` (`dispatch/models.py::CUSTOMER_FACING_PHOTO_TYPES`); the Driver Portal's *Load Securement Photos* and *Freight Condition Photos* buttons; shown in the Mission Visibility View (`services.customer_facing_photos`, mission-scoped evidence route); a `mission_evidence_added` event via JOE on the Mission Record; a Customer Alert through Joe → Publisher (*Customer Mission Evidence Alert*) → COMI (trigger `mission_evidence_added`, channel `customer_email`) → Email Helper; and listed in the completion packet and closeout email.
 
 ### Business Purpose
 Mission Visibility exists to:
@@ -292,14 +311,14 @@ The following parties do **NOT** receive M6A details:
 
 *(Unless a related Route Risk event escalates to a consequence level requiring external communication).*
 
-*Mission Visibility (Section 4A):* securement photos that Operations approves for the Mission Visibility View may be shown to the customer, as the Archive Requirements below already anticipate for customer confidence packages. M6A findings, issues observed, corrective actions, driver notes and status indicators are not shown.
+*Mission Visibility (Section 4A, doctrine correction of 2026-09-13):* the M6A check may remain an internal operational activity, but **the resulting securement photos and customer-approved evidence are customer-facing Mission Visibility artifacts** — shown in the Mission Visibility View, sent as Customer Alerts, kept in Mission Record history and the final mission package. The exclusion above covers M6A's internal details (findings, issues observed, corrective actions, driver notes, status indicators), not the securement photos.
 
 ### COMI Routing Rules for M6A
 
 *(Communication follows the Section 4A flow: Joe evaluates the communication requirement, Publisher creates any customer-facing draft, COMI routes it, Email Helper sends it.)*
 
 * **Normal Check** (Result: Load Secure / No Issues / Continue Transit):
-  * *COMI Action*: Operations Feed update only. No Publisher Draft. No Customer Communication. No Stakeholder Update.
+  * *COMI Action*: Operations Feed update. No communication about the check itself. The resulting securement photos are customer-facing Mission Visibility evidence and go to the customer as a Customer Alert (Section 4A).
 * **Minor Issue** (Examples: Loose strap, minor pallet movement, securement adjustment required):
   * *Consequence Level*: Level 1.
   * *COMI Action*: Operations Feed card generated, Archive notation added, No external communication.
@@ -343,7 +362,7 @@ Operational roles are categorized as **Internal** or **External**:
 #### Data Sanitization Boundaries (Fail-Closed):
 * **Internal Views See**: Gross pay, linehaul rate, fuel surcharge, driver pay, profit margin, internal carrier risk scores, dispatcher private notes, driver phone/license numbers, private routing codes.
 * **External Driver Views See**: Trip origin/destination, pickup/delivery windows, load weight/commodity, special handling instructions, safe turn-by-turn corridor notes, appointment numbers.
-* **External Customer/Broker Views See**: Milestone status (M1-M10, excluding internal M6A), real-time sanitized ETA, current city/state location (or corridor zip code), delay summaries, non-sensitive route risk alerts. For customers this is the **Mission Visibility View** opened by the Mission Visibility Key (Section 4A): mission-scoped, curated, derived from the Mission Record.
+* **External Customer/Broker Views See**: Milestone status (M1-M10, excluding internal M6A), real-time sanitized ETA, current city/state location (or corridor zip code), delay summaries, non-sensitive route risk alerts, and customer-facing mission evidence (load securement photos, freight condition photos, POP, POD). For customers this is the **Mission Visibility View** opened by the Mission Visibility Key (Section 4A): mission-scoped, curated, derived from the Mission Record.
 
 ### Rule 2: Escalation Matrix & Channel Selection
 * **Consequence Level 0**: Logged to audit database. No external alert. Operations Feed remains clean.
