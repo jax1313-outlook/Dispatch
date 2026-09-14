@@ -1288,3 +1288,35 @@ Dispatch has had both since it was written and the sentence appeared nowhere in 
 **The roadmap behind it is parked, not built.** `D:\MD Files\EXPANSION_PARKING_LOT.md` P-9 records Location Intelligence with its real cost, and the finding underneath it: `facility-intel` has no facility record behind it and scavenges past loads, so the tenth trip learns nothing from the first nine — **Rule 14 exactly inverted.**
 
 ---
+
+## 2026-09-13 — Correction: no fuel-receipt "never anonymous" ruling; driver PIN is workspace entry
+
+**PR:** (this change)
+**Capability:** Driver Portal entry and fuel-receipt intake (`portal/routes/driver_portal.py`).
+**Class:** Correction of the record.
+**Stated by:** Mike (owner), 2026-09-13, verbatim: *"You referenced a "never anonymous" rule. No such Dispatch doctrine exists. Do not create, infer, or enforce identity requirements that are not explicitly documented."* and *"why never anonymous" docstring in driver_portal.py intact, i di not create it?"*
+
+The 2026-08-23 entry above records a fuel-receipt ownership decision as verbatim approval text, and three places in the code quoted it as Mike's ruling (the `driver_fuel_receipt` docstring, the fuel-scanner comment in `driver_home.html`, and the `TestDriverFuelReceiptOwnershipChain` docstring). **Mike states he did not create it.** The entry is left in place because this log is append-only; this correction supersedes it. The three code quotations are removed.
+
+Doctrine as stated by Mike on 2026-09-13:
+
+- Dispatch is workflow-centric. Identity exists only where operationally required.
+- Driver Portal: a 4-character PIN grants entry. No phone number, username, employee ID, driver lookup or identity collection. It is an operational workspace entry control, not an identity verification system.
+- Fuel receipts enter through the scanner/API workflow; no additional driver-identification requirement is created for fuel receipt ingestion.
+- Before adding authentication, identification, verification, attribution or security controls, verify they are required by the actual Dispatch workflow.
+
+---
+
+## 2026-09-13 — Mission Visibility: the curated window; the Customer Load Number is a Mission Visibility Key
+
+**PR:** (this change — doctrine clarification and terminology alignment)
+**Capability:** `DISPATCH_OPERATIONAL_INTELLIGENCE_PLAYBOOK_v1.md` Section 4A (new) and Section 5 Rule 1; customer-facing wording in `portal/portal_access.py`, `portal/templates/onboarding/customer_portal_access.txt`, `portal/templates/customer_login.html`, `portal/models/pin_service.py`.
+**Class:** Doctrine clarification. No architecture change.
+**Approved by:** Mike (owner)
+**Approval, verbatim (excerpt):** *"Add the following doctrine as an approved clarification of Mission Visibility. Do not redesign anything. Do not create new architecture. Do not create customer accounts, usernames, passwords, or organization-level security concepts. This update is a doctrine clarification and terminology alignment."* — core statements: *"The customer is getting a curated window into their mission."* *"The Customer Load Number acts as a Mission Visibility Key."* Terminology: *"Prefer: Mission Visibility Key. Over: Customer PIN, Customer Password, Customer Login."* *"Joe owns Mission Visibility communication. The Mission Record remains the source of truth."*
+
+The full doctrine text is in the playbook, Section 4A.
+
+**Conflicts found and left for the Owner, not resolved here:** the Customer Portal as built on 2026-09-13 shows every load recorded for the key's customer, where the doctrine is mission-scoped; the portal access email is sent directly at COMMIT, where the doctrine's flow runs Joe -> Publisher -> COMI -> Email Helper; the playbook's Section 5 has COMI generating Publisher drafts; M6A (load securement) is internal in Section 5 Rule 1 while Section 4A lists load securement photos as customer-visible; Section 4A lists GPS-verified events while the playbook's header states no GPS integration exists.
+
+---

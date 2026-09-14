@@ -121,6 +121,86 @@ Mission Visibility tracks the sequential lifecycle of a freight movement through
 
 ---
 
+## SECTION 4A: MISSION VISIBILITY — THE CURATED WINDOW (APPROVED CLARIFICATION)
+
+> **Approved clarification of Mission Visibility.** Mike Zachary, 2026-09-13 (`DECISION_LOG.md`).
+> A doctrine clarification and terminology alignment. It does not redesign the architecture and
+> creates no customer accounts, usernames, passwords, or organization-level security concepts.
+
+### Purpose
+Provide customers a curated window into their mission.
+
+### Core Statement
+*"The customer is getting a curated window into their mission."*
+
+### Mission Visibility Key
+*"The Customer Load Number acts as a Mission Visibility Key."*
+
+The Customer Load Number is **not**:
+* A username
+* A customer account
+* A company login
+* An organizational credential
+
+The Customer Load Number is a **Mission Visibility Key** that grants access only to the approved **Mission Visibility View** associated with the matching **Mission Record**.
+
+The customer is not accessing Dispatch. The customer is accessing an approved Mission Visibility View of their mission.
+
+### Mission Scope
+Mission Visibility is **mission-scoped**. The Customer Load Number grants visibility only to the associated mission and its approved customer-facing information.
+
+Mission Visibility may include:
+* Load status
+* Pickup information
+* Delivery information
+* GPS-verified events
+* ETA updates
+* Delay notifications
+* Weather impacts
+* POP
+* POD
+* Freight condition photos
+* Load securement photos
+* Mission communications
+* Customer-facing operational updates
+* Other approved mission-specific information
+
+### Business Purpose
+Mission Visibility exists to:
+* Build confidence
+* Increase transparency
+* Improve customer experience
+* Reduce customer uncertainty
+* Demonstrate professionalism
+* Build trust
+* Generate repeat business
+
+### Mission Visibility Communication Flow
+
+```
+Mission Record Updates
+    -> Joe Updates Mission Visibility
+    -> Joe Evaluates Communication Requirements
+    -> Publisher Creates Customer-Facing Communications
+    -> COMI Routes Communications
+    -> Email Helper Sends Communications
+```
+
+Joe owns Mission Visibility communication. The Mission Record remains the source of truth.
+
+### Customer Portal and Customer Alerts
+Customer Portal and Customer Alerts are complementary views of the same mission.
+
+* **Customer Portal = Pull Communication**
+* **Customer Alerts = Push Communication**
+
+Both surfaces communicate information derived from the same Mission Record.
+
+### Terminology
+Use **Mission Visibility Key** in preference to *Customer PIN*, *Customer Password*, or *Customer Login*.
+
+---
+
 ## ADDENDUM: M6A – MID-ROUTE LOAD SECUREMENT CHECK
 
 ### Classification & Position
@@ -247,7 +327,7 @@ Operational roles are categorized as **Internal** or **External**:
 #### Data Sanitization Boundaries (Fail-Closed):
 * **Internal Views See**: Gross pay, linehaul rate, fuel surcharge, driver pay, profit margin, internal carrier risk scores, dispatcher private notes, driver phone/license numbers, private routing codes.
 * **External Driver Views See**: Trip origin/destination, pickup/delivery windows, load weight/commodity, special handling instructions, safe turn-by-turn corridor notes, appointment numbers.
-* **External Customer/Broker Views See**: Milestone status (M1-M10, excluding internal M6A), real-time sanitized ETA, current city/state location (or corridor zip code), delay summaries, non-sensitive route risk alerts.
+* **External Customer/Broker Views See**: Milestone status (M1-M10, excluding internal M6A), real-time sanitized ETA, current city/state location (or corridor zip code), delay summaries, non-sensitive route risk alerts. For customers this is the **Mission Visibility View** opened by the Mission Visibility Key (Section 4A): mission-scoped, curated, derived from the Mission Record.
 
 ### Rule 2: Escalation Matrix & Channel Selection
 * **Consequence Level 0**: Logged to audit database. No external alert. Operations Feed remains clean.
