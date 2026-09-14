@@ -11,8 +11,9 @@ the normal commercial rule may apply to a record, and why not -- the answer the
 Operations Feed's Retention Alert card and the retention API show. Purging a
 record stays a person's decision.
 
-The SOP gives no number of years for the normal commercial class ("use
-accounting/claims needs before purge"), so none is invented here.
+Normal commercial retention is 3 years from archiving (Mike Zachary,
+2026-09-13: "3 years normal Commerical record retention"). A record inside its
+3 years is simply not due; that is the normal rule working, not an alert.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ NORMAL_COMMERCIAL = "normal_commercial"
 
 #: class -> (label, minimum years or None, what the SOP says)
 RETENTION_CLASSES = {
-    NORMAL_COMMERCIAL: ("Normal Commercial", None,
-                        "Commercial default; use accounting/claims needs before purge."),
+    NORMAL_COMMERCIAL: ("Normal Commercial", 3,
+                        "3 years (Mike Zachary, 2026-09-13); use accounting/claims needs before purge."),
     "dispute_detention_claim": ("Broker Dispute / Detention / Claim", None,
                                 "Hold until resolved plus applicable retention requirement."),
     "government": ("Government / FEMA / DLA", 4,
@@ -66,7 +67,8 @@ def purge_check(record: dict, *, now: datetime | None = None) -> dict:
     """Whether the normal commercial rule may apply to this archive record.
 
     Returns {"normal_rule_applies": bool, "reasons": [...], "earliest_purge": iso or None,
-    "retention_class", "label", "policy"}. Never deletes anything.
+    "purge_due": bool, "retention_class", "label", "policy"}. `purge_due` is True only when
+    the record may be purged today; purging is still a person's act. Never deletes anything.
     """
     now = now or datetime.now(timezone.utc)
     retention_class = (record.get("retention_class") or NORMAL_COMMERCIAL).strip().lower()
@@ -101,8 +103,11 @@ def purge_check(record: dict, *, now: datetime | None = None) -> dict:
         else:
             until = _plus_years(archived, years)
             earliest = until.isoformat()
-            if now < until:
+            # Normal Commercial inside its 3 years is the normal rule working, not a reason.
+            if now < until and retention_class != NORMAL_COMMERCIAL:
                 reasons.append(f"{label}: keep until {until.date()} ({years}-year minimum).")
 
+    purge_due = not reasons and earliest is not None and now >= datetime.fromisoformat(earliest)
     return {"retention_class": retention_class, "label": label, "policy": policy,
-            "normal_rule_applies": not reasons, "reasons": reasons, "earliest_purge": earliest}
+            "normal_rule_applies": not reasons, "reasons": reasons, "earliest_purge": earliest,
+            "purge_due": purge_due}

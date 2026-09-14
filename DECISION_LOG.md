@@ -1389,3 +1389,14 @@ Implementation: the driver adds securement or freight condition photos from the 
 **Retention class — a database migration on Mike's instruction.** `db.schema_drift` records that adding a column to a database holding real freight is a Class 2 decision; this instruction is that decision. Five columns are added to `retention` by guarded `ALTER TABLE` in `_apply_migrations`; every existing archive record reads as Normal Commercial with no legal hold, which is how it was treated before. Nothing is deleted anywhere: `purge_check` only says whether the normal commercial rule may apply and why not, and the Operations Feed shows a Retention Alert card when it may not. No number of years is invented for Normal Commercial.
 
 ---
+
+## 2026-09-13 — Normal Commercial retention is 3 years
+
+**PR:** (this change)
+**Capability:** `dispatch/retention.py` (`RETENTION_CLASSES`, `purge_check`), playbook Section 4B.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"3 years normal Commerical record retention"*
+
+Fills the one number the Visibility SOP left open (and the entry above declined to invent). A Normal Commercial archive record's earliest purge is 3 years after archiving; `purge_check` now also reports `purge_due`. A record inside its 3 years is the normal rule working and raises no Retention Alert. Nothing is deleted automatically. `D:\Library\Library Department Core Object Model.docx` places retention status on the Archive record and links Library objects to it by `retention_class`; it sets no period.
+
+---

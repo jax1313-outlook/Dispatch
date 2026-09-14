@@ -51,9 +51,16 @@ class TestPurgeCheck:
         base.update(kw)
         return retention.purge_check(base, now=NOW)
 
-    def test_normal_commercial_follows_the_normal_rule(self):
+    def test_normal_commercial_is_three_years(self):
+        # Mike Zachary, 2026-09-13: "3 years normal Commerical record retention".
         check = self.record()
         assert check["normal_rule_applies"] is True and check["reasons"] == []
+        assert check["earliest_purge"].startswith("2029-01-01") and check["purge_due"] is False
+        old = self.record(archived_at="2023-09-01T00:00:00Z")
+        assert old["purge_due"] is True and old["earliest_purge"].startswith("2026-09-01")
+
+    def test_a_record_under_hold_is_never_due(self):
+        assert self.record(archived_at="2020-01-01T00:00:00Z", legal_hold=True)["purge_due"] is False
 
     def test_a_legal_hold_blocks_any_class(self):
         check = self.record(legal_hold=True, legal_hold_note="insurance claim 44")

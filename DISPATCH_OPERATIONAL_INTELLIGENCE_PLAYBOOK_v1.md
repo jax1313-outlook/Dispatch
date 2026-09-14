@@ -260,7 +260,7 @@ Do not use one purge clock for every load. **Retention class is stored with each
 
 | Retention Class | Policy Direction |
 |---|---|
-| Normal Commercial | Commercial default; use accounting/claims needs before purge. |
+| Normal Commercial | **3 years** from archiving (Mike Zachary, 2026-09-13); use accounting/claims needs before purge. |
 | Broker Dispute / Detention / Claim | Hold until resolved plus applicable retention requirement. |
 | Government / FEMA / DLA | Minimum 4 years unless a contract-specific period requires longer. |
 | FAR-Covered Contract | 3 years after final payment unless the clause says longer. |
@@ -269,7 +269,7 @@ Do not use one purge clock for every load. **Retention class is stored with each
 
 The system warns when a record cannot purge under the normal commercial rule. Purging an archive record remains a person's decision; Dispatch deletes none on its own.
 
-**In the code:** `dispatch/retention.py` (`RETENTION_CLASSES`, `purge_check`); `retention` table columns `retention_class`, `legal_hold`, `legal_hold_note`, `final_payment_at`, `dispute_resolved_at` (existing records become Normal Commercial, no hold); archive API `POST /api/dispatch/loads/<id>/archive` accepts a class and hold, `PATCH /api/dispatch/retention/<id>` changes them; the Operations Feed shows a **Retention Alert** card for every record the normal rule does not cover. Retention class and hold are internal and never shown to customers. No number of years is set for Normal Commercial, because the SOP gives none.
+**In the code:** `dispatch/retention.py` (`RETENTION_CLASSES`, `purge_check`); `retention` table columns `retention_class`, `legal_hold`, `legal_hold_note`, `final_payment_at`, `dispute_resolved_at` (existing records become Normal Commercial, no hold); archive API `POST /api/dispatch/loads/<id>/archive` accepts a class and hold, `PATCH /api/dispatch/retention/<id>` changes them; the Operations Feed shows a **Retention Alert** card for every record the normal rule does not cover. Retention class and hold are internal and never shown to customers. Each record's `purge_check` gives its earliest purge date and whether a purge is due today (Normal Commercial: 3 years after archiving); a due record is still purged only by a person.
 
 ### Supersession
 The SOP says "The first build does not need a live customer portal. Start with clean, professional PDF/email outputs." The live Customer Portal has since been built and made the pull side of Mission Visibility (Section 4A), next to Customer Alerts (push). **Section 4A supersedes that line**; the SOP's PDF/email outputs remain wanted as Publisher products.
