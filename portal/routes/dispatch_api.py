@@ -529,8 +529,14 @@ def generate_pod(load_id):
 
 @dispatch_bp.route("/loads/<load_id>/archive", methods=["POST"])
 def archive_load(load_id):
+    body = request.get_json(silent=True) or {}
     try:
-        ret = services.archive_load(load_id)
+        ret = services.archive_load(
+            load_id,
+            retention_class=body.get("retention_class") or "normal_commercial",
+            legal_hold=bool(body.get("legal_hold")),
+            legal_hold_note=body.get("legal_hold_note") or "",
+        )
     except ValueError as e:
         status = 404 if "not found" in str(e).lower() else 409
         return jsonify({"error": str(e)}), status
@@ -717,6 +723,19 @@ def get_retention(load_id):
     ret = services.get_retention(load_id)
     if not ret:
         return jsonify({"error": f"No retention record for {load_id}"}), 404
+    return jsonify({"status": "ok", "retention": ret})
+
+
+@dispatch_bp.route("/retention/<load_id>", methods=["PATCH"])
+def update_retention(load_id):
+    """Retention class, legal hold, final payment and dispute resolution dates
+    (Company Library, Visibility SOP section 8). Deletes nothing."""
+    body = request.get_json(silent=True) or {}
+    try:
+        ret = services.set_retention(load_id, **body)
+    except ValueError as e:
+        status = 404 if "no retention record" in str(e).lower() else 400
+        return jsonify({"error": str(e)}), status
     return jsonify({"status": "ok", "retention": ret})
 
 

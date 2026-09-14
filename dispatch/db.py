@@ -128,7 +128,12 @@ CREATE TABLE IF NOT EXISTS retention (
     financial_summary TEXT NOT NULL DEFAULT '{}',
     archive_location  TEXT NOT NULL DEFAULT '',
     retention_status  TEXT NOT NULL DEFAULT 'active',
-    archived_at       TEXT NOT NULL
+    archived_at       TEXT NOT NULL,
+    retention_class   TEXT NOT NULL DEFAULT 'normal_commercial',
+    legal_hold        INTEGER NOT NULL DEFAULT 0,
+    legal_hold_note   TEXT NOT NULL DEFAULT '',
+    final_payment_at  TEXT,
+    dispute_resolved_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS rate_confirmations (
@@ -563,6 +568,20 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         )
     except sqlite3.OperationalError:
         pass
+    # Retention classes (Company Library, Visibility SOP section 8; Mike Zachary,
+    # 2026-09-13, "build retention class"): stored with each archive record. An
+    # existing record becomes normal_commercial with no legal hold -- exactly
+    # what it was treated as before -- and dispatch/retention.py says when that
+    # rule may not apply.
+    for column in ("retention_class TEXT NOT NULL DEFAULT 'normal_commercial'",
+                   "legal_hold INTEGER NOT NULL DEFAULT 0",
+                   "legal_hold_note TEXT NOT NULL DEFAULT ''",
+                   "final_payment_at TEXT",
+                   "dispute_resolved_at TEXT"):
+        try:
+            conn.execute("ALTER TABLE retention ADD COLUMN %s" % column)
+        except sqlite3.OperationalError:
+            pass
     # Rehearsal mode (Operational Readiness Mission Section 4.2) tags records so
     # a proof run can never display as an unlabeled live mission. One TEXT
     # column per tagged table, empty for operational records -- see

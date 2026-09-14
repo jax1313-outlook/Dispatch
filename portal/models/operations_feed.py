@@ -338,6 +338,31 @@ def _route_risk_cards() -> list[dict]:
     return cards
 
 
+def _retention_alert_cards() -> list[dict]:
+    """Retention Alert Card (Company Library, Visibility SOP 9.2): a government, high-value,
+    claim or legal-hold class, or a legal hold, blocks the normal purge rule and says why."""
+    cards = []
+    for record in dispatch_svc.list_retentions():
+        check = record.get("purge_check") or {}
+        if check.get("normal_rule_applies", True):
+            continue
+        load = dispatch_svc.get_load(record["load_id"]) or {}
+        title = f"Retention — {check.get('label', '')}"
+        if load.get("customer"):
+            title = f"{title} — {load['customer']}"
+        cards.append(_card(
+            card_id=f"retention-{record.get('archive_id', '')}",
+            source="retention",
+            band="admin",
+            card_level=1,
+            title=title,
+            summary="Normal purge does not apply. " + " ".join(check.get("reasons") or []),
+            url=f"/dispatch/{record['load_id']}",
+            created_at=record.get("archived_at", ""),
+        ))
+    return cards
+
+
 _SOURCE_BUILDERS = (
     _publisher_cards,
     _conflict_cards,
@@ -349,6 +374,7 @@ _SOURCE_BUILDERS = (
     _library_gap_cards,
     _comi_cards,
     _route_risk_cards,
+    _retention_alert_cards,
 )
 
 

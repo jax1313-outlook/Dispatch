@@ -514,14 +514,34 @@ def create_retention(ret: RetentionArchive) -> dict:
             """INSERT INTO retention
                (archive_id, load_id, final_status, pod_package_id,
                 evidence_index, financial_summary, archive_location,
-                retention_status, archived_at)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+                retention_status, archived_at, retention_class, legal_hold,
+                legal_hold_note, final_payment_at, dispute_resolved_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (ret.archive_id, ret.load_id, ret.final_status,
              ret.pod_package_id, json.dumps(ret.evidence_index),
              json.dumps(ret.financial_summary),
-             ret.archive_location, ret.retention_status, ret.archived_at),
+             ret.archive_location, ret.retention_status, ret.archived_at,
+             ret.retention_class, int(bool(ret.legal_hold)), ret.legal_hold_note,
+             ret.final_payment_at, ret.dispute_resolved_at),
         )
     return ret.to_dict()
+
+
+#: Retention fields a person may change after archiving (dispatch/retention.py).
+RETENTION_EDITABLE = ("retention_class", "legal_hold", "legal_hold_note", "final_payment_at", "dispute_resolved_at")
+
+
+def update_retention_fields(load_id: str, **fields) -> dict | None:
+    changes = {k: v for k, v in fields.items() if k in RETENTION_EDITABLE}
+    if changes:
+        if "legal_hold" in changes:
+            changes["legal_hold"] = int(bool(changes["legal_hold"]))
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE retention SET %s WHERE load_id=?" % ", ".join(f"{k}=?" for k in changes),
+                (*changes.values(), load_id),
+            )
+    return get_retention_by_load(load_id)
 
 
 def get_retention(archive_id: str) -> dict | None:

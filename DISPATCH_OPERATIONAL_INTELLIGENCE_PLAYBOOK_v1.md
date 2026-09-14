@@ -232,6 +232,56 @@ Use **Mission Visibility Key** in preference to *Customer PIN*, *Customer Passwo
 
 ---
 
+## SECTION 4B: CARRIER-CONTROLLED VISIBILITY, EVIDENCE AND RETENTION
+
+> Adopted from the Company Library's **Visibility SOP** (*Company Library Policy + Dispatch Build Notes*), Mike Zachary, 2026-09-13: "update the doctrine and build retention class" (`DECISION_LOG.md`).
+
+### Policy
+Level 1 Transport maintains a **carrier-controlled** freight visibility and evidence system. It gives brokers, shippers, direct customers, and government buyers professional shipment visibility **without surrendering operational control** of the carrier business process.
+
+**The differentiator is not tracking alone. The differentiator is tracking + photos + POD/BOL + complete archive + retrieval readiness.**
+
+### Operational Rules
+* Every active load should have a current status milestone.
+* Every material status event should be timestamped when practical.
+* Exceptions should be communicated **before** the broker/customer is forced to ask.
+* POD/BOL evidence should be packaged cleanly after delivery.
+* High-value or securement-sensitive freight should receive additional evidence collection.
+* Government, FEMA, DLA, claim, audit, high-value, and legal-hold records must not use a simple flat purge clock.
+* Customer-facing visibility is a carrier-controlled output, not customer control of the carrier's means and methods. The Mission Visibility View is read-only.
+
+### Evidence Package Rules
+* **Normal commercial loads:** preserve rate confirmation, BOL/POD, status notes, and invoice support.
+* **High-value or securement-sensitive loads:** add pickup photos, seal number if any, securement check, custody/condition notes, delivery photos if allowed, and signatures/timestamps. Securement photos are customer-facing Mission Visibility artifacts (Section 4A).
+* **Government or FEMA/DLA-style loads:** use the additional government field set and the longer retention class.
+
+### Retention Classes
+Do not use one purge clock for every load. **Retention class is stored with each load's archive record**, with a legal-hold flag.
+
+| Retention Class | Policy Direction |
+|---|---|
+| Normal Commercial | Commercial default; use accounting/claims needs before purge. |
+| Broker Dispute / Detention / Claim | Hold until resolved plus applicable retention requirement. |
+| Government / FEMA / DLA | Minimum 4 years unless a contract-specific period requires longer. |
+| FAR-Covered Contract | 3 years after final payment unless the clause says longer. |
+| High-Value / Securement Sensitive | Keep longer; 4 years is preferred where evidence protects against later claims. |
+| Legal / Insurance / Audit Hold | No purge until the hold is released. |
+
+The system warns when a record cannot purge under the normal commercial rule. Purging an archive record remains a person's decision; Dispatch deletes none on its own.
+
+**In the code:** `dispatch/retention.py` (`RETENTION_CLASSES`, `purge_check`); `retention` table columns `retention_class`, `legal_hold`, `legal_hold_note`, `final_payment_at`, `dispute_resolved_at` (existing records become Normal Commercial, no hold); archive API `POST /api/dispatch/loads/<id>/archive` accepts a class and hold, `PATCH /api/dispatch/retention/<id>` changes them; the Operations Feed shows a **Retention Alert** card for every record the normal rule does not cover. Retention class and hold are internal and never shown to customers. No number of years is set for Normal Commercial, because the SOP gives none.
+
+### Supersession
+The SOP says "The first build does not need a live customer portal. Start with clean, professional PDF/email outputs." The live Customer Portal has since been built and made the pull side of Mission Visibility (Section 4A), next to Customer Alerts (push). **Section 4A supersedes that line**; the SOP's PDF/email outputs remain wanted as Publisher products.
+
+### Not Yet Built (from the SOP's acceptance criteria)
+Government Mode field set; Publisher Status Summary, Exception Alert, Detention Evidence, High-Value Chain-of-Custody and Government evidence packages; an Exception card for missing documents and securement concerns; the high-value checklist.
+
+### Wording Candidate — not approved for use
+*"Level 1 Transport maintains internal dispatch, tracking, securement, POD, and documentation systems as carrier business records and provides customer-facing visibility outputs for shipment coordination, service quality, and documentation."* The SOP requires review by counsel before use in legal, broker, or customer packet documents.
+
+---
+
 ## ADDENDUM: M6A – MID-ROUTE LOAD SECUREMENT CHECK
 
 ### Classification & Position

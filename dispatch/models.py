@@ -390,13 +390,22 @@ class RetentionArchive:
     archive_location: str = ""
     retention_status: str = "active"
     archived_at: str = ""
+    # Company Library, Visibility SOP section 8 -- see dispatch/retention.py.
+    retention_class: str = "normal_commercial"
+    legal_hold: bool = False
+    legal_hold_note: str = ""
+    final_payment_at: str | None = None
+    dispute_resolved_at: str | None = None
 
     def __post_init__(self) -> None:
+        from dispatch.retention import validate_class
+
         if not self.archive_id:
             self.archive_id = _gen_id("RET")
         if not self.archived_at:
             self.archived_at = _utc_now()
         _validate_choice(self.retention_status, RETENTION_STATUSES, "retention_status")
+        self.retention_class = validate_class(self.retention_class)
 
     def to_dict(self) -> dict:
         return asdict(self)

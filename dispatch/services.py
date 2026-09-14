@@ -871,7 +871,8 @@ def sanitize_payload_for_role(payload: dict, role: str) -> dict:
     return comi_routing.sanitize_payload_for_role(payload, role)
 
 
-def archive_load(load_id: str) -> dict:
+def archive_load(load_id: str, *, retention_class: str = "normal_commercial", legal_hold: bool = False,
+                 legal_hold_note: str = "") -> dict:
     load = store.get_load(load_id)
     if not load:
         raise ValueError(f"Load not found: {load_id}")
@@ -904,6 +905,9 @@ def archive_load(load_id: str) -> dict:
         evidence_index=evidence_ids,
         financial_summary=fin_summary,
         archive_location=archive_loc,
+        retention_class=retention_class,
+        legal_hold=legal_hold,
+        legal_hold_note=legal_hold_note,
     )
     result = store.create_retention(ret)
 
@@ -932,12 +936,45 @@ def archive_load(load_id: str) -> dict:
     return result
 
 
+def _with_purge_check(record: dict | None) -> dict | None:
+    from dispatch.retention import purge_check
+
+    if record is None:
+        return None
+    record["legal_hold"] = bool(record.get("legal_hold"))
+    record["purge_check"] = purge_check(record)
+    return record
+
+
 def get_retention(load_id: str) -> dict | None:
-    return store.get_retention_by_load(load_id)
+    return _with_purge_check(store.get_retention_by_load(load_id))
 
 
 def list_retentions() -> list[dict]:
-    return store.list_retentions()
+    return [_with_purge_check(r) for r in store.list_retentions()]
+
+
+def set_retention(load_id: str, **fields) -> dict:
+    """Change an archive record's retention class, legal hold, final payment or dispute
+    resolution date (Company Library, Visibility SOP section 8). Deletes nothing."""
+    from datetime import datetime
+
+    from dispatch.retention import validate_class
+
+    if not store.get_retention_by_load(load_id):
+        raise ValueError(f"No retention record for {load_id}")
+    unknown = set(fields) - set(store.RETENTION_EDITABLE)
+    if unknown:
+        raise ValueError(f"Not a retention field: {', '.join(sorted(unknown))}")
+    if "retention_class" in fields:
+        fields["retention_class"] = validate_class(fields["retention_class"])
+    for key in ("final_payment_at", "dispute_resolved_at"):
+        if fields.get(key):
+            try:
+                datetime.fromisoformat(str(fields[key]).replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError(f"{key} must be a date, e.g. 2026-09-13") from exc
+    return _with_purge_check(store.update_retention_fields(load_id, **fields))
 
 
 _CLOSEOUT_ELIGIBLE_STATUSES = {"delivered", "completed"}

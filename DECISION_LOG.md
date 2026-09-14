@@ -1376,3 +1376,16 @@ No code changed. No open Mission Visibility doctrine conflicts remain on record.
 Implementation: the driver adds securement or freight condition photos from the Driver Portal; they are load evidence shown inline in the mission-scoped Mission Visibility View (and token links), a `mission_evidence_added` event via JOE on the Mission Record, a Customer Alert through Joe → Publisher → COMI → Email Helper (recorded on `customer_alerts`; not sent, with the reason, when no Mission Visibility Key, email or Operations person is on record), and counted in the completion packet's closeout summary. M6A findings, issues, corrective actions and driver notes stay internal.
 
 ---
+
+## 2026-09-13 — Visibility SOP adopted into doctrine; retention class built
+
+**PR:** (this change)
+**Capability:** playbook Section 4B (new); `dispatch/retention.py` (new), `dispatch/db.py` (retention columns and guarded migration), `dispatch/models.py` (`RetentionArchive`), `dispatch/store.py`, `dispatch/services.py` (`archive_load`, `get_retention`, `list_retentions`, `set_retention`), `portal/routes/dispatch_api.py` (archive body, `PATCH /retention/<id>`), `portal/models/operations_feed.py` (Retention Alert card).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"update the doctrine and build retention class"* — in response to the Company Library document `Visibility_SOP.docx`.
+
+**Doctrine:** the SOP's policy (carrier-controlled visibility; "tracking + photos + POD/BOL + complete archive + retrieval readiness"), operational rules, evidence package rules and retention classes become Section 4B. Its line that the first build needs no live customer portal is recorded as superseded by Section 4A. Its visibility-language candidate is carried as not approved, pending counsel.
+
+**Retention class — a database migration on Mike's instruction.** `db.schema_drift` records that adding a column to a database holding real freight is a Class 2 decision; this instruction is that decision. Five columns are added to `retention` by guarded `ALTER TABLE` in `_apply_migrations`; every existing archive record reads as Normal Commercial with no legal hold, which is how it was treated before. Nothing is deleted anywhere: `purge_check` only says whether the normal commercial rule may apply and why not, and the Operations Feed shows a Retention Alert card when it may not. No number of years is invented for Normal Commercial.
+
+---
