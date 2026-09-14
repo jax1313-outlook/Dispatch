@@ -798,9 +798,11 @@ class TestCardVisual:
 
 # ---------- P2-1. Publisher Queue: all 8 action types ----------
 class TestPublisherAllTypes:
-    def test_all_nine_action_types_exist(self):
+    def test_all_action_types_exist(self):
         # Ninth type (GovCon Proposal Draft Required) added by Stage 2 of
         # DISPATCH_END_TO_END_DEPLOYMENT_PLAN_v1.md -- see TestStage2PublisherProposalWriterBridge.
+        # Tenth and eleventh: the Mission Visibility customer communications (playbook
+        # Section 4A) -- see tests/test_portal_pin_service.py.
         from portal.models.publisher import ACTION_TYPES
         expected = [
             "Broker Packet Required",
@@ -812,6 +814,8 @@ class TestPublisherAllTypes:
             "POD/BOL Document Package Draft",
             "Detention Evidence Draft",
             "GovCon Proposal Draft Required",
+            "Customer Portal Access",
+            "Customer Mission Evidence Alert",
         ]
         assert ACTION_TYPES == expected
 
