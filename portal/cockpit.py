@@ -129,14 +129,28 @@ def ends_for(record: dict) -> dict:
     }
 
 
-def cargo_for(record: dict) -> dict:
-    """Description, then the three facts a driver keeps in the back of his mind."""
+def _cargo_facts(record: dict) -> list:
+    """Pieces / Pallets, then weight -- the cargo section of the one-page layout.
+
+    Pieces / Pallets is one field since 2026-09-15; an older record's separate
+    counts read together under it (`mission_template.pieces_pallets_of`).
+    """
+    from dispatch import mission_template as mt
+
     card = record.get("card_data") or {}
     parts = []
-    for key, unit in (("pallets", "pallets"), ("pieces", "pieces"), ("weight_lbs", "lbs")):
-        value = record.get(key) or card.get(key)
-        if value not in (None, "", []):
-            parts.append(f"{value} {unit}")
+    count = mt.pieces_pallets_of(record)
+    if count:
+        parts.append(count)
+    weight = record.get("weight_lbs") or card.get("weight_lbs")
+    if weight not in (None, "", []):
+        parts.append(f"{weight} lbs")
+    return parts
+
+
+def cargo_for(record: dict) -> dict:
+    """Description, then the facts a driver keeps in the back of his mind."""
+    parts = _cargo_facts(record)
     return {
         "description": _first(record, "commodity", "cargo", default="Not stated"),
         "brackets": " · ".join(parts) if parts else "no cargo detail recorded",
@@ -172,14 +186,10 @@ def stop_list(record: dict) -> list:
             "phone": entry.get("phone") or "",
             "notes": entry.get("notes") or "",
             "gps": entry.get("gps") or "",
-            # Who holds authority for this stop, carried through rather than
-            # normalised away. Dropping these here silently fell back to the
-            # run's default, which showed the broker on the stop that answers
-            # to the shipper -- the precise failure this data exists to stop.
-            "control_name": entry.get("control_name") or "",
-            "control_role": entry.get("control_role") or "",
-            "control_phone": entry.get("control_phone") or "",
-            "control_ref": entry.get("control_ref") or "",
+            # Stop-level load control (name, role, phone, reference) is no
+            # longer shown: it left the Mission Template in the one-page layout,
+            # 2026-09-15. A stop that stores it keeps it; the screen reads the
+            # record's `controlled_by` pick instead (see `end_detail`).
             "special": entry.get("special") or "",
         })
     return stops
@@ -250,12 +260,7 @@ def cargo_by_stop(record: dict) -> dict:
         if not row["description"]:
             row["description"] = entry.get("description") or ""
 
-    card = record.get("card_data") or {}
-    totals = []
-    for key, unit in (("pallets", "pallets"), ("pieces", "pieces"), ("weight_lbs", "lbs")):
-        value = record.get(key) or card.get(key)
-        if value not in (None, "", []):
-            totals.append(f"{value} {unit}")
+    totals = _cargo_facts(record)
 
     return {
         "rows": list(by_stop.values()),
@@ -340,22 +345,17 @@ def end_detail(record: dict, end: str, stop_number: int | None = None) -> dict:
         "instructions": stop.get("notes") or _first(record, f"{end}_notes",
                                                     f"{end}_instructions", default="—"),
         "items": unique or ["—"],
-        # Who to call when something is wrong with the freight on THIS stop.
-        #
-        # This deliberately reverses the rule that broker identity lives in one
-        # place only. That rule was written for a run with one broker and holds
-        # for one -- it fails the run the operator described: one broker, two
-        # stops, and the shipper holding authority on the second. Standing at a
-        # dock with damaged freight, the party named here is the party he rings,
-        # and the cost of it being the wrong one is not a tidier screen.
         # Distinct from access instructions, and shown apart from them. A
         # security hold or a single permitted gate is not a note about the
         # door -- it changes when the driver has to leave, and it has to be
         # read before the trip rather than at the gate.
         "special": (stop.get("special")
                     or _first(record, f"{end}_special", default="")),
-        "control": lc.control_for(stop, record.get("load_control") or {}),
-        "control_varies": bool(record.get("load_control_varies")),
+        # Who holds load control: the Customer or Level 1, as picked on the
+        # Mission Template (one-page layout, 2026-09-15). The stop-level name,
+        # role, phone and reference it replaced are not shown, on any record.
+        "control": lc.held_by(record),
+        "control_varies": False,
     }
 
 

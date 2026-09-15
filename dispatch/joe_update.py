@@ -45,7 +45,9 @@ from dispatch import mission_template as mt
 SPOKEN = {
     "broker": "customer",
     "customer": "customer",
-    "shipper": "pickup_shipper",
+    # One party, whichever name he uses (Mike, 2026-09-06). The separate
+    # pickup Shipper field left the template on 2026-09-15.
+    "shipper": "customer",
     "broker email": "customer_email",
     "customer email": "customer_email",
     "their email": "customer_email",
@@ -62,9 +64,9 @@ SPOKEN = {
     "cod": "cod",
     "payment": "payment_type",
     "service": "service",
-    "load control": "control_name",
-    "load control phone": "control_phone",
-    "load control email": "control_email",
+    # A two-choice pick since 2026-09-15: the Customer, or Level 1. Its phone
+    # and email left the template with it.
+    "load control": "controlled_by",
     "pickup": "pickup_location",
     "pickup contact": "pickup_contact",
     "pickup phone": "pickup_phone",
@@ -84,8 +86,10 @@ SPOKEN = {
     "commodity": "commodity",
     "freight": "commodity",
     "weight": "weight_lbs",
-    "pallets": "pallets",
-    "pieces": "pieces",
+    # One field since 2026-09-15: "cargo: 1) Description 2) Pieces / Pallets/
+    # 3) Weight".
+    "pallets": "pieces_pallets",
+    "pieces": "pieces_pallets",
     "notes": "notes",
 }
 
@@ -127,6 +131,15 @@ def understand(spoken: str) -> dict:
         if not value:
             return _unplaced(spoken, "I heard the field but no value.")
         key = names[phrase]
+        choices = _choices_for(key)
+        if choices:
+            # A field meant to be counted is picked from. A value that is not
+            # one of the picks is not written down as though it were.
+            picked = [c for c in choices if c.lower() == value.lower()]
+            if not picked:
+                return _unplaced(spoken, "%s is one of: %s." % (
+                    _label_for(key), " or ".join(choices)))
+            value = picked[0]
         return {
             "understood": True,
             "field": key,
@@ -142,6 +155,13 @@ def understand(spoken: str) -> dict:
 def _unplaced(spoken, note) -> dict:
     return {"understood": False, "field": "", "label": "", "value": "",
             "spoken": str(spoken or ""), "note": note}
+
+
+def _choices_for(key: str) -> tuple:
+    for field in mt.TEMPLATE:
+        if field.key == key:
+            return tuple(field.choices or ())
+    return ()
 
 
 def _label_for(key: str) -> str:

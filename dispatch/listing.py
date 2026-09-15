@@ -367,9 +367,8 @@ def parse_offer_email(text: str) -> dict:
         weight = _number(values["weight_lbs"])
         if weight:
             extras["weight_lbs"] = int(weight)
-    count = " ".join(p for p in (
-        f"{values['pallets']} pallets" if values.get("pallets") else "",
-        f"{values['pieces']} pieces" if values.get("pieces") else "") if p)
+    # One field on the template since 2026-09-15: Pieces / Pallets.
+    count = values.get("pieces_pallets", "")
     if count:
         fields["pieces_weight"] = count
     extra_notes = []

@@ -114,8 +114,11 @@ MANUAL_SOURCES = ()
 SOURCE_VOICE = SOURCE_JOE
 SOURCE_MANUAL = SOURCE_CUSTOMER
 
-#: The operator's six sections, in his order.
-SECTIONS = ("MISSION SOURCE", "LOAD CONTROL", "PICKUP", "DELIVERY",
+#: The operator's sections, in his order. **The one-page layout, 2026-09-15.**
+#: Mike marked up a printed Mission Brief -- *"this is the idea trying to get
+#: this to one page."* -- and IDENTITY, which the brief used to draw from a list
+#: of its own, is now a section of the template like the rest.
+SECTIONS = ("IDENTITY", "MISSION SOURCE", "LOAD CONTROL", "PICKUP", "DELIVERY",
             "CARGO", "NOTES")
 
 
@@ -134,6 +137,9 @@ class Field:
     #: the next time are two categories that should be one, and nothing notices
     #: until a report is finally built and shows both.
     choices: tuple = ()
+    #: Dispatch fills this in; nobody types it. Shown on the form and the brief
+    #: as the value Dispatch assigned, never as a box to write in.
+    assigned: bool = False
 
     def prompt(self) -> str:
         return self.spoken or f"{self.label}?"
@@ -151,27 +157,56 @@ class Field:
 #: **Manual entry only.** Mike ruled 2026-09-06 that nothing sources this from
 #: a load board. The boards do not use these words, and mapping their
 #: categories onto this list would build a tidy-looking lie. Leave it alone.
+#:
+#: **Reduced to two by the one-page layout, 2026-09-15.** Mike: *"drop status
+#: type is LTL / Courier"*. Records that already carry one of the earlier twelve
+#: keep it exactly as stored; the list only governs what is offered.
 SERVICE_TYPES = (
-    "LTL Freight",
+    "LTL",
     "Courier",
-    "Medical",
-    "Retail",
-    "Food & Beverage",
-    "Industrial",
-    "Port / Container",
-    "Dedicated",
-    "Government",
-    "Emergency / Expedited",
-    "Final Mile",
-    "Other",
 )
+
+#: Who holds load control. **A two-choice pick, 2026-09-15.** Mike, asked
+#: whether load control is picked from two: *"2) yes either"*. See
+#: `dispatch/load_control.py` for the stop-level detail it replaced on the form.
+LOAD_CONTROL_CHOICES = lc.HELD_BY
 
 
 #: The template. Field for field, this is what the Driver Cockpit displays --
 #: intake and display agree, or a manually created mission renders with holes a
 #: swept one does not have.
+#:
+#: **The one-page layout: twenty-nine fields, 2026-09-15.** Mike marked up the
+#: printed Mission Brief (*"this is the idea trying to get this to one page."*)
+#: and found the brief and New Mission are one document (*"I used to wrong
+#: document it should have been the New Mission Document but i find the are the
+#: same"*). Removed: Status, Intake and Taken by from the brief; the separate
+#: "Load number (theirs)" (the number now sits in IDENTITY); "Load control is
+#: the", load control phone and email; Shipper at pickup; Stop 1 load control;
+#: Cargo items; and separate Pallets and Pieces, merged into one field (*"cargo:
+#: 1) Description 2) Pieces / Pallets/ 3) Weight"*).
+#:
+#: **Nothing stored was deleted or rewritten.** An older record keeps every value
+#: it holds; a removed field simply stops being shown.
 TEMPLATE: tuple[Field, ...] = (
-    # --- MISSION SOURCE: who the work is for and who took it
+    # --- IDENTITY: what this mission is called, and what kind of run it is
+    #     The load number is not required from the driver. If nobody else
+    #     numbered this work, Dispatch numbers it -- see `dispatch/load_number.py`.
+    Field("load_number", "Load Number", "IDENTITY",
+          hint="Their number exactly as given. Leave blank and Dispatch assigns one",
+          spoken="Do they have a load number for it?"),
+    # Dispatch's own sequence. Assigned, never typed -- the same number a swept
+    # mission gets (`dispatch/mission.py::next_mission_number`).
+    Field("mission_number", "Mission Number", "IDENTITY",
+          hint="Assigned by Dispatch",
+          spoken="Dispatch assigns the mission number. Anything to add?",
+          assigned=True),
+    Field("service", "Service Type", "IDENTITY",
+          hint="What kind of run",
+          choices=SERVICE_TYPES,
+          spoken="What kind of run is it?"),
+
+    # --- MISSION SOURCE: who the work is for
     # One party, three names depending on who the work came from. A direct
     # customer, the shipper, or a broker -- the record does not need three
     # fields for it, and three fields would only ask which one is current.
@@ -181,28 +216,16 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="Who is the contact there?"),
     Field("customer_phone", "Their phone", "MISSION SOURCE",
           spoken="What is their phone number?"),
+    # Stored under the key existing records and the Customer Portal already
+    # read (`portal/portal_access.py::customer_email`).
+    Field("customer_email", "Their email", "MISSION SOURCE",
+          spoken="What is their email address?"),
 
-    # --- LOAD CONTROL: the number, and what the work pays
-    #     Not required from the driver. If nobody else numbered this work,
-    #     Dispatch numbers it -- see `dispatch/load_number.py`.
-    Field("load_number", "Load number (theirs)", "LOAD CONTROL",
-          hint="Their number exactly as given. Leave blank and Dispatch assigns one",
-          spoken="Do they have a load number for it?"),
-    # Who to call when something is wrong with the freight. Not necessarily
-    # the broker -- see dispatch/load_control.py. This is the run's default;
-    # any stop can name somebody else, and on a real run one usually does.
-    Field("control_name", "Load control", "LOAD CONTROL",
-          hint="Who to call on issues or damage, if it is the same for the whole run",
-          spoken="Who has load control -- who do you call if there is a problem?"),
-    Field("control_role", "Load control is the", "LOAD CONTROL",
-          hint="Broker, shipper, customer or consignee",
-          spoken="Are they the broker, the shipper, or the customer?"),
-    Field("control_phone", "Load control phone", "LOAD CONTROL",
-          spoken="What is their number?"),
-    Field("service", "Service type", "LOAD CONTROL",
-          hint="What kind of run",
-          choices=SERVICE_TYPES,
-          spoken="What kind of run is it?"),
+    # --- LOAD CONTROL: who holds it, and what the work pays
+    Field("controlled_by", "Load control", "LOAD CONTROL",
+          hint="Who holds load control",
+          choices=LOAD_CONTROL_CHOICES,
+          spoken="Who has load control -- the customer, or Level 1?"),
     Field("rate", "Rate", "LOAD CONTROL", hint="Linehaul, before accessorials",
           spoken="What does it pay?"),
     Field("rate_basis", "Rate agreed with", "LOAD CONTROL",
@@ -219,21 +242,13 @@ TEMPLATE: tuple[Field, ...] = (
     Field("payor", "Paid by", "LOAD CONTROL",
           hint="Who hands over the money on a C.O.D. load",
           spoken="Who pays you?"),
-    Field("amount", "Amount to collect", "LOAD CONTROL",
+    Field("amount", "Amount", "LOAD CONTROL",
           hint="C.O.D. loads only",
           spoken="How much do you collect?"),
 
     # --- PICKUP
     Field("pickup_location", "Pickup facility and address", "PICKUP",
           required=True, spoken="Where does the truck load?"),
-    # The shipper is a party; the pickup is a place. On an interline or
-    # linehaul move they are not the same -- the freight can be shipped by a
-    # hospital in Minnesota and collected from a partner's dock in Georgia.
-    # Collapsing the two puts the shipper's city in the address field, which
-    # is a thousand miles of wrong turn.
-    Field("pickup_shipper", "Shipper", "PICKUP",
-          hint="Whose freight it is, if not the facility you load at",
-          spoken="Who is the shipper, if it is not where you are loading?"),
     Field("pickup_window", "Pickup appointment", "PICKUP", required=True,
           spoken="When is the pickup appointment?"),
     Field("pickup_contact", "Pickup contact", "PICKUP",
@@ -266,29 +281,20 @@ TEMPLATE: tuple[Field, ...] = (
           hint="Anything that changes the plan at this end",
           spoken="Anything special at the delivery end?"),
     #: Additional stops are captured as repeating STOP blocks rather than as
-    #: fields here -- see STOP_FIELDS. A pipe-separated line could not carry
-    #: load control legibly, and load control is the field a driver reads at a
-    #: dock with damaged freight.
-    Field("delivery_control_name", "Stop 1 load control", "DELIVERY",
-          hint="Only if it differs from the run's load control",
-          spoken="Is load control for this stop the same as the run?"),
+    #: fields here -- see STOP_FIELDS.
 
     # --- CARGO
-    Field("commodity", "Cargo description", "CARGO", required=True,
-          hint="What it is overall. Itemise below if it is a mixed load",
+    # Stored under `commodity`, the key every existing record and reader uses.
+    Field("commodity", "Description", "CARGO", required=True,
+          hint="What the freight is",
           spoken="What is the freight?"),
-    # A mixed load is normal, and one commodity field cannot hold two
-    # commodities at two weights. Itemising is what lets the totals be
-    # computed rather than done in the driver's head at a scale.
-    Field("cargo_lines", "Cargo items", "CARGO",
-          hint="One per line: description | pallets | weight each (lbs)",
-          spoken="Break it down for me -- what is on each pallet?"),
-    Field("pallets", "Pallets (total)", "CARGO",
-          hint="Leave blank to total the items above",
-          spoken="How many pallets altogether?"),
-    Field("pieces", "Pieces", "CARGO", spoken="How many pieces?"),
+    # One field for the count, in his words: "4 pallets", "20 pieces", or both.
+    # Free text on purpose -- a count that has to be a number is a count that
+    # cannot say which of the two it is.
+    Field("pieces_pallets", "Pieces / Pallets", "CARGO",
+          hint="How many, and of what -- pieces, pallets or both",
+          spoken="How many pieces or pallets?"),
     Field("weight_lbs", "Weight (lbs, total)", "CARGO",
-          hint="Leave blank to total the items above",
           spoken="What does it weigh altogether?"),
 
     # --- NOTES
@@ -298,8 +304,11 @@ TEMPLATE: tuple[Field, ...] = (
 )
 
 #: A stop, captured as a repeating block. Every delivery on the run carries
-#: these, and load control is among them because it is a stop-level fact: one
-#: broker's run can still have the shipper holding authority on stop 2.
+#: these.
+#:
+#: The stop-level load control fields (name, role, phone, reference) left with
+#: "Stop 1 load control" in the one-page layout, 2026-09-15. Stops already
+#: stored with them keep them; they are no longer asked or shown.
 STOP_FIELDS: tuple[Field, ...] = (
     Field("facility", "Facility", "STOP", required=True,
           spoken="Where does this one go?"),
@@ -312,27 +321,18 @@ STOP_FIELDS: tuple[Field, ...] = (
     Field("special", "SPECIAL INSTRUCTIONS", "STOP",
           hint="Anything that changes the plan at this stop",
           spoken="Anything special about this stop?"),
-    Field("control_name", "Load control", "STOP",
-          hint="Who to call on issues or damage for this stop",
-          spoken="Who has load control on this stop?"),
-    Field("control_role", "Load control is the", "STOP",
-          hint="Broker, shipper, customer or consignee",
-          spoken="Are they the broker, the shipper, or the customer?"),
-    Field("control_phone", "Load control phone", "STOP",
-          spoken="What is their number?"),
-    Field("control_ref", "Their reference", "STOP",
-          hint="Their load or order number for this stop",
-          spoken="Do they have a reference number for this stop?"),
 )
 
 STOP_KEYS = tuple(f.key for f in STOP_FIELDS)
 
 TEMPLATE_KEYS = tuple(f.key for f in TEMPLATE)
 REQUIRED_KEYS = tuple(f.key for f in TEMPLATE if f.required)
+#: What a person may type. Everything but what Dispatch assigns.
+ENTERED_KEYS = tuple(f.key for f in TEMPLATE if not f.assigned)
 
 #: Kept resolving for callers written against the earlier field names.
 _ALIASES = {"broker": "customer", "broker_poc": "customer_poc",
-            "broker_phone": "customer_phone"}
+            "broker_phone": "customer_phone", "broker_email": "customer_email"}
 
 
 class TemplateError(ValueError):
@@ -350,6 +350,28 @@ def _resolve(values: dict) -> dict:
         if out.get(old) and not out.get(new):
             out[new] = out[old]
     return out
+
+
+def pieces_pallets_of(record: dict) -> str:
+    """The Pieces / Pallets value, on a record of any age. **Read only.**
+
+    Written since 2026-09-15 as one field. A record written before then carries
+    separate `pallets` and `pieces` counts, flat or on its card; they are read
+    together under the merged field and never rewritten.
+    """
+    record = record or {}
+    merged = str(record.get("pieces_pallets") or "").strip()
+    if merged:
+        return merged
+    card = record.get("card_data") or {}
+    parts = []
+    for key in ("pallets", "pieces"):
+        value = record.get(key)
+        if value in (None, "", []):
+            value = card.get(key)
+        if value not in (None, "", []):
+            parts.append(f"{value} {key}")
+    return " / ".join(parts)
 
 
 # ---------------------------------------------------------------- number ----
@@ -426,9 +448,10 @@ def parse_email(body: str) -> dict:
 
     Tolerant of what a phone does to an email -- reply markers, wrapping, stray
     blank lines, the section rules -- and deliberately not tolerant of
-    inventing a value it could not find.
+    inventing a value it could not find. A value written against a field
+    Dispatch assigns is not read: the mission number is Dispatch's to give.
     """
-    label_to_key = {f.label.lower(): f.key for f in TEMPLATE}
+    label_to_key = {f.label.lower(): f.key for f in TEMPLATE if not f.assigned}
     values = blank_template()
     for raw in (body or "").splitlines():
         line = raw.strip().lstrip(">").strip()
@@ -444,9 +467,8 @@ def parse_email(body: str) -> dict:
 def render_stop_block(number: int, values: dict | None = None) -> str:
     """One stop, as a labelled block rather than a packed line.
 
-    The pipe-separated line this replaced could not carry load control
-    legibly, and load control is the field a driver reads standing at a dock
-    with damaged freight. Length is worth paying for there.
+    The pipe-separated line this replaced could not be read at a dock. Length
+    is worth paying for there.
     """
     values = values or {}
     lines = [f"STOP {number}", "-" * len(f"STOP {number}")]
@@ -492,47 +514,6 @@ def parse_stops(body: str) -> list:
             if any(stop.get(k) for k in STOP_KEYS)]
 
 
-def parse_cargo(raw: str) -> list:
-    """Cargo items, one per line: description | pallets | weight each.
-
-    A mixed load is the normal case, not an exception -- one pallet of
-    equipment and two of supplies at different weights is one load with three
-    positions on the trailer and two descriptions on the paperwork.
-    """
-    items = []
-    for line in str(raw or "").splitlines():
-        line = line.strip().lstrip(">").strip()
-        if not line:
-            continue
-        parts = [p.strip() for p in line.split("|")]
-
-        def whole(text):
-            text = "".join(c for c in str(text) if c.isdigit())
-            return int(text) if text else None
-
-        items.append({
-            "description": parts[0] if parts else "",
-            "pallets": whole(parts[1]) if len(parts) > 1 else None,
-            "weight_each": whole(parts[2]) if len(parts) > 2 else None,
-        })
-    return [i for i in items if i["description"]]
-
-
-def cargo_totals(items: list) -> dict:
-    """Pallets and weight across the items. Partial data totals what it has.
-
-    Returns None rather than 0 for a total nothing was recorded for: zero
-    pounds is a claim about the freight, and an absent weight is not.
-    """
-    pallets = [i["pallets"] for i in items or [] if i.get("pallets")]
-    weights = [(i["pallets"] or 1) * i["weight_each"]
-               for i in items or [] if i.get("weight_each")]
-    return {
-        "pallets": sum(pallets) if pallets else None,
-        "weight_lbs": sum(weights) if weights else None,
-    }
-
-
 # -------------------------------------------------------------- validate ----
 
 def validate(values: dict) -> list:
@@ -547,7 +528,9 @@ def validate(values: dict) -> list:
     for field in TEMPLATE:
         if field.required and not str(values.get(field.key, "")).strip():
             problems.append(f"{field.label} is required")
-    for key in ("pallets", "pieces", "weight_lbs"):
+    # Pieces / Pallets is words ("4 pallets / 20 pieces"); only the total
+    # weight is a number.
+    for key in ("weight_lbs",):
         raw = str(values.get(key, "")).strip()
         if raw and not raw.replace(",", "").replace(".", "").isdigit():
             problems.append(f"{key} must be a number, got {raw!r}")
@@ -601,27 +584,10 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "delivery_window": value("delivery_window"),
         "source": source.lower(),
     }
-    # Itemised cargo becomes the load plan the diagram and the stop-by-stop
-    # cargo view already read; totals fall back to the items when the driver
-    # did not also state them, so he is never asked for arithmetic he has
-    # already given us the parts for.
-    items = parse_cargo(value("cargo_lines"))
-    totals = cargo_totals(items)
-    for key in ("pallets", "pieces", "weight_lbs"):
-        if number(key) is not None:
-            card[key] = number(key)
-        elif totals.get(key) is not None:
-            card[key] = totals[key]
+    if number("weight_lbs") is not None:
+        card["weight_lbs"] = number("weight_lbs")
     if value("rate"):
         card["rate"] = value("rate")
-
-    # The run's default point of authority. Any stop may name somebody else,
-    # and on a real run one usually does.
-    mission_control = {
-        "control_name": value("control_name"),
-        "control_role": lc.normalise_role(value("control_role")),
-        "control_phone": value("control_phone"),
-    }
 
     stops = [{
         "number": 1,
@@ -632,23 +598,14 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "phone": value("delivery_phone"),
         "notes": value("delivery_notes"),
         "special": value("delivery_special"),
-        "control_name": value("delivery_control_name"),
-        "control_role": "",
-        "control_phone": "",
-        "control_ref": assigned["supplied"],
     }]
     for stop in extra_stops or []:
-        number = int(stop.get("number") or len(stops) + 1)
+        stop_number = int(stop.get("number") or len(stops) + 1)
         stops.append({
-            "number": number,
-            "label": f"STOP {number}",
+            "number": stop_number,
+            "label": f"STOP {stop_number}",
             **{key: str(stop.get(key) or "").strip() for key in STOP_KEYS},
         })
-
-    # Resolved once, here, so every reader sees the same answer rather than
-    # each working out inheritance for itself.
-    for stop in stops:
-        stop["control"] = lc.control_for(stop, mission_control)
 
     record = {
         "title": f"{value('commodity')} - {value('pickup_location')} "
@@ -659,33 +616,24 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "load_number": assigned["load_number"],
         "load_number_origin": assigned["origin"],
         "intake_source": source,
+        # Still recorded -- a mission arrives on somebody's word -- but no
+        # longer shown on the brief (one-page layout, 2026-09-15).
         "intake_taken_by": taken_by,
         "stops": stops,
         "stop_total": len(stops),
         "stop_number": 1,
-        "load_control": mission_control,
-        "cargo_items": items,
-        "load_plan": [{"position": n, "description": item["description"],
-                       "stop": "Stop 1"}
-                      for n, item in enumerate(
-                          [i for i in items for _ in range(i.get("pallets") or 1)],
-                          start=1)],
-        # When a run carries more than one point of authority the stop card has
-        # to name it. That reverses the one-broker-one-place rule deliberately:
-        # that rule was written for a run with one broker and fails the run
-        # where stop 2 answers to somebody else.
-        "load_control_varies": lc.differs_across(stops, mission_control),
     }
     for key, target in (("customer", "broker"), ("customer_poc", "broker_poc"),
                         ("customer_phone", "broker_phone")):
         if value(key):
             record[target] = value(key)
-    for key in ("pickup_location", "pickup_shipper", "pickup_window",
-                "pickup_contact", "pickup_phone", "pickup_notes",
-                "pickup_special", "delivery_special", "delivery_location",
-                "delivery_window", "delivery_contact", "delivery_phone",
-                "delivery_notes", "commodity", "service", "notes",
-                "rate_basis", "payment_type", "payor", "amount"):
+    for key in ("customer_email", "controlled_by", "pickup_location",
+                "pickup_window", "pickup_contact", "pickup_phone",
+                "pickup_notes", "pickup_special", "delivery_special",
+                "delivery_location", "delivery_window", "delivery_contact",
+                "delivery_phone", "delivery_notes", "commodity",
+                "pieces_pallets", "service", "notes", "rate_basis",
+                "payment_type", "payor", "amount"):
         if value(key):
             record[key] = value(key)
     return record

@@ -91,9 +91,24 @@
       {% for f in section.fields %}
         <dt class="{{ 'empty' if f.empty }}">{{ f.label }}</dt>
         <dd class="{{ 'empty' if f.empty }}">
-          {% if editing and section.editable and f.key %}
-            <input type="text" name="{{ f.key }}" value="{{ f.value }}"
-                   autocomplete="off" placeholder="{{ f.hint }}">
+          {% if editing and section.editable and f.key and not f.locked %}
+            {% if f.choices %}
+              {# Picked, never typed -- the same list New Mission offers. A
+                 value an older record stored outside the list is kept and
+                 shown as it is, never silently replaced. #}
+              <select name="{{ f.key }}">
+                <option value="">{{ f.hint or 'Choose one' }}</option>
+                {% for c in f.choices %}
+                  <option value="{{ c }}" {{ 'selected' if f.value == c }}>{{ c }}</option>
+                {% endfor %}
+                {% if f.value and f.value not in f.choices %}
+                  <option value="{{ f.value }}" selected>{{ f.value }}</option>
+                {% endif %}
+              </select>
+            {% else %}
+              <input type="text" name="{{ f.key }}" value="{{ f.value }}"
+                     autocomplete="off" placeholder="{{ f.hint }}">
+            {% endif %}
           {% else %}
             {{ f.value }}
           {% endif %}
@@ -124,22 +139,6 @@
         </dl>
       </div>
     {% endfor %}
-  </section>
-  {% endif %}
-
-  {% if card.cargo %}
-  <section class="card-section">
-    <h2>CARGO ITEMS</h2>
-    <table class="cargo">
-      <tr><th>Description</th><th>Pallets</th><th>Weight each</th></tr>
-      {% for item in card.cargo %}
-        <tr>
-          <td>{{ item.description }}</td>
-          <td>{{ item.pallets if item.pallets is not none else '' }}</td>
-          <td>{{ item.weight_each if item.weight_each is not none else '' }}</td>
-        </tr>
-      {% endfor %}
-    </table>
   </section>
   {% endif %}
 
