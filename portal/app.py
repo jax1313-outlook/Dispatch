@@ -142,6 +142,13 @@ def create_app(config: dict | None = None) -> Flask:
         # Operations sign-in, or the server laptop before any Operations PIN exists).
         if request.endpoint in ("auth.login", "auth.logout", "auth.operations_pin"):
             return None
+        # One Driver Cockpit (Mike Zachary, 2026-09-14): a driver sign-in opens the
+        # Driver Cockpit and its actions, and nothing else behind this gate.
+        if session.get("driver_open") or session.get("driver_id"):
+            from portal.routes.joe_portal import DRIVER_COCKPIT_ENDPOINTS
+
+            if request.endpoint in DRIVER_COCKPIT_ENDPOINTS:
+                return None
         if not session.get("user_id"):
             return redirect(url_for("auth.login"))
         return None

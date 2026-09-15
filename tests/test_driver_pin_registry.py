@@ -226,11 +226,12 @@ class TestDriverPortalRoutes:
         assert resp.status_code == 302
         assert "/driver/login" in resp.headers["Location"]
 
-    def test_login_success_redirects_home(self, client, driver):
+    def test_login_success_lands_in_the_driver_cockpit(self, client, driver):
+        """One Driver Cockpit (Mike Zachary, 2026-09-14): /driver/home is parked."""
         pin_registry.create_pin_card(driver["driver_id"], "1234", "anchor", "mike")
         resp = client.post("/driver/login", data={"phone": driver["phone"], "pin": "1234"})
         assert resp.status_code == 302
-        assert "/driver/home" in resp.headers["Location"]
+        assert resp.headers["Location"].endswith("/portal")
 
     def test_login_failure_returns_401(self, client, driver):
         pin_registry.create_pin_card(driver["driver_id"], "1234", "anchor", "mike")

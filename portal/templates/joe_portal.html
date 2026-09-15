@@ -21,6 +21,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>Driver Cockpit — {{ record.numbers.load_label or 'No load' }}</title>
 <script src="{{ url_for('static', filename='vendor/tailwind.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='joe_portal.css') }}">
@@ -33,7 +34,15 @@
 
 {# ------------------------------------------------------------------ BANNER #}
 <header class="cockpit-banner">
+  {# A driver sign-in cannot open Dispatch, so the way out is signing out. #}
+  {% if driver.signed_in_as_driver %}
+  <form class="way-out-form" method="post" action="{{ url_for('driver_portal.driver_logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="way-out" type="submit">Sign out</button>
+  </form>
+  {% else %}
   <a class="way-out" href="{{ url_for('pages.home') }}">&larr; Dispatch</a>
+  {% endif %}
 
   <div class="banner-identity">
     <span class="brand">LEVEL 1 TRANSPORT</span>
@@ -195,6 +204,38 @@
     {% endif %}
   </button>
 
+  {# NEXT STEP. One tap for the milestone the load is waiting on. Arrivals point
+     at ARRIVE, which records the milestone as well as sending the notice. #}
+  {% if driver.load_open and driver.next_event %}
+    {% if driver.next_event == 'arrive' %}
+    <button class="action" type="button" data-trigger="arrive">
+      <span class="action-name">NEXT: {{ driver.next_label }}</span>
+      <span class="action-sub">Tap ARRIVE when you are there</span>
+    </button>
+    {% elif driver.next_event == 'pod' %}
+    <button class="action" type="button" data-drawer="uploads" data-side="right">
+      <span class="action-name">NEXT: {{ driver.next_label }}</span>
+      <span class="action-sub">Camera or scanner</span>
+    </button>
+    {% else %}
+    <form method="post" action="{{ url_for('joe_portal.cockpit_milestone', record_id=record.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="view" value="{{ requested_view }}">
+      <input type="hidden" name="stop" value="{{ stops.number }}">
+      <input type="hidden" name="milestone_event" value="{{ driver.next_event }}">
+      <button class="action" type="submit">
+        <span class="action-name">NEXT: {{ driver.next_label }}</span>
+        <span class="action-sub">Load status: {{ driver.status_label }}</span>
+      </button>
+    </form>
+    {% endif %}
+  {% elif driver.closed_note %}
+  <button class="action" type="button" disabled>
+    <span class="action-name">NEXT STEP</span>
+    <span class="action-sub">{{ driver.closed_note }}</span>
+  </button>
+  {% endif %}
+
   {% if arrive.available %}
   <button class="action quiet" data-drawer="arrival" data-side="right">
     <span class="action-name">SEE ARRIVAL NOTICE</span>
@@ -213,9 +254,28 @@
     <span class="action-sub">{{ doc_status.label }}</span>
   </button>
 
-  <button class="action" data-action="upload">
+  <button class="action" data-drawer="uploads" data-side="right"
+          {% if not driver.load_open %}disabled{% endif %}>
     <span class="action-name">UPLOAD DOCUMENTS - PHOTOS</span>
-    <span class="action-sub">Scanner or camera</span>
+    <span class="action-sub">POD, securement, freight condition</span>
+  </button>
+
+  <button class="action" data-drawer="exception" data-side="right"
+          {% if not driver.load_open %}disabled{% endif %}>
+    <span class="action-name">DETENTION - REPORT A PROBLEM</span>
+    <span class="action-sub">Dispatch sees it at once</span>
+  </button>
+
+  <button class="action" data-drawer="fuel" data-side="right"
+          {% if not driver.trucks %}disabled{% endif %}>
+    <span class="action-name">FUEL RECEIPT</span>
+    <span class="action-sub">{% if driver.trucks %}Snap the receipt{% else %}No active truck on the fleet yet{% endif %}</span>
+  </button>
+
+  <button class="action quiet" data-drawer="milestones" data-side="right"
+          {% if not driver.load_open %}disabled{% endif %}>
+    <span class="action-name">ALL MILESTONES</span>
+    <span class="action-sub">Record one that was missed</span>
   </button>
 
   <div class="action-spacer"></div>
@@ -437,7 +497,130 @@
 </aside>
 {% endfor %}
 
+{# ----------------------------------------------------- DRIVER ACTION DRAWERS #}
+{# The Driver Portal's actions, merged in (Mike Zachary, 2026-09-14). Each form
+   comes back to this screen and the result is said in the JOE line. #}
+{% macro keep_place() %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="view" value="{{ requested_view }}">
+  <input type="hidden" name="stop" value="{{ stops.number }}">
+{% endmacro %}
+
+{% if driver.load_open %}
+<aside class="drawer drawer-right" id="drawer-uploads" hidden role="dialog" aria-label="Upload documents and photos">
+  <header class="drawer-head">
+    <span class="drawer-title">UPLOAD DOCUMENTS - PHOTOS</span>
+    <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
+  </header>
+  <div class="drawer-body drawer-actions">
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_pod', record_id=record.id) }}">
+      {{ keep_place() }}
+      <label class="action">
+        <span class="action-name">POD PHOTO</span>
+        <span class="action-sub">Signed proof of delivery</span>
+        <input class="file-pick" type="file" name="pod_file" accept="image/*,application/pdf" capture="environment" onchange="this.form.submit()">
+      </label>
+    </form>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_photos', record_id=record.id) }}">
+      {{ keep_place() }}
+      <input type="hidden" name="photo_type" value="securement_photo">
+      <label class="action">
+        <span class="action-name">LOAD SECUREMENT PHOTOS</span>
+        <span class="action-sub">The customer is sent a Customer Alert</span>
+        <input class="file-pick" type="file" name="photos" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
+      </label>
+    </form>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_photos', record_id=record.id) }}">
+      {{ keep_place() }}
+      <input type="hidden" name="photo_type" value="freight_condition_photo">
+      <label class="action">
+        <span class="action-name">FREIGHT CONDITION PHOTOS</span>
+        <span class="action-sub">The customer is sent a Customer Alert</span>
+        <input class="file-pick" type="file" name="photos" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
+      </label>
+    </form>
+  </div>
+</aside>
+
+<aside class="drawer drawer-right" id="drawer-exception" hidden role="dialog" aria-label="Detention or a problem">
+  <header class="drawer-head">
+    <span class="drawer-title">DETENTION - REPORT A PROBLEM</span>
+    <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
+  </header>
+  <div class="drawer-body drawer-actions">
+    {% for value, label in driver.exceptions %}
+    <form method="post" action="{{ url_for('joe_portal.cockpit_exception', record_id=record.id) }}">
+      {{ keep_place() }}
+      <input type="hidden" name="exception_type" value="{{ value }}">
+      <button class="action" type="submit">
+        <span class="action-name">{{ label|upper }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</aside>
+
+<aside class="drawer drawer-right" id="drawer-milestones" hidden role="dialog" aria-label="All milestones">
+  <header class="drawer-head">
+    <span class="drawer-title">ALL MILESTONES</span>
+    <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
+  </header>
+  <div class="drawer-body drawer-actions">
+    <p class="drawer-note">Load status: {{ driver.status_label }}. An arrival is better recorded with ARRIVE, which also sends the notice.</p>
+    {% for label, value in driver.milestones %}
+    <form method="post" action="{{ url_for('joe_portal.cockpit_milestone', record_id=record.id) }}">
+      {{ keep_place() }}
+      <input type="hidden" name="milestone_event" value="{{ value }}">
+      <button class="action" type="submit">
+        <span class="action-name">{{ label|upper }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</aside>
+{% endif %}
+
+{% if driver.trucks %}
+<aside class="drawer drawer-right" id="drawer-fuel" hidden role="dialog" aria-label="Fuel receipt">
+  <header class="drawer-head">
+    <span class="drawer-title">FUEL RECEIPT</span>
+    <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
+  </header>
+  <div class="drawer-body drawer-actions">
+    <form class="drawer-form" method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_fuel_receipt') }}">
+      {{ keep_place() }}
+      <input type="hidden" name="record_id" value="{{ record.id }}">
+      {% if driver.load_open %}<input type="hidden" name="load_id" value="{{ driver.load_id }}">{% endif %}
+      <label for="fuel-truck">Truck</label>
+      <select id="fuel-truck" name="equipment_id" required>
+        {% for truck in driver.trucks %}
+        <option value="{{ truck.equipment_id }}" {% if truck.equipment_id == driver.default_equipment_id %}selected{% endif %}>
+          {{ truck.unit_number or truck.equipment_id }}{% if truck.license_plate %} &middot; {{ truck.license_plate }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <p class="drawer-note">If the receipt cannot be read, fill these in by hand.</p>
+      <label for="fuel-gallons">Gallons</label>
+      <input id="fuel-gallons" name="gallons" inputmode="decimal" autocomplete="off">
+      <label for="fuel-amount">Amount $</label>
+      <input id="fuel-amount" name="amount" inputmode="decimal" autocomplete="off">
+      <label for="fuel-state">State</label>
+      <input id="fuel-state" name="state" maxlength="2" autocomplete="off">
+      <label class="action">
+        <span class="action-name">SNAP THE RECEIPT</span>
+        <span class="action-sub">Logged when the photo is taken</span>
+        <input class="file-pick" type="file" name="fuel_file" accept="image/*,application/pdf" capture="environment" onchange="this.form.submit()">
+      </label>
+    </form>
+  </div>
+</aside>
+{% endif %}
+
 <script>
+// This page does not extend base.html, so it carries its own CSRF header for
+// the fetch() calls below.
+var CSRF_TOKEN = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
 // Mode switch. The URL carries the mode so a reload lands where the driver was.
 function go(param, value) {
   var url = new URL(window.location);
@@ -463,7 +646,7 @@ document.querySelectorAll('[data-action="arrive"]').forEach(function (b) {
       var body = new URLSearchParams();
       body.set('view', document.body.dataset.view || '');
       if (gps) { body.set('gps', gps); }
-      fetch(window.location.pathname + '/arrive', {method: 'POST', body: body})
+      fetch(window.location.pathname + '/arrive', {method: 'POST', body: body, headers: {'X-CSRF-Token': CSRF_TOKEN}})
         .then(function (r) { return r.json(); })
         .then(function (d) {
           var line = document.getElementById('joe-line');
@@ -478,6 +661,14 @@ document.querySelectorAll('[data-action="arrive"]').forEach(function (b) {
         function () { send(''); },
         {timeout: 8000});
     } else { send(''); }
+  });
+});
+
+// NEXT: ARRIVE AT ... is ARRIVE.
+document.querySelectorAll('[data-trigger="arrive"]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var arrive = document.querySelector('[data-action="arrive"]');
+    if (arrive && !arrive.disabled) { arrive.click(); }
   });
 });
 
@@ -508,7 +699,7 @@ document.querySelectorAll('.tick-row').forEach(function (row) {
     body.set('label', row.dataset.artifact);
     body.set('held', now ? '1' : '0');
 
-    fetch(window.location.pathname + '/artifact', {method: 'POST', body: body})
+    fetch(window.location.pathname + '/artifact', {method: 'POST', body: body, headers: {'X-CSRF-Token': CSRF_TOKEN}})
       .then(function (r) { return r.json(); })
       .then(function (d) {
         row.dataset.busy = '';

@@ -631,3 +631,21 @@
     border: 1px solid var(--edge-lit); border-radius: 7px; cursor: pointer;
 }
 .van-save:hover { color: #fff; border-color: var(--key); }
+
+/* ------------------------------------------- driver action drawers ------ */
+/* The Driver Portal's actions, merged into the cockpit (2026-09-14). Same
+   cards as the Mission Actions column; a photo is taken by tapping the card. */
+.drawer-actions { display: flex; flex-direction: column; gap: 10px; }
+.drawer-actions form { margin: 0; }
+.drawer-actions label.action { position: relative; }
+.file-pick { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drawer-form { display: flex; flex-direction: column; gap: 6px; }
+.drawer-form > label:not(.action) { font-size: 0.72rem; letter-spacing: 0.08em; color: var(--ink-faint); margin-top: 6px; }
+.drawer-form select, .drawer-form input:not(.file-pick) {
+    min-height: 48px; padding: 8px 12px; font-size: 1.05rem;
+    color: var(--ink); background: var(--panel);
+    border: 1px solid var(--edge-lit); border-radius: 7px;
+}
+.drawer-form label.action { margin-top: 10px; }
+.way-out-form { display: inline-block; margin: 0; }
+button.way-out { cursor: pointer; font-family: inherit; }

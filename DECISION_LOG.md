@@ -1415,3 +1415,22 @@ Fills the one number the Visibility SOP left open (and the entry above declined 
 **Still open:** `DISPATCH_PORTAL_URL` — no public address is set, so links carry the address Dispatch is browsed on.
 
 ---
+
+## 2026-09-14 — One Driver Cockpit: the two driver screens merge; the Driver Portal home is parked
+
+**PR:** (this change)
+**Capability:** `portal/driver_actions.py` (new), `portal/routes/joe_portal.py` (cockpit action routes, `DRIVER_COCKPIT_ENDPOINTS`), `portal/routes/driver_portal.py`, `portal/app.py` (sign-in gate), `portal/templates/joe_portal.html`, `portal/static/joe_portal.css`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"Joe I want to call Driver, Dispatch I want to call Operations, Stake holder. In order to function I need Joe/Driver and Dispatch/Operations. Stake holder can be parked for now."* Then: *"can we merge the two driver screens and leave them sized for tablet full screen/laptop. I like that. I will toggle between maps the the driver screen. no need to alter visual."* Then: *"try this park one and alter the other by writing the needed code for the "Real" one needed"*.
+
+**What changed.** The Driver Cockpit (`/portal/mission/<id>`, titled DRIVER COCKPIT) is the driver's one screen. A driver sign-in (PIN window or driver PIN) now lands there instead of `/driver/home`, and reaches the cockpit and its actions only; intake, the booking board, the Mission Brief and COMMIT stay behind the Operations sign-in. The Driver Portal's actions (milestones, POD photo, securement and freight condition photos with their Customer Alert, exceptions including detention, fuel receipts) are cards and drawers in the cockpit's Mission Actions column, in its existing style; the visual layout is otherwise unchanged. The actions live once, in `portal/driver_actions.py`, and both screens call them (Rule 15).
+
+**Parked, not deleted.** `/driver/home` still renders and its routes still work; it is simply no longer where a driver lands.
+
+**One tap for arrival.** When the mission has an open load, ARRIVE also records the arrival milestone. A NEXT card offers the milestone the load is waiting on; an arrival points at ARRIVE.
+
+**Defect fixed.** The cockpit does not extend `base.html`, so its `fetch()` calls (ARRIVE, the document checklist) carried no CSRF token and were refused with 403 outside TESTING. The page now carries and sends its own token.
+
+**Recorded, not resolved.** The cockpit acts on the load row opened under the Mission Record's own id. COMMIT does not open that row today (BOOK does), so a committed mission that was never booked shows "no open load yet" on its action cards — the split named as CO-1 in the Deterministic Close-Out roadmap. The Stakeholder portal is not yet parked in code: freeze or park is still Mike's to choose.
+
+---

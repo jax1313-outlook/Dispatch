@@ -17,7 +17,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+from flask import (Blueprint, flash, get_flashed_messages, jsonify, redirect, render_template,
+                   request, session, url_for)
 
 from dispatch import mission as mission_svc
 from dispatch import scheduling, sweep
@@ -25,6 +26,122 @@ from portal import cockpit
 from portal.models import sandbox
 
 joe_bp = Blueprint("joe_portal", __name__)
+
+
+# ---- One Driver Cockpit --------------------------------------------------
+#
+# Mike Zachary, 2026-09-14: the two driver screens merge into this cockpit, at
+# its current look and full tablet or laptop size; the Driver Portal home
+# (/driver/home) is parked. A driver sign-in lands here, and the Driver Portal's
+# actions -- milestones, POD, securement and condition photos, exceptions, fuel
+# receipts -- are worked from the Mission Actions column. The actions themselves
+# are shared with the parked screen in portal/driver_actions.py.
+#
+# A driver sign-in reaches these endpoints and no others on this blueprint:
+# intake, the booking board, the Mission Brief and COMMIT stay Operations work.
+DRIVER_COCKPIT_ENDPOINTS = frozenset({
+    "joe_portal.portal_home",
+    "joe_portal.portal_mission",
+    "joe_portal.portal_arrive",
+    "joe_portal.portal_mark_artifact",
+    "joe_portal.portal_save_arrangement",
+    "joe_portal.cockpit_milestone",
+    "joe_portal.cockpit_pod",
+    "joe_portal.cockpit_photos",
+    "joe_portal.cockpit_exception",
+    "joe_portal.cockpit_fuel_receipt",
+})
+
+#: A load in one of these is finished; a driver sign-in cannot act on it.
+_CLOSED_LOAD_STATUSES = ("archived", "cancelled", "completed")
+
+#: The next thing to record, by load status. ARRIVE records both arrivals --
+#: it stamps the time and GPS, sends the notice and records the milestone -- so
+#: an arrival is pointed at ARRIVE rather than offered as a second button.
+NEXT_STEP = {
+    "created": ("START MISSION", "dispatched"),
+    "dispatched": ("ON MY WAY TO PICKUP", "en_route_pickup"),
+    "en_route_pickup": ("ARRIVE AT PICKUP", "arrive"),
+    "at_pickup": ("LOADED", "loaded"),
+    "picked_up": ("ROLLING TO DELIVERY", "departed_pickup"),
+    "in_transit": ("ARRIVE AT DELIVERY", "arrive"),
+    "at_delivery": ("DELIVERED", "delivered"),
+    "delivered": ("UPLOAD THE POD", "pod"),
+}
+
+#: Every milestone a driver may record by hand, in run order, for the one that
+#: was missed. Labels are what he reads; values are what Dispatch stores.
+ALL_MILESTONES = [
+    ("Start mission", "dispatched"),
+    ("On my way to pickup", "en_route_pickup"),
+    ("Arrived at pickup", "arrived_pickup"),
+    ("Loaded", "loaded"),
+    ("Rolling to delivery", "departed_pickup"),
+    ("Arrived at delivery", "arrived_delivery"),
+    ("Delivered", "delivered"),
+    ("POD sent", "pod_received"),
+]
+
+
+def _driver_signed_in() -> bool:
+    return bool(session.get("driver_open") or session.get("driver_id"))
+
+
+def _cockpit_actor() -> str:
+    """Who an action is recorded against: the driver session as the Driver Portal
+    records it, or Operations. Never a name the session did not establish."""
+    if session.get("user_id"):
+        return "operations"
+    return session.get("driver_id") or "driver-pin"
+
+
+def _operational_load(record_id: str) -> dict | None:
+    """The load row opened under this Mission Record's own id, if it may be acted on."""
+    from dispatch import services as dispatch_svc
+
+    load = dispatch_svc.get_load(record_id)
+    if not load:
+        return None
+    if not session.get("user_id") and load.get("status") in _CLOSED_LOAD_STATUSES:
+        return None
+    return load
+
+
+def _driver_panel(record_id: str) -> dict:
+    """What the Mission Actions column needs for the driver's actions."""
+    from dispatch import services as dispatch_svc
+    from portal import driver_actions
+
+    load = _operational_load(record_id) if record_id else None
+    status = str((load or {}).get("status") or "")
+    label, event = NEXT_STEP.get(status, ("", ""))
+    trucks = dispatch_svc.list_equipment(status="active")
+    return {
+        "signed_in_as_driver": _driver_signed_in() and not session.get("user_id"),
+        "load_open": bool(load),
+        "load_id": (load or {}).get("load_id", ""),
+        "status_label": status.replace("_", " ").upper(),
+        "next_label": label,
+        "next_event": event,
+        "closed_note": ("This mission has no open load yet. Operations opens it with Book Load."
+                        if record_id and not load else ""),
+        "milestones": ALL_MILESTONES,
+        "exceptions": driver_actions.exception_choices(),
+        "trucks": trucks,
+        "default_equipment_id": (load or {}).get("equipment_id", ""),
+    }
+
+
+def _joe_line(default: str) -> str:
+    """The last thing an action said, in the JOE line, or JOE's standing line."""
+    messages = get_flashed_messages()
+    return messages[-1] if messages else default
+
+
+def _back_to_cockpit(record_id: str):
+    return redirect(url_for("joe_portal.portal_mission", record_id=record_id,
+                            view=request.form.get("view") or None,
+                            stop=request.form.get("stop") or None))
 
 
 # What a driver can record at each end of the run. Labels are what he reads;
@@ -130,7 +247,8 @@ def portal_home():
         views={"PICKUP": {"milestones": [], "evidence": []},
                "DELIVERY": {"milestones": [], "evidence": []}},
         sweep=sweep.status(),
-        joe={"status": "Ask JOE anything. It answers; it does not decide."},
+        joe={"status": _joe_line("Ask JOE anything. It answers; it does not decide.")},
+        driver=_driver_panel(""),
         next_action="Run a sweep, then accept a load",
         route_risk="", facility_intel="",
         actions_for=_actions_for,
@@ -554,11 +672,22 @@ def portal_arrive(record_id: str):
     data[record_id] = stored
     sandbox._save(data)
 
+    # One tap, not two (Mike Zachary, 2026-09-14, one Driver Cockpit): when the
+    # mission has an open load, ARRIVE also records the arrival milestone, and
+    # says what the load made of it.
+    note = outcome.get("note", "")
+    if _operational_load(record_id):
+        from portal import driver_actions
+
+        event = "arrived_delivery" if mode == cockpit.MODE_DELIVERY else "arrived_pickup"
+        said, _category = driver_actions.step_milestone(record_id, event, _cockpit_actor())
+        note = (note + " " + said).strip()
+
     return jsonify({"ok": bool(outcome.get("ok")),
                     "sent": bool(outcome.get("sent")),
                     "drafted": bool(outcome.get("drafted")),
                     "recipients": outcome.get("recipients") or [],
-                    "note": outcome.get("note", ""),
+                    "note": note,
                     "arrived_at": stored["arrived_at"]})
 
 
@@ -695,6 +824,71 @@ def portal_save_arrangement(record_id: str):
                             stop=request.form.get("stop") or None))
 
 
+def _act_on_load(record_id: str, act):
+    """Run one driver action against this mission's open load, then come back."""
+    if not sandbox.get(record_id):
+        return redirect(url_for("joe_portal.portal_home"))
+    if not _operational_load(record_id):
+        flash("This mission has no open load yet. Operations opens it with Book Load.", "error")
+        return _back_to_cockpit(record_id)
+    message, category = act()
+    flash(message, category)
+    return _back_to_cockpit(record_id)
+
+
+@joe_bp.route("/portal/mission/<path:record_id>/milestone", methods=["POST"])
+def cockpit_milestone(record_id: str):
+    from portal import driver_actions
+
+    return _act_on_load(record_id, lambda: driver_actions.step_milestone(
+        record_id, request.form.get("milestone_event", ""), _cockpit_actor()))
+
+
+@joe_bp.route("/portal/mission/<path:record_id>/pod", methods=["POST"])
+def cockpit_pod(record_id: str):
+    from portal import driver_actions
+
+    return _act_on_load(record_id, lambda: driver_actions.upload_pod(
+        record_id, request.files.get("pod_file"), _cockpit_actor()))
+
+
+@joe_bp.route("/portal/mission/<path:record_id>/photos", methods=["POST"])
+def cockpit_photos(record_id: str):
+    from portal import driver_actions
+
+    return _act_on_load(record_id, lambda: driver_actions.upload_mission_photos(
+        record_id, request.form.get("photo_type", "securement_photo"), request.files.getlist("photos"),
+        _cockpit_actor(), mail_connector=_mail_connector, url_root=request.url_root))
+
+
+@joe_bp.route("/portal/mission/<path:record_id>/exception", methods=["POST"])
+def cockpit_exception(record_id: str):
+    from portal import driver_actions
+
+    return _act_on_load(record_id, lambda: driver_actions.log_exception(
+        record_id, request.form.get("exception_type", "detention"),
+        request.form.get("description", ""), _cockpit_actor()))
+
+
+@joe_bp.route("/portal/fuel-receipt", methods=["POST"])
+def cockpit_fuel_receipt():
+    """Fuel is never gated on a mission -- an owner/operator fuels between loads --
+    so this works with no mission and with a mission that has no open load. A load
+    rides along only when it is the shown mission's own open load; none is ever
+    invented."""
+    from portal import driver_actions
+
+    record_id = (request.form.get("record_id") or "").strip()
+    message, category = driver_actions.fuel_receipt(
+        request.form, request.files, _cockpit_actor(),
+        load_allowed=lambda load_id: bool(record_id) and load_id == record_id
+        and bool(_operational_load(record_id)))
+    flash(message, category)
+    if not record_id or not sandbox.get(record_id):
+        return redirect(url_for("joe_portal.portal_home"))
+    return _back_to_cockpit(record_id)
+
+
 @joe_bp.route("/portal/mission/<path:record_id>")
 def portal_mission(record_id: str):
     """One Mission Record, one of three views over it."""
@@ -733,7 +927,8 @@ def portal_mission(record_id: str):
         view=view,
         views=views,
         sweep=sweep.status(),
-        joe={"status": "Ask JOE anything. It answers; it does not decide."},
+        joe={"status": _joe_line("Ask JOE anything. It answers; it does not decide.")},
+        driver=_driver_panel(record_id),
         next_action=_next_action(merged, phase),
         route_risk=risk,
         facility_intel=_facility_intel(record, phase),
