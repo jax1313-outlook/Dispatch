@@ -179,6 +179,28 @@ def calendar_status() -> str:
         return STATUS_UNAVAILABLE
 
 
+def alert_mailbox():
+    """The read-only alert mailbox adapter, or None when there is none on this build.
+
+    Load-board alert emails (2026-09-15). Outside the governed eight for the same
+    reason `mail()` is: adding a ninth registered connector is Mike's decision.
+    """
+    try:
+        from dispatch.connectors.outlook_alert_mailbox import AlertFolderAdapter
+    except Exception:  # noqa: BLE001 - an absent connector is not an error
+        return None
+    return AlertFolderAdapter()
+
+
+def approved_mailboxes() -> tuple:
+    """The mailboxes Dispatch may use at all. The outbound mail list, reused."""
+    try:
+        from dispatch.connectors.outlook_mail import APPROVED_MAILBOXES
+    except Exception:  # noqa: BLE001
+        return ()
+    return tuple(APPROVED_MAILBOXES)
+
+
 def status() -> dict:
     """Everything, for a status panel that is read rather than guessed at."""
     return {"mail": mail_status(), "calendar": calendar_status()}

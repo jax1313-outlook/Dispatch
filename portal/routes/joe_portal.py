@@ -378,7 +378,76 @@ def candidate_queue():
     "these need me".
     """
     return render_template("candidates.html", rows=_candidate_rows(),
-                           notices=get_flashed_messages(), paste=None)
+                           notices=get_flashed_messages(), paste=None,
+                           alerts=_alerts_strip())
+
+
+def _alerts_strip() -> dict | None:
+    """The LOAD ALERTS strip. Read from the store; never opens the mailbox (D9)."""
+    from portal.models import load_alerts
+
+    try:
+        return load_alerts.strip()
+    except Exception:  # noqa: BLE001 - a strip must never take the Loads screen down
+        return None
+
+
+@joe_bp.route("/loads/alerts/check", methods=["POST"])
+def check_load_alerts():
+    """CHECK ALERTS NOW. Reads the alert folder, read-only, and cards what it can.
+
+    Owner direction, 2026-09-15: alert emails from specific board senders are
+    sorted into a folder of the operations mailbox, *"then the reader can do it's
+    thing."* The check runs off the request thread (`load_alerts.check_for_request`).
+    """
+    from portal.models import load_alerts
+
+    driver = str(session.get("user_id") or "").strip() or "operations"
+    flash(load_alerts.summary_line(load_alerts.check_for_request(driver=driver)))
+    return redirect(url_for("joe_portal.candidate_queue"))
+
+
+@joe_bp.route("/loads/alerts/settings")
+def load_alert_settings():
+    """Where the alert mailbox, folder, sender list and schedule are set."""
+    from portal.models import load_alerts
+
+    return _alert_settings_page(load_alerts.settings(), problems=[],
+                                notices=get_flashed_messages())
+
+
+@joe_bp.route("/loads/alerts/settings", methods=["POST"])
+def save_load_alert_settings():
+    from portal.models import load_alerts
+
+    saved = load_alerts.save_settings(request.form)
+    if saved["ok"]:
+        flash("Load alert settings saved.")
+        return redirect(url_for("joe_portal.load_alert_settings"))
+    typed = dict(load_alerts.settings())
+    typed.update({
+        "mailbox": request.form.get("mailbox", ""),
+        "folder": request.form.get("folder", ""),
+        "senders": str(request.form.get("senders") or "").splitlines(),
+        "check_every_minutes": request.form.get("check_every_minutes", "0"),
+        "profiles_text": request.form.get("profiles", ""),
+    })
+    return _alert_settings_page(typed, problems=saved["problems"], notices=[]), 400
+
+
+def _alert_settings_page(current: dict, *, problems: list, notices: list):
+    import json
+
+    from portal.models import load_alerts
+
+    profiles_text = current.get("profiles_text")
+    if profiles_text is None:
+        profiles_text = (json.dumps(current.get("profiles"), indent=2)
+                         if current.get("profiles") else "")
+    return render_template(
+        "load_alert_settings.html", current=current, problems=problems, notices=notices,
+        profiles_text=profiles_text, approved=load_alerts.approved_mailboxes(),
+        intervals=load_alerts.INTERVALS, alerts=_alerts_strip())
 
 
 @joe_bp.route("/loads/clear-expired", methods=["POST"])
@@ -486,7 +555,7 @@ def paste_listing():
         "candidates.html", rows=_candidate_rows(), notices=[],
         paste={"text": text, "kind": kind, "fields": outcome["fields"],
                "extras": outcome["extras"], "note": outcome["note"],
-               "missing": outcome["missing"]}), 400
+               "missing": outcome["missing"]}, alerts=_alerts_strip()), 400
 
 
 def brief_gaps(record: dict) -> int:

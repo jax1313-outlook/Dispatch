@@ -12,12 +12,13 @@ ROOT = Path(__file__).resolve().parent
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
 
-from portal.app import create_app, _ensure_storage_dirs  # noqa: E402
+from portal.app import create_app, _ensure_storage_dirs, start_background_work  # noqa: E402
 from portal.config import Config  # noqa: E402
 
 if __name__ == "__main__":
     _ensure_storage_dirs()
     app = create_app()
+    start_background_work(app)
     print("\n  JOE Presentation Layer")
     print("  http://%s:%s/portal\n" % (Config.HOST, Config.PORT))
     app.run(host=Config.HOST, port=Config.PORT, debug=False, use_reloader=False)
