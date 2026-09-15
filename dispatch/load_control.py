@@ -18,9 +18,39 @@ told -- on a clock, from a dock, with a receiver waiting.
 
 This is why the Mission Record stays one record. The broker was never a
 mission-level identity. **Load control is stop-level, and always was.**
+
+THE ONE-PAGE LAYOUT, 2026-09-15
+===============================
+
+The Mission Template no longer asks for the stop-level detail below. Mike
+reduced load control on the form to a two-choice pick -- *"2) yes either"* --
+between the Customer and Level 1 (`HELD_BY`), stored on the record as
+`controlled_by`. The name, role, phone, email and reference fields left the
+template and every screen that showed them.
+
+**Nothing stored was rewritten.** Records and stops that already carry the
+detail keep it, and `control_for` still reads it for whatever holds such a
+record; it is simply not asked for or shown any more.
 """
 
 from __future__ import annotations
+
+#: Who holds load control, as the Mission Template offers it. Picked, never
+#: typed, so a report can count it.
+HELD_BY_CUSTOMER = "Customer"
+HELD_BY_LEVEL_1 = "Level 1"
+HELD_BY = (HELD_BY_CUSTOMER, HELD_BY_LEVEL_1)
+
+
+def held_by(record: dict) -> dict:
+    """What the Driver Cockpit shows for load control: the pick, or nothing.
+
+    `known` is False when the record carries no pick -- including an older record
+    whose load control was the stop-level detail the template no longer shows.
+    The screen then leaves the line out rather than showing a removed field.
+    """
+    value = str((record or {}).get("controlled_by") or "").strip()
+    return {"known": bool(value), "line": value, "reference": ""}
 
 #: Which party holds authority for a stop. Recorded, never assumed -- the whole
 #: point is that it differs between stops on the same run.

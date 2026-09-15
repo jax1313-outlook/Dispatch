@@ -70,7 +70,9 @@ class TestWhatJoeHears:
         ("update pickup contact Fred Jones", "pickup_contact", "Fred Jones"),
         ("rate 950", "rate", "950"),
         ("broker phone 904-555-0199", "customer_phone", "904-555-0199"),
-        ("load control phone 904-956-3200", "control_phone", "904-956-3200"),
+        ("load control is level 1", "controlled_by", "Level 1"),
+        ("pallets 4 pallets / 20 pieces", "pieces_pallets", "4 pallets / 20 pieces"),
+        ("shipper Southeast Freight", "customer", "Southeast Freight"),
         ("delivery appointment 2026-09-08 11:00", "delivery_window",
          "2026-09-08 11:00"),
         ("set cargo to Aviation parts", "commodity", "Aviation parts"),
@@ -103,8 +105,18 @@ class TestWhatJoeHears:
         from dispatch import mission_template as mt
 
         for field in mt.TEMPLATE:
-            said = "%s something" % field.label
+            said = "%s %s" % (field.label, field.choices[0] if field.choices
+                              else "something")
             assert joe.understand(said)["field"] == field.key, field.label
+
+    def test_a_pick_list_field_takes_only_its_picks(self):
+        """Load control is the Customer or Level 1 (2026-09-15). "Load control
+        phone 904-956-3200" -- a field that left the template -- is not written
+        into the pick as though it were one."""
+        heard = joe.understand("load control phone 904-956-3200")
+        assert heard["understood"] is False
+        assert "Customer or Level 1" in heard["note"]
+        assert joe.understand("service type courier")["value"] == "Courier"
 
 
 class TestPublisherAppliesIt:
@@ -115,12 +127,28 @@ class TestPublisherAppliesIt:
         assert result["applied"] is True
         assert sandbox.get(mission)["customer_phone"] == "904-555-0199"
 
-    def test_load_control_goes_into_its_own_block(self, mission):
-        """Where the stop cards read from, not a flat field nobody looks at."""
+    def test_load_control_is_written_as_the_pick(self, mission):
+        """Where the brief and the cockpit read it since 2026-09-15."""
         publisher.apply_mission_update(
-            mission, "control_phone", "904-956-3200",
+            mission, "controlled_by", "Customer",
             requested_by="Mike", sandbox_module=sandbox)
-        assert sandbox.get(mission)["load_control"]["control_phone"] == "904-956-3200"
+        assert sandbox.get(mission)["controlled_by"] == "Customer"
+
+    def test_a_removed_load_control_field_is_refused(self, mission):
+        """Load control phone and email left the template on 2026-09-15."""
+        for field in ("control_phone", "control_email", "control_name"):
+            result = publisher.apply_mission_update(
+                mission, field, "904-956-3200",
+                requested_by="Mike", sandbox_module=sandbox)
+            assert result["applied"] is False, field
+        assert "load_control" not in sandbox.get(mission)
+
+    def test_the_mission_number_is_still_refused(self, mission):
+        """It is on the template now, and still Dispatch's to assign."""
+        result = publisher.apply_mission_update(
+            mission, "mission_number", "999",
+            requested_by="Mike", sandbox_module=sandbox)
+        assert result["applied"] is False
 
     def test_it_keeps_what_was_there_before(self, mission):
         """A number corrected on a call is sometimes corrected wrongly, and the

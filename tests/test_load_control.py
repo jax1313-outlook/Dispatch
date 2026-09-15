@@ -24,9 +24,7 @@ from dispatch import load_control as lc, mission_template as mt
 
 RUN = {
     "customer": "Southeast Freight Partners",
-    "control_name": "Southeast Freight Partners",
-    "control_role": "broker",
-    "control_phone": "904-555-0199",
+    "controlled_by": "Customer",
     "pickup_location": "Jacksonville, FL 32202",
     "pickup_window": "2026-09-02 06:00 - 10:00",
     "delivery_location": "Publix DC Lakeland",
@@ -41,56 +39,70 @@ def _record(**over):
                         taken_by="Mike", extra_stops=extra)
 
 
-class TestAuthorityIsAStopLevelFact:
-    def test_one_broker_over_the_whole_run_still_works(self):
-        """The common case. Naming him once has to be enough, or the template
-        stops getting filled in."""
-        record = _record()
-        control = record["stops"][0]["control"]
+class TestTheTemplateAsksForThePick:
+    """**The one-page layout, 2026-09-15.** Load control on the Mission Template
+    is a two-choice pick -- *"2) yes either"* -- the Customer, or Level 1. The
+    name, role, phone and per-stop detail below left the template."""
+
+    def test_the_choices_are_customer_and_level_1(self):
+        assert lc.HELD_BY == ("Customer", "Level 1")
+        assert mt.LOAD_CONTROL_CHOICES == lc.HELD_BY
+
+    def test_the_pick_reaches_the_record(self):
+        assert _record()["controlled_by"] == "Customer"
+        assert _record(controlled_by="Level 1")["controlled_by"] == "Level 1"
+
+    def test_a_blank_pick_is_not_invented(self):
+        assert "controlled_by" not in _record(controlled_by="")
+
+    def test_no_stop_level_detail_is_written_any_more(self):
+        """A stop block carrying the old load control lines is read for its
+        stop and nothing else: those lines are no longer template fields."""
+        body = mt.render_stop_block(2, {
+            "facility": "Winn-Dixie Orlando", "window": "2026-09-02 17:00"})
+        body += "\n  Load control: Gulf Coast Paper\n  Their reference: GCP-88\n"
+        record = _record(extra_stops=mt.parse_stops(body))
+        assert record["stop_total"] == 2
+        assert record["stops"][1]["facility"] == "Winn-Dixie Orlando"
+        for stop in record["stops"]:
+            assert not any(key.startswith("control") for key in stop), stop
+        assert "load_control" not in record
+        assert "load_control_varies" not in record
+
+    def test_three_stops_one_truck_is_still_one_record(self):
+        """Three companies, one run -- one Mission Record."""
+        blocks = [mt.render_stop_block(i, {"facility": f"Consignee {i}",
+                                           "window": f"1{i}:00"}) for i in (2, 3)]
+        record = _record(extra_stops=mt.parse_stops("\n".join(blocks)))
+        assert record["stop_total"] == 3
+        assert [s["facility"] for s in record["stops"]] == [
+            "Publix DC Lakeland", "Consignee 2", "Consignee 3"]
+
+
+class TestAnOlderRecordsAuthorityStillReads:
+    """Records written before 2026-09-15 keep their stop-level load control.
+    `control_for` still reads it exactly as it did; nothing was rewritten."""
+
+    DEFAULT = {"control_name": "Southeast Freight Partners",
+               "control_role": "broker", "control_phone": "904-555-0199"}
+
+    def test_one_broker_over_the_whole_run_still_resolves(self):
+        control = lc.control_for({"facility": "Publix DC Lakeland"}, self.DEFAULT)
         assert control["name"] == "Southeast Freight Partners"
         assert control["role"] == lc.BROKER
         assert control["inherited"] is True
-        assert record["load_control_varies"] is False
 
-    def test_a_stop_can_answer_to_the_shipper_instead(self):
-        """The operator's actual run: one broker, two stops, and stop 2 is the
-        shipper's freight."""
-        body = mt.render_stop_block(2, {
-            "facility": "Winn-Dixie Orlando",
-            "window": "2026-09-02 17:00",
-            "control_name": "Gulf Coast Paper",
-            "control_role": "shipper",
-            "control_phone": "813-555-0177"})
-        record = _record(extra_stops=mt.parse_stops(body))
-
-        first = record["stops"][0]["control"]
-        second = record["stops"][1]["control"]
-        assert first["name"] == "Southeast Freight Partners"
+    def test_a_stop_that_answered_to_the_shipper_still_does(self):
+        stops = [{"facility": "Publix DC Lakeland"},
+                 {"facility": "Winn-Dixie Orlando", "control_name": "Gulf Coast Paper",
+                  "control_role": "shipper", "control_phone": "813-555-0177",
+                  "control_ref": "REF-2"}]
+        second = lc.control_for(stops[1], self.DEFAULT)
         assert second["name"] == "Gulf Coast Paper"
         assert second["role"] == lc.SHIPPER
         assert second["inherited"] is False
-
-    def test_the_record_knows_when_authority_varies(self):
-        """Which is what tells the screen it must name the party per stop."""
-        body = mt.render_stop_block(2, {
-            "facility": "Winn-Dixie Orlando", "window": "17:00",
-            "control_name": "Gulf Coast Paper", "control_role": "shipper"})
-        record = _record(extra_stops=mt.parse_stops(body))
-        assert record["load_control_varies"] is True
-
-    def test_three_brokers_one_truck(self):
-        """Three brokers, three companies, one run -- one Mission Record."""
-        blocks = [mt.render_stop_block(i, {
-            "facility": f"Consignee {i}", "window": f"1{i}:00",
-            "control_name": f"Broker {i}", "control_role": "broker",
-            "control_ref": f"REF-{i}"}) for i in (2, 3)]
-        record = _record(extra_stops=mt.parse_stops("\n".join(blocks)))
-
-        assert record["stop_total"] == 3
-        assert record["load_control_varies"] is True
-        names = [s["control"]["name"] for s in record["stops"]]
-        assert names == ["Southeast Freight Partners", "Broker 2", "Broker 3"]
-        assert record["stops"][2]["control"]["reference"] == "REF-3"
+        assert second["reference"] == "REF-2"
+        assert lc.differs_across(stops, self.DEFAULT) is True
 
 
 class TestItDoesNotGuessAuthority:
@@ -132,21 +144,17 @@ class TestWhatTheDriverReads:
                                   "control_role": "shipper"}, {})
         assert control["line"] == "Gulf Coast Paper (Shipper)"
 
-    def test_each_stop_keeps_its_own_reference_number(self):
-        """Three brokers means three reference numbers, and quoting the wrong
-        one at a gate is a delay."""
-        body = mt.render_stop_block(2, {"facility": "X", "window": "1",
-                                        "control_ref": "REF-2"})
-        record = _record(extra_stops=mt.parse_stops(body))
-        assert record["stops"][1]["control"]["reference"] == "REF-2"
+    def test_the_pick_is_the_whole_line(self):
+        assert lc.held_by({"controlled_by": "Level 1"}) == {
+            "known": True, "line": "Level 1", "reference": ""}
+        assert lc.held_by({})["known"] is False
 
 
-class TestTheStopCardCarriesItThrough:
-    """The bug this class exists for: `stop_list` normalised stops into a
-    fixed set of keys and dropped the control fields, so every stop silently
-    inherited the run default -- showing the broker on the stop that answers
-    to the shipper. Exactly the failure the data was added to prevent, and
-    invisible unless something asserts on stop 2 specifically."""
+class TestTheCockpitShowsThePickNotTheRemovedDetail:
+    """**One-page layout, 2026-09-15.** The Driver Cockpit's LOAD CONTROL line
+    reads the record's pick. The stop-level name, role, phone and reference an
+    older record stores are no longer shown -- and the cockpit still renders
+    that record, stop by stop, without them."""
 
     RECORD = {
         "card_data": {"load_id": "847261"},
@@ -163,32 +171,45 @@ class TestTheStopCardCarriesItThrough:
         "load_control_varies": True,
     }
 
-    def test_each_stop_shows_its_own_authority(self):
+    def test_an_older_record_still_renders_each_stop(self):
         from portal import cockpit
 
         first = cockpit.end_detail(self.RECORD, "delivery", stop_number=1)
         second = cockpit.end_detail(self.RECORD, "delivery", stop_number=2)
-        assert first["control"]["name"] == "Southeast Freight Partners"
-        assert second["control"]["name"] == "Gulf Coast Paper"
-        assert second["control"]["role"] == lc.SHIPPER
+        assert first["address"] == "Publix DC Lakeland"
+        assert second["address"] == "Winn-Dixie Orlando"
 
-    def test_the_stop_list_does_not_normalise_authority_away(self):
+    def test_the_removed_stop_detail_is_not_shown(self):
         from portal import cockpit
 
+        for number in (1, 2):
+            detail = cockpit.end_detail(self.RECORD, "delivery", stop_number=number)
+            assert detail["control"]["known"] is False
+            assert detail["control"]["reference"] == ""
+            assert detail["control_varies"] is False
         stop = cockpit.selected_stop(self.RECORD, 2)
-        assert stop["control_name"] == "Gulf Coast Paper"
-        assert stop["control_role"] == "SHIPPER"
-        assert stop["control_ref"] == "GCP-88"
+        assert not any(key.startswith("control") for key in stop)
 
-    def test_the_reference_travels_with_the_stop(self):
+    def test_the_stored_detail_is_left_exactly_as_it_was(self):
         from portal import cockpit
 
-        detail = cockpit.end_detail(self.RECORD, "delivery", stop_number=2)
-        assert detail["control"]["reference"] == "GCP-88"
+        cockpit.end_detail(self.RECORD, "delivery", stop_number=2)
+        assert self.RECORD["stops"][1]["control_ref"] == "GCP-88"
+        assert self.RECORD["load_control"]["control_name"] == "Southeast Freight Partners"
+
+    def test_the_pick_is_what_the_line_shows(self):
+        from portal import cockpit
+
+        record = dict(self.RECORD, controlled_by="Customer")
+        detail = cockpit.end_detail(record, "delivery", stop_number=2)
+        assert detail["control"]["known"] is True
+        assert detail["control"]["line"] == "Customer"
 
     def test_the_screen_says_it_in_the_drivers_words(self):
         from portal import joe_voice
 
+        for pick in lc.HELD_BY:
+            assert joe_voice.is_driver_safe(lc.held_by({"controlled_by": pick})["line"]) == []
         control = lc.control_for(self.RECORD["stops"][1], {})
         assert joe_voice.is_driver_safe(control["line"]) == []
 

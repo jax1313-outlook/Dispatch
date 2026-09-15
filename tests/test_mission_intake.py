@@ -35,8 +35,7 @@ COMPLETE = {
     "delivery_phone": "770-555-0142",
     "delivery_notes": "Dock 4 after 06:00",
     "commodity": "Aviation parts",
-    "pallets": "4",
-    "pieces": "4",
+    "pieces_pallets": "4 pallets",
     "weight_lbs": "8400",
 }
 
@@ -74,7 +73,19 @@ class TestTheEmailRoundTrip:
         parsed = mt.parse_email(mt.render_email(COMPLETE))
         assert parsed["customer"] == COMPLETE["customer"]
         assert parsed["load_number"] == "847261"
+        assert parsed["pieces_pallets"] == "4 pallets"
         assert mt.validate(parsed) == []
+
+    def test_a_mission_number_written_into_the_email_is_not_read(self):
+        """Dispatch assigns it. A number typed into the reply is not taken."""
+        body = mt.render_email(COMPLETE).replace("Mission Number: ",
+                                                 "Mission Number: 999")
+        assert "Mission Number: 999" in body
+        assert mt.parse_email(body)["mission_number"] == ""
+
+    def test_pieces_pallets_is_words_not_a_number(self):
+        """"4 pallets / 20 pieces" is a valid answer to the merged field."""
+        assert mt.validate(dict(COMPLETE, pieces_pallets="4 pallets / 20 pieces")) == []
 
     def test_it_survives_what_a_phone_does_to_an_email(self):
         """Reply markers and stray blank lines are normal, not an error."""
@@ -189,6 +200,7 @@ class TestTheCockpitCanReadWhatIntakeWrote:
         assert context["ends"]["pickup"]["place"] == "Jacksonville, FL 32202"
         assert context["ends"]["delivery"]["place"] == "Atlanta, GA 30336"
         assert "Aviation parts" in context["cargo"]["description"]
+        assert context["cargo"]["brackets"] == "4 pallets · 8400 lbs"
         assert context["broker"]["name"] == "Southeast Freight Partners"
 
     def test_the_pickup_panel_has_no_holes(self):

@@ -50,8 +50,9 @@ def client():
         yield c
 
 
-def _create(client, source="PHONE", taken_by="Mike", **over):
-    data = dict(COMPLETE, source=source, taken_by=taken_by, **over)
+def _create(client, source="PHONE", **over):
+    # What the page posts since the one-page layout, 2026-09-15: no Taken by.
+    data = dict(COMPLETE, source=source, **over)
     return client.post("/intake", data=data, follow_redirects=False)
 
 
@@ -90,8 +91,10 @@ class TestTheFormNoLongerAsksHowItCameIn:
         html = client.get("/intake").get_data(as_text=True)
         assert 'name="source"' not in html
         assert "HOW IT CAME IN" not in html
-        # Who took it is a different question and is still asked.
-        assert 'name="taken_by"' in html
+        # Who took it was a different question, asked until the one-page
+        # layout of 2026-09-15 took it off the page.
+        assert 'name="taken_by"' not in html
+        assert "WHO TOOK IT" not in html
 
     def test_a_supplied_load_number_is_kept_exactly(self, client):
         _create(client, load_number="CVS-44912")
@@ -114,7 +117,6 @@ class TestTheFormNoLongerAsksHowItCameIn:
 class TestItRefusesRatherThanLosingTheCall:
     def test_an_incomplete_load_is_not_created(self, client):
         response = client.post("/intake", data={"source": "PHONE",
-                                                "taken_by": "Mike",
                                                 "customer": "Somebody"})
         assert response.status_code == 400
         assert sandbox.get_all() == {}
@@ -123,7 +125,7 @@ class TestItRefusesRatherThanLosingTheCall:
         """Losing a call's worth of notes to a validation message is how a
         screen stops being used."""
         response = client.post("/intake", data={
-            "source": "PHONE", "taken_by": "Mike",
+            "source": "PHONE",
             "customer": "Baptist Health Logistics",
             "notes": "Sally says detention after two hours"})
         html = response.get_data(as_text=True)
@@ -131,15 +133,31 @@ class TestItRefusesRatherThanLosingTheCall:
         assert "detention after two hours" in html
 
     def test_it_says_every_problem_not_the_first(self, client):
-        html = client.post("/intake", data={"source": "PHONE",
-                                            "taken_by": "Mike"}).get_data(as_text=True)
+        html = client.post("/intake", data={"source": "PHONE"}).get_data(as_text=True)
         assert html.count("<li>") >= 4
 
-    def test_it_will_not_create_without_who_took_it(self, client):
-        """A mission arrives on somebody's word and the record says whose."""
+    def test_it_no_longer_refuses_for_want_of_who_took_it(self, client):
+        """Taken by left the page in the one-page layout, 2026-09-15, so the
+        screen can no longer refuse a mission for it."""
         response = client.post("/intake", data=dict(COMPLETE, source="PHONE"))
-        assert response.status_code == 400
-        assert "Who took it" in response.get_data(as_text=True)
+        assert response.status_code == 302
+        assert "Who took it" not in response.get_data(as_text=True)
+
+    def test_the_record_still_says_whose_word_it_arrived_on(self, client):
+        """Not shown, still recorded: the signed-in user, else "operations" --
+        the same word a REJECT from this screen records."""
+        _create(client)
+        record = list(sandbox.get_all().values())[0]
+        assert record["intake_taken_by"] == "operations"
+
+    def test_the_new_mission_page_shows_the_one_page_layout(self, client):
+        html = client.get("/intake").get_data(as_text=True)
+        for gone in ("Taken by", "Load number (theirs)", "Load control is the",
+                     "Load control phone", "Stop 1 load control", "Cargo items",
+                     "Pallets (total)", "Amount to collect"):
+            assert gone not in html, gone
+        for section in mt.SECTIONS:
+            assert "<h2>%s</h2>" % section in html
 
     def test_an_unknown_source_cannot_get_in(self):
         """It used to be refused at the door. Now there is no door -- the form
@@ -207,6 +225,47 @@ class TestTheCandidateQueue:
     def test_an_empty_queue_says_so_plainly(self, client):
         html = client.get("/candidates").get_data(as_text=True)
         assert "Nothing waiting" in html
+
+
+class TestTheOnePageMissionRunsEndToEnd:
+    """New Mission -> brief -> Driver Cockpit, through the real routes, on the
+    one-page layout of 2026-09-15."""
+
+    def test_the_brief_and_cockpit_show_what_new_mission_took(self, client):
+        assert _create(client, service="LTL", controlled_by="Level 1",
+                       customer_email="ops@baptist.example",
+                       pieces_pallets="2 pallets / 14 pieces",
+                       weight_lbs="1200", amount="450").status_code == 302
+        record_id = list(sandbox.get_all())[0]
+        record = sandbox.get(record_id)
+        assert record["mission_number"]
+
+        import re
+
+        brief_html = client.get(f"/brief/mission/{record_id}").get_data(as_text=True)
+
+        def shown(label):
+            match = re.search(r">%s</dt>\s*<dd[^>]*>\s*(.*?)\s*</dd>" % re.escape(label),
+                              brief_html, re.S)
+            assert match, label
+            return match.group(1)
+
+        assert shown("Service Type") == "LTL"
+        assert shown("Load control") == "Level 1"
+        assert shown("Their email") == "ops@baptist.example"
+        assert shown("Pieces / Pallets") == "2 pallets / 14 pieces"
+        assert shown("Weight (lbs, total)") == "1200"
+        assert shown("Amount") == "450"
+        assert shown("Mission Number") == str(record["mission_number"])
+        for gone in (">Status<", ">Intake<", ">Taken by<", "operations"):
+            assert gone not in brief_html, gone
+
+        cockpit = client.get(f"/portal/mission/{record_id}?view=DELIVERY")
+        assert cockpit.status_code == 200
+        cockpit_html = cockpit.get_data(as_text=True)
+        assert "Gainesville, FL 32608" in cockpit_html
+        assert "2 pallets / 14 pieces" in cockpit_html
+        assert '<span class="control-name">Level 1</span>' in cockpit_html
 
 
 class TestThereIsOnlyOneTemplate:
@@ -340,28 +399,22 @@ class TestTheSourceSurvivesIntoTheLoadRecord:
 
 
 class TestServiceTypeIsPickedNotTyped:
-    """**Mike's list, 2026-09-06.** Twelve kinds of run.
+    """**Mike's list, 2026-09-06**, twelve kinds of run -- **reduced to two by
+    the one-page layout, 2026-09-15:** *"drop status type is LTL / Courier"*.
 
-    This is where Courier and Medical belong. They were sitting in the intake
-    source list, which was a category error -- a courier run is a kind of
-    freight, not a way a load reached the office -- and where nothing could ever
-    report on them.
+    Courier moved here from the intake source list on 2026-09-06, where it was
+    a category error -- a courier run is a kind of freight, not a way a load
+    reached the office.
 
     Picked, never typed, because the whole point is counting them later.
-    "Medical" once and "medical route" the next time are two categories that
-    should be one, and nothing notices until a report is finally built.
     """
 
     def test_the_list_is_mikes_list(self):
-        assert mt.SERVICE_TYPES == (
-            "LTL Freight", "Courier", "Medical", "Retail", "Food & Beverage",
-            "Industrial", "Port / Container", "Dedicated", "Government",
-            "Emergency / Expedited", "Final Mile", "Other")
+        assert mt.SERVICE_TYPES == ("LTL", "Courier")
 
-    def test_the_two_that_moved_here_from_the_source_list(self):
-        """Courier and medical were intake sources until 2026-09-06."""
+    def test_courier_is_still_a_kind_of_run(self):
+        """Courier was an intake source until 2026-09-06."""
         assert "Courier" in mt.SERVICE_TYPES
-        assert "Medical" in mt.SERVICE_TYPES
 
     def test_the_field_carries_them(self):
         field = next(f for f in mt.TEMPLATE if f.key == "service")
@@ -370,15 +423,14 @@ class TestServiceTypeIsPickedNotTyped:
     def test_the_screen_offers_a_picker_not_a_text_box(self, client):
         html = client.get("/intake").get_data(as_text=True)
         assert "<select" in html
-        assert "LTL Freight" in html
-        assert "Emergency / Expedited" in html
+        assert '<option value="LTL"' in html
+        assert '<option value="Courier"' in html
+        assert "Emergency / Expedited" not in html
 
-    def test_twelve_options_is_a_dropdown_not_radio_buttons(self, client):
-        """Mike ruled radio buttons for the source list because they reduce
-        cognitive load at three options. Twelve is past where that holds --
-        the control follows the count, not the other way round."""
+    def test_the_picks_are_a_dropdown_not_radio_buttons(self, client):
+        """The New Mission screen draws every pick list the same way."""
         html = client.get("/intake").get_data(as_text=True)
-        assert len(mt.SERVICE_TYPES) == 12
+        assert len(mt.SERVICE_TYPES) == 2
         assert 'type="radio"' not in html
 
     def test_a_chosen_service_reaches_the_record(self, client):
@@ -386,9 +438,18 @@ class TestServiceTypeIsPickedNotTyped:
         card is what the Driver Cockpit reads, so today the service type is
         stored and reportable but not shown to the driver. Recorded here rather
         than changed, because whether he needs to see it is Mike's call."""
-        _create(client, service="Medical")
+        _create(client, service="Courier")
         record = list(sandbox.get_all().values())[0]
-        assert record.get("service") == "Medical"
+        assert record.get("service") == "Courier"
+
+    def test_load_control_is_picked_too(self, client):
+        """*"2) yes either"* -- the Customer, or Level 1."""
+        html = client.get("/intake").get_data(as_text=True)
+        assert '<select name="controlled_by">' in html
+        assert '<option value="Level 1"' in html
+        _create(client, controlled_by="Level 1")
+        record = list(sandbox.get_all().values())[0]
+        assert record.get("controlled_by") == "Level 1"
 
     def test_it_is_optional_and_a_blank_is_not_invented(self, client):
         """Leave anything you do not know blank -- do not guess. The footer of

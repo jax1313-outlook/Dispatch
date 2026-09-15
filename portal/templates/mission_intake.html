@@ -43,20 +43,9 @@
     </div>
   {% endif %}
 
-  {# How it came in. A label on the record, because "who told us about this
-     load" is a real question later and guessing at it is not possible. #}
-  <section class="card-section">
-    {# "How it came in" is no longer asked. A person at this screen is always
-       the direct door; a machine sets SWEEP. A field with one reachable value
-       is a field that should not be asked. Mike, 2026-09-06. #}
-    <h2>WHO TOOK IT</h2>
-    <dl>
-      <dt>Taken by *</dt>
-      <dd><input type="text" name="taken_by" value="{{ taken_by }}"
-                 autocomplete="off" placeholder="A mission arrives on somebody's word"></dd>
-    </dl>
-  </section>
-
+  {# "How it came in" is no longer asked (Mike, 2026-09-06), and neither is who
+     took it: Taken by left the page in the one-page layout, 2026-09-15. The
+     page is the Mission Template's twenty-nine fields and nothing else. #}
   {% for name, fields in sections %}
   <section class="card-section">
     <h2>{{ name }}</h2>
@@ -64,13 +53,18 @@
       {% for f in fields %}
         <dt>{{ f.label }}{% if f.required %} *{% endif %}</dt>
         <dd>
-          {% if f.key in ('cargo_lines', 'notes', 'additional_stops') %}
+          {% if f.assigned %}
+            {# Dispatch assigns it when the mission is created. Shown, never
+               typed; the screen does not read it back. #}
+            <input type="text" name="{{ f.key }}" value="" readonly
+                   tabindex="-1" placeholder="{{ f.hint }}">
+          {% elif f.key == 'notes' %}
             <textarea name="{{ f.key }}" rows="3"
                       placeholder="{{ f.hint }}">{{ values[f.key] }}</textarea>
           {% elif f.choices %}
             {# Picked, never typed. A field meant to be counted has to be, or
                "Medical" and "medical route" become two categories that should
-               be one. Twelve options is past where radio buttons help. #}
+               be one. #}
             <select name="{{ f.key }}">
               <option value="">{{ f.hint or 'Choose one' }}</option>
               {% for c in f.choices %}

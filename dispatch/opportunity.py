@@ -53,7 +53,9 @@ from dispatch.db import get_connection
 ONTO_MISSION_CARD = {
     "origin": "pickup_location",
     "destination": "delivery_location",
-    "pieces_weight": "cargo_lines",
+    # Cargo items left the card on 2026-09-15; the count now has one field,
+    # Pieces / Pallets, which is where "two pallets" belongs.
+    "pieces_weight": "pieces_pallets",
     "equipment": "service",
     "rate": "rate",
     "pickup_date": "pickup_window",

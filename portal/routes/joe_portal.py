@@ -330,7 +330,6 @@ def mission_intake():
         sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
         problems=[],
         values=mt.blank_template(),
-        taken_by="",
     )
 
 
@@ -339,16 +338,22 @@ def mission_intake_create():
     """Create the Candidate. Same record SWEEP would have produced."""
     from dispatch import mission_template as mt
 
+    # What a person enters. The mission number is Dispatch's to assign, so a
+    # value posted for it is never read.
     values = {key: str(request.form.get(key) or "").strip()
-              for key in mt.TEMPLATE_KEYS}
+              for key in mt.ENTERED_KEYS}
     # The form no longer asks how it came in, because a person sitting at it is
     # always the direct door. A machine sets SWEEP; a screen never offers it.
     source = mt.SOURCE_DIRECT
-    taken_by = str(request.form.get("taken_by") or "").strip()
+    # Nor who took it: Taken by left the page in the one-page layout
+    # (2026-09-15). The record still says whose word it arrived on -- the
+    # signed-in user, or "operations" as a REJECT from this screen records.
+    taken_by = (str(request.form.get("taken_by") or "").strip()
+                or str(session.get("display_name") or "").strip()
+                or str(session.get("user_id") or "").strip()
+                or "operations")
 
     problems = mt.validate(values)
-    if not taken_by:
-        problems.append("Who took it is required")
 
     if problems:
         # Everything he typed comes back with it. Losing a call's worth of
@@ -356,7 +361,7 @@ def mission_intake_create():
         return render_template(
             "mission_intake.html",
             sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
-            problems=problems, values=values, taken_by=taken_by), 400
+            problems=problems, values=dict(mt.blank_template(), **values)), 400
 
     record = mt.create_mission(values, source=source, taken_by=taken_by,
                                sandbox_module=sandbox, mission_module=mission_svc)
@@ -834,14 +839,12 @@ def mission_brief_save(record_id: str):
     if control:
         stored["load_control"] = control
 
-    # Stop-level edits: a dock phone or a different party holding load control
-    # on stop 2 is learned on the same call as everything else.
+    # Stop-level edits: a dock phone on stop 2 is learned on the same call as
+    # everything else. Stop-level load control is no longer written here -- it
+    # left the Mission Template in the one-page layout (2026-09-15) -- so no
+    # resolved control block is rebuilt; a stop that stored one keeps it as is.
     stops = brief_view.apply_stop_edits(stored, request.form)
     if stops:
-        from dispatch import load_control as lc
-
-        for stop in stops:
-            stop["control"] = lc.control_for(stop, control)
         stored["stops"] = stops
 
     data[record_id] = stored

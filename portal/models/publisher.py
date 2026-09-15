@@ -235,15 +235,16 @@ def record_communication_result(action_id: str, result: dict) -> dict:
 # which is the one thing the authority model does not allow. So the write lives
 # here, and `dispatch/joe_update.py` has no way to reach a store at all.
 
-#: Fields Publisher will write from a spoken request. Everything the Mission
-#: Template can capture, plus load control, and nothing else -- a request
-#: naming `committed_at` or `mission_number` is refused rather than obeyed.
+#: Fields Publisher will write from a spoken request. Everything a person enters
+#: on the Mission Template, plus the payment facts the cockpit reads, and
+#: nothing else -- a request naming `committed_at` or `mission_number` is
+#: refused rather than obeyed. The load control phone and email left the
+#: template in the one-page layout (2026-09-15) and are no longer written.
 def _writable_keys() -> set:
     from dispatch import mission_template as mt
 
-    keys = {f.key for f in mt.TEMPLATE}
-    keys |= {"customer_email", "control_email", "amount", "cod",
-             "payment_type", "rate_basis", "pod_required"}
+    keys = set(mt.ENTERED_KEYS)
+    keys |= {"cod", "pod_required"}
     return keys
 
 

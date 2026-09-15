@@ -169,13 +169,15 @@ class TestOneTemplateForEveryKindOfWork:
         """No specialty templates. Service type is a field, not a template."""
         assert "service" in mt.TEMPLATE_KEYS
         for source in mt.INTAKE_SOURCES:
-            record = mt.to_record(dict(MINIMUM, service="Medical"),
+            record = mt.to_record(dict(MINIMUM, service="Courier"),
                                   source=source, taken_by="Mike")
-            assert record["service"] == "Medical"
+            assert record["service"] == "Courier"
 
-    def test_the_six_sections_are_the_operators(self):
-        assert mt.SECTIONS == ("MISSION SOURCE", "LOAD CONTROL", "PICKUP",
-                               "DELIVERY", "CARGO", "NOTES")
+    def test_the_sections_are_the_operators(self):
+        """Six until the one-page layout, 2026-09-15, which put IDENTITY on the
+        template ahead of them."""
+        assert mt.SECTIONS == ("IDENTITY", "MISSION SOURCE", "LOAD CONTROL",
+                               "PICKUP", "DELIVERY", "CARGO", "NOTES")
 
     def test_every_field_belongs_to_one_of_them(self):
         for field in mt.TEMPLATE:

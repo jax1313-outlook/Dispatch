@@ -86,17 +86,14 @@ class TestEveryFieldIsEditable:
             assert all(f["key"] for f in section["fields"]), section["title"]
 
     def test_stop_fields_are_editable_too(self, client, mission):
-        """On a multi-stop run the dock phone and who holds load control are
-        exactly what the call is for."""
+        """On a multi-stop run the dock phone is exactly what the call is for."""
         client.post(f"/brief/mission/{mission}/save", data={
             "stop:2:phone": "863-555-0114",
             "stop:2:poc": "Dock 7 - K. Mills",
-            "stop:2:control_name": "Gulf Coast Paper",
-            "stop:2:control_role": "shipper",
         })
         stops = sandbox.get(mission)["stops"]
         assert stops[1]["phone"] == "863-555-0114"
-        assert stops[1]["control_name"] == "Gulf Coast Paper"
+        assert stops[1]["poc"] == "Dock 7 - K. Mills"
 
     def test_editing_one_stop_leaves_the_others_alone(self, client, mission):
         client.post(f"/brief/mission/{mission}/save",
@@ -105,24 +102,30 @@ class TestEveryFieldIsEditable:
         assert stops[0].get("phone", "") == ""
         assert stops[0]["facility"] == "Mayo Clinic"
 
-    def test_the_resolved_control_is_rebuilt_after_an_edit(self, client, mission):
-        """The stop card reads a resolved block, so writing the raw field and
-        leaving the resolved one stale would show the old party."""
+    def test_stop_load_control_is_no_longer_written(self, client, mission):
+        """Stop-level load control left the Mission Template in the one-page
+        layout, 2026-09-15. A posted value for it is not stored, and the save
+        adds no resolved block to a stop that never had one."""
         client.post(f"/brief/mission/{mission}/save",
                     data={"stop:2:control_name": "Gulf Coast Paper",
-                          "stop:2:control_role": "shipper"})
+                          "stop:2:control_role": "shipper",
+                          "stop:2:phone": "863-555-0114"})
         stop = sandbox.get(mission)["stops"][1]
-        assert stop["control"]["name"] == "Gulf Coast Paper"
-        assert stop["control"]["role_label"] == "Shipper"
+        assert stop["phone"] == "863-555-0114"
+        assert "control_name" not in stop and "control_role" not in stop
+        assert "control" not in stop
 
     def test_the_edit_screen_shows_an_input_for_every_editable_field(self, client,
                                                                     mission):
         html = client.get(f"/brief/mission/{mission}?edit=1").get_data(as_text=True)
         card = brief.card_for(sandbox.get(mission))
-        expected = sum(1 for s in card["sections"] if s["editable"]
-                       for f in s["fields"] if f["key"])
+        fields = [f for s in card["sections"] if s["editable"]
+                  for f in s["fields"] if f["key"] and not f["locked"]]
+        expected = sum(1 for f in fields if not f["choices"])
         expected += sum(len(s["fields"]) for s in card["stops"])
         assert html.count('<input type="text"') == expected
+        # The pick lists are picked on the brief as on New Mission.
+        assert html.count("<select") == sum(1 for f in fields if f["choices"]) == 2
 
     def test_a_field_that_was_not_sent_is_not_cleared(self, client, mission):
         """Two calls, two facts. The second must not wipe the first."""

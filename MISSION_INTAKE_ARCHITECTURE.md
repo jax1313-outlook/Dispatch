@@ -129,17 +129,29 @@ answers down and hands them over.
 
 ## The template
 
-Six sections, in the operator's order:
+**The one-page layout, ruled 2026-09-15** (Owner: *"go ahead with the one page template"*).
+Twenty-nine fields in seven sections, in the operator's order. The New Mission screen and
+the Mission Brief are the same document and both render exactly this; `dispatch/mission_template.py`
+is the definition and `tests/test_mission_template_published.py` holds it to this list.
 
 ```
-MISSION SOURCE     customer, their contact, their phone
-LOAD CONTROL       load number (theirs, optional), service type, rate
-PICKUP             facility, appointment, contact, phone, access
-DELIVERY           facility, appointment, contact, phone, access,
-                   additional stops
-CARGO              description, pallets, pieces, weight
+IDENTITY           Load Number · Mission Number (assigned by Dispatch) ·
+                   Service Type (LTL / Courier)
+MISSION SOURCE     Customer / Shipper / Broker · their contact · their phone · their email
+LOAD CONTROL       Load control (Customer / Level 1) · rate · rate agreed with ·
+                   payment type · paid by · amount
+PICKUP             facility and address · appointment · contact · phone ·
+                   access instructions · SPECIAL INSTRUCTIONS
+DELIVERY           facility and address · appointment · contact · phone ·
+                   access instructions · SPECIAL INSTRUCTIONS
+CARGO              description · pieces / pallets · weight (lbs, total)
 NOTES              anything else that matters on this run
 ```
+
+Removed by that ruling: Status, Intake and Taken by from the brief; the separate "load number
+(theirs)"; load control name, role, phone and email; Shipper at pickup; Stop 1 load control and
+the per-stop load control lines; Cargo items; separate Pallets and Pieces. **Older records keep
+every stored value; a removed field is simply not shown.**
 
 **Use the existing Mission Record data structure.** Do not create a second mission structure.
 Do not invent a courier structure or a medical structure. The Mission Record remains
