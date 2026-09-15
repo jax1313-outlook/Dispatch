@@ -249,15 +249,27 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
                                          % day.strftime("%a %d %b")})
             day += timedelta(days=1)
 
-    # --- money after the empty miles ---
+    # --- money over every mile driven ---
+    # Mike Zachary, 2026-09-15: "rate floor should include all miles driven including
+    # return home." Loaded miles, the empty miles to pickup, and the run home from
+    # delivery. A leg nothing can measure is said, never counted as zero silently.
+    home = home_base()
+    return_leg = (distance.miles_between(card["destination"], home)
+                  if card.get("destination") else {"miles": None})
+    return_home = return_leg.get("miles")
     if rate is not None and miles:
-        total = miles + (deadhead or 0)
+        total = miles + (deadhead or 0) + (return_home or 0)
         effective = rate / total if total else None
         if effective is not None and effective < scoring._RATE_PER_MILE_FLOOR:
+            unmeasured = [name for name, leg in (("to pickup", deadhead), ("home", return_home))
+                          if leg is None]
             warnings.append({"code": "BELOW_FLOOR_AFTER_DEADHEAD",
-                             "text": "$%.2f a mile counting %d empty miles to pickup, below the "
-                                     "$%.2f floor." % (effective, round(deadhead or 0),
-                                                       scoring._RATE_PER_MILE_FLOOR)})
+                             "text": "$%.2f a mile over %d miles driven (%d loaded, %d empty to pickup, "
+                                     "%d home to %s), below the $%.2f floor.%s"
+                                     % (effective, round(total), round(miles), round(deadhead or 0),
+                                        round(return_home or 0), home, scoring._RATE_PER_MILE_FLOOR,
+                                        (" Miles %s could not be measured." % " and ".join(unmeasured))
+                                        if unmeasured else "")})
 
     # --- weight against what the truck is stated to carry ---
     weight = weight_of(card)
@@ -286,6 +298,7 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
         "position": position,
         "deadhead_miles": deadhead,
         "deadhead_basis": deadhead_basis,
+        "return_home_miles": return_home,
         "equipment": fit,
         "timing": {k: (v.isoformat(sep=" ", timespec="minutes") if hasattr(v, "isoformat") else v)
                    for k, v in timing.items()},

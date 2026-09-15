@@ -349,6 +349,11 @@ Nightly encrypted backup off-node whenever connectivity allows; the append-only 
 often. Destination is the home NAS. **"Recoverable" and "Portable" are procedures, not adjectives**
 — a restore test to a spare machine is part of the habit, not a claim.
 
+**Rotating backup drives sit beside the NAS** (Owner ruling, 2026-09-15: *"sit beside"*). Two
+rotating 4TB external drives, recognised by identity rather than drive letter, are backed up on the
+truck and swapped (`docs/operations/ROTATING_BACKUP_DRIVES.md`). They do not replace the nightly
+off-node NAS backup, which is still not built.
+
 ### What this means for where code goes
 
 - Anything that owns a record, a workflow or an audit entry belongs **on the node**.

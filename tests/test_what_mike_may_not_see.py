@@ -199,8 +199,23 @@ class TestWarnings:
         result = load_assessment.assess(
             {"origin": "Atlanta, GA", "destination": "Birmingham, AL", "rate": 700,
              "pickup_window": "2026-09-24 08:00"}, records=[], today=TODAY)
-        # 150 loaded + 345 empty from home base = $1.41 a mile.
+        # 150 loaded + 345 empty from home base, plus the run home = under $1.41 a mile.
         assert "BELOW_FLOOR_AFTER_DEADHEAD" in _codes(result)
+
+    def test_the_floor_counts_the_run_home(self):
+        """Mike Zachary, 2026-09-15: "rate floor should include all miles driven including
+        return home." Jacksonville to Atlanta and back: loaded miles alone clear the floor,
+        but the empty run home brings the load under it."""
+        card = {"origin": "Jacksonville, FL", "destination": "Atlanta, GA",
+                "pickup_window": "2026-09-24 08:00"}
+        loaded = load_assessment.assess(dict(card, rate=0.1), records=[], today=TODAY)["distance"]["miles"]
+        home = load_assessment.assess(dict(card, rate=0.1), records=[], today=TODAY)["return_home_miles"]
+        assert loaded and home, "the 22-lane table must know Jacksonville-Atlanta both ways"
+        # A rate that clears the floor over loaded miles but not over loaded plus the run home.
+        rate = 2.60 * loaded
+        result = load_assessment.assess(dict(card, rate=rate), records=[], today=TODAY)
+        floor = [w for w in result["warnings"] if w["code"] == "BELOW_FLOOR_AFTER_DEADHEAD"]
+        assert floor and "home to" in floor[0]["text"]
 
     def test_overweight_against_the_fleet_and_without_one(self):
         heavy = {"origin": "A", "destination": "B", "rate": 900, "weight_lbs": 5000}

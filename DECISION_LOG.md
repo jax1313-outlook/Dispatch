@@ -1505,3 +1505,18 @@ The portal-access email at COMMIT and the Customer Alerts for securement and fre
 Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly worksheet, printing and DOT packet) is kept on its branch and not merged. Its database additions would need Mike's confirmation before reaching the operator's database. Printing and the DOT packet (one added table for stored document copies) are to be taken out separately later with that confirmation. **Consequence recorded:** until the receipt-review fix is merged, a scanned fuel receipt can still replace driver-typed values without review.
 
 ---
+
+## 2026-09-15 — Rate floor counts every mile; no loading time; rotating drives sit beside the NAS
+
+**PR:** (this change)
+**Capability:** `dispatch/load_assessment.py` (rate floor warning), `CLAUDE.md` §5A R8 (addition).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** On Track A's and Track C's open questions: *"1) this feature is not needed"* (loading/unloading time in drive estimates), *"3) rate floor should include all miles driven including return home."*, *"4)sit beside"* (rotating backup drives and the home NAS).
+
+**Rate floor.** The below-floor warning now divides the rate by loaded miles plus the empty miles to pickup plus the run home from delivery to the declared home base, and says each leg. A leg nothing can measure is named as unmeasured rather than silently counted. The score itself is unchanged.
+
+**Drive estimates.** No loading or unloading time is added; the estimate stays drive time plus the required breaks and resets.
+
+**Backups.** Rotating drives sit beside the home NAS in R8; `CLAUDE.md` §5A records it. The NAS backup remains unbuilt.
+
+---
