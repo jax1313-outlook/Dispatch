@@ -649,3 +649,22 @@
 .drawer-form label.action { margin-top: 10px; }
 .way-out-form { display: inline-block; margin: 0; }
 button.way-out { cursor: pointer; font-family: inherit; }
+
+/* ------------------------------------------------ TALK: voice capture ---- */
+/* Same cards as the Mission Actions column. The talk button is the one large
+   target; the words box is the fallback that works on any tablet. */
+.action.voice-talk { min-height: 110px; justify-content: center; align-items: center; text-align: center; }
+.action.voice-talk .action-name { font-size: 1.35rem; color: var(--key); }
+.action.voice-talk.listening { border-color: var(--go); background: #0d2418; }
+.action.voice-talk.listening .action-name { color: #7fe3a4; }
+.voice-live { min-height: 1.2em; font-size: 0.95rem; color: var(--ink-dim); }
+.voice-ask { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.05em; color: var(--key); }
+.drawer-form textarea.voice-words {
+    min-height: 140px; padding: 10px 12px; font-size: 1.05rem; font-family: inherit;
+    color: var(--ink); background: var(--panel);
+    border: 1px solid var(--edge-lit); border-radius: 7px; resize: vertical;
+}
+.drawer-form .action.voice-log { margin-top: 6px; }
+.voice-results { margin: 0; padding-left: 1.2em; font-size: 0.85rem; color: var(--ink-dim); }
+.voice-results li { margin: 4px 0; }
+.voice-results li.voice-not-logged { color: #d2a13b; }

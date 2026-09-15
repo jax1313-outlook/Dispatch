@@ -50,6 +50,8 @@ DRIVER_COCKPIT_ENDPOINTS = frozenset({
     "joe_portal.cockpit_photos",
     "joe_portal.cockpit_exception",
     "joe_portal.cockpit_fuel_receipt",
+    # Log a load by voice (2026-09-15). Capture only; see portal/voice_capture.py.
+    "joe_portal.cockpit_voice_capture",
 })
 
 #: A load in one of these is finished; a driver sign-in cannot act on it.
@@ -1108,6 +1110,45 @@ def cockpit_fuel_receipt():
     if not record_id or not sandbox.get(record_id):
         return redirect(url_for("joe_portal.portal_home"))
     return _back_to_cockpit(record_id)
+
+
+# ---- Log a load by voice (2026-09-15) --------------------------------------
+#
+# Self-contained block. The TALK card and its drawer in joe_portal.html post
+# here. The tablet turns speech into words; only the words arrive. The work is
+# portal/voice_capture.py, which reuses the dictation reader and the capture
+# contract's own functions. Capture only: nothing is committed, passed or sent.
+
+@joe_bp.route("/portal/voice-capture", methods=["POST"])
+def cockpit_voice_capture():
+    """Words from the voice drawer -> loads logged, one question, the read-back.
+
+    JSON `{"text", "answer"?}` from the drawer's script answers JSON. A plain
+    form post (a browser with no script) says the read-back in the JOE line and
+    comes back to the cockpit.
+    """
+    from portal import voice_capture
+
+    body = request.get_json(silent=True) if request.is_json else None
+    source = body if isinstance(body, dict) else request.form
+    text = str(source.get("text") or "")
+    answer = source.get("answer")
+    answer = None if answer is None else str(answer)
+    driver = str(session.get("user_id") or session.get("driver_id") or "driver-pin").strip()
+
+    result = voice_capture.capture_spoken(text, driver=driver, answer=answer)
+    if body is not None:
+        return jsonify(result), (200 if result["ok"] else 400)
+
+    line = result["say"]
+    waiting = [load["words"] for load in result["loads"] if load["status"] == voice_capture.QUESTION]
+    if waiting:
+        line += " Say it again with the rate: %s" % waiting[0]
+    flash(line)
+    record_id = str(request.form.get("record_id") or "").strip()
+    if record_id and sandbox.get(record_id):
+        return _back_to_cockpit(record_id)
+    return redirect(url_for("joe_portal.portal_home"))
 
 
 @joe_bp.route("/portal/mission/<path:record_id>")

@@ -236,6 +236,14 @@
   </button>
   {% endif %}
 
+  {# ---------------------------------------------------- TALK (voice capture) #}
+  {# Log a load by voice, with or without a mission shown: capture comes before
+     any commitment. Opens the voice drawer below. #}
+  <button class="action voice-card" id="voice-card" type="button" data-drawer="voice" data-side="right">
+    <span class="action-name">TALK</span>
+    <span class="action-sub">Log a load by voice</span>
+  </button>
+
   {% if arrive.available %}
   <button class="action quiet" data-drawer="arrival" data-side="right">
     <span class="action-name">SEE ARRIVAL NOTICE</span>
@@ -647,6 +655,216 @@
   </div>
 </aside>
 {% endif %}
+
+{# ------------------------------------------------ VOICE DRAWER (TALK card) #}
+{# Log a load by voice (2026-09-15). Self-contained block -- markup and script.
+   The tablet turns speech into words, with the browser's own listening where it
+   has it, or the keyboard's microphone key everywhere. Only the words are sent;
+   no sound ever leaves the tablet for Dispatch. The words go to
+   /portal/voice-capture, which logs each load, asks its one question, and says
+   back what was logged. Capture only: nothing is booked, passed or sent. #}
+<aside class="drawer drawer-right" id="drawer-voice" hidden role="dialog" aria-label="Log a load by voice" data-sticky="1">
+  <header class="drawer-head">
+    <span class="drawer-title">TALK - LOG A LOAD BY VOICE</span>
+    <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
+  </header>
+  <div class="drawer-body drawer-actions">
+    <p class="drawer-note">Read the listing: city to city, the rate, the pickup. Say NEXT between loads. Nothing is booked from here.</p>
+    <button class="action voice-talk" id="voice-talk" type="button" hidden>
+      <span class="action-name" id="voice-talk-name">TAP TO TALK</span>
+      <span class="action-sub" id="voice-talk-sub">Stops when you tap again or stop talking</span>
+    </button>
+    <div class="voice-live" id="voice-live" role="status" aria-live="polite"></div>
+    <p class="voice-ask" id="voice-ask" role="status" aria-live="assertive" hidden></p>
+    <form class="drawer-form voice-form" id="voice-form" method="post"
+          action="{{ url_for('joe_portal.cockpit_voice_capture') }}"
+          data-voice-url="{{ url_for('joe_portal.cockpit_voice_capture') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="record_id" value="{{ record.id }}">
+      <label for="voice-words">Or tap the microphone key on the keyboard and talk</label>
+      <textarea id="voice-words" class="voice-words" name="text" rows="6" spellcheck="false"
+                autocomplete="off" placeholder="Jacksonville to Savannah, dry van, twenty two hundred, pickup Thursday. Next."></textarea>
+      <button class="action voice-log" id="voice-log" type="submit">
+        <span class="action-name">LOG IT</span>
+        <span class="action-sub">Logged and read back</span>
+      </button>
+    </form>
+    <button class="action quiet" id="voice-mute" type="button" aria-pressed="true">
+      <span class="action-name" id="voice-mute-name">READ-BACK: ON</span>
+      <span class="action-sub">Spoken in the headset. Remembered on this tablet.</span>
+    </button>
+    <ol class="voice-results" id="voice-results" aria-label="Loads logged by voice"></ol>
+  </div>
+</aside>
+<script>
+(function () {
+  var form = document.getElementById('voice-form');
+  if (!form || !window.fetch || !window.JSON) { return; }  // the plain form still posts
+  var box = document.getElementById('voice-words');
+  var talk = document.getElementById('voice-talk');
+  var talkName = document.getElementById('voice-talk-name');
+  var talkSub = document.getElementById('voice-talk-sub');
+  var live = document.getElementById('voice-live');
+  var ask = document.getElementById('voice-ask');
+  var results = document.getElementById('voice-results');
+  var mute = document.getElementById('voice-mute');
+  var muteName = document.getElementById('voice-mute-name');
+  var logBtn = document.getElementById('voice-log');
+  var joeLine = function (text) { var l = document.getElementById('joe-line'); if (l) { l.textContent = text; } };
+  var KEY = 'dispatch.voice.readback';
+  var pending = [];   // loads waiting on their one question, in the order said
+  var busy = false;
+
+  // Read-back on or off, remembered on this tablet only.
+  var readbackOn = function () {
+    try { return window.localStorage.getItem(KEY) !== 'off'; } catch (e) { return true; }
+  };
+  var paintMute = function () {
+    var on = readbackOn();
+    muteName.textContent = on ? 'READ-BACK: ON' : 'READ-BACK: OFF';
+    mute.setAttribute('aria-pressed', on ? 'true' : 'false');
+  };
+  var canSpeak = !!(window.speechSynthesis && window.SpeechSynthesisUtterance);
+  if (!canSpeak) { mute.hidden = true; }
+  mute.addEventListener('click', function () {
+    var on = !readbackOn();
+    try { window.localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) {}
+    if (!on && canSpeak) { window.speechSynthesis.cancel(); }
+    paintMute();
+  });
+  paintMute();
+
+  var speak = function (text) {
+    if (!text || !canSpeak || !readbackOn()) { return; }
+    try {
+      window.speechSynthesis.cancel();
+      var u = new window.SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+
+  var paintAsk = function () {
+    if (pending.length) {
+      ask.textContent = pending[0].say;
+      ask.hidden = false;
+      box.placeholder = 'Say or type the rate. Say skip to leave it.';
+    } else {
+      ask.textContent = '';
+      ask.hidden = true;
+      box.placeholder = 'Jacksonville to Savannah, dry van, twenty two hundred, pickup Thursday. Next.';
+    }
+  };
+
+  var addResult = function (load) {
+    var li = document.createElement('li');
+    li.className = 'voice-result' + (load.status === 'NOT LOGGED' ? ' voice-not-logged' : '');
+    li.textContent = load.say;
+    results.insertBefore(li, results.firstChild);
+  };
+
+  var send = function () {
+    var words = box.value.trim();
+    if (busy || !words) { return; }
+    var answering = pending.length > 0;
+    var payload = answering ? {text: pending[0].words, answer: words} : {text: words};
+    busy = true;
+    logBtn.disabled = true;
+    fetch(window.location.origin + form.dataset.voiceUrl, {method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
+      body: JSON.stringify(payload)})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        busy = false;
+        logBtn.disabled = false;
+        var loads = d.loads || [];
+        var shown = [], spoken = [];
+        if (answering && loads.length && loads[0].status !== 'QUESTION') { pending.shift(); }
+        loads.forEach(function (load) {
+          if (load.status === 'QUESTION') {
+            if (!answering) { pending.push(load); }
+            return;
+          }
+          addResult(load);
+          shown.push(load.say);
+          spoken.push(load.speak);
+        });
+        if (pending.length) { shown.push(pending[0].say); spoken.push(pending[0].speak); }
+        if (!loads.length) { shown = [d.say]; spoken = [d.speak]; }
+        box.value = '';
+        live.textContent = '';
+        paintAsk();
+        joeLine(shown.join(' '));
+        speak(spoken.join(' '));
+      })
+      .catch(function () {
+        busy = false;
+        logBtn.disabled = false;
+        var line = 'NOT LOGGED. THE WORDS ARE STILL IN THE BOX.';
+        joeLine(line);
+        live.textContent = line;
+        speak(line);
+      });
+  };
+
+  form.addEventListener('submit', function (e) { e.preventDefault(); send(); });
+
+  // The browser's own listening, where it has it. Words only; it stops on a
+  // tap or after a few quiet seconds, then logs what it heard.
+  var Listen = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Listen) { return; }
+  talk.hidden = false;
+  var rec = null, listening = false, gotWords = false, quiet = null;
+  var stop = function () { if (rec && listening) { try { rec.stop(); } catch (e) {} } };
+  var paintTalk = function () {
+    talk.classList.toggle('listening', listening);
+    talkName.textContent = listening ? 'LISTENING - TAP TO STOP' : 'TAP TO TALK';
+  };
+  talk.addEventListener('click', function () {
+    if (listening) { stop(); return; }
+    if (canSpeak) { window.speechSynthesis.cancel(); }
+    var before = box.value.trim();
+    gotWords = false;
+    rec = new Listen();
+    rec.lang = 'en-US';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = function (ev) {
+      var said = '';
+      for (var i = 0; i < ev.results.length; i++) { said += ev.results[i][0].transcript + ' '; }
+      said = said.replace(/\s+/g, ' ').trim();
+      if (said) { gotWords = true; }
+      live.textContent = said;
+      box.value = (before ? before + ' ' : '') + said;
+      clearTimeout(quiet);
+      quiet = setTimeout(stop, 5000);
+    };
+    rec.onerror = function (ev) {
+      var why = ev && ev.error;
+      talkSub.textContent = (why === 'not-allowed' || why === 'service-not-allowed')
+        ? 'Listening is not allowed on this screen. Use the microphone key on the keyboard.'
+        : (why === 'network')
+          ? 'Listening needs signal. Use the microphone key on the keyboard.'
+          : 'Nothing heard. Tap to talk again.';
+    };
+    rec.onend = function () {
+      listening = false;
+      clearTimeout(quiet);
+      paintTalk();
+      if (gotWords && box.value.trim()) { send(); }
+    };
+    try {
+      rec.start();
+      listening = true;
+      talkSub.textContent = 'Stops when you tap again or stop talking';
+      quiet = setTimeout(stop, 8000);
+    } catch (e) {
+      talkSub.textContent = 'Listening did not start. Use the microphone key on the keyboard.';
+    }
+    paintTalk();
+  });
+})();
+</script>
 
 <script>
 // This page does not extend base.html, so it carries its own CSRF header for
