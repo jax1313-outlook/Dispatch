@@ -661,8 +661,9 @@
    The tablet turns speech into words, with the browser's own listening where it
    has it, or the keyboard's microphone key everywhere. Only the words are sent;
    no sound ever leaves the tablet for Dispatch. The words go to
-   /portal/voice-capture, which logs each load, asks its one question, and says
-   back what was logged. Capture only: nothing is booked, passed or sent. #}
+   /portal/voice-capture, which logs each load and says back what was logged.
+   Nothing is asked: a load without a rate is read back RATE PENDING (Owner
+   rulings 2026-09-15). Capture only: nothing is booked, passed or sent. #}
 <aside class="drawer drawer-right" id="drawer-voice" hidden role="dialog" aria-label="Log a load by voice" data-sticky="1">
   <header class="drawer-head">
     <span class="drawer-title">TALK - LOG A LOAD BY VOICE</span>
@@ -675,7 +676,6 @@
       <span class="action-sub" id="voice-talk-sub">Stops when you tap again or stop talking</span>
     </button>
     <div class="voice-live" id="voice-live" role="status" aria-live="polite"></div>
-    <p class="voice-ask" id="voice-ask" role="status" aria-live="assertive" hidden></p>
     <form class="drawer-form voice-form" id="voice-form" method="post"
           action="{{ url_for('joe_portal.cockpit_voice_capture') }}"
           data-voice-url="{{ url_for('joe_portal.cockpit_voice_capture') }}">
@@ -705,14 +705,12 @@
   var talkName = document.getElementById('voice-talk-name');
   var talkSub = document.getElementById('voice-talk-sub');
   var live = document.getElementById('voice-live');
-  var ask = document.getElementById('voice-ask');
   var results = document.getElementById('voice-results');
   var mute = document.getElementById('voice-mute');
   var muteName = document.getElementById('voice-mute-name');
   var logBtn = document.getElementById('voice-log');
   var joeLine = function (text) { var l = document.getElementById('joe-line'); if (l) { l.textContent = text; } };
   var KEY = 'dispatch.voice.readback';
-  var pending = [];   // loads waiting on their one question, in the order said
   var busy = false;
 
   // Read-back on or off, remembered on this tablet only.
@@ -744,18 +742,6 @@
     } catch (e) {}
   };
 
-  var paintAsk = function () {
-    if (pending.length) {
-      ask.textContent = pending[0].say;
-      ask.hidden = false;
-      box.placeholder = 'Say or type the rate. Say skip to leave it.';
-    } else {
-      ask.textContent = '';
-      ask.hidden = true;
-      box.placeholder = 'Jacksonville to Savannah, dry van, twenty two hundred, pickup Thursday. Next.';
-    }
-  };
-
   var addResult = function (load) {
     var li = document.createElement('li');
     li.className = 'voice-result' + (load.status === 'NOT LOGGED' ? ' voice-not-logged' : '');
@@ -766,8 +752,7 @@
   var send = function () {
     var words = box.value.trim();
     if (busy || !words) { return; }
-    var answering = pending.length > 0;
-    var payload = answering ? {text: pending[0].words, answer: words} : {text: words};
+    var payload = {text: words};
     busy = true;
     logBtn.disabled = true;
     fetch(window.location.origin + form.dataset.voiceUrl, {method: 'POST', credentials: 'same-origin',
@@ -779,21 +764,15 @@
         logBtn.disabled = false;
         var loads = d.loads || [];
         var shown = [], spoken = [];
-        if (answering && loads.length && loads[0].status !== 'QUESTION') { pending.shift(); }
+        // Every load is logged or said NOT LOGGED. Nothing is asked.
         loads.forEach(function (load) {
-          if (load.status === 'QUESTION') {
-            if (!answering) { pending.push(load); }
-            return;
-          }
           addResult(load);
           shown.push(load.say);
           spoken.push(load.speak);
         });
-        if (pending.length) { shown.push(pending[0].say); spoken.push(pending[0].speak); }
         if (!loads.length) { shown = [d.say]; spoken = [d.speak]; }
         box.value = '';
         live.textContent = '';
-        paintAsk();
         joeLine(shown.join(' '));
         speak(spoken.join(' '));
       })

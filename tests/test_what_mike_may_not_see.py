@@ -227,11 +227,26 @@ class TestWarnings:
         heavier = dict(heavy, weight_lbs=48000)
         assert "OVERWEIGHT" in _codes(load_assessment.assess(heavier, fleet=[], today=TODAY))
 
-    def test_a_card_without_a_rate_needs_a_rate(self):
+    def test_a_card_without_a_rate_is_rate_pending_not_a_warning(self):
+        """Was NEEDS_RATE, first in the warning list. **Owner ruling, 2026-09-15:**
+        *"holding a load with out a rate will need an astric or blank is not
+        negative."* A neutral line, not a warning."""
         result = load_assessment.assess({"origin": "A", "destination": "B"}, today=TODAY)
-        assert result["needs_rate"] is True
-        assert _codes(result)[0] == "NEEDS_RATE"
+        assert result["rate_pending"] is True
+        assert result["rate_line"] == "* Rate pending"
+        assert "NEEDS_RATE" not in _codes(result)
+        assert not any("rate" in w["text"].lower() for w in result["warnings"])
         assert "MISSING_FACTS" in _codes(result)
+
+    def test_the_floor_check_does_not_fire_without_a_rate(self):
+        """Rate-dependent warnings simply do not run: the load that was below the
+        floor at $700 says nothing about the floor with no rate."""
+        card = {"origin": "Atlanta, GA", "destination": "Birmingham, AL",
+                "pickup_window": "2026-09-24 08:00"}
+        assert "BELOW_FLOOR_AFTER_DEADHEAD" not in _codes(
+            load_assessment.assess(card, records=[], today=TODAY))
+        assert "BELOW_FLOOR_AFTER_DEADHEAD" not in _codes(
+            load_assessment.assess(dict(card, rate=0), records=[], today=TODAY))
 
 
 class TestScoreBands:
@@ -239,6 +254,36 @@ class TestScoreBands:
         assert helpers.card_visual(scoring.MAX_SCORE)["css"] == "card-high"
         assert helpers.card_visual(81)["css"] == "card-high"
         assert helpers.card_visual(80)["css"] == "card-strong"
+
+    def test_with_the_rate_pending_the_bands_are_the_same_shares_of_sixty(self):
+        """Owner ruling 2026-09-15, "2a": scored without the rate factor and read
+        against the maximum that excludes it."""
+        assert scoring.MAX_SCORE_WITHOUT_RATE == scoring.MAX_SCORE - scoring.RATE_POINTS == 60
+        assert helpers.card_visual(54, rate_pending=True)["css"] == "card-high"    # 0.90 of 60
+        assert helpers.card_visual(53, rate_pending=True)["css"] == "card-strong"
+        assert helpers.card_visual(45, rate_pending=True)["css"] == "card-strong"  # 0.75 of 60
+        assert helpers.card_visual(36, rate_pending=True)["css"] == "card-moderate"
+        assert helpers.card_visual(24, rate_pending=True)["css"] == "card-low"
+        assert helpers.format_score(52, True) == "52 of 60 · * rate pending"
+        assert helpers.format_score(70) == "70"
+
+    def test_a_missing_rate_is_not_a_penalty(self):
+        """The same load scores exactly the other factors: nothing added for the
+        rate, nothing taken away, and never above sixty."""
+        rated = {"origin": "Jacksonville, FL", "destination": "Savannah, GA",
+                 "distance_miles": 140, "rate": 200, "equipment_match": "match"}
+        pending = dict(rated)
+        pending.pop("rate")
+        # A below-floor rate earns the rate factor 0 points, so the two differ
+        # only in which maximum they are read against.
+        assert scoring.compute_score(pending) == scoring.compute_score(rated)
+        assert scoring.score_max_for(pending) == 60 and scoring.score_max_for(rated) == 90
+        excellent = dict(rated, rate=900)
+        assert scoring.compute_score(excellent) - scoring.compute_score(pending) == 30
+        assert scoring.compute_score({"load_id": "x"}) <= 60
+        result = scoring.score_load(pending)
+        assert scoring.rate_pending(pending) is True and result["score"] <= 60
+        assert "below floor" not in result["economic_opportunity_flag"].lower()
 
     def test_the_divergent_scorer_is_on_no_screen_path(self):
         """dispatch/opportunities.py carries a second scorer used only by tests.
@@ -274,7 +319,10 @@ class TestThroughTheScreens:
         assert "below the $2.50 floor" in page
         assert "Earliest legal delivery" not in page
 
-    def test_a_swept_load_without_a_rate_says_needs_rate(self, client):
+    def test_a_swept_load_without_a_rate_is_scored_with_the_rate_pending(self, client):
+        """Was: unscored, "Score: needs rate". **Owner ruling, 2026-09-15** --
+        *"(a) a score from everything except the rate, marked '* rate pending'"*:
+        **"2a"**."""
         from portal.models import opportunity_card
 
         opportunity_card.from_acquired([{
@@ -282,6 +330,43 @@ class TestThroughTheScreens:
             "destination": "Savannah, GA", "pickup_window": "2099-09-22 08:00",
             "data_origin": "SIMULATED"}])
         entry = sandbox.get("SBX-DISPATCH-NR-1")
-        assert entry["score"] is None
-        assert entry["card_data"]["needs_rate"] is True
-        assert "Score: needs rate" in client.get("/dispatch").get_data(as_text=True)
+        card = entry["card_data"]
+        assert card["rate_pending"] is True and card["score_max"] == 60
+        assert "needs_rate" not in card
+        assert entry["score"] is not None and 0 <= entry["score"] <= 60
+        # Not lower than the same card scored with the rate factor left out.
+        other_factors = scoring.compute_score(dict(card, rate=None))
+        assert entry["score"] >= other_factors
+        page = client.get("/dispatch").get_data(as_text=True)
+        assert "Score %s of 60 · * rate pending" % entry["score"] in page
+        assert "* Rate pending" in page
+        assert "needs rate" not in page.lower()
+        assert "<strong>Rate:</strong> *" in page
+
+    def test_the_inquiry_threshold_compares_like_with_like(self, client):
+        """The threshold (81 of 90) is a share. A rate-pending card is measured as a
+        share of 60: 54 clears it, 53 does not. A rated card is unchanged. Only the
+        gate is compared; the draft is still a human-review draft and nothing sends."""
+        def entry(sid, score, pending):
+            sandbox.create_entry(source_type="dispatch", source_id=sid, title=sid,
+                                 card_data={"broker_email": "b@example.com",
+                                            "rate_pending": pending}, score=score)
+            return client.post("/api/inquiry/create",
+                               json={"sandbox_id": "SBX-DISPATCH-%s" % sid}).get_json()
+
+        assert entry("P54", 54, True)["status"] == "DRAFT_CREATED"
+        low = entry("P53", 53, True)
+        assert low["status"] == "NOT_READY" and "53 of 60 · * rate pending" in low["reason"]
+        assert "(54)" in low["reason"]
+        assert entry("R80", 80, False)["status"] == "NOT_READY"
+        assert entry("R81", 81, False)["status"] == "DRAFT_CREATED"
+
+    def test_the_loads_screen_shows_the_rate_as_an_asterisk(self, client):
+        client.post("/loads/paste", data={"pasted": "Jacksonville, FL to Savannah, GA\n"
+                                                    "Pickup: 2099-09-22 08:00"})
+        entry = next(iter(sandbox.get_all().values()))
+        page = client.get("/loads").get_data(as_text=True)
+        assert '<span class="cand-rate">*</span>' in page
+        assert "Score %s of 60 · * rate pending" % entry["score"] in page
+        assert "* Rate pending" in page
+        assert "&#9888; * Rate pending" not in page  # a neutral line, not a warning

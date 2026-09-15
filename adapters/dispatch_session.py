@@ -294,16 +294,15 @@ class DispatchSession:
         return self.post("/api/joe/driver-status", status=status,
                          mission=mission, note=note)
 
-    def capture_opportunity(self, *, source_board: str, origin: str,
-                            destination: str, rate, **optional) -> Result:
+    def capture_opportunity(self, **fields) -> Result:
         """Class 1. The seventh contract.
 
-        Board, lane and rate are required; everything after money is optional,
+        Nothing is required (Owner rulings, 2026-09-15): a capture without a rate
+        is held with the rate pending, and one without a lane keeps what was
+        said. The node refuses only a capture with no freight fact at all,
         because a capture with gaps beats a listing lost to the next screen.
         """
-        return self.post("/api/joe/opportunity", source_board=source_board,
-                         origin=origin, destination=destination, rate=rate,
-                         **optional)
+        return self.post("/api/joe/opportunity", **fields)
 
     def send_notice(self, *, confirmed: bool, **body) -> Result:
         """**Class 2 — the read-back happened before this was called.**

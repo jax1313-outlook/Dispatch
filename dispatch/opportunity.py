@@ -73,17 +73,43 @@ ONTO_MISSION_CARD = {
 #: part of a load's identity, so the same load posted to DAT and to Truckstop
 #: read as two loads. Brokers post to several boards; a lane and a rate are what
 #: make a load the same load, and where it was seen is not.
-REQUIRED = ("origin", "destination", "rate")
+#:
+#: **Owner rulings, 2026-09-15** (after the Truck Smarter test, where many loads
+#: are listed with no rate): *"holding a load with out a rate will need an astric
+#: or blank is not negative."* On the lane refusal: *"I do not use lane for any
+#: thing. delete."* Asked whether a capture with no pickup or delivery city should
+#: still save what it heard: **"1a"**.
+#:
+#: So nothing is required any more. The three facts a card leads with keep their
+#: place at the front of `FIELDS` under `KEY_FACTS`, and `parse_dictation` still
+#: names the ones that were not heard so a card can show the gap -- but no capture
+#: is refused for want of any of them. A capture is refused only when it carries
+#: no freight fact at all (`FREIGHT_FACTS`).
+KEY_FACTS = ("origin", "destination", "rate")
+
+#: What a capture may not be logged without. **Empty, by Owner ruling
+#: 2026-09-15.** Kept as a name because it is published in the mission-template
+#: contract (`GET /api/joe/mission-template`, `opportunity.required`), and an empty
+#: list there is the honest answer: JOE may send a capture without any one field.
+REQUIRED: tuple = ()
 
 #: Everything the contract carries. Freeform where the plan says freeform.
 #:
-#: `source_board` is here and not in REQUIRED: **kept, not tracked.** Rows
-#: already carry it, dropping the column would lose what they hold, and a field
-#: nobody is asked for costs nothing.
-FIELDS = REQUIRED + (
+#: `source_board` is **kept, not tracked.** Rows already carry it, dropping the
+#: column would lose what they hold, and a field nobody is asked for costs nothing.
+FIELDS = KEY_FACTS + (
     "source_board", "pieces_weight", "equipment", "pickup_date",
     "delivery_date", "contact", "notes", "captured_via",
 )
+
+#: The fields that say something about the freight. A capture with none of these
+#: was nothing heard, and that is the one capture still refused. `source_board`
+#: and `captured_via` describe where a capture came from, not the load.
+FREIGHT_FACTS = tuple(k for k in FIELDS if k not in ("source_board", "captured_via"))
+
+#: What the read-back and the card say when no rate was given. Not a warning and
+#: not a penalty: *"an astric or blank is not negative."*
+RATE_PENDING = "RATE PENDING"
 
 #: Channels, **named by nature and never by product** (Contract-First Rule).
 CHANNELS = ("VOICE", "CHAT", "MISSIONSCREEN", "SWEEP")
@@ -155,21 +181,33 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def validate(payload: dict) -> list:
-    """What is missing. Empty list means the capture is loggable.
+def has_freight_fact(payload: dict) -> bool:
+    """Whether a capture carries anything about the freight at all.
 
-    **Lane and rate. Nothing else.** §2: *"Sparse capture is valid capture ... a
-    capture with gaps beats a listing lost to the next screen."* The board came
-    off the list on 2026-09-08 by Owner ruling.
+    A rate of zero is a fact (it is a number a broker could have said); a blank
+    is not. `_rate` still refuses a rate that is not a number.
+    """
+    for key in FREIGHT_FACTS:
+        if key == "rate":
+            if _rate((payload or {}).get("rate")) is not None:
+                return True
+        elif _clean((payload or {}).get(key)):
+            return True
+    return False
+
+
+def validate(payload: dict) -> list:
+    """What is wrong. Empty list means the capture is loggable.
+
+    **Nothing is required** (Owner rulings, 2026-09-15: no lane refusal, "1a";
+    a load without a rate is held with an asterisk). §2 already said *"a capture
+    with gaps beats a listing lost to the next screen."* The only capture refused
+    is one that carries no freight fact at all -- nothing heard -- or a rate that
+    is not a number.
     """
     problems = []
-    for key in REQUIRED:
-        if key == "rate":
-            continue
-        if not _clean(payload.get(key)):
-            problems.append("%s is required" % key)
-    if _rate(payload.get("rate")) is None:
-        problems.append("rate is required")
+    if not has_freight_fact(payload or {}):
+        problems.append("nothing heard: a capture needs at least one freight fact")
     # **The channel is deliberately not validated here.** It is a server-side
     # classification of how a capture arrived, not freight the Owner dictated,
     # and §2 is clear about the priority: *"a capture with gaps beats a listing
@@ -247,9 +285,19 @@ def classify(payload: dict, existing: list) -> tuple:
     flagged POSSIBLE DUPLICATE ... the engine never silently guesses two loads
     are one."*
 
-    A different board or a different lane is a different load; nothing else is
-    considered. Same board and same lane makes it a candidate, and then the
-    money and the date have to agree before it is called one load.
+    A different lane is a different load; nothing else is considered. Same lane
+    makes it a candidate, and then the money and the date have to agree before
+    it is called one load.
+
+    **Missing facts are unknown, never a match** (2026-09-15, captures without a
+    rate or a city are now logged). Two captures that both lack a rate are not the
+    same load for that reason, and a lane half-heard is not a lane that agrees:
+
+      * a lane part known on both sides and different -> a different load;
+      * a lane part unknown on either side -> at most AMBIGUOUS, and only when at
+        least one lane part is known on both sides and agrees. With no lane part
+        in common there is no evidence of a duplicate at all, so it is NEW;
+      * a rate unknown on either side -> at most AMBIGUOUS.
     """
     from dispatch import rehearsal
 
@@ -267,7 +315,20 @@ def classify(payload: dict, existing: list) -> tuple:
         # The board is deliberately NOT part of a load's identity. Ruled
         # 2026-09-08: a broker posts the same load to several boards, and two
         # sightings of one load are one load. The lane and the rate decide.
-        if _lane(candidate) != lane:
+        theirs = _lane(candidate)
+        agree = differ = unknown = 0
+        for mine, other_part in zip(lane, theirs):
+            if not mine or not other_part:
+                unknown += 1
+            elif mine == other_part:
+                agree += 1
+            else:
+                differ += 1
+        if differ or not agree:
+            continue
+        if unknown:
+            # Half a lane that agrees is a possible duplicate, never a merge.
+            ambiguous = ambiguous or candidate
             continue
 
         other = candidate.get("rate")
@@ -500,8 +561,8 @@ def _spoken_number(text: str):
     stand-in for silence.**
 
     Handles `$750`, `750`, `750 dollars`, `seven fifty`, `1,850`. A number it
-    cannot read is left for the caller to ask about, because section 6 allows
-    exactly one question and this is what it is for.
+    cannot read is left out, and the capture is saved with the rate pending
+    (Owner ruling 2026-09-15: nothing asks for it).
     """
     t = text.lower().replace(",", "")
 
@@ -552,9 +613,9 @@ def parse_dictation(text: str) -> dict:
     2. **Nothing he said is discarded.** Text the parser cannot place goes to
        `notes` rather than the floor. A capture that quietly loses half a
        sentence is worse than one that admits it did not understand.
-    3. **At most one question, and only about the rate.** `missing` names what a
-       caller may ask for; the rate is the only entry that ever justifies asking,
-       per section 6.
+    3. **No question.** `missing` names which of the key facts (`KEY_FACTS`) were
+       not heard, so a card can show the gap. Nothing asks for them: Owner
+       ruling 2026-09-15, *"3 yes stop asking rate"*.
 
     Returns `{"fields": {...}, "missing": [...], "heard": "..."}`.
     """
@@ -684,7 +745,7 @@ def parse_dictation(text: str) -> dict:
     for key in ("pieces_weight",):
         fields.setdefault(key, "")
 
-    missing = [k for k in REQUIRED if not str(fields.get(k) or "").strip()]
+    missing = [k for k in KEY_FACTS if not str(fields.get(k) or "").strip()]
     if fields.get("rate") is not None:
         missing = [m for m in missing if m != "rate"]
 
@@ -694,34 +755,43 @@ def parse_dictation(text: str) -> dict:
 
 
 def one_question(missing: list) -> str:
-    """The single question a capture may ask, and only about the rate.
+    """The question a capture asks. **Always "" now.**
 
-    Section 6: *"Joe asks at most one question, and only for the rate. Missing
-    rate -> 'RATE?' -- Owner answers or says 'skip'; Joe logs either way. Never
-    more than one question per capture; speed outranks completeness."*
-
-    Anything else missing is logged missing. Returns "" when there is nothing
-    worth asking.
+    Section 6 used to allow one question, for the rate: *"Missing rate ->
+    'RATE?'"*. **Superseded by Owner ruling, 2026-09-15:** *"3 yes stop asking
+    rate"* -- a load without a rate is saved with the rate pending. Kept as a
+    function so a caller that still asks it gets the ruled answer: nothing.
     """
-    return "RATE?" if "rate" in (missing or []) else ""
+    del missing
+    return ""
 
 
 def echo(record: dict) -> str:
     """The line Joe says back. §6: *"LOGGED. OPPORTUNITY [id]. [board], [lane],
     $[rate], [pickup]."*
 
-    Declarative, in the locked voice. Nothing that was not captured appears.
+    Declarative, in the locked voice. Nothing that was not captured appears. A
+    capture with no rate says RATE PENDING where the rate would be (Owner ruling
+    2026-09-15: *"an astric or blank is not negative"*); a lane half-heard says
+    only the half that was heard.
     """
     parts = ["LOGGED.", "OPPORTUNITY %s." % record.get("opportunity_id", "")]
     board = _clean(record.get("source_board"))
     if board:
         parts.append("%s," % board.upper())
-    lane = "%s TO %s" % (_clean(record.get("origin")).upper(),
-                         _clean(record.get("destination")).upper())
-    parts.append("%s," % lane)
+    origin = _clean(record.get("origin")).upper()
+    destination = _clean(record.get("destination")).upper()
+    if origin and destination:
+        parts.append("%s TO %s," % (origin, destination))
+    elif origin:
+        parts.append("FROM %s," % origin)
+    elif destination:
+        parts.append("TO %s," % destination)
     rate = record.get("rate")
     if rate is not None:
         parts.append("$%s," % ("%.2f" % rate).rstrip("0").rstrip("."))
+    else:
+        parts.append("%s," % RATE_PENDING)
     pickup = _clean(record.get("pickup_date"))
     if pickup:
         parts.append("PICKUP %s." % pickup.upper())

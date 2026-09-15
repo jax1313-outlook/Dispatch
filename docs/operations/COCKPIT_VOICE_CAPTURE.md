@@ -63,8 +63,10 @@ browser that has it.
    > *"Jacksonville Florida to Savannah Georgia, dry van, twenty two hundred, pickup
    > Thursday six a.m., broker is Coastal."*
 
-   Order is a help, not a rule. **City to city and the rate are what a load needs.** Anything
-   not placed is kept in the card's notes rather than dropped.
+   Order is a help, not a rule. **Say what the listing shows.** A listing with no rate is
+   logged with the rate pending, and one with no city to city is logged with what you said
+   (Owner rulings, 2026-09-15). Nothing asks you for anything. Anything not placed is kept in
+   the card's notes rather than dropped.
 4. **Say "next" between loads.** One go can log several loads, in the order read:
 
    > *"Tampa to Miami, nine hundred. Next. Orlando to Atlanta, fourteen hundred. Next.
@@ -74,6 +76,8 @@ browser that has it.
    as a new load. Typing: put **next** on its own line.
 5. TAP TO TALK stops when you tap it again or stop talking for a few seconds, then logs what it
    heard. With the words box, tap **LOG IT**.
+6. Each time loads are logged, uncommitted cards whose pickup has already gone by are cleared
+   first, the same as a paste on the Loads screen. A committed load is never cleared.
 
 ---
 
@@ -88,13 +92,14 @@ it.
 | `LOGGED. OPPORTUNITY OPP-…. TAMPA TO MIAMI, $900.` | Logged, and a card is on the Loads screen |
 | `… FLAGGED POSSIBLE DUPLICATE.` | Logged as its own card; it looks like another load on the same lane at different money, so you decide whether they are the same |
 | `MERGED INTO EXISTING. …` | Same lane, rate and pickup as a load already logged: it filled in what that card was missing and overwrote nothing |
-| `SAVANNAH TO ATLANTA. RATE?` | **Nothing is logged yet.** The rate was not heard. Say or type the rate, and it is logged. Say **skip** to leave that load out |
-| `NOT LOGGED. LANE NOT HEARD.` | No city to city was heard. Nothing was logged. Read that listing again |
+| `LOGGED. … SAVANNAH TO ATLANTA, RATE PENDING.` | Logged with no rate. The card shows the rate as `*` and scores the load on everything except the rate, marked `* rate pending` |
+| `LOGGED. … $2200.` (no cities) | Logged with what was heard; no city to city was said. The card shows the cities as not recorded |
+| `NOT LOGGED. NOTHING HEARD.` | That piece had nothing in it to log |
 | `NOT LOGGED. THE WORDS ARE STILL IN THE BOX.` | The laptop did not answer. Nothing was logged; the words are kept to try again |
 | `NOTHING HEARD.` | Nothing was sent |
 
-**One question at a time.** If several loads each miss a rate, the others are logged and the
-first question is asked; the next question comes after that one is answered.
+**Nothing is asked.** There is no rate question and no "lane not heard" any more (Owner rulings,
+2026-09-15). Every load with something in it is logged, in the order read.
 
 **READ-BACK: ON / OFF** mutes the spoken line. The choice is remembered on this tablet.
 
@@ -102,9 +107,8 @@ first question is asked; the next question comes after that one is answered.
 
 ## 4. What it never does
 
-- It never books, passes, discards or sends a load.
-- **Known gap, being closed separately:** today a voice capture that matches a load already
-  committed can fill in blanks on that load's card (it never overwrites what is there). A guard
-  that leaves committed cards untouched is being added to the card code on another branch.
+- It never books, passes or sends a load. The only cards it removes are uncommitted ones whose
+  pickup has already passed, exactly as a paste does.
+- A voice capture that matches a committed load leaves that load's card untouched.
 - It never keeps sound. Dispatch receives words only.
 - It never uses the Joe machine contract or its token; the tablet holds no standing secret.

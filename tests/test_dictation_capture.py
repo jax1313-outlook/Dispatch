@@ -95,10 +95,13 @@ class TestSparseCaptureAndTheOneQuestion:
         assert f["source_board"] == "DAT"
         assert f["origin"] == "Jacksonville" and f["destination"] == "Ocala"
 
-    def test_a_missing_rate_is_the_only_thing_worth_asking_about(self):
+    def test_a_missing_rate_is_reported_and_nothing_asks(self):
+        """**Owner ruling, 2026-09-15:** *"3 yes stop asking rate"*. `missing`
+        still names the rate so the card can show it pending; the question that
+        used to follow ("RATE?") is gone."""
         r = opp.parse_dictation("log this one DAT. Jacksonville to Ocala. reefer, pickup Friday")
         assert r["missing"] == ["rate"]
-        assert opp.one_question(r["missing"]) == "RATE?"
+        assert opp.one_question(r["missing"]) == ""
 
     def test_a_missing_board_is_not_missing_at_all_any_more(self):
         """**Owner ruling, 2026-09-08.** The board was one of the four a capture
@@ -136,10 +139,22 @@ class TestItIsToleratntOfHowPeopleActuallyTalk:
                                 "pickup Tuesday. $600")["fields"]
         assert f["rate"] == 600.0 and f["pickup_date"] == "Tuesday"
 
-    def test_an_empty_call_asks_for_the_rate_and_nothing_else(self):
+    def test_an_empty_call_asks_nothing_and_names_what_was_not_heard(self):
+        """Was "asks for the rate and nothing else". Ruled 2026-09-15: nothing is
+        asked. An empty call reports all three key facts missing and carries no
+        freight fact, which is the one capture the contract still refuses."""
         r = opp.parse_dictation("")
         assert r["fields"] == {} or "rate" not in r["fields"]
-        assert opp.one_question(r["missing"]) == "RATE?"
+        assert r["missing"] == ["origin", "destination", "rate"]
+        assert opp.one_question(r["missing"]) == ""
+        assert opp.has_freight_fact(r["fields"]) is False
+
+    def test_a_listing_without_a_lane_still_parses_what_was_said(self):
+        """Ruling "1a": no pickup or delivery city heard, and what was heard is kept."""
+        r = opp.parse_dictation("twenty two hundred dry van pickup Thursday")
+        assert r["fields"]["rate"] == 2200.0 and r["fields"]["equipment"] == "dry van"
+        assert "origin" in r["missing"] and "destination" in r["missing"]
+        assert opp.has_freight_fact(r["fields"]) is True
 
 
 class TestTheParserDecidesNothing:
@@ -162,8 +177,10 @@ class TestReadingOffABoardNaturally:
     a real board. He does not, and these are the five readings that proved it --
     three of which lost the rate before 2026-09-10.
 
-    A lost rate is not a cosmetic miss. Rate is required, so the capture is
-    refused and the listing is gone by the time he looks up.
+    A lost rate is not a cosmetic miss. Rate was required then, so the capture
+    was refused and the listing gone by the time he looked up. Since 2026-09-15
+    (Owner ruling) it would be logged with the rate pending -- still a card with a
+    gap where a rate was said.
     """
 
     def test_a_rate_said_as_digits(self):

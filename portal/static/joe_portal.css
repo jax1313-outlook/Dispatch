@@ -658,7 +658,6 @@ button.way-out { cursor: pointer; font-family: inherit; }
 .action.voice-talk.listening { border-color: var(--go); background: #0d2418; }
 .action.voice-talk.listening .action-name { color: #7fe3a4; }
 .voice-live { min-height: 1.2em; font-size: 0.95rem; color: var(--ink-dim); }
-.voice-ask { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.05em; color: var(--key); }
 .drawer-form textarea.voice-words {
     min-height: 140px; padding: 10px 12px; font-size: 1.05rem; font-family: inherit;
     color: var(--ink); background: var(--panel);

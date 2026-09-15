@@ -16,9 +16,10 @@ questions, in order:
      sender profile names them.
 
 **Pure.** No mailbox, no network, no database, no clock. Links in an alert are
-removed, never opened (D1). A block that does not carry what the capture
-contract needs comes back as *needs a look* with what was read, and nothing
-downstream turns it into a card.
+removed, never opened (D1). A block nothing could be read from comes back as
+*needs a look*, and nothing downstream turns it into a card. A load with no
+rate, or missing a city, is a card with the gap shown (Owner rulings,
+2026-09-15).
 
 SENDER PROFILES -- HOW A BOARD IS TUNED
 =======================================
@@ -314,8 +315,9 @@ def read_alert(message: dict, *, allowed, profiles: dict | None = None) -> dict:
          "loads": [{"text", "kind", "fields", "card_extras", "missing"}],
          "needs_look": [{"reason", "fields", "missing", "text"}]}
 
-    `loads` carry everything the capture contract requires. Nothing is carded
-    from `needs_look`.
+    `loads` carry at least one freight fact -- a load with no rate or no city is
+    still a load (Owner rulings 2026-09-15). Nothing is carded from
+    `needs_look`, which holds only what nothing could be read from.
     """
     sender = address_of(message.get("sender", ""))
     subject = str(message.get("subject") or "")
@@ -352,10 +354,12 @@ def read_alert(message: dict, *, allowed, profiles: dict | None = None) -> dict:
     for block in pieces["blocks"]:
         read = (listing.parse_offer_email(block) if kind == "email"
                 else listing.parse_listing(block))
-        if read["required_missing"]:
+        # Owner rulings, 2026-09-15: a load without a rate, or missing a city, is
+        # still a card (rate pending). Only a block nothing could be read from
+        # needs a look.
+        if read["nothing_read"]:
             outcome["needs_look"].append({
-                "reason": "Missing %s." % ", ".join(
-                    name for fact, name in listing.WANTED if fact in read["required_missing"]),
+                "reason": "No load could be read in it.",
                 "fields": read["fields"], "missing": read["missing"], "text": block[:2000]})
             continue
         outcome["loads"].append({"text": block, "kind": kind, "fields": read["fields"],

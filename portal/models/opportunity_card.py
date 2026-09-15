@@ -212,7 +212,8 @@ def assess_card(card: dict, *, exclude_id: str = "") -> dict | None:
       distance_miles / distance_basis   the miles and where they came from
       position_deadhead_miles / deadhead_basis   empty miles to pickup, and from where
       equipment_match / equipment_note  the load's equipment against the fleet
-      warnings / needs_rate             the checks, in plain words
+      warnings                          the checks, in plain words
+      rate_pending / rate_line          "* Rate pending", neutral, when no rate
 
     Never costs the card: an assessment that cannot run returns None.
     """
@@ -243,7 +244,13 @@ def assess_card(card: dict, *, exclude_id: str = "") -> dict | None:
         card["equipment_match"] = assessment["equipment"]["match"]
     card["equipment_note"] = assessment["equipment"]["note"]
     card["warnings"] = assessment["warnings"]
-    card["needs_rate"] = assessment["needs_rate"]
+    # Owner ruling 2026-09-15: a pending rate is a neutral line, not a warning.
+    card["rate_pending"] = assessment["rate_pending"]
+    if assessment["rate_line"]:
+        card["rate_line"] = assessment["rate_line"]
+    else:
+        card.pop("rate_line", None)
+    card.pop("needs_rate", None)  # the old flag; a re-scored card no longer carries it
     # Delivery timing is parked (Mike Zachary, 2026-09-15): no card carries it.
     card.pop("delivery_timing", None)
     return assessment
@@ -253,13 +260,19 @@ def score_card(card: dict, *, exclude_id: str = "") -> tuple:
     """`(score, scoring)` for one card, from the engine. `(None, None)` if it cannot.
 
     Runs the assessment first (`assess_card`), so the engine scores on the miles,
-    empty miles and equipment fit the card now carries. A card without a rate
-    gets no score -- it says "needs rate" -- because a number computed with the
-    money missing ranks a load on everything except what it pays.
+    empty miles and equipment fit the card now carries.
+
+    **A card without a rate is scored** on every factor except the rate, and the
+    score is read against the maximum without the rate factor (Owner ruling
+    2026-09-15: *"(a) a score from everything except the rate, marked '* rate
+    pending'"* -- **"2a"**). This used to leave such a card unscored, saying
+    "needs rate". `card["rate_pending"]` and `card["score_max"]` (from the
+    engine's `rate_pending` / `score_max_for`) say which maximum applies; nothing
+    here adjusts the engine's number.
     """
     assessment = assess_card(card, exclude_id=exclude_id)
     try:
-        from dispatch.scoring import known_distance, score_load
+        from dispatch.scoring import known_distance, rate_pending, score_load, score_max_for
 
         # A dictated listing carries no mileage -- nobody says "one hundred and
         # forty miles" reading a board. Without it, economics cannot compute and
@@ -274,8 +287,9 @@ def score_card(card: dict, *, exclude_id: str = "") -> tuple:
                 card["distance_miles"] = miles
 
         scoring = score_load(dict(card))
-        if assessment is not None and assessment["needs_rate"]:
-            scoring["score"] = None
+        # What the score is read against (score_load's result keeps its shape).
+        card["rate_pending"] = rate_pending(card)
+        card["score_max"] = score_max_for(card)
         return scoring.get("score"), scoring
     except Exception:  # noqa: BLE001 - an unscored card still beats no card
         return None, None
@@ -508,9 +522,9 @@ def capture_from_text(text: str, *, kind: str = "listing", driver: str,
 
     The capture goes through the same contract function the voice capture uses
     (`dispatch.opportunity.capture`), so deduplication, the rehearsal tag and
-    the one-card rule all hold. The contract still refuses a capture without a
-    lane and a rate; this returns `ok: False` with what was read so the screen
-    can ask for exactly those, and stores nothing.
+    the one-card rule all hold. A paste without a lane or a rate is logged with
+    the gaps named (Owner rulings, 2026-09-15). Only a paste nothing readable
+    came out of returns `ok: False`, with what the form held, and stores nothing.
 
     Load-board alert emails (2026-09-15) arrive through this same function, so
     their cards follow the same contract, dedupe and one-card rules. They say
@@ -544,15 +558,17 @@ def capture_from_text(text: str, *, kind: str = "listing", driver: str,
         elif key in opportunity.FIELDS:
             fields[key] = value
 
-    required_missing = [k for k in listing.REQUIRED if not str(fields.get(k) or "").strip()]
+    key_missing = [k for k in listing.KEY_FACTS if not str(fields.get(k) or "").strip()]
     outcome = {"ok": False, "parsed": parsed, "fields": fields, "extras": extras,
-               "missing": list(parsed["missing"]), "required_missing": required_missing,
+               "missing": list(parsed["missing"]), "key_missing": key_missing,
                "record": None, "entry": None, "note": ""}
     outcome["missing"] = [name for key, name in listing.WANTED
                           if not dict(fields, **extras).get(key)]
-    if required_missing:
-        outcome["note"] = "Needs %s before it can be logged." % ", ".join(
-            name for key, name in listing.WANTED if key in required_missing)
+    # Owner rulings, 2026-09-15: a paste without a lane or a rate is still logged,
+    # with the gaps shown and the rate pending. Only nothing readable is refused.
+    if listing.nothing_read(fields):
+        outcome["note"] = ("Nothing readable: no city, rate, date, equipment, weight "
+                           "or customer was found.")
         return outcome
 
     fields["captured_via"] = via

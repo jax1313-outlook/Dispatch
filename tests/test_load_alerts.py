@@ -200,13 +200,27 @@ class TestSplitting:
         assert read["loads"] == []
         assert read["needs_look"][0]["reason"] == "No load could be read in it."
 
-    def test_a_load_without_a_rate_is_a_needs_a_look(self):
+    def test_a_load_without_a_rate_is_a_load_not_a_needs_a_look(self):
+        """Was "Missing rate." in needs a look. **Owner ruling, 2026-09-15:**
+        *"holding a load with out a rate will need an astric or blank is not
+        negative."* Needs a look is only for alerts nothing could be read from."""
         read = alert_reader.read_alert(
             message("1", BOARD_ONE, f"Ocala, FL -> Macon, GA\nPickup: {_day(1)}"),
             allowed=[BOARD_ONE])
-        assert read["loads"] == []
-        assert read["needs_look"][0]["reason"] == "Missing rate."
-        assert read["needs_look"][0]["fields"]["origin"] == "Ocala, FL"
+        assert read["needs_look"] == []
+        assert len(read["loads"]) == 1
+        assert read["loads"][0]["fields"]["origin"] == "Ocala, FL"
+        assert "rate" not in read["loads"][0]["fields"]
+        assert "rate" in read["loads"][0]["missing"]
+
+    def test_a_load_missing_a_city_is_a_load(self):
+        read = alert_reader.read_alert(
+            message("1", BOARD_ONE, f"Pickup: Ocala, FL {_day(1)}\nRate: $900"),
+            allowed=[BOARD_ONE])
+        assert read["needs_look"] == [] and len(read["loads"]) == 1
+        fields = read["loads"][0]["fields"]
+        assert fields["origin"] == "Ocala, FL" and fields["rate"] == 900.0
+        assert "destination" not in fields
 
     def test_links_are_removed_and_the_footer_dropped(self):
         cleaned = alert_reader.clean("Rate: $900\nSee https://board.example/load/1 now\n"
@@ -217,7 +231,10 @@ class TestSplitting:
     def test_a_board_profile_translates_its_own_labels(self):
         body = f"Orig: Valdosta, GA\nDest: Tifton, GA\nAmt: 700\nAvail: {_day(1)}"
         plain = alert_reader.read_alert(message("1", BOARD_THREE, body), allowed=[BOARD_THREE])
-        assert plain["loads"] == []  # no dollar sign and no known label: never guessed
+        # No dollar sign and no known label: the rate is never guessed. The lane
+        # is read from the places, and the load is carded with the rate pending
+        # (Owner ruling 2026-09-15) rather than held back.
+        assert len(plain["loads"]) == 1 and "rate" not in plain["loads"][0]["fields"]
         profiles = {"board-three.example": {"name": "Board Three", "labels": {
             "Orig": "origin", "Dest": "destination", "Amt": "rate", "Avail": "pickup_date"}}}
         tuned = alert_reader.read_alert(message("1", BOARD_THREE, body), allowed=[BOARD_THREE],
@@ -480,6 +497,31 @@ class TestTheScreens:
         assert "LB1-1003" in page
         assert "email alert" in page
         assert len(_cards()) == 3
+
+    def test_an_alert_without_a_rate_becomes_a_card_through_the_button(self, client, monkeypatch):
+        """Owner ruling, 2026-09-15: a load listed with no rate is held with an
+        asterisk, not left as needs a look. Reached the way the screen reaches it."""
+        _configure()
+        body = (f"Ocala, FL -> Macon, GA\nPickup: {_day(1)} 08:00\nRef: NR-77\n"
+                "------------------------------\n"
+                f"Pickup: Valdosta, GA {_day(1)}\nRate: $650\nRef: NR-78")
+        _use(monkeypatch, FakeAlertMailbox([message("A1", BOARD_ONE, body),
+                                            message("A2", BOARD_ONE, UNREADABLE_ALERT,
+                                                    subject="Log in to see loads")]))
+        resp = client.post("/loads/alerts/check")
+        assert resp.status_code == 302
+        page = client.get("/loads").get_data(as_text=True)
+        assert "Load alerts LIVE: 2 new cards" in page and "1 needs a look" in page
+        cards = {e["card_data"].get("load_id"): e for e in _cards().values()}
+        no_rate = cards["NR-77"]
+        assert no_rate["card_data"]["rate_pending"] is True
+        assert no_rate["score"] is not None
+        assert "Score %s of 60 · * rate pending" % no_rate["score"] in page
+        no_city = cards["NR-78"]["card_data"]
+        assert no_city["origin"] == "Valdosta, GA" and not no_city.get("destination")
+        assert no_city["rate_pending"] is False
+        look = load_alerts.strip()["needs_look"]
+        assert len(look) == 1 and look[0]["reason"] == "No load could be read in it."
 
     def test_looking_at_the_loads_screen_never_checks(self, client, monkeypatch):
         _configure()

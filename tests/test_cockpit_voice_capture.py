@@ -123,44 +123,89 @@ class TestNextSeparatesLoads:
         assert pieces == ["Tampa to Miami 900 pickup next Tuesday", "Orlando to Atlanta 1400"]
 
 
-class TestTheOneQuestion:
-    def test_a_missing_rate_asks_and_stores_nothing(self, client):
+class TestNothingIsAsked:
+    """**Owner rulings, 2026-09-15.** This class was TestTheOneQuestion. On the
+    lane refusal: *"i do not know where this came from. I do not use lane for any
+    thing. delete."* then **"1a"**; on the rate question: **"3 yes stop asking
+    rate"**. Every load with a fact in it is logged; nothing is asked."""
+
+    def test_a_missing_rate_is_logged_and_read_back_rate_pending(self, client):
         as_driver(client)
         data = say(client, "Savannah to Atlanta dry van pickup Friday").get_json()
         load = data["loads"][0]
-        assert load["status"] == "QUESTION" and load["question"] == "RATE?"
-        assert load["say"] == "SAVANNAH TO ATLANTA. RATE?"
-        assert load["words"] == "Savannah to Atlanta dry van pickup Friday"
-        assert load["opportunity_id"] == "" and opportunity.all_open() == []
+        assert load["status"] == "LOGGED" and load["verdict"] == "NEW"
+        assert "SAVANNAH TO ATLANTA, RATE PENDING" in load["say"]
+        assert "RATE?" not in data["say"] and "question" not in load
+        assert load["rate_pending"] is True and load["missing"] == ["rate"]
+        stored = opportunity.get(load["opportunity_id"])
+        assert stored["rate"] is None and stored["captured_via"] == "VOICE"
+        card = sandbox.get(load["card_id"])
+        assert card["card_data"]["rate_pending"] is True
+        assert card["score"] is not None  # scored on everything except the rate
 
-    def test_answering_the_question_logs_the_load(self, client):
+    def test_an_answer_field_is_ignored_and_asks_nothing(self, client):
+        """The drawer no longer sends an answer. One that arrives anyway changes
+        nothing: the words are logged as said."""
         as_driver(client)
-        words = say(client, "Savannah to Atlanta dry van").get_json()["loads"][0]["words"]
-        data = say(client, words, answer="eighteen fifty").get_json()
+        data = say(client, "Savannah to Atlanta dry van", answer="eighteen fifty").get_json()
         load = data["loads"][0]
-        assert load["status"] == "LOGGED" and opportunity.get(load["opportunity_id"])["rate"] == 1850.0
+        assert load["status"] == "LOGGED"
+        assert opportunity.get(load["opportunity_id"])["rate"] is None
 
-    def test_a_skip_leaves_it_unlogged(self, client):
-        as_driver(client)
-        data = say(client, "Savannah to Atlanta dry van", answer="skip").get_json()
-        assert data["loads"][0]["status"] == "NOT LOGGED" and opportunity.all_open() == []
-
-    def test_an_unheard_answer_asks_again(self, client):
-        as_driver(client)
-        data = say(client, "Savannah to Atlanta dry van", answer="umm").get_json()
-        assert data["loads"][0]["question"] == "RATE?" and opportunity.all_open() == []
-
-    def test_only_one_question_is_said_at_a_time(self, client):
+    def test_several_loads_without_rates_are_all_logged_in_order(self, client):
         as_driver(client)
         data = say(client, "Savannah to Atlanta next Tampa to Miami 900 next Mobile to Macon").get_json()
-        assert [l["status"] for l in data["loads"]] == ["QUESTION", "LOGGED", "QUESTION"]
-        assert data["say"].count("RATE?") == 1 and data["say"].endswith("SAVANNAH TO ATLANTA. RATE?")
+        assert [l["status"] for l in data["loads"]] == ["LOGGED", "LOGGED", "LOGGED"]
+        assert data["say"].count("RATE PENDING") == 2 and "?" not in data["say"]
+        assert len(opportunity.all_open()) == 3
 
-    def test_no_lane_is_not_logged_and_the_words_are_kept(self, client):
+    def test_no_lane_is_logged_with_what_was_heard(self, client):
+        """Was: NOT LOGGED. LANE NOT HEARD. Deleted by ruling; "1a" keeps what was heard."""
         as_driver(client)
         load = say(client, "twenty two hundred dry van").get_json()["loads"][0]
-        assert load["status"] == "NOT LOGGED" and load["words"] == "twenty two hundred dry van"
-        assert opportunity.all_open() == []
+        assert load["status"] == "LOGGED" and "LANE" not in load["say"]
+        stored = opportunity.get(load["opportunity_id"])
+        assert stored["rate"] == 2200.0 and stored["equipment"] == "dry van"
+        assert stored["origin"] == "" and stored["destination"] == ""
+
+    def test_the_lane_message_and_the_question_are_gone_from_the_code(self):
+        # The code, after the module docstring (which quotes the ruling that deleted it).
+        source = Path("portal/voice_capture.py").read_text(encoding="utf-8").split('"""', 2)[2]
+        assert "LANE NOT HEARD" not in source and "one_question(" not in source
+        assert "QUESTION = " not in source and "SKIP_WORDS" not in source
+        template = Path("portal/templates/joe_portal.html").read_text(encoding="utf-8")
+        assert "voice-ask" not in template and "answer:" not in template
+        assert "'QUESTION'" not in template and "Say or type the rate" not in template
+
+    def test_words_with_no_fact_are_not_logged_and_are_kept(self):
+        load = voice_capture.capture_one(". . .", driver="d")
+        assert load["status"] == "NOT LOGGED" and load["say"] == "NOT LOGGED. NOTHING HEARD."
+        assert load["words"] == ". . ." and opportunity.all_open() == []
+
+
+class TestExpiredCardsAreCleared:
+    """Owner ruling, 2026-09-15: *"clear expired cards too"* -- the way a paste does."""
+
+    def test_voice_capture_clears_an_expired_uncommitted_card(self, client):
+        from portal.models import opportunity_card
+
+        as_driver(client)
+        old = say(client, "Tampa to Miami 900 pickup 2020-01-02").get_json()["loads"][0]
+        assert sandbox.get(old["card_id"]) is not None
+        data = say(client, "Orlando to Atlanta 1400").get_json()
+        assert data["cleared_expired"] == 1
+        assert sandbox.get(old["card_id"]) is None
+        assert opportunity.get(old["opportunity_id"]) is None
+        assert opportunity_card.expired_card_ids() == []
+
+    def test_a_committed_card_past_pickup_is_never_cleared(self, client):
+        as_driver(client)
+        old = say(client, "Tampa to Miami 900 pickup 2020-01-02").get_json()["loads"][0]
+        sandbox.mark_accepted(old["card_id"], 1)
+        assert commitment.is_committed(sandbox.get(old["card_id"]))
+        data = say(client, "Orlando to Atlanta 1400").get_json()
+        assert data["cleared_expired"] == 0
+        assert sandbox.get(old["card_id"]) is not None
 
 
 class TestDuplicates:

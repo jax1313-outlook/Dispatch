@@ -147,13 +147,31 @@ class TestCaptureEndpointMakesTheCard:
     def test_a_refused_capture_makes_no_card(self, client, monkeypatch):
         monkeypatch.setenv("DISPATCH_JOE_TOKEN", "test-token")
         before = len(sandbox.get_all())
+        # A capture with no freight fact at all. An origin alone used to be the
+        # refused example; since the Owner rulings of 2026-09-15 it is a valid
+        # sparse capture and makes a card (below).
+        resp = client.post(
+            "/api/joe/opportunity",
+            json={"source_board": "DAT", "origin": "", "rate": ""},
+            headers={"Authorization": "Bearer test-token", "X-Driver": "mike"},
+        )
+        assert resp.status_code == 400
+        assert len(sandbox.get_all()) == before
+
+    def test_an_origin_alone_is_logged_and_carded_with_the_rate_pending(self, client, monkeypatch):
+        monkeypatch.setenv("DISPATCH_JOE_TOKEN", "test-token")
         resp = client.post(
             "/api/joe/opportunity",
             json={"origin": "Tampa FL"},
             headers={"Authorization": "Bearer test-token", "X-Driver": "mike"},
         )
-        assert resp.status_code == 400
-        assert len(sandbox.get_all()) == before
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data["carded"] is True and "RATE PENDING" in data["echo"]
+        entry = next(e for e in sandbox.get_all().values()
+                     if e["source_id"] == data["opportunity_id"])
+        assert entry["card_data"]["rate_pending"] is True
+        assert entry["score"] is not None and entry["score"] <= 60
 
     def test_a_card_that_cannot_be_made_never_costs_the_capture(self, client, monkeypatch):
         """The capture is the record that must survive. If carding fails the
