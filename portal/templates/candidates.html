@@ -75,6 +75,17 @@
     </form>
   </section>
 
+  {% set expired_count = rows|selectattr('expired')|list|length %}
+  {% if expired_count %}
+  <section class="card-section expired-loads">
+    <form method="post" action="{{ url_for('joe_portal.clear_expired_loads') }}">
+      <span class="cand-gaps">{{ expired_count }} load{{ '' if expired_count == 1 else 's' }}
+        past pickup and not committed. Uncommitted loads are not kept.</span>
+      <button class="btn reject" type="submit">CLEAR</button>
+    </form>
+  </section>
+  {% endif %}
+
   {% if not rows %}
     <p class="brief-gaps">Nothing waiting. Sweep something, or open one by hand.</p>
   {% endif %}
@@ -92,7 +103,8 @@
       {{ row.origin or 'Origin not recorded' }}
       &rarr; {{ row.destination or 'Destination not recorded' }}
     </div>
-    <div class="cand-when">{{ row.when or 'No pickup appointment recorded' }}</div>
+    <div class="cand-when">{{ row.when or 'No pickup appointment recorded' }}
+      {% if row.expired %}<strong class="cand-expired">PICKUP PASSED</strong>{% endif %}</div>
 
     {# Counted, never scored. It is the number of questions worth asking while
        somebody is on the phone, and nothing reads it to decide anything. #}

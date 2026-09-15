@@ -204,6 +204,140 @@ def from_capture(record: dict, extras: dict | None = None) -> dict:
     return entry
 
 
+# ----------------------------------------------------------- one card story ----
+#
+# **Owner ruling D12, 2026-09-14:** *"program only processes committed loads. due
+# to the life span of only hours to minuties it makes no sense to keep any
+# uncommitted load information."* Discard on PASS, and when the pickup window
+# expires uncommitted. Both stores go together -- the capture row and its card --
+# so no screen can show a card whose capture is gone, or the reverse.
+#
+# The one thing that is never discarded is a committed record. Everything below
+# asks the commitment gate first.
+
+
+def is_protected(entry: dict) -> bool:
+    """A record that may never be discarded: committed, or already opened as a load."""
+    from dispatch import commitment
+
+    entry = entry or {}
+    return bool(commitment.is_committed(entry) or entry.get("engine_load_id")
+                or entry.get("operational_load"))
+
+
+def discard(sandbox_id: str, *, reason: str, driver: str) -> dict:
+    """Discard one uncommitted card and the capture behind it (D12).
+
+    Returns `{"discarded": bool, "note": str}`. A committed record is refused and
+    left exactly as it was. Every discard is written to the audit log, because a
+    record removed without a trace is a silent failure however right the rule.
+    """
+    from dispatch import audit, opportunity
+
+    entry = sandbox.get(sandbox_id)
+    if not entry:
+        return {"discarded": False, "note": "There was no such card."}
+    if is_protected(entry):
+        return {"discarded": False,
+                "note": "This load is committed. Committed loads are never discarded."}
+
+    card = entry.get("card_data") or {}
+    opportunity_id = card.get("opportunity_id") or (
+        entry.get("source_id") if str(entry.get("source_id", "")).startswith("OPP-") else "")
+    if opportunity_id:
+        opportunity.discard(opportunity_id)
+    sandbox.discard_entry(sandbox_id)
+    audit.record(action="opportunity-discard", driver=driver or "dispatch",
+                 channel=audit.CHANNEL_MISSION_SCREEN, mission_id=sandbox_id,
+                 intent=entry.get("title", ""), result=audit.RESULT_SUCCESS,
+                 note="D12: %s; uncommitted load information is not kept" % reason)
+    return {"discarded": True, "note": "Discarded. Uncommitted loads are not kept."}
+
+
+def pickup_deadline(window: str, *, day=None):
+    """When a pickup window has gone by, as an aware home-zone datetime, or None.
+
+    "2026-09-15 06:00 - 10:00" has gone by at 10:00 on the 15th. A window with
+    only a day, or only a start time, has gone by when that day ends -- a board
+    appointment at 06:00 is often a first-come window, and the rule is to discard
+    a load that can no longer be run, not one that is merely late in the day.
+    Words nothing can read have no deadline and are never discarded for expiry.
+    """
+    import re
+    from datetime import datetime, time
+
+    from dispatch import booking, clock, spoken_date
+
+    said = str(window or "").strip()
+    if not said:
+        return None
+    on = booking._as_date(said)
+    if on is None:
+        resolved = spoken_date.resolve(said, today=day) if day else ""
+        on = booking._as_date(resolved) if resolved else None
+    if on is None:
+        return None
+    end = time(23, 59, 59)
+    parts = said.split(" - ")
+    if len(parts) == 2:
+        match = re.match(r"^\s*(\d{1,2}):(\d{2})", parts[1])
+        if match and int(match.group(1)) < 24:
+            end = time(int(match.group(1)), int(match.group(2)))
+    return datetime.combine(on, end, tzinfo=clock.home_zone())
+
+
+def expired_card_ids(*, now=None) -> list:
+    """Uncommitted freight cards whose pickup has gone by. Reads; changes nothing.
+
+    What a screen may show ("pickup passed") without discarding anything, because
+    looking is not doing (D9).
+    """
+    from dispatch import clock
+
+    now = now or clock.home_now()
+    ids = []
+    for sid, entry in sandbox.get_all_for_source(SOURCE_TYPE).items():
+        if is_protected(entry):
+            continue
+        card = entry.get("card_data") or {}
+        deadline = pickup_deadline(card.get("pickup_window")
+                                   or entry.get("pickup_window") or "")
+        if deadline is not None and now > deadline:
+            ids.append(sid)
+    return ids
+
+
+def discard_expired(*, now=None, driver: str = "dispatch") -> list:
+    """Discard every uncommitted freight card, and capture, whose pickup has gone by.
+
+    Called when work is being done -- a paste, a sweep, the Loads screen's
+    CLEAR -- never when a screen is merely looked at: D9, *retrieval is not
+    modification*. It is deliberately not called from the seventh contract
+    (`POST /api/joe/opportunity`): a side effect on a ratified contract is the
+    Owner's to add. Returns the ids discarded.
+    """
+    from dispatch import clock, opportunity
+
+    now = now or clock.home_now()
+    gone = []
+    for sid in expired_card_ids(now=now):
+        if discard(sid, reason="pickup window passed uncommitted",
+                   driver=driver)["discarded"]:
+            gone.append(sid)
+
+    # A capture whose card was never made still expires with its pickup.
+    for row in opportunity.all_open():
+        sid = f"SBX-{SOURCE_TYPE.upper()}-{row['opportunity_id']}"
+        if sandbox.get(sid) is not None:
+            continue
+        deadline = pickup_deadline(row.get("pickup_date") or "",
+                                   day=capture_day(row))
+        if deadline is not None and now > deadline:
+            opportunity.discard(row["opportunity_id"])
+            gone.append(row["opportunity_id"])
+    return gone
+
+
 # ------------------------------------------------------ paste a listing ----
 
 #: What a pasted text is. A listing is copied off a board's screen; an offer is

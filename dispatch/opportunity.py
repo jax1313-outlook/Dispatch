@@ -206,6 +206,24 @@ def get(opportunity_id: str) -> dict | None:
     return _row_to_record(row) if row else None
 
 
+def discard(opportunity_id: str) -> bool:
+    """Remove one capture from the store. True when there was one to remove.
+
+    **Owner ruling D12, 2026-09-14:** *"program only processes committed loads.
+    due to the life span of only hours to minuties it makes no sense to keep any
+    uncommitted load information."* A passed load, and one whose pickup window
+    went by uncommitted, is discarded rather than archived.
+
+    This function does not decide whether a capture may go. The caller asks the
+    commitment gate first (`portal/models/opportunity_card.discard`): a capture
+    whose card was committed is the lineage of a mission and is never removed.
+    """
+    with get_connection() as conn:
+        gone = conn.execute("DELETE FROM opportunities WHERE opportunity_id=?",
+                            (str(opportunity_id),)).rowcount
+    return bool(gone)
+
+
 # ----------------------------------------------------------- deduplication
 
 def _dates_overlap(a: str, b: str) -> bool | None:
