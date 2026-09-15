@@ -282,8 +282,9 @@ class TestCustomerPortalAccessAtCommit:
         assert len(mail.sent) == 1
         email = mail.sent[0]
         assert email["to"] == ["loads@xpo.example"] and "8842193" in email["subject"]
-        assert "8842193" in email["body"] and "/portal/login" in email["body"]
-        assert "XPO Logistics" in email["body"]
+        assert "8842193" in email["body"] and "XPO Logistics" in email["body"]
+        # The Customer Portal is frozen (Mike Zachary, 2026-09-14): no portal link goes out.
+        assert "/portal/login" not in email["body"] and "Portal" not in email["subject"]
         created = next(e for e in pins.events() if e["action"] == "CREATE_PIN")
         assert (created["actor"], created["channel"]) == (MIKE, "LOAD_COMMIT")
 
@@ -305,11 +306,23 @@ class TestCustomerPortalAccessAtCommit:
         resp = client.get("/portal/mission")
         assert b"8842193" in resp.data and b"Jacksonville, FL" in resp.data
 
-    def test_the_portal_address_comes_from_the_setting_when_there_is_one(self, client, pins, mail, monkeypatch):
+    def test_the_portal_address_comes_from_the_setting_when_the_portal_is_open(self, client, pins, mail,
+                                                                                monkeypatch):
+        from portal import portal_access
+        monkeypatch.setattr(portal_access, "CUSTOMER_PORTAL_FROZEN", False)
         monkeypatch.setenv("DISPATCH_PORTAL_URL", "https://portal.l1truck.example/")
         sign_in_operations(client, pins)
         committed_mission(client)
         assert "https://portal.l1truck.example/portal/login" in mail.sent[0]["body"]
+        assert "Customer Portal" in mail.sent[0]["subject"]
+
+    def test_setting_the_address_does_not_reopen_a_frozen_portal(self, client, pins, mail, monkeypatch):
+        monkeypatch.setenv("DISPATCH_PORTAL_URL", "https://portal.l1truck.example/")
+        sign_in_operations(client, pins)
+        committed_mission(client)
+        body = mail.sent[0]["body"]
+        assert "portal.l1truck.example" not in body and "Sign In" not in body
+        assert "YOUR LOAD NUMBER: 8842193" in body
 
     def test_nobody_signed_in_by_name_means_no_pin_and_no_email(self, pins, mail):
         from portal.app import create_app
@@ -345,7 +358,7 @@ class TestCustomerPortalAccessAtCommit:
         assert access["sent"] is False and "no text-message sender" in access["note"]
         card = next(a for a in publisher.get_queue() if a["id"] == access["flow"]["publisher"]["action_id"])
         assert card["status"] == "READY" and card["communication"]["channel"] == "text"
-        assert "8842193" in card["communication"]["body"] and "/portal/login" in card["communication"]["body"]
+        assert "8842193" in card["communication"]["body"] and "/portal/login" not in card["communication"]["body"]
 
     def test_email_wins_over_phone(self, client, pins, mail):
         sign_in_operations(client, pins)
@@ -556,6 +569,8 @@ class TestMissionEvidence:
             ("Customer Mission Evidence Alert", "ARCHIVED", MIKE)
         assert len(mail.sent) == 2 and "Load securement photo" in mail.sent[1]["subject"]
         assert "8842193" in mail.sent[1]["body"]
+        # Frozen Customer Portal: the alert points to the mission record, not the portal.
+        assert "/portal/login" not in mail.sent[1]["body"] and "Reply to this email" in mail.sent[1]["body"]
 
         # Mission Visibility View: shown to the key holder, inline.
         client.post("/portal/login", data={"pin": "8842193"})

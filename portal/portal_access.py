@@ -68,6 +68,24 @@ def portal_url(fallback_root: str) -> str:
     return base.rstrip("/") + "/portal/login"
 
 
+#: The Customer Portal is FROZEN. Mike Zachary, 2026-09-14: the Stakeholder portal is
+#: parked for now ("Stake holder can be parked for now"), then, between freezing and
+#: parking it, "freeze it". Frozen means the customer messages still go out -- the
+#: portal-access email at COMMIT and the Customer Alerts for securement and freight
+#: condition photos -- but no longer point the customer at a portal they cannot reach
+#: from outside the truck. The Mission Visibility Key is still made at COMMIT, and the
+#: portal code is untouched.
+#:
+#: Unfreezing is an Owner ruling, not a setting: DISPATCH_PORTAL_URL also carries the
+#: address in Dispatch's own approval links, so setting it must not quietly reopen this.
+CUSTOMER_PORTAL_FROZEN = True
+
+
+def customer_portal_link(fallback_root: str) -> str:
+    """The portal address for a customer message, or "" while the portal is frozen."""
+    return "" if CUSTOMER_PORTAL_FROZEN else portal_url(fallback_root)
+
+
 def joe_update_mission_visibility(record: dict, *, committed_by: str | None) -> dict:
     """Joe Updates Mission Visibility: the load number becomes this mission's Mission Visibility Key."""
     customer = brief._record_value(record, "customer")
@@ -184,15 +202,20 @@ def issue(record: dict, *, committed_by: str | None, mail_connector, url_root: s
 
     number = visibility["load_number"]
     channel = requirement["channel"]
-    if channel == "text":
+    link = customer_portal_link(url_root)
+    if channel == "text" and link:
         body = (f"Level 1 Transport: follow your mission, load {number}, in our Customer Portal: "
-                f"{portal_url(url_root)} - sign in with your load number.")
+                f"{link} - sign in with your load number.")
+    elif channel == "text":
+        body = (f"Level 1 Transport: thank you for load {number}. We will send you updates as your "
+                f"mission moves.")
     else:
-        body = render_template(TEMPLATE, customer=visibility["customer"], load_number=number,
-                               portal_url=portal_url(url_root))
+        body = render_template(TEMPLATE, customer=visibility["customer"], load_number=number, portal_url=link)
+    subject = (f"Your Level 1 Transport Customer Portal - Load {number}" if link
+               else f"Level 1 Transport - Load {number}: Mission Visibility")
     sent = _publish_route_send(
         outcome, record, trigger=comi_routing.MISSION_VISIBILITY_OPENED, template=requirement["template"],
-        to=requirement["to"], subject=f"Your Level 1 Transport Customer Portal - Load {number}", body=body,
+        to=requirement["to"], subject=subject, body=body,
         trigger_reason="COMMIT opened Mission Visibility for the customer", requested_for=visibility["requested_for"],
         action_type=publisher.CUSTOMER_PORTAL_ACCESS_ACTION_TYPE, auto_send_basis=publisher.PORTAL_ACCESS_AUTO_SEND,
         mail_connector=mail_connector, channel=channel)
@@ -271,12 +294,16 @@ def alert_mission_evidence(load_id: str, photos: list[dict], *, mail_connector, 
 
     labels = sorted({p["label"] for p in photos})
     number = load_number(stored)
-    if channel == "text":
-        body = (f"Level 1 Transport: new {', '.join(l.lower() + 's' for l in labels)} for load {number} "
-                f"are in your Customer Portal: {portal_url(url_root)}")
+    link = customer_portal_link(url_root)
+    kinds = ", ".join(l.lower() + "s" for l in labels)
+    if channel == "text" and link:
+        body = f"Level 1 Transport: new {kinds} for load {number} are in your Customer Portal: {link}"
+    elif channel == "text":
+        body = (f"Level 1 Transport: new {kinds} for load {number} were taken and are kept with your "
+                f"mission record. Reply and we will send them.")
     else:
         body = render_template(EVIDENCE_ALERT_TEMPLATE, customer=brief._record_value(stored, "customer"),
-                               load_number=number, labels=labels, count=len(photos), portal_url=portal_url(url_root))
+                               load_number=number, labels=labels, count=len(photos), portal_url=link)
     sent = _publish_route_send(
         outcome, dict(stored, id=record_id), trigger=comi_routing.MISSION_EVIDENCE_ADDED, template="evidence_alert",
         to=to, subject=f"Level 1 Transport - Load {number}: {', '.join(labels)}", body=body,

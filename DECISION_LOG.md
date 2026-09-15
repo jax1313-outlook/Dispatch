@@ -1434,3 +1434,18 @@ Fills the one number the Visibility SOP left open (and the entry above declined 
 **Recorded, not resolved.** The cockpit acts on the load row opened under the Mission Record's own id. COMMIT does not open that row today (BOOK does), so a committed mission that was never booked shows "no open load yet" on its action cards — the split named as CO-1 in the Deterministic Close-Out roadmap. The Stakeholder portal is not yet parked in code: freeze or park is still Mike's to choose.
 
 ---
+
+## 2026-09-14 — Customer Portal frozen: customer messages keep going, without the portal link
+
+**PR:** (this change)
+**Capability:** `portal/portal_access.py` (`CUSTOMER_PORTAL_FROZEN`, `customer_portal_link`), `portal/templates/onboarding/customer_portal_access.txt`, `portal/templates/mission_visibility/evidence_alert.txt`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"Stake holder can be parked for now."* Offered freeze (messages keep going without the portal link) or park (the onboarding emails stop too): *"why freeze as opose to parking?"*, then *"freeze it"*.
+
+The portal-access email at COMMIT and the Customer Alerts for securement and freight condition photos still go out through Joe → Publisher → COMI → Email Helper, as ruled 2026-09-13. While frozen they carry no portal link or sign-in steps: the onboarding email gives the load number and says updates come by email; the photo alert says the photos are kept with the mission record and the customer can reply to get them. The Mission Visibility Key is still made at COMMIT and the Customer Portal code is untouched.
+
+**Unfreezing is a ruling, not a setting.** `DISPATCH_PORTAL_URL` also carries the address in Dispatch's own approval links, so setting it does not reopen the portal; `CUSTOMER_PORTAL_FROZEN` does. The completion-package email's stakeholder link stays as it was: a box a person ticks.
+
+**Recorded, not resolved.** A frozen photo alert tells the customer photos exist without showing them. Attaching the photos is the real answer; the Outlook adapter already takes attachments, `dispatch.mail` does not yet. Carried to CO-6 (customer updates) in the Deterministic Close-Out roadmap.
+
+---

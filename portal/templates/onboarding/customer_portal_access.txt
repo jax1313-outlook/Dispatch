@@ -1,7 +1,7 @@
 {{ customer }},
 
 Thank you for your load with Level 1 Transport. Mission Visibility is our commitment to you: a curated window into your mission, so you know where it stands without having to ask.
-
+{% if portal_url %}
 HOW TO GET IN
 
   1. Open the Customer Portal: {{ portal_url }}
@@ -21,6 +21,14 @@ KEEP IN MIND
   - Share your load number only with people who should see this shipment.
   - After five wrong entries in a row, the portal pauses sign-in from that device for 15 minutes.
   - The portal is read-only. For changes, reply to this email or call dispatch.
+{% else %}
+YOUR LOAD NUMBER: {{ load_number }}
 
+WHAT HAPPENS NEXT
+
+  - We will email you as your mission moves, including when photos of load securement and freight condition are taken.
+  - Keep your load number handy; it is how we find your mission when you contact us.
+  - For changes, reply to this email or call dispatch.
+{% endif %}
 Mike Zachary
 Level 1 Transport Inc.
