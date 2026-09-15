@@ -1591,3 +1591,22 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 **Recorded, not resolved.** `CLAUDE.md` §7 and earlier entries in this log say "thirty-three" fields, as history. **Open for Mike:** whether the brief shows only additional stops (stop 1 repeats Delivery); whether Load Arrangement stays on the brief; whether the cockpit shows the customer's name and phone when load control is Customer; whether "Taken by" is still recorded quietly.
 
 ---
+
+## 2026-09-15 — Stops numbered "k of N"; Load Arrangement and "Taken by" removed
+
+**PR:** (this change)
+**Capability:** `dispatch/mission_template.py` (`stop_label`), `portal/brief.py`, `portal/templates/mission_brief.html`, `portal/cockpit.py`, `portal/templates/joe_portal.html`, `portal/routes/joe_portal.py` (arrangement route removed), `dispatch/load_control.py`, the intake path (`create_mission`, `to_record`), stylesheets.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"stop per mission if multiple stops pre one mission then each card should be labeled  1 of _ . show only additional stops, 2) good idea but delete now. for small operation not really useful.  3) No redundant not needed hurts cognitive load. 4) meaningless AI thought it was useful. Delete. Template: 1) yes only additional stops should list 2 of __ etc. 2) Drop it. 3) no redunat not needed. Less is more. 4) delete."*
+
+**Stops.** Delivery is stop 1. The brief lists only additional stops, labelled "2 of N", "3 of N"; on a multi-stop mission Delivery reads "1 of N" and the cockpit's stop controls read "k of N". A single-stop mission shows no numbering. Stored stops are read, never rewritten; a stored stop 1 that repeats Delivery is not shown twice.
+
+**Load Arrangement removed.** The brief section, the cockpit's OPEN LOAD DIAGRAM button, the load diagram drawer, the save route and its styles are gone. Stored arrangement values on existing records are untouched.
+
+**Load control line.** Shows only the pick (Customer / Level 1); nothing redundant added.
+
+**"Taken by" removed.** New missions no longer record who took the load; stored values on older records are untouched and not displayed.
+
+**Recorded, not resolved.** No screen can enter additional stops today (they arrive only through the emailed intake template or older data). The Arrival Notice's pickup list still promises a "Load Diagram" — a customer message, left unchanged pending the Owner. `DRIVER_COCKPIT_LOCKED_DIRECTION.md` and `docs/DISPATCH_LOAD_ARRANGEMENT_SPEC.md` still describe load arrangement, as history. A stored stop 1 can drift from Delivery after the brief is edited, because the cockpit reads stop 1 first.
+
+---
