@@ -503,6 +503,54 @@ def mission_brief(record_id: str):
     )
 
 
+def _open_operational_load(record_id: str, record: dict) -> dict:
+    """Open the load row under the Mission Record's own id, as ACCEPT LOAD does.
+
+    Nothing is minted: `create_load_with_id` keeps one key for the life of the
+    mission (dispatch/mission.py::accept_load). A load that is already open is left
+    alone. A spoken window is resolved to a date the calendar can use; one nothing
+    could read leaves the date empty and the words in the load's notes. Whatever
+    happens is said on the record and never undoes the commitment.
+    """
+    from dispatch import services as dispatch_svc
+    from dispatch.models import LOAD_SOURCES
+    from portal import brief
+    from portal.routes.api import _extract_window_start
+
+    if dispatch_svc.get_load(record_id):
+        return {"opened": False, "note": "The load was already open."}
+
+    card = record.get("card_data") or {}
+
+    def value(key: str) -> str:
+        return brief._record_value(record, key)
+
+    windows = {"Pickup": value("pickup_window"), "Delivery": value("delivery_window")}
+    dates = {label: _extract_window_start(said) for label, said in windows.items()}
+    board = str(card.get("source") or "").strip().lower()
+    try:
+        dispatch_svc.create_load_with_id(
+            record_id,
+            customer=value("customer") or record.get("title", ""),
+            broker_shipper=card.get("broker", ""),
+            pickup_location=value("pickup_location"),
+            delivery_location=value("delivery_location"),
+            pickup_datetime=dates["Pickup"],
+            delivery_datetime=dates["Delivery"],
+            equipment=card.get("equipment_required", ""),
+            source=board if board in LOAD_SOURCES else "",
+        )
+    except Exception as exc:  # noqa: BLE001 - reported on the record, never undoes COMMIT
+        return {"opened": False, "note": f"The load could not be opened: {exc}"}
+
+    unread = [f"{label} as dictated, not read as a date: {said}"
+              for label, said in windows.items() if said and not dates[label]]
+    if unread:
+        dispatch_svc.update_load(record_id, notes=" | ".join(unread))
+    return {"opened": True,
+            "note": "The load is open for the driver." + (" " + " ".join(unread) if unread else "")}
+
+
 @joe_bp.route("/brief/mission/<path:record_id>/commit", methods=["POST"])
 def mission_commit(record_id: str):
     """COMMIT. Booking ends here and Dispatch begins.
@@ -513,8 +561,9 @@ def mission_commit(record_id: str):
     supposed to be on the record by now, and the operator is the one who
     decides it is.
 
-    Nothing is created. The record SWEEP found, or that JOE took down by
-    voice, is the record that runs.
+    No second record is created. The record SWEEP found, or that JOE took down
+    by voice, is the record that runs; COMMIT opens its operational load under
+    that same id.
     """
     from datetime import datetime, timezone
 
@@ -536,6 +585,12 @@ def mission_commit(record_id: str):
             mission_svc.assigned_mission_numbers(data))
     stored.setdefault("events", []).append(
         {"action": "committed", "timestamp": now})
+
+    # COMMIT opens the load (D5, Mike Zachary, 2026-09-14: COMMIT is "the conversion from
+    # opportunity idea to actual accepted load/mission ... the beginning of the deterministic
+    # workflow"). The operational row opens under the record's own id, so the Driver
+    # Cockpit, the calendar and the driver's milestones all run on this one mission.
+    stored["operational_load"] = _open_operational_load(record_id, stored)
 
     # Ask the real Outlook to hold the time. Its answer is recorded as given,
     # including "I could not" -- a mission that quietly failed to reach the

@@ -140,6 +140,9 @@ def dispatch():
                 title=load.get("title", "Unknown"),
                 card_data=load,
                 score=load.get("score"),
+                # The origin acquisition gave it. Left out, create_entry's LIVE
+                # default put bundled sample loads on cards as live freight.
+                data_origin=load.get("data_origin") or "SIMULATED",
             )
             scoring = load.get("_scoring")
             if scoring:

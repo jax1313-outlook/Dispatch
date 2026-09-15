@@ -1449,3 +1449,18 @@ The portal-access email at COMMIT and the Customer Alerts for securement and fre
 **Recorded, not resolved.** A frozen photo alert tells the customer photos exist without showing them. Attaching the photos is the real answer; the Outlook adapter already takes attachments, `dispatch.mail` does not yet. Carried to CO-6 (customer updates) in the Deterministic Close-Out roadmap.
 
 ---
+
+## 2026-09-14 — CO-1: COMMIT opens the load; sample loads stop showing as live
+
+**PR:** (this change)
+**Capability:** `portal/routes/joe_portal.py` (`_open_operational_load`, `mission_commit`), `portal/routes/pages.py` (dispatch seeding).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** D5: *"Commit creates the conversion from opprotuity idea to actual accepted load/mission. the creation of the classified card and the beginning of the deterministic workflow."* The Deterministic Close-Out roadmap (CO-1, One COMMIT), then *"continue"*.
+
+**What changed.** COMMIT now opens the operational load row under the Mission Record's own id — the same "one key for the life of the mission" rule ACCEPT LOAD already follows (`dispatch/mission.py::accept_load`). Customer, pickup and delivery locations and windows come from the record; a spoken window is resolved to a date, and one nothing could read leaves the date empty with the words in the load's notes. A load already open (booked first) is left alone. The outcome is written on the record as `operational_load` and never undoes the commitment. A committed mission is therefore immediately workable from the Driver Cockpit and appears on the load calendar.
+
+**Defect fixed.** The Dispatch screen seeded acquisition's loads onto cards without their `data_origin`, so `sandbox.create_entry`'s LIVE default showed bundled sample freight as live. The origin acquisition gives is now carried; a missing one is SIMULATED.
+
+**Recorded, not resolved.** BOOK still opens the load on its own (with its automatic rate confirmation) and does not commit, hold the calendar or send portal access. Folding BOOK into COMMIT is the rest of CO-1; it waits until every test that reaches the booking path keeps Outlook closed, so no test can put an appointment on a real calendar.
+
+---
