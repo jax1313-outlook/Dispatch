@@ -79,13 +79,18 @@ class TestTheReader:
         assert extras["rpm"] == 3.62
         # D8: the customer's own number travels to the card.
         assert extras["load_id"] == "SFP-88213"
-        assert read["required_missing"] == []
+        assert read["key_missing"] == [] and read["nothing_read"] is False
 
     def test_a_per_mile_figure_is_never_the_rate(self):
         read = listing.parse_listing("Tampa, FL to Miami, FL\nRate: $2.75/mi\n280 miles")
         assert "rate" not in read["fields"]
         assert read["card_extras"]["rpm"] == 2.75
-        assert read["required_missing"] == ["rate"]
+        # Reported for the card, no longer a reason to refuse (Owner ruling 2026-09-15).
+        assert read["key_missing"] == ["rate"] and read["nothing_read"] is False
+
+    def test_text_with_nothing_in_it_is_nothing_read(self):
+        read = listing.parse_listing("Hello, call me when you can.")
+        assert read["fields"] == {} and read["nothing_read"] is True
 
     def test_labelled_fields(self):
         read = listing.parse_listing(LABELLED)
@@ -174,13 +179,37 @@ class TestThroughTheLoadsScreen:
         cards = [e for e in sandbox.get_all().values() if e["source_type"] == "dispatch"]
         assert len(cards) == 1
 
-    def test_a_paste_without_a_rate_stores_nothing_and_asks(self, client):
+    def test_a_paste_without_a_rate_is_logged_with_the_rate_pending(self, client):
+        """Was: stores nothing and asks for the rate. **Owner ruling, 2026-09-15:**
+        *"holding a load with out a rate will need an astric or blank is not
+        negative."* The card is made, the rate shows "*", and the score is read
+        against the maximum without the rate."""
         resp = client.post("/loads/paste",
                            data={"pasted": "Tampa, FL to Miami, FL\n280 miles"})
+        assert resp.status_code == 302
+        cards = [e for e in sandbox.get_all().values() if e["source_type"] == "dispatch"]
+        assert len(cards) == 1
+        card = cards[0]["card_data"]
+        assert card["origin"] == "Tampa, FL" and "rate" not in card
+        assert card["rate_pending"] is True
+        assert opportunity.all_open()[0]["rate"] is None
+        page = client.get("/loads").get_data(as_text=True)
+        assert "Card made: Tampa, FL to Miami, FL, * rate pending." in page
+        assert "* Rate pending" in page
+        assert "Needs rate" not in page
+
+    def test_a_paste_without_a_lane_is_logged_with_what_was_read(self, client):
+        """Ruling "1a": no city, and what was read is still saved."""
+        resp = client.post("/loads/paste", data={"pasted": "Rate: $1,400\nEquipment: Reefer"})
+        assert resp.status_code == 302
+        record = opportunity.all_open()[0]
+        assert record["rate"] == 1400.0 and record["origin"] == "" and record["destination"] == ""
+        assert "Card made: no city read, $1400." in client.get("/loads").get_data(as_text=True)
+
+    def test_a_paste_with_nothing_readable_stores_nothing(self, client):
+        resp = client.post("/loads/paste", data={"pasted": "Hello, call me when you can."})
         assert resp.status_code == 400
-        page = resp.get_data(as_text=True)
-        assert "Needs rate" in page
-        assert 'value="Tampa, FL"' in page
+        assert "Nothing readable" in resp.get_data(as_text=True)
         assert sandbox.get_all() == {}
         assert opportunity.all_open() == []
 

@@ -115,8 +115,18 @@ WANTED = (
     ("contact", "customer"),
 )
 
-#: Capture fields the contract refuses to log without (`opportunity.REQUIRED`).
-REQUIRED = ("origin", "destination", "rate")
+#: The capture fields a card leads with (`opportunity.KEY_FACTS`). Reported when
+#: not read, so the card shows the gap. **No longer required** -- Owner rulings,
+#: 2026-09-15: a listing without a rate or a city is still logged. Only a paste
+#: nothing could be read from is refused (`nothing_read`).
+KEY_FACTS = ("origin", "destination", "rate")
+
+
+def nothing_read(fields: dict) -> bool:
+    """Whether a read found no freight fact the capture contract carries."""
+    from dispatch import opportunity
+
+    return not opportunity.has_freight_fact(fields or {})
 
 
 def _number(text: str):
@@ -189,7 +199,7 @@ def parse_listing(text: str) -> dict:
     """Read pasted listing text. Returns fields, card extras and what is missing.
 
     `{"fields": {...}, "card_extras": {...}, "missing": [...],
-      "required_missing": [...], "pasted": "..."}`
+      "key_missing": [...], "nothing_read": bool, "pasted": "..."}`
     """
     pasted = str(text or "")
     labelled = _labelled(pasted)
@@ -390,6 +400,8 @@ def _report(fields: dict, extras: dict, pasted: str) -> dict:
         "fields": {k: v for k, v in fields.items() if v not in ("", None)},
         "card_extras": {k: v for k, v in extras.items() if v not in ("", None)},
         "missing": missing,
-        "required_missing": [k for k in REQUIRED if not fields.get(k)],
+        # Reported, never refused for: a card shows these gaps.
+        "key_missing": [k for k in KEY_FACTS if fields.get(k) in (None, "")],
+        "nothing_read": nothing_read(fields),
         "pasted": pasted,
     }

@@ -113,7 +113,10 @@ class TestClassOne:
 
 class TestSparseCaptureIsValidCapture:
     """§2: *"only board, origin, destination, and rate are required. A capture
-    with gaps beats a listing lost to the next screen."*"""
+    with gaps beats a listing lost to the next screen."*
+
+    The required list is empty since the Owner rulings of 2026-09-15 (the plan
+    text is not edited here; the conflict is recorded for the decision log)."""
 
     def test_the_three_alone_are_enough(self, client):
         r = _post(client)
@@ -122,11 +125,44 @@ class TestSparseCaptureIsValidCapture:
         for gap in ("pieces_weight", "equipment", "pickup_date", "contact", "notes"):
             assert record[gap] == ""
 
-    @pytest.mark.parametrize("missing", ["origin", "destination"])
-    def test_each_of_the_three_is_actually_required(self, client, missing):
+    @pytest.mark.parametrize("missing", ["origin", "destination", "rate"])
+    def test_none_of_the_three_is_required_any_more(self, client, missing):
+        """**Owner rulings, 2026-09-15.** These three were required and a capture
+        without any one of them was refused. On the lane: *"I do not use lane for
+        any thing. delete."* and **"1a"**; on the rate: *"holding a load with out a
+        rate will need an astric or blank is not negative."* Each is now logged
+        with the gap, and the record keeps the gap rather than a guess."""
         r = _post(client, **{missing: ""})
+        assert r.status_code == 201, r.get_json()
+        record = opp.get(r.get_json()["opportunity_id"])
+        assert record[missing] in ("", None)
+        assert opp.REQUIRED == ()
+
+    def test_only_a_lane_is_enough(self, client):
+        r = _post(client, rate="")
+        assert r.status_code == 201
+        d = r.get_json()
+        assert opp.get(d["opportunity_id"])["rate"] is None
+        assert "RATE PENDING" in d["echo"] and d["carded"] is True
+
+    def test_only_a_rate_is_enough(self, client):
+        r = client.post("/api/joe/opportunity", json={"rate": 900},
+                        headers={"Authorization": "Bearer " + TOKEN, "X-Driver": "mike"})
+        assert r.status_code == 201
+        record = opp.get(r.get_json()["opportunity_id"])
+        assert record["rate"] == 900.0 and record["origin"] == "" and record["destination"] == ""
+        echo = r.get_json()["echo"]
+        assert "$900" in echo and " TO " not in echo and "RATE PENDING" not in echo
+
+    def test_nothing_heard_is_still_refused(self, client):
+        """The one refusal left: a capture that carries no freight fact at all."""
+        r = client.post("/api/joe/opportunity",
+                        json={"source_board": "DAT", "origin": "", "destination": "",
+                              "rate": ""},
+                        headers={"Authorization": "Bearer " + TOKEN, "X-Driver": "mike"})
         assert r.status_code == 400
-        assert missing in r.get_json()["note"]
+        assert "nothing heard" in r.get_json()["note"]
+        assert opp.all_open() == []
 
     def test_the_board_is_carried_but_no_longer_required(self, client):
         """**Owner ruling, 2026-09-08:** *"I don't think that which load board
@@ -138,18 +174,24 @@ class TestSparseCaptureIsValidCapture:
         assert r.status_code == 201
         assert "source_board" in opp.FIELDS
 
-    def test_a_missing_rate_is_refused_not_defaulted(self, client):
+    def test_a_missing_rate_is_pending_not_defaulted(self, client):
         """Zero is a number a broker could have said. A missing rate is not
-        free freight, so it is never invented."""
+        free freight, so it is never invented. It was refused; since the Owner
+        ruling of 2026-09-15 it is logged as None -- pending -- and never as 0."""
         r = _post(client, rate="")
-        assert r.status_code == 400
-        assert "rate" in r.get_json()["note"]
+        assert r.status_code == 201
+        assert opp.get(r.get_json()["opportunity_id"])["rate"] is None
+
+    def test_a_rate_that_is_not_a_number_is_still_refused(self, client):
+        r = _post(client, rate="call me")
+        assert r.status_code == 400 and "rate" in r.get_json()["note"]
+        assert opp.all_open() == []
 
     def test_a_rate_of_zero_is_a_real_answer(self, client):
         assert _post(client, rate=0).status_code == 201
 
     def test_a_refused_capture_stores_nothing(self, client):
-        _post(client, origin="")
+        _post(client, origin="", destination="", rate="", source_board="")
         assert opp.all_open() == []
 
 
@@ -217,6 +259,33 @@ class TestTheDeduplicationRule:
         d = _post(client, pickup_date="").get_json()
         assert d["verdict"] == "AMBIGUOUS"
         assert d["possible_duplicate_of"]
+
+    def test_two_rate_less_loads_on_different_lanes_are_two_loads(self, client):
+        """2026-09-15: captures without a rate are logged now. Both lacking a rate
+        is not something they have in common -- a missing rate is unknown."""
+        first = _post(client, rate="", pickup_date="2026-09-10").get_json()
+        second = _post(client, rate="", destination="Orlando, FL",
+                       pickup_date="2026-09-10").get_json()
+        assert first["verdict"] == "NEW" and second["verdict"] == "NEW"
+        assert len(opp.all_open()) == 2
+
+    def test_two_rate_less_sightings_of_one_lane_are_flagged_never_merged(self, client):
+        first = _post(client, rate="", pickup_date="2026-09-10").get_json()
+        second = _post(client, rate="", pickup_date="2026-09-10").get_json()
+        assert second["verdict"] == "AMBIGUOUS"
+        assert second["possible_duplicate_of"] == first["opportunity_id"]
+        assert len(opp.all_open()) == 2
+
+    def test_a_half_heard_lane_is_never_merged(self, client):
+        _post(client, pickup_date="2026-09-10")
+        d = _post(client, destination="", pickup_date="2026-09-10").get_json()
+        assert d["verdict"] == "AMBIGUOUS" and len(opp.all_open()) == 2
+
+    def test_captures_with_no_lane_in_common_are_not_called_duplicates(self, client):
+        headers = {"Authorization": "Bearer " + TOKEN, "X-Driver": "mike"}
+        client.post("/api/joe/opportunity", json={"rate": 900}, headers=headers)
+        d = client.post("/api/joe/opportunity", json={"rate": 900}, headers=headers).get_json()
+        assert d["verdict"] == "NEW" and d["flag"] == ""
 
     def test_a_flagged_record_names_the_one_it_may_duplicate(self, client):
         first = _post(client, pickup_date="2026-09-10").get_json()

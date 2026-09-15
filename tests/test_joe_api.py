@@ -36,8 +36,13 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("DISPATCH_JOE_TOKEN", TOKEN)
     from dispatch import scheduling
+    from dispatch.connectors import outlook_mail
 
     monkeypatch.setattr(scheduling, "_outlook_is_running", lambda: False)
+    # No test may reach a real Outlook. Without this, a machine with Outlook open
+    # sends the confirmed send-notice below for real (found 2026-09-15: the test
+    # came back "sent": True).
+    monkeypatch.setattr(outlook_mail, "_outlook_is_running", lambda: False)
     yield
 
 

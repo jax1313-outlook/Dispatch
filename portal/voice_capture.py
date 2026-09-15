@@ -20,15 +20,27 @@ The words are read by the existing dictation reader, exactly as the seventh
 contract reads them:
 
   * `dispatch.opportunity.parse_dictation` -- the words into fields
-  * `dispatch.opportunity.one_question`    -- the one question (RATE?)
   * `dispatch.opportunity.capture`         -- dedup, merge, rehearsal tag
   * `portal.models.opportunity_card.from_capture` -- the card at capture time
   * `dispatch.opportunity.echo`            -- the read-back
+  * `portal.models.opportunity_card.discard_expired` -- clears expired
+    uncommitted cards first, as a paste does
 
 Rule 15, Reuse Before Create: the only new thing here is saying NEXT between
-loads, and keeping a load's words while its one question is answered.
+loads.
 
-**Capture only.** Nothing here commits, passes, discards or sends. Class 1.
+**Owner rulings, 2026-09-15.** On "NOT LOGGED. LANE NOT HEARD.": *"i do not know
+where this came from. I do not use lane for any thing. delete."* -- then **"1a"**:
+no lane message and no question; a load with no pickup or delivery city still
+saves what was heard. On the rate question: **"3 yes stop asking rate"** -- a load
+with no rate is logged and the read-back says RATE PENDING. And *"clear expired
+cards too"*. So every load with at least one fact is logged, nothing is asked,
+and only a load with nothing in it is NOT LOGGED.
+
+**Capture only.** *"Capture only: it never commits, passes or sends anything."*
+Nothing here commits, passes or sends. The one removal it makes is the one a
+paste makes: uncommitted cards whose pickup has already gone by (D12), through
+the card model's own gate, which never touches a committed load. Class 1.
 
 The ratified contract `POST /api/joe/opportunity` is not called and not
 changed: it is a machine contract with a bearer token the tablet never holds
@@ -55,13 +67,10 @@ _NEXT_RE = re.compile(
     % "|".join(_DAY_WORDS),
     flags=re.IGNORECASE)
 
-#: What he says instead of a rate to leave a load unlogged.
-SKIP_WORDS = ("skip", "skip it", "drop", "drop it", "never mind", "nevermind", "cancel")
-
-#: Status words for one load in the read-back list.
+#: Status words for one load in the read-back list. There is no question status:
+#: nothing asks (Owner ruling 2026-09-15, "3 yes stop asking rate").
 LOGGED = "LOGGED"
 MERGED = "MERGED"
-QUESTION = "QUESTION"
 NOT_LOGGED = "NOT LOGGED"
 
 _OPPORTUNITY_ID_RE = re.compile(r"\s*OPPORTUNITY [A-Z]+-[0-9A-F]+\.", flags=re.IGNORECASE)
@@ -97,47 +106,26 @@ def _refused(words: str, driver: str, note: str, say: str, fields: dict) -> dict
     audit.record(action="opportunity-capture", driver=driver, channel=audit.CHANNEL_VOICE,
                  result=audit.RESULT_FAILURE, note="cockpit voice: %s" % note)
     return {"words": words, "status": NOT_LOGGED, "say": say, "speak": say,
-            "question": "", "verdict": "", "opportunity_id": "", "card_id": "",
-            "carded": False, "note": note, "fields": fields}
+            "verdict": "", "opportunity_id": "", "card_id": "",
+            "carded": False, "note": note, "fields": fields, "missing": []}
 
 
-def capture_one(words: str, *, driver: str, answer: str | None = None) -> dict:
-    """Read one load's words, ask its one question or log it, and say what happened.
+def capture_one(words: str, *, driver: str) -> dict:
+    """Read one load's words, log it, and say what happened.
 
-    `answer` is what he said back to the question. A rate logs the load; a skip
-    word leaves it unlogged; anything else asks again. **Nothing is stored for a
-    load that still has a question**, and its words come back so the question
-    can be answered against them.
+    **Nothing is asked.** A load with no rate is logged and read back with RATE
+    PENDING; a load with no pickup or delivery city is logged with what was
+    heard (Owner rulings 2026-09-15). Only words with no freight fact in them
+    are NOT LOGGED, and those words come back so they can be read again.
     """
     from dispatch import audit, opportunity
 
     parsed = opportunity.parse_dictation(words)
     fields = dict(parsed["fields"])
-    missing = list(parsed["missing"])
     lane = _lane(fields)
 
-    if answer is not None:
-        said = " ".join(str(answer).split())
-        if said.lower().strip(" .!?") in SKIP_WORDS:
-            line = "NOT LOGGED. %s DROPPED." % (lane or "LOAD")
-            return {"words": words, "status": NOT_LOGGED, "say": line, "speak": line,
-                    "question": "", "verdict": "", "opportunity_id": "", "card_id": "",
-                    "carded": False, "note": "dropped at the question", "fields": fields}
-        rate = opportunity.parse_dictation(said).get("fields", {}).get("rate") if said else None
-        if rate is not None:
-            fields["rate"] = rate
-            missing = [m for m in missing if m != "rate"]
-
-    if "origin" in missing or "destination" in missing:
-        line = "NOT LOGGED. LANE NOT HEARD."
-        return _refused(words, driver, "lane not heard", line, fields)
-
-    question = opportunity.one_question(missing)
-    if question:
-        line = ("%s. %s" % (lane, question)) if lane else question
-        return {"words": words, "status": QUESTION, "say": line, "speak": line,
-                "question": question, "verdict": "", "opportunity_id": "", "card_id": "",
-                "carded": False, "note": "", "fields": fields}
+    if not opportunity.has_freight_fact(fields):
+        return _refused(words, driver, "nothing heard", "NOT LOGGED. NOTHING HEARD.", fields)
 
     fields["captured_via"] = CHANNEL
     try:
@@ -181,45 +169,40 @@ def capture_one(words: str, *, driver: str, answer: str | None = None) -> dict:
     if not line.endswith((".", "?")):
         line += "."
     return {"words": words, "status": MERGED if verdict == "MERGED" else LOGGED,
-            "say": line, "speak": spoken(line), "question": "", "verdict": verdict,
+            "say": line, "speak": spoken(line), "verdict": verdict,
             "opportunity_id": record["opportunity_id"], "card_id": card_id,
             "carded": carded, "note": note,
             "flag": record.get("flag", ""),
             "possible_duplicate_of": record.get("possible_duplicate_of", ""),
-            "filled": record.get("filled", []), "fields": fields}
+            "filled": record.get("filled", []), "fields": fields,
+            "rate_pending": record.get("rate") is None,
+            # What was not heard, for the screen. Nothing asks for it.
+            "missing": list(parsed["missing"]),
+            "lane": lane}
 
 
-def capture_spoken(text: str, *, driver: str, answer: str | None = None) -> dict:
-    """One submission from the voice drawer: several loads split on NEXT, or one
-    load's words with the answer to its question.
+def capture_spoken(text: str, *, driver: str) -> dict:
+    """One submission from the voice drawer: one or more loads, split on NEXT.
 
-    Returns `{"ok", "loads", "say", "speak"}`. `say` is every load's line in
-    order, with **only the first question** -- one question at a time; the
-    screen asks the next one after this one is answered.
+    Clears expired uncommitted cards first, the way `/loads/paste` does (Owner
+    ruling 2026-09-15: *"clear expired cards too"*), then logs every load that
+    carries a fact. Returns `{"ok", "loads", "say", "speak", "cleared_expired"}`;
+    `say` is every load's line in the order they were said.
     """
     words = " ".join(str(text or "").split())
-    if not words:
-        line = "NOTHING HEARD."
-        return {"ok": False, "loads": [], "say": line, "speak": line}
-
-    pieces = [words] if answer is not None else split_loads(text)
+    pieces = split_loads(text) if words else []
     if not pieces:
         line = "NOTHING HEARD."
-        return {"ok": False, "loads": [], "say": line, "speak": line}
+        return {"ok": False, "loads": [], "say": line, "speak": line, "cleared_expired": 0}
 
-    loads = [capture_one(p, driver=driver, answer=answer) for p in pieces]
+    # D12: expired uncommitted loads go when work is done, never on a look (D9).
+    # The card model's own gate refuses to remove a committed load.
+    from portal.models import opportunity_card
 
-    said, speak, asked = [], [], False
-    for load in loads:
-        if load["status"] == QUESTION:
-            if asked:
-                continue
-            asked = True
-        said.append(load["say"])
-        speak.append(load["speak"])
-    # Questions go last in what is said, so the last thing he hears is the one
-    # thing he has to answer.
-    order = sorted(range(len(said)), key=lambda i: said[i].endswith("?"))
+    cleared = opportunity_card.discard_expired(driver=driver)
+
+    loads = [capture_one(p, driver=driver) for p in pieces]
     return {"ok": True, "loads": loads,
-            "say": " ".join(said[i] for i in order),
-            "speak": " ".join(speak[i] for i in order)}
+            "say": " ".join(load["say"] for load in loads),
+            "speak": " ".join(load["speak"] for load in loads),
+            "cleared_expired": len(cleared)}

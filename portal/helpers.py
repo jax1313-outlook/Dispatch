@@ -25,10 +25,16 @@ SCORE_BAND_SHARES = (
 )
 
 
-def _score_max() -> int:
-    from dispatch.scoring import MAX_SCORE
+def _score_max(rate_pending: bool = False) -> int:
+    """The maximum a score is read against.
 
-    return MAX_SCORE
+    With the rate pending it is the maximum without the rate factor (Owner ruling
+    2026-09-15, "2a"), so the bands keep the same shares of what that card can
+    actually score -- a card is never banded lower for a rate nobody has given.
+    """
+    from dispatch.scoring import MAX_SCORE, MAX_SCORE_WITHOUT_RATE
+
+    return MAX_SCORE_WITHOUT_RATE if rate_pending else MAX_SCORE
 
 
 #: Kept for callers that read it: the score at which a card is HIGH VALUE.
@@ -90,11 +96,15 @@ def load_dispatch_data() -> list[dict]:
     return loads
 
 
-def card_visual(score: int | None, decision: dict | None = None) -> dict:
-    """Determine card visual header based on score or routing decision."""
+def card_visual(score: int | None, decision: dict | None = None, *,
+                rate_pending: bool = False) -> dict:
+    """Determine card visual header based on score or routing decision.
+
+    `rate_pending` reads the score against the maximum without the rate factor.
+    """
     if score is not None:
         for share, visual in SCORE_BAND_SHARES:
-            if score >= share * _score_max():
+            if score >= share * _score_max(bool(rate_pending)):
                 return dict(visual)
         return {"icon": "🔴", "label": "POOR MATCH", "css": "card-poor"}
 
@@ -113,10 +123,29 @@ def card_visual(score: int | None, decision: dict | None = None) -> dict:
     return {"icon": "", "label": "", "css": "card-default"}
 
 
-def format_score(score: int | None) -> str:
+#: How a score with the rate pending is marked. Owner ruling 2026-09-15:
+#: *"(a) a score from everything except the rate, marked '* rate pending'"*.
+RATE_PENDING_MARK = "* rate pending"
+
+
+def format_score(score: int | None, rate_pending: bool = False) -> str:
+    """The score as shown. With the rate pending: "52 of 60 · * rate pending"."""
     if score is None:
         return "Unknown"
+    if rate_pending:
+        return "%s of %s · %s" % (score, _score_max(True), RATE_PENDING_MARK)
     return str(score)
+
+
+def score_share(score: int | None, rate_pending: bool = False) -> float | None:
+    """A score as a share of the maximum that applies to it. None when unscored.
+
+    What a threshold set against the full maximum is compared with, so a card
+    with the rate pending is measured like with like.
+    """
+    if score is None:
+        return None
+    return float(score) / _score_max(bool(rate_pending))
 
 
 def attention_needed(limit: int = 5) -> list[dict]:

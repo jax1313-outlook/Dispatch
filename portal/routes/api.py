@@ -221,10 +221,20 @@ def create_inquiry():
     if not broker_email:
         return jsonify({"status": "BLOCKED_MISSING_EMAIL", "reason": "No broker email available."})
 
-    if score is not None and score < threshold:
+    # Like with like. The threshold is set against the full maximum; a card with
+    # the rate pending is scored against the maximum without the rate factor
+    # (Owner ruling 2026-09-15, "2a"), so both are compared as shares.
+    from dispatch.scoring import MAX_SCORE
+
+    rate_pending = bool(card.get("rate_pending"))
+    share = helpers.score_share(score, rate_pending)
+    if share is not None and share < threshold / MAX_SCORE:
+        shown = helpers.format_score(score, rate_pending)
+        needed = threshold if not rate_pending else round(
+            threshold / MAX_SCORE * helpers._score_max(True))
         return jsonify({
             "status": "NOT_READY",
-            "reason": f"Score {score} is below the inquiry threshold ({threshold}).",
+            "reason": f"Score {shown} is below the inquiry threshold ({needed}).",
         })
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

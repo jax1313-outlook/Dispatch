@@ -20,7 +20,9 @@ emails from specific senders to a box then the reader can do it's thing."*
      in it goes through the paste's own capture path
      (`opportunity_card.capture_from_text`) -- dedupe and merge rules and all.
      A load whose pickup has passed is not carded. A load matching a committed
-     record is left alone. What cannot be read is kept as *needs a look*.
+     record is left alone. A load with no rate, or missing a city, is carded with
+     the rate pending (Owner rulings, 2026-09-15). Only what nothing could be
+     read from is kept as *needs a look*.
   5. Remembers every message it handled, by the mailbox's id and by a
      fingerprint, in this store -- never by marking anything in the mailbox.
 
@@ -428,8 +430,10 @@ def _card_one(load: dict, outcome: dict, message: dict, report: dict, *,
     key = {"MERGED": "merged", "AMBIGUOUS": "possible_duplicates"}.get(verdict, "new_cards")
     report["counts"][key] += 1
     report["cards"].append({"id": captured["entry"]["id"], "verdict": verdict,
-                            "lane": "%s to %s" % (record.get("origin", ""),
-                                                  record.get("destination", ""))})
+                            "lane": " to ".join(p for p in (record.get("origin", ""),
+                                                            record.get("destination", ""))
+                                                if p),
+                            "rate_pending": record.get("rate") is None})
     return verdict.lower()
 
 

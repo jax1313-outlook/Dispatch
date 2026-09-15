@@ -472,6 +472,7 @@ def clear_expired_loads():
 def _candidate_rows() -> list:
     """The Loads workbench rows: every uncommitted record still waiting on a decision."""
     from dispatch import commitment
+    from portal import helpers
     from portal.models import opportunity_card
 
     expired = set(opportunity_card.expired_card_ids())
@@ -484,6 +485,9 @@ def _candidate_rows() -> list:
         merged = dict(record)
         merged["numbers"] = mission_svc.display_numbers(merged)
         card = record.get("card_data") or {}
+        rate = record.get("rate") or card.get("rate") or ""
+        # The score was read against the maximum its card was scored with.
+        pending = bool(card.get("rate_pending"))
         rows.append({
             "id": record.get("id"),
             "load_number": record.get("load_number") or card.get("load_id") or "",
@@ -491,7 +495,9 @@ def _candidate_rows() -> list:
             "origin": card.get("origin") or record.get("pickup_location") or "",
             "destination": card.get("destination") or record.get("delivery_location") or "",
             "when": record.get("pickup_window") or card.get("pickup_window") or "",
-            "rate": record.get("rate") or card.get("rate") or "",
+            # Owner ruling 2026-09-15: a load held without a rate shows "*".
+            "rate": rate or "*",
+            "rate_line": "* Rate pending" if pending and not rate else "",
             "source": (record.get("intake_source") or card.get("source")
                        or card.get("captured_via") or ""),
             "gaps": brief_gaps(merged),
@@ -499,8 +505,8 @@ def _candidate_rows() -> list:
             "warnings": [w.get("text", "") for w in (card.get("warnings") or [])
                          if isinstance(w, dict)],
             "timing": card.get("delivery_timing") or "",
-            "score": ("needs rate" if card.get("needs_rate") else
-                      "" if record.get("score") is None else str(record.get("score"))),
+            "score": ("" if record.get("score") is None else
+                      helpers.format_score(record.get("score"), pending)),
         })
 
     rows.sort(key=lambda r: (r["when"] or "~", r["customer"]))
@@ -520,10 +526,11 @@ def paste_listing():
     decision making."* The text is what the person copied. Nothing here reads a
     board or a mailbox (D1), and nothing is written for any one board.
 
-    A paste that carries a lane and a rate is logged through the capture
-    contract's own function and lands on this screen as a card, with what is
-    still missing named. One that does not comes back with what was read filled
-    in, and asks for exactly what the contract needs -- nothing is stored.
+    A paste with anything readable in it is logged through the capture contract's
+    own function and lands on this screen as a card, with what is still missing
+    named -- a lane or a rate included (Owner rulings, 2026-09-15; a card without
+    a rate shows it pending). A paste nothing could be read from comes back with
+    the form as it was typed, and nothing is stored.
     """
     from portal.models import opportunity_card
 
@@ -543,9 +550,12 @@ def paste_listing():
 
     if outcome["ok"]:
         record = outcome["record"]
-        line = "Card made: %s to %s, $%s." % (
-            record.get("origin", ""), record.get("destination", ""),
-            ("%.2f" % record["rate"]).rstrip("0").rstrip(".") if record.get("rate") else "")
+        lane = " to ".join(p for p in (record.get("origin", ""), record.get("destination", ""))
+                           if p) or "no city read"
+        # Owner ruling 2026-09-15: a load held without a rate shows an asterisk.
+        money = ("$%s" % ("%.2f" % record["rate"]).rstrip("0").rstrip(".")
+                 if record.get("rate") is not None else "* rate pending")
+        line = "Card made: %s, %s." % (lane, money)
         if record.get("verdict") == "MERGED":
             line = "Already on a card; filled in what it was missing."
         if outcome["missing"]:
@@ -1117,34 +1127,31 @@ def cockpit_fuel_receipt():
 # Self-contained block. The TALK card and its drawer in joe_portal.html post
 # here. The tablet turns speech into words; only the words arrive. The work is
 # portal/voice_capture.py, which reuses the dictation reader and the capture
-# contract's own functions. Capture only: nothing is committed, passed or sent.
+# contract's own functions. Capture only: nothing is committed, passed or sent;
+# like a paste, it clears expired uncommitted cards first.
 
 @joe_bp.route("/portal/voice-capture", methods=["POST"])
 def cockpit_voice_capture():
-    """Words from the voice drawer -> loads logged, one question, the read-back.
+    """Words from the voice drawer -> loads logged, and the read-back. Nothing asked.
 
-    JSON `{"text", "answer"?}` from the drawer's script answers JSON. A plain
-    form post (a browser with no script) says the read-back in the JOE line and
-    comes back to the cockpit.
+    JSON `{"text"}` from the drawer's script answers JSON. A plain form post (a
+    browser with no script) says the read-back in the JOE line and comes back to
+    the cockpit. Owner rulings 2026-09-15: no lane refusal, no rate question, a
+    load without a rate is read back RATE PENDING, and expired uncommitted cards
+    are cleared first.
     """
     from portal import voice_capture
 
     body = request.get_json(silent=True) if request.is_json else None
     source = body if isinstance(body, dict) else request.form
     text = str(source.get("text") or "")
-    answer = source.get("answer")
-    answer = None if answer is None else str(answer)
     driver = str(session.get("user_id") or session.get("driver_id") or "driver-pin").strip()
 
-    result = voice_capture.capture_spoken(text, driver=driver, answer=answer)
+    result = voice_capture.capture_spoken(text, driver=driver)
     if body is not None:
         return jsonify(result), (200 if result["ok"] else 400)
 
-    line = result["say"]
-    waiting = [load["words"] for load in result["loads"] if load["status"] == voice_capture.QUESTION]
-    if waiting:
-        line += " Say it again with the rate: %s" % waiting[0]
-    flash(line)
+    flash(result["say"])
     record_id = str(request.form.get("record_id") or "").strip()
     if record_id and sandbox.get(record_id):
         return _back_to_cockpit(record_id)

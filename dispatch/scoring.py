@@ -46,6 +46,43 @@ _WEIGHT_LIMIT_LBS = 45000
 #: silently rescale every band without anything failing.
 MAX_SCORE = 90
 
+#: The points the rate-quality factor can contribute.
+RATE_POINTS = 30
+
+#: The highest score a load **without a rate** can produce: every factor except
+#: the rate. **Owner ruling, 2026-09-15** -- asked how a load with no rate should
+#: be scored, *"(a) a score from everything except the rate, marked '* rate
+#: pending'"*, he answered **"2a"**. A missing rate contributes nothing and is not
+#: a penalty; the score is read against this reduced maximum, never against 90.
+MAX_SCORE_WITHOUT_RATE = MAX_SCORE - RATE_POINTS
+
+
+def rate_of(load: dict):
+    """The load's rate as a number, or None when it is pending.
+
+    Pending means no rate was given: absent, blank, not a number, or zero or
+    less. Zero is treated as pending on a card because a board that shows no
+    rate often shows $0; the capture contract still stores a spoken zero as said.
+    """
+    raw = (load or {}).get("rate")
+    if raw is None:
+        return None
+    try:
+        value = float(str(raw).replace("$", "").replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def rate_pending(load: dict) -> bool:
+    """Whether a load is scored without its rate (`MAX_SCORE_WITHOUT_RATE`)."""
+    return rate_of(load) is None
+
+
+def score_max_for(load: dict) -> int:
+    """The maximum this load's score is read against: 90, or 60 with the rate pending."""
+    return MAX_SCORE_WITHOUT_RATE if rate_pending(load) else MAX_SCORE
+
 _KNOWN_DISTANCES: dict[tuple[str, str], float] = {
     ("jacksonville", "savannah"): 140,
     ("jacksonville", "atlanta"): 345,
@@ -337,10 +374,13 @@ def compute_capacity_flags(load: dict) -> list[str]:
 
 
 def compute_economic_opportunity(load: dict) -> str:
-    rate = load.get("rate")
+    rate = rate_of(load)
     distance = load.get("distance_miles")
 
-    if rate is None or distance is None or distance == 0:
+    if rate is None:
+        # Not "below floor": a rate nobody has given is pending, not low.
+        return "Unknown — rate pending"
+    if distance is None or distance == 0:
         return "Unknown — rate or distance data missing"
 
     rpm = rate / distance
@@ -398,12 +438,20 @@ def compute_score(load: dict) -> int:
     Band thresholds were set against a 100-point maximum and have not been
     revisited. They are policy values and are reviewed when the weights move into
     the Policy Profile.
+
+    **A load without a rate** (Owner ruling 2026-09-15, "2a") is scored on every
+    other factor. The rate factor contributes nothing -- not the five points of
+    "benefit of the doubt" it used to, and not a penalty -- and the result is
+    capped at `MAX_SCORE_WITHOUT_RATE`, the maximum it is read against
+    (`score_max_for`).
     """
     score = 0.0
 
-    rate = load.get("rate")
+    rate = rate_of(load)
     distance = load.get("distance_miles")
-    if rate and distance and distance > 0:
+    if rate is None:
+        pass  # rate pending: this factor is left out, not scored low
+    elif distance and distance > 0:
         rpm = rate / distance
         if rpm >= _RATE_PER_MILE_EXCELLENT:
             score += 30
@@ -413,8 +461,6 @@ def compute_score(load: dict) -> int:
         elif rpm >= _RATE_PER_MILE_FLOOR:
             score += 15 * ((rpm - _RATE_PER_MILE_FLOOR) / (_RATE_PER_MILE_GOOD - _RATE_PER_MILE_FLOOR))
         # below floor: 0 points
-    elif rate is None:
-        score += 5  # unknown rate gets small benefit of the doubt
 
     if distance:
         if distance <= _OPERATING_RADIUS_MILES:
@@ -467,7 +513,7 @@ def compute_score(load: dict) -> int:
     # until broken. See docs/DISPATCH_SCORING_ACCEPTANCE_CRITERIA.md section 3:
     # trust is not a program variable. It is not scored, inferred or stored.
 
-    return max(0, min(MAX_SCORE, round(score)))
+    return max(0, min(score_max_for(load), round(score)))
 
 
 def _requested_drive_hours(load: dict) -> float:

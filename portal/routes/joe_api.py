@@ -189,6 +189,8 @@ def mission_template():
         "sections": list(dict.fromkeys(f["section"] for f in fields)),
         "opportunity": {
             "fields": list(opportunity.FIELDS),
+            # Empty since the Owner rulings of 2026-09-15: no capture is refused
+            # for want of any one field, only for carrying no freight fact.
             "required": list(opportunity.REQUIRED),
             "dictation_order": list(opportunity.dictation_order()),
         },
@@ -552,9 +554,10 @@ def opportunity_capture():
     listing.* Requiring a confirmation here would be confirmation that does not
     match consequence, which is the whole of Section 3.
 
-    **Sparse capture is valid capture.** Board, lane and rate are required and
-    nothing else is — *"a capture with gaps beats a listing lost to the next
-    screen."*
+    **Sparse capture is valid capture.** Nothing is required: a capture is refused
+    only when it carries no freight fact at all (Owner rulings 2026-09-15 -- no
+    lane refusal, and a load without a rate is held with the rate pending). *"a
+    capture with gaps beats a listing lost to the next screen."*
 
     **No board automation exists in this path.** The input is what the Owner
     dictated. Nothing here reads a board, and nothing here may be taught to.

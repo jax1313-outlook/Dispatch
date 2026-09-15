@@ -143,11 +143,16 @@ def weight_of(card: dict):
 
 
 def _rate(card: dict):
-    try:
-        rate = float(str(card.get("rate") or "").replace("$", "").replace(",", ""))
-    except (TypeError, ValueError):
-        return None
-    return rate if rate > 0 else None
+    """The card's rate, or None while it is pending. One reading, the engine's."""
+    from dispatch import scoring
+
+    return scoring.rate_of(card)
+
+
+#: The neutral line a card carries while its rate is pending. **Owner ruling,
+#: 2026-09-15:** *"holding a load with out a rate will need an astric or blank is
+#: not negative."* It is not a warning and does not sit in the warning list.
+RATE_PENDING_LINE = "* Rate pending"
 
 
 def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
@@ -155,8 +160,10 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
     """Everything a card should say beside its score. Pure given its inputs.
 
     Returns `{"distance", "position", "deadhead_miles", "deadhead_basis",
-    "equipment", "timing", "warnings", "needs_rate", "missing"}`. `warnings` is a
-    list of `{"code", "text"}` in the order a man reading the card needs them.
+    "equipment", "timing", "warnings", "rate_pending", "rate_line", "missing"}`.
+    `warnings` is a list of `{"code", "text"}` in the order a man reading the card
+    needs them. A pending rate is not among them: `rate_line` carries the neutral
+    "* Rate pending" (Owner ruling 2026-09-15).
     """
     from datetime import timedelta
 
@@ -193,9 +200,9 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
     rate = _rate(card)
     with_miles = dict(card, distance_miles=miles, weight_lbs=weight_of(card))
     missing = [name for key, name in CARD_FACTS if not with_miles.get(key)]
-    if rate is None:
-        warnings.append({"code": "NEEDS_RATE",
-                         "text": "Needs a rate. No score until it has one."})
+    # A pending rate is not a warning (Owner ruling 2026-09-15). The card says
+    # RATE_PENDING_LINE on its own line, and the rate-dependent check below (the
+    # floor over every mile driven) simply does not run without a rate.
 
     # --- delivery timing: PARKED ---
     # Mike Zachary, 2026-09-15: "this system does not need to track drive times for nay
@@ -305,6 +312,7 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
         "timing": {k: (v.isoformat(sep=" ", timespec="minutes") if hasattr(v, "isoformat") else v)
                    for k, v in timing.items()},
         "warnings": warnings,
-        "needs_rate": rate is None,
+        "rate_pending": rate is None,
+        "rate_line": RATE_PENDING_LINE if rate is None else "",
         "missing": missing,
     }

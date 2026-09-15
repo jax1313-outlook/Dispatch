@@ -22,12 +22,15 @@
      {% from "_card_dispatch.html" import dispatch_card with context %}
 #}
 {% macro dispatch_card(entry, compact=False) %}
-        {% set vis = card_visual(entry.score) %}
         {% set cd = entry.card_data %}
+        {# Owner ruling 2026-09-15: a card without a rate is scored on everything
+           else, read against the maximum without the rate, and marked
+           "* rate pending". Not a warning; not negative. #}
+        {% set vis = card_visual(entry.score, rate_pending=cd.rate_pending) %}
         <div class="card card-dispatch">
             <div class="card-header {{ vis.css }}">
                 <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
-                <span class="card-score">{% if cd.needs_rate %}Score: needs rate{% else %}Score {{ format_score(entry.score) }}{% endif %}</span>
+                <span class="card-score">Score {{ format_score(entry.score, cd.rate_pending) }}</span>
             </div>
             <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
             <div class="card-meta">
@@ -36,6 +39,9 @@
             </div>
             {# What Mike may not see (CO-3, 2026-09-14). Advisory: each line names a
                fact; none of them decides. #}
+            {% if cd.rate_pending %}
+            <div class="card-rate-pending">{{ cd.rate_line or '* Rate pending' }}</div>
+            {% endif %}
             {% if cd.warnings %}
             <ul class="card-warnings">
                 {% for w in cd.warnings %}<li class="card-warning warn-{{ w.code|lower }}">&#9888; {{ w.text }}</li>{% endfor %}
@@ -45,7 +51,7 @@
             <div class="card-fields">
                 <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
                 <div><strong>Dest:</strong> {{ cd.destination or 'Unknown' }}</div>
-                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}</div>
+                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else '*' }}</div>
                 <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
             </div>
             {% else %}
@@ -53,7 +59,7 @@
                 <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
                 <div><strong>Destination:</strong> {{ cd.destination or 'Unknown' }}</div>
                 <div><strong>Broker:</strong> {{ cd.broker or 'Unknown' }}</div>
-                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else 'Unknown' }}{% if cd.rpm %} | <strong>RPM:</strong> ${{ cd.rpm }}{% endif %}</div>
+                <div><strong>Rate:</strong> {{ '$%s'|format(cd.rate) if cd.rate else '*' }}{% if cd.rpm %} | <strong>RPM:</strong> ${{ cd.rpm }}{% endif %}</div>
                 <div><strong>Pickup:</strong> {{ cd.pickup_window or 'Unknown' }}</div>
                 <div><strong>Delivery:</strong> {{ cd.delivery_window or 'Unknown' }}</div>
                 <div><strong>Equipment:</strong> {{ cd.equipment_required or 'Unknown' }}

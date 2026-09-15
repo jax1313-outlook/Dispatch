@@ -87,7 +87,11 @@ class TestItSaysWhichFieldsReachTheContract:
     def test_the_contract_travels_with_it(self, client):
         contract = fetch(client).get_json()["opportunity"]
         assert contract["required"] == list(opportunity.REQUIRED)
+        # Owner rulings, 2026-09-15: no capture is refused for want of any one
+        # field. The published list says so, rather than a list JOE would enforce.
+        assert contract["required"] == []
         assert contract["fields"] == list(opportunity.FIELDS)
+        assert contract["fields"][:3] == list(opportunity.KEY_FACTS)
         assert contract["dictation_order"] == list(opportunity.dictation_order())
 
     def test_a_field_the_contract_cannot_carry_is_still_published(self, client):

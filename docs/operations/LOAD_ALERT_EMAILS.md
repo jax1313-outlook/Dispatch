@@ -153,10 +153,13 @@ The counts are for the last check:
 ### Why an alert "needs a look"
 
 - **No load could be read in it** -- for example an alert that only says "log in to see loads".
-- **Missing rate** (or pickup city, delivery city) -- the capture contract needs a lane and a
-  rate. Many board alerts leave the rate out; those land here instead of as cards.
 - **It seems to hold several loads but they could not be told apart** -- Dispatch does not
   cut an alert apart by guesswork.
+
+**A load with no rate is a card, not a needs a look.** Many board alerts leave the rate out.
+Since the Owner rulings of 2026-09-15 such a load becomes a card with the rate shown as `*`,
+scored on everything except the rate and marked `* rate pending`. A load missing its pickup
+or delivery city is carded the same way, with what the alert did say.
 
 ---
 

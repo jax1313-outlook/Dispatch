@@ -282,9 +282,11 @@ paths:
         The seventh contract, ratified in OPPORTUNITY_CAPTURE_PLAN.md section 2.
         Class 1: internal, reversible, touches no Mission Record and no outside
         party, so there is no read-back and no confirmed flag. Speed is the
-        point. Sparse capture is valid capture: board, origin, destination and
-        rate are required and nothing else is. No board automation exists in
-        this path; the input is what the Owner dictated.
+        point. Sparse capture is valid capture: no field is required (Owner
+        rulings 2026-09-15); a capture is refused only when it carries no
+        freight fact at all. A capture without a rate is logged with the rate
+        pending. No board automation exists in this path; the input is what the
+        Owner dictated.
       parameters:
         - $ref: '#/components/parameters/Driver'
         - $ref: '#/components/parameters/Channel'
@@ -294,7 +296,6 @@ paths:
           application/json:
             schema:
               type: object
-              required: [source_board, origin, destination, rate]
               properties:
                 source_board:
                   type: string
@@ -307,8 +308,9 @@ paths:
                 rate:
                   type: number
                   description: >-
-                    Required, and never invented. Zero is a number a broker
-                    could have said; a missing rate is not free freight.
+                    Optional, and never invented. Left out, the load is held
+                    with the rate pending. Zero is a number a broker could have
+                    said; a missing rate is not free freight.
                 pieces_weight: {type: string}
                 equipment: {type: string}
                 pickup_date: {type: string}
