@@ -66,7 +66,10 @@
 >   copy of operational truth.
 > - **Rent-the-Trailer Rule.** The AI brain is rented. No in-house AI platform.
 > - **ROGER control remains `UNVERIFIED`.** Do not implement without explicit Owner approval.
-> - **No board automation, scraping, or session tooling of any kind, anywhere.**
+> - **No board automation, scraping, or session tooling of any kind, anywhere.** Boards are swept
+>   only through an API or MCP connection. **Refined 2026-09-15 (Owner):** *"include share links and
+>   the ability to open and recover any and all data required. it is assumes that shared links are
+>   permission to use."* A load link the Owner shares may be opened and read (`DECISION_LOG.md`).
 >
 > ### Standing prohibitions
 >

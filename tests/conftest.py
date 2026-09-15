@@ -51,6 +51,53 @@ _ENV_VARS = [
 ]
 
 
+#: Every module that talks to a running Outlook over COM, each behind its own
+#: `_outlook_is_running()` check.
+_OUTLOOK_MODULES = (
+    "dispatch.scheduling",
+    "dispatch.connectors.outlook_mail",
+    "dispatch.connectors.outlook_alert_mailbox",
+)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_outlook(monkeypatch):
+    """No test may reach the operator's Outlook.
+
+    2026-09-15: with classic Outlook open on the node, `tests/test_joe_api.py`
+    blocked Outlook only in `dispatch.scheduling`, and its confirmed send-notice
+    went out through the real mail adapter -- twice, to an undeliverable test
+    address. Guarding module by module in each test file is how one was missed,
+    so every COM entry point is closed here for every test.
+
+    Two locks: each adapter's own running-check says Outlook is closed, and
+    `win32com.client.Dispatch` / `GetActiveObject` refuse outright, so a test that
+    forces the check open still cannot attach. A test that exercises an adapter
+    against a fake installs the fake itself and overrides these.
+    """
+    import importlib
+
+    for name in _OUTLOOK_MODULES:
+        try:
+            module = importlib.import_module(name)
+        except Exception:  # noqa: BLE001 - a module absent on this branch has nothing to guard
+            continue
+        if hasattr(module, "_outlook_is_running"):
+            monkeypatch.setattr(module, "_outlook_is_running", lambda: False)
+
+    try:
+        import win32com.client as com
+    except Exception:  # noqa: BLE001 - no COM on this machine, nothing to close
+        return
+
+    def _refuse(*args, **kwargs):
+        raise RuntimeError("tests never reach a real Outlook (tests/conftest.py::_no_real_outlook)")
+
+    for attr in ("Dispatch", "GetActiveObject", "DispatchEx"):
+        if hasattr(com, attr):
+            monkeypatch.setattr(com, attr, _refuse)
+
+
 @pytest.fixture(autouse=True)
 def _scrub_env(monkeypatch):
     """Remove all integration config so tests are deterministic and offline.
