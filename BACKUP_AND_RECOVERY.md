@@ -6,7 +6,7 @@ them together. A disk failure lost all four.
 | What | Where it lives | Lost without a backup |
 | --- | --- | --- |
 | Operational database | `dispatch.db` in the portal data dir | Every load, milestone, evidence row, settlement, IFTA record |
-| Portal JSON stores | `*.json` in the portal data dir | Conflict notices, publisher queue, completion packets, sandbox |
+| Portal data | every file in the portal data dir (JSON stores, `*.jsonl` logs, `LibraryDocuments`) — top-level `*.json` only before 2026-09-14 | Conflict notices, publisher queue, completion packets, sandbox, Joe audit, library documents |
 | Evidence uploads | `PORTAL_UPLOAD_DIR` (or `<memory root>\Evidence`) | Signed BOLs and PODs — the documents that get invoices paid |
 | Archive / Library / Memory | `DISPATCH_ARCHIVE_ROOT`, `DISPATCH_MEMORY_ROOT`, CIN archive tree | Archived records, approved library assets, intelligence output |
 
@@ -35,6 +35,14 @@ count, every byte — without writing anything.
 | --- | --- |
 | 0 | Every configured source was captured |
 | 2 | The backup ran, but at least one configured source was missing |
+| 5 | The archive failed its own immediate hash check — do not rely on it |
+
+Every run re-hashes the archive it just wrote and prints `hash check: PASS` or `FAIL`. A PASS
+means the copy matches its manifest; it is not a restore test.
+
+**Rotating external drives:** use `drive-backup` instead of `backup` so the drive is found by its
+identity file rather than its letter, and each run is logged on the drive and on the node. See
+`docs/operations/ROTATING_BACKUP_DRIVES.md`.
 
 Exit code 2 is the failure this tool exists to prevent. It means a directory the
 system is configured to use was not there — usually because an env var changed
