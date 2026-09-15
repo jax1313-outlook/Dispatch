@@ -1464,3 +1464,44 @@ The portal-access email at COMMIT and the Customer Alerts for securement and fre
 **Recorded, not resolved.** BOOK still opens the load on its own (with its automatic rate confirmation) and does not commit, hold the calendar or send portal access. Folding BOOK into COMMIT is the rest of CO-1; it waits until every test that reaches the booking path keeps Outlook closed, so no test can put an appointment on a real calendar.
 
 ---
+
+## 2026-09-15 — CO-2, CO-3, CO-4: rapid capture, what Mike may not see, calendar at a glance
+
+**PR:** (this change)
+**Capability:** `dispatch/spoken_date.py`, `dispatch/listing.py` (new), `dispatch/opportunity.py`, `dispatch/sweep.py`, `dispatch/distance.py` (new), `dispatch/drive_time.py` (new), `dispatch/load_assessment.py` (new), `dispatch/scoring.py`, `dispatch/booking.py`, `portal/models/opportunity_card.py`, `portal/models/sandbox.py`, `portal/helpers.py`, `portal/routes/api.py`, `portal/routes/joe_portal.py`, `portal/routes/pages.py`, `portal/templates/_card_dispatch.html`, `portal/templates/candidates.html`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** must-haves 2026-09-14: *"A rapid way to capture load information for later decision making"*, *"Assistance scoring the loads to see what I may not see"*, *"Calendar is required. I must be able to see gaps in days at a glance in order to make decision of accepting loads. Assistance with pickup and delivery times"*; D12 *"program only processes committed loads. due to the life span of only hours to minuties it makes no sense to keep any uncommitted load information."*; D8; D1 *"only API / MCP connected boards will be swept."* Then, 2026-09-15, on two open questions: *"yes end of pickup day, warn Saturdays"*.
+
+**CO-2 — capture and one card.** Spoken dates resolve at capture on the home terminal's day; a card carries real dates with the words kept beside them. PASTE A LOAD on the Loads screen reads a board listing or a broker offer email deterministically (no fetching, no board-specific scraping; load number only from a labelled field, D8) and goes through the same `opportunity.capture` as voice. PASS or REJECT on an uncommitted freight card discards the card and its capture row together, audited (D12); a committed record is never discarded. A card whose pickup has passed — the window's end, or the end of the pickup day when only a start is known (Mike, 2026-09-15) — shows PICKUP PASSED with CLEAR; paste and sweep clear too; viewing never deletes (D9). A sweep saves its results as cards carrying their true `data_origin`.
+
+**CO-3 — what Mike may not see.** Miles come from the mapping connector (UNCONFIGURED today), else typed/listed (MANUAL), else the 22-lane table (UNVERIFIED), else none (ABSENT); the card says which. Deadhead is measured from the last committed load's delivery city, else home base, with the basis shown. Equipment is checked against the active fleet. Advisory warnings: needs rate (no score shown), cannot legally deliver in time, closed-day or weekend delivery (Saturday warned, Mike 2026-09-15), collides with a committed load, stranded gap day, below the rate floor after deadhead, overweight, missing card facts. Score bands are shares of the real 90-point maximum (81 / 67.5 / 54 / 36). The test-only scorer in `dispatch/opportunities.py` is unreachable from any screen (guarded), kept under THE MIKE RULE.
+
+**CO-4 — calendar.** A committed load marks pickup, every transit day and delivery; captured candidates with dates appear as chips that never count against capacity; each card shows the earliest legal delivery and flags an appointment that cannot be made. Outlook writing unchanged.
+
+**Recorded, not resolved.** `docs/campaign/OPPORTUNITY_CAPTURE_PLAN.md` §6A.3 says PASS archives the card; D12 supersedes it — the doctrine text is unchanged and should be marked SUPERSEDED by its owner. REJECT's earlier "recorded rather than deleted" reasoning likewise. **Held for Mike (Class 3):** paste and expiry-clearing are not added to the ratified `POST /api/joe/opportunity` contract. **Open for Mike:** loading/unloading time in drive estimates; inquiry threshold (still 90); rate floor basis (empty miles to pickup only).
+
+---
+
+## 2026-09-15 — CO-12 rotating backup drives; CO-11 node health (safe subset)
+
+**PR:** (this change)
+**Capability:** `dispatch/backup_drives.py` (new), `dispatch/backup.py`, `scripts/dispatch_backup.py`, `dispatch/node_health.py` (new), `portal/routes/node.py` (new), `portal/app.py`, `portal/routes/__init__.py`, `portal/templates/joe_portal.html` (NODE card), `portal/templates/node_health.html`, `docs/operations/ROTATING_BACKUP_DRIVES.md`, `docs/operations/NODE_UNATTENDED_RECOVERY.md`, `BACKUP_AND_RECOVERY.md`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"Back up is rotating 4TB Crucial external hard drives."* and *"... running in a temperature cooled Pelican box vented with Temp gauge loaded on tablet for monitoring. The tablet has cellular connection and phone/data. The tablet will connect to the laptop."* (2026-09-14).
+
+**Backups.** A backup drive is recognised by an identity file at its root, never by drive letter; a drive holding Dispatch data, or a copied identity, is refused. Every run re-hashes what it wrote (PASS/FAIL) and logs to the drive and the node. Status shows the newest passing backup per drive, warns past 24 hours and says "Time to swap drives" after 7 days. **Nothing is deleted or pruned.** **Defect fixed:** PortalData was backed up as top-level `*.json` only, silently omitting `joe_audit.jsonl`, `security_events.jsonl` and `LibraryDocuments\`; it is now walked recursively, refusing links.
+
+**Node health.** Temperature from a read-only Windows query, UNAVAILABLE with the reason when none is plausible — never guessed; free space on the data drive; newest good backup; uptime. Joe's reachability is UNVERIFIED (no live check exists) and not shown as JOE LIVE / JOE DOWN. A NODE card sits at the end of the Driver Cockpit's Mission Actions column; `/operations/node` for Operations. Scheduled tasks, BitLocker To Go, power-on-after-outage and auto-login are written as steps for Mike; none were performed.
+
+**Recorded, not resolved.** `CLAUDE.md` §5A R8 says nightly encrypted backup off-node to the home NAS; Mike's direction names rotating drives. Replace or sit beside? Doctrine text unchanged. The node routes are read-only status endpoints, not Joe contract endpoints.
+
+---
+
+## 2026-09-15 — IFTA parked
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"can we park IFTA at this point?"* — after Track D raised that the truck may be under IFTA thresholds (design figures about 19,940 lb combined). On keeping printing for later: *"that is good"*.
+
+Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly worksheet, printing and DOT packet) is kept on its branch and not merged. Its database additions would need Mike's confirmation before reaching the operator's database. Printing and the DOT packet (one added table for stored document copies) are to be taken out separately later with that confirmation. **Consequence recorded:** until the receipt-review fix is merged, a scanned fuel receipt can still replace driver-typed values without review.
+
+---
