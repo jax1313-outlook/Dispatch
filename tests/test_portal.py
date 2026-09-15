@@ -769,14 +769,15 @@ class TestSandboxModel:
 
 # ---------- Card visual rules ----------
 class TestCardVisual:
+    # Bands are shares of the engine's real maximum of 90 since CO-3 (2026-09-14).
     def test_score_90_plus(self):
         from portal.helpers import card_visual
         vis = card_visual(90)
         assert vis["css"] == "card-high"
 
-    def test_score_below_90(self):
+    def test_score_below_the_high_band(self):
         from portal.helpers import card_visual
-        vis = card_visual(89)
+        vis = card_visual(80)
         assert vis["css"] == "card-strong"
 
     def test_decision_approve_proposal(self):

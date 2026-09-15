@@ -425,6 +425,11 @@ def _candidate_rows() -> list:
                        or card.get("captured_via") or ""),
             "gaps": brief_gaps(merged),
             "expired": record.get("id") in expired,
+            "warnings": [w.get("text", "") for w in (card.get("warnings") or [])
+                         if isinstance(w, dict)],
+            "timing": card.get("delivery_timing") or "",
+            "score": ("needs rate" if card.get("needs_rate") else
+                      "" if record.get("score") is None else str(record.get("score"))),
         })
 
     rows.sort(key=lambda r: (r["when"] or "~", r["customer"]))

@@ -168,7 +168,8 @@ def from_capture(record: dict, extras: dict | None = None) -> dict:
         if value not in (None, "") and card.get(key) in (None, ""):
             card[key] = value
 
-    score, scoring = score_card(card)
+    score, scoring = score_card(
+        card, exclude_id=f"SBX-{SOURCE_TYPE.upper()}-{record['opportunity_id']}")
 
     entry = sandbox.create_entry(
         source_type=SOURCE_TYPE,
@@ -184,11 +185,70 @@ def from_capture(record: dict, extras: dict | None = None) -> dict:
     return entry
 
 
-def score_card(card: dict) -> tuple:
+def _active_fleet() -> list:
+    try:
+        from dispatch import services as dispatch_svc
+
+        return dispatch_svc.list_equipment(status="active")
+    except Exception:  # noqa: BLE001 - no fleet is an unknown, never a failure
+        return []
+
+
+def assess_card(card: dict, *, exclude_id: str = "") -> dict | None:
+    """Write what Mike may not see onto the card, and return the assessment. CO-3.
+
+    `dispatch/load_assessment.py` does the working; this gathers what it needs
+    -- every record, for committed loads and the truck's position, and the
+    active fleet -- and puts the answer where the card templates read it:
+
+      distance_miles / distance_basis   the miles and where they came from
+      position_deadhead_miles / deadhead_basis   empty miles to pickup, and from where
+      equipment_match / equipment_note  the load's equipment against the fleet
+      warnings / needs_rate / delivery_timing   the checks, in plain words
+
+    Never costs the card: an assessment that cannot run returns None.
+    """
+    from dispatch import distance as distance_mod
+
+    try:
+        from dispatch import load_assessment
+
+        # Miles the engine filled in last time are not miles anybody typed.
+        basis = str(card.get("distance_basis") or "")
+        if basis.startswith((distance_mod.BASIS_TABLE, distance_mod.BASIS_PROVIDER)):
+            card.pop("distance_miles", None)
+        assessment = load_assessment.assess(card, records=sandbox.get_all(),
+                                            fleet=_active_fleet(), exclude_id=exclude_id)
+    except Exception:  # noqa: BLE001 - a card without its checks still beats no card
+        return None
+
+    trip = assessment["distance"]
+    if trip["miles"]:
+        card["distance_miles"] = trip["miles"]
+    card["distance_basis"] = "%s (%s)" % (trip["basis"], trip["status"])
+    if assessment["deadhead_miles"] is not None:
+        card["position_deadhead_miles"] = assessment["deadhead_miles"]
+    else:
+        card.pop("position_deadhead_miles", None)
+    card["deadhead_basis"] = assessment["deadhead_basis"]
+    if assessment["equipment"]["match"]:
+        card["equipment_match"] = assessment["equipment"]["match"]
+    card["equipment_note"] = assessment["equipment"]["note"]
+    card["warnings"] = assessment["warnings"]
+    card["needs_rate"] = assessment["needs_rate"]
+    card["delivery_timing"] = assessment["timing"]["line"]
+    return assessment
+
+
+def score_card(card: dict, *, exclude_id: str = "") -> tuple:
     """`(score, scoring)` for one card, from the engine. `(None, None)` if it cannot.
 
-    Mutates `card` only to fill a missing distance the engine's table knows.
+    Runs the assessment first (`assess_card`), so the engine scores on the miles,
+    empty miles and equipment fit the card now carries. A card without a rate
+    gets no score -- it says "needs rate" -- because a number computed with the
+    money missing ranks a load on everything except what it pays.
     """
+    assessment = assess_card(card, exclude_id=exclude_id)
     try:
         from dispatch.scoring import known_distance, score_load
 
@@ -205,6 +265,8 @@ def score_card(card: dict) -> tuple:
                 card["distance_miles"] = miles
 
         scoring = score_load(dict(card))
+        if assessment is not None and assessment["needs_rate"]:
+            scoring["score"] = None
         return scoring.get("score"), scoring
     except Exception:  # noqa: BLE001 - an unscored card still beats no card
         return None, None
@@ -255,11 +317,9 @@ def from_acquired(loads, *, skip_expired: bool = False, now=None) -> dict:
 
         origin = load.get("data_origin") or "SIMULATED"
         card = dict(load)
-        scoring = card.pop("_scoring", None)
-        if scoring is None:
-            score, scoring = score_card(card)
-        else:
-            score = load.get("score")
+        card.pop("_scoring", None)
+        card.pop("score", None)
+        score, scoring = score_card(card, exclude_id=sid)
         entry = sandbox.create_entry(
             source_type=SOURCE_TYPE,
             source_id=load_id,

@@ -124,6 +124,27 @@ def _as_date(value):
         return None
 
 
+def windows_of(record: dict) -> tuple:
+    """`(pickup_window, delivery_window)` as the record or its card carries them."""
+    card = (record or {}).get("card_data") or {}
+    return ((record or {}).get("pickup_window") or card.get("pickup_window") or "",
+            (record or {}).get("delivery_window") or card.get("delivery_window") or "")
+
+
+def span_of(record: dict) -> list:
+    """Every day a load occupies, pickup through delivery. CO-4, 2026-09-14.
+
+    A load that picks up Monday and delivers Wednesday takes Tuesday too -- the
+    truck is not sellable on a day it is driving somebody's freight. Only one
+    end known gives that one day; neither gives nothing. A delivery written
+    before its pickup is not stretched backwards into a span.
+    """
+    pickup, delivery = (_as_date(w) for w in windows_of(record))
+    if pickup and delivery and delivery >= pickup:
+        return [pickup + timedelta(days=n) for n in range((delivery - pickup).days + 1)]
+    return sorted({d for d in (pickup, delivery) if d})
+
+
 def commitments_from(records) -> dict:
     """Freight already committed, by the day it happens.
 

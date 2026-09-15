@@ -121,6 +121,25 @@ def _estimate_deadhead(destination: str) -> float | None:
     return _lookup_distance(destination, _HOME_BASE)
 
 
+def _deadhead_for(load: dict) -> float | None:
+    """Empty miles for this load.
+
+    `position_deadhead_miles`, when a caller supplies it, is the empty run from
+    where the truck actually is to this load's pickup -- worked out by
+    `dispatch/load_assessment.py` from the last committed delivery or home base,
+    with its basis stated on the card (CO-3, 2026-09-14). Without it, the
+    engine's historical estimate stands: the run home from this load's
+    destination.
+    """
+    supplied = load.get("position_deadhead_miles")
+    if supplied is not None:
+        try:
+            return float(supplied)
+        except (TypeError, ValueError):
+            pass
+    return _estimate_deadhead(load.get("destination", ""))
+
+
 def _parse_window_start(window: str | None) -> datetime | None:
     if not window:
         return None
@@ -339,7 +358,7 @@ def compute_economic_opportunity(load: dict) -> str:
     net = rate - fuel_cost
     margin_pct = (net / rate) * 100 if rate > 0 else 0
 
-    deadhead = _estimate_deadhead(load.get("destination", ""))
+    deadhead = _deadhead_for(load)
     if deadhead:
         total_miles = distance + deadhead
         effective_rpm = rate / total_miles
@@ -360,7 +379,7 @@ def compute_economic_opportunity(load: dict) -> str:
 
 
 def compute_deadhead_miles(load: dict) -> float | None:
-    return _estimate_deadhead(load.get("destination", ""))
+    return _deadhead_for(load)
 
 
 def compute_fuel_estimate(load: dict) -> float | None:

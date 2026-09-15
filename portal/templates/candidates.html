@@ -106,6 +106,10 @@
     <div class="cand-when">{{ row.when or 'No pickup appointment recorded' }}
       {% if row.expired %}<strong class="cand-expired">PICKUP PASSED</strong>{% endif %}</div>
 
+    {% if row.score %}<div class="cand-score">Score {{ row.score }}</div>{% endif %}
+    {% if row.timing %}<div class="cand-when">{{ row.timing }}</div>{% endif %}
+    {% for text in row.warnings %}<div class="cand-gaps">&#9888; {{ text }}</div>{% endfor %}
+
     {# Counted, never scored. It is the number of questions worth asking while
        somebody is on the phone, and nothing reads it to decide anything. #}
     {% if row.gaps %}
