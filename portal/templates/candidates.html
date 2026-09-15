@@ -39,6 +39,45 @@
     <p class="brief-gaps paste-notice">{{ notice }}</p>
   {% endfor %}
 
+  {# LOAD ALERTS. Owner direction 2026-09-15: board alert emails sorted into a
+     folder of the operations mailbox become cards. Read-only; the strip shows
+     the last check and never opens the mailbox by being looked at (D9). #}
+  {% if alerts %}
+  <section class="card-section load-alerts">
+    <div class="cand-head">
+      <strong>LOAD ALERTS</strong>
+      <span class="cand-src alert-status">{{ alerts.status }}</span>
+      <span class="cand-customer">{{ alerts.mailbox }} &middot; {{ alerts.folder }}</span>
+    </div>
+    {% if alerts.reason %}<div class="cand-gaps">{{ alerts.reason }}</div>{% endif %}
+    <div class="cand-when">
+      Last check: {{ alerts.last_check[:16]|replace('T', ' ') if alerts.last_check else 'never' }}
+      {% if alerts.last_how %}({{ alerts.last_how }}){% endif %}
+      &middot; {{ 'Checks every %d minutes' % alerts.every_minutes if alerts.every_minutes else 'Scheduled checking off' }}
+      {% if alerts.running %}&middot; checking now{% endif %}
+    </div>
+    <div class="cand-when alert-counts">
+      {{ alerts.counts.new_cards }} new cards &middot; {{ alerts.counts.merged }} merged
+      &middot; {{ alerts.counts.ignored_senders }} ignored senders
+      &middot; {{ alerts.counts.needs_look }} need a look
+      {% if alerts.counts.possible_duplicates %}&middot; {{ alerts.counts.possible_duplicates }} possible duplicates{% endif %}
+      {% if alerts.counts.expired_skipped %}&middot; {{ alerts.counts.expired_skipped }} past pickup, not carded{% endif %}
+      {% if alerts.counts.committed_untouched %}&middot; {{ alerts.counts.committed_untouched }} matched a committed load{% endif %}
+    </div>
+    {% for item in alerts.needs_look %}
+      <div class="cand-gaps">NEEDS A LOOK: {{ item.subject or '(no subject)' }} &mdash; {{ item.sender }}
+        &mdash; {{ item.reason }}</div>
+    {% endfor %}
+    <div class="cand-actions">
+      <form method="post" action="{{ url_for('joe_portal.check_load_alerts') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn primary" type="submit">CHECK ALERTS NOW</button>
+      </form>
+      <a class="btn" href="{{ url_for('joe_portal.load_alert_settings') }}">ALERT SETTINGS</a>
+    </div>
+  </section>
+  {% endif %}
+
   {# Paste a listing or a broker's offer email. CO-2, 2026-09-14: "A rapid way
      to capture load information for later decision making." What is pasted is
      what he copied -- nothing here reads a board or a mailbox. #}

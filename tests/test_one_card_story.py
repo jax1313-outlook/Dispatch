@@ -51,6 +51,28 @@ def _capture(client, **over):
     return data["opportunity_id"], "SBX-DISPATCH-%s" % data["opportunity_id"]
 
 
+def test_a_capture_matching_a_committed_load_never_overwrites_its_card(client):
+    """The same lane, rate and pickup captured again -- by voice or a paste -- after the
+    load was committed leaves the committed card exactly as it was."""
+    from dispatch import commitment
+
+    first = _capture(client, pickup_date="2099-09-22")
+    sid = next(iter(sandbox.get_all()))
+    data = sandbox._load()
+    data[sid].update(commitment.commit(data[sid], when="2099-09-01T12:00:00+00:00"))
+    data[sid]["card_data"]["pickup_window"] = "2099-09-22 06:00"
+    data[sid]["card_data"]["notes"] = "committed facts"
+    sandbox._save(data)
+    before = sandbox.get(sid)["card_data"]
+
+    _capture(client, pickup_date="2099-09-22", notes="a later capture")
+    resp = client.post("/loads/paste", data={"pasted": (
+        "Jacksonville FL to Savannah GA\nPickup: 2099-09-22\nRate: $1,150")})
+    assert resp.status_code in (200, 302)
+    assert sandbox.get(sid)["card_data"] == before
+    assert first is not None
+
+
 def _audit_actions():
     from dispatch import audit
 

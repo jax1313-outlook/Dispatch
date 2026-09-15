@@ -1,0 +1,84 @@
+{# Load alert settings. Owner direction 2026-09-15: board alert emails sorted into
+   a folder of the operations mailbox become cards. Dispatch reads that folder,
+   read-only. Nothing here creates a mail rule or a folder: Mike makes those
+   himself (docs/operations/LOAD_ALERT_EMAILS.md). #}
+<!doctype html>
+<meta charset="utf-8">
+<title>Load Alert Settings — Level 1 Transport</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='mission_brief.css') }}">
+
+<div class="brief">
+  <nav class="ops-nav">
+    <a href="{{ url_for('joe_portal.candidate_queue') }}">LOADS</a>
+    <a href="{{ url_for('joe_portal.booking_board') }}">BOOKING</a>
+    <a href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
+    <a href="{{ url_for('pages.home') }}">DISPATCH</a>
+  </nav>
+
+  <header class="brief-head">
+    <div class="brief-title">
+      <span class="company">LEVEL 1 TRANSPORT</span>
+      <h1>LOAD ALERT SETTINGS</h1>
+      {% if alerts %}<span class="brief-load">Status: {{ alerts.status }}{% if alerts.reason %} &mdash; {{ alerts.reason }}{% endif %}</span>{% endif %}
+    </div>
+  </header>
+
+  {% for notice in notices or [] %}<p class="brief-gaps">{{ notice }}</p>{% endfor %}
+  {% if problems %}
+  <section class="card-section">
+    {% for problem in problems %}<p class="cand-gaps">{{ problem }}</p>{% endfor %}
+    <p class="brief-gaps">Nothing was saved.</p>
+  </section>
+  {% endif %}
+
+  <section class="card-section">
+    <p class="brief-gaps">Dispatch reads one folder of one mailbox and never changes it: nothing is
+      sent, moved, deleted, flagged or marked read. Only messages from the senders listed below
+      become cards; anyone else is ignored and counted. The mail rule and the folder are yours to
+      make in your mail program.</p>
+    {% if current.from_env %}
+      <p class="cand-gaps">Set on this node's environment, which wins over this page:
+        {{ current.from_env|join(', ') }}.</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('joe_portal.save_load_alert_settings') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="paste-fields">
+        <label>Mailbox
+          <select name="mailbox">
+            {% for box in approved %}
+              <option value="{{ box }}" {% if box|lower == (current.mailbox or '')|lower %}selected{% endif %}>{{ box }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Folder <input name="folder" value="{{ current.folder }}"></label>
+        <label>Check every
+          <select name="check_every_minutes">
+            {% for minutes in intervals %}
+              <option value="{{ minutes }}" {% if minutes|string == current.check_every_minutes|string %}selected{% endif %}>
+                {{ 'Off (check by hand)' if minutes == 0 else '%d minutes' % minutes }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <label for="senders"><strong>ALERT SENDERS</strong> &mdash; one per line: a whole address
+        (alerts@board.example) or a domain (board.example)</label>
+      <textarea id="senders" name="senders" rows="6"
+                style="width:100%;box-sizing:border-box">{{ current.senders|join('\n') }}</textarea>
+
+      <label for="profiles"><strong>BOARD READING HINTS</strong> &mdash; optional, per sender
+        domain. Leave empty unless a board's alerts read wrong.</label>
+      <textarea id="profiles" name="profiles" rows="8"
+                style="width:100%;box-sizing:border-box;font-family:monospace">{{ profiles_text }}</textarea>
+      <p class="brief-gaps">Example: {"board.example": {"name": "Board name", "split": "^Load \\d+",
+        "labels": {"Orig": "origin", "Dest": "destination", "Pay": "rate"}}}</p>
+
+      <button class="btn primary" type="submit">SAVE</button>
+    </form>
+  </section>
+
+  <footer class="brief-foot">
+    Scheduled checking needs the mail program open on this node. CHECK ALERTS NOW is on the Loads screen.
+  </footer>
+</div>

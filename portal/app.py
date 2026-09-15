@@ -301,6 +301,25 @@ def _print_storage_map() -> None:
     print()
 
 
+def start_background_work(app: Flask, *, debug: bool = False) -> None:
+    """Work that runs beside the portal while it serves. Started only by a real launch.
+
+    The scheduled load-alert check (portal/models/load_alerts.py): one thread,
+    idle unless `check_every_minutes` is set, never under TESTING. Under the
+    debug reloader only the serving child starts it, so there is never two.
+    """
+    if app.config.get("TESTING"):
+        return
+    if debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        return
+    try:
+        from portal.models import load_alerts
+
+        load_alerts.start_background(app)
+    except Exception as exc:  # noqa: BLE001 - the portal serves without it
+        print(f"  Load alert checking did not start ({type(exc).__name__}).", file=sys.stderr)
+
+
 if __name__ == "__main__":
     _ensure_storage_dirs()
     app = create_app()
@@ -309,4 +328,5 @@ if __name__ == "__main__":
     print(f"\n  Dispatch")
     print(f"  http://{host}:{port}\n")
     _print_storage_map()
+    start_background_work(app, debug=_debug_enabled())
     app.run(host=host, port=port, debug=_debug_enabled())

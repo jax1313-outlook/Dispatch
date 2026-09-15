@@ -131,7 +131,8 @@ def card_data_for(record: dict) -> dict:
     return resolve_windows(card, day=capture_day(record))
 
 
-def from_capture(record: dict, extras: dict | None = None) -> dict:
+def from_capture(record: dict, extras: dict | None = None, *,
+                 data_origin: str = "LIVE") -> dict:
     """Create or update the card for one captured Opportunity, and score it.
 
     `extras` are card facts the capture contract has no field for -- miles, a
@@ -159,11 +160,17 @@ def from_capture(record: dict, extras: dict | None = None) -> dict:
     filled. A capture that reached a screen beats a capture held back for want
     of a number.
     """
+    earlier = sandbox.get(f"SBX-{SOURCE_TYPE.upper()}-{record['opportunity_id']}")
+    # A committed record is never overwritten by a later capture of the same load --
+    # voice, paste or alert. It is the Mission Record now; changes to it go through
+    # the Mission Brief, not through a capture that happens to match its lane.
+    if earlier and is_protected(earlier):
+        return earlier
+
     card = card_data_for(record)
     for key, value in (extras or {}).items():
         if value not in (None, "") and card.get(key) in (None, ""):
             card[key] = value
-    earlier = sandbox.get(f"SBX-{SOURCE_TYPE.upper()}-{record['opportunity_id']}")
     for key, value in ((earlier or {}).get("card_data") or {}).items():
         if value not in (None, "") and card.get(key) in (None, ""):
             card[key] = value
@@ -177,6 +184,7 @@ def from_capture(record: dict, extras: dict | None = None) -> dict:
         title=title_for(record),
         card_data=card,
         score=score,
+        data_origin=data_origin,
     )
     if scoring:
         updated = sandbox.update_scoring(entry["id"], scoring)
@@ -488,7 +496,9 @@ PASTE_KINDS = ("listing", "email")
 
 
 def capture_from_text(text: str, *, kind: str = "listing", driver: str,
-                      typed: dict | None = None) -> dict:
+                      typed: dict | None = None, via: str = "MISSIONSCREEN",
+                      audit_channel: str = "", card_facts: dict | None = None,
+                      data_origin: str = "LIVE", told_as: str = "") -> dict:
     """Paste a listing or an offer email; get a card, and a list of what is missing.
 
     CO-2, 2026-09-14. The text is read by `dispatch/listing.py` -- deterministic,
@@ -502,14 +512,25 @@ def capture_from_text(text: str, *, kind: str = "listing", driver: str,
     lane and a rate; this returns `ok: False` with what was read so the screen
     can ask for exactly those, and stores nothing.
 
+    Load-board alert emails (2026-09-15) arrive through this same function, so
+    their cards follow the same contract, dedupe and one-card rules. They say
+    how they came (`via`, `audit_channel`, `told_as`), add facts about the alert
+    itself (`card_facts`: source, board, sender), and carry the read's own
+    origin (`data_origin`). The defaults are the paste's, unchanged.
+
     Returns `{"ok", "parsed", "missing", "record", "entry", "note"}`.
     """
     from dispatch import audit, listing, opportunity
 
+    audit_channel = audit_channel or audit.CHANNEL_MISSION_SCREEN
+    told_as = told_as or "pasted %s" % kind
     parsed = (listing.parse_offer_email(text) if kind == "email"
               else listing.parse_listing(text))
     fields = dict(parsed["fields"])
     extras = dict(parsed["card_extras"])
+    for key, value in (card_facts or {}).items():
+        if value not in (None, ""):
+            extras[key] = value
 
     for key, value in (typed or {}).items():
         value = str(value if value is not None else "").strip()
@@ -534,21 +555,22 @@ def capture_from_text(text: str, *, kind: str = "listing", driver: str,
             name for key, name in listing.WANTED if key in required_missing)
         return outcome
 
-    fields["captured_via"] = "MISSIONSCREEN"
+    fields["captured_via"] = via
     try:
-        record = opportunity.capture(fields, driver=driver, channel="MISSIONSCREEN")
+        record = opportunity.capture(fields, driver=driver, channel=via)
     except opportunity.OpportunityError as refusal:
         audit.record(action="opportunity-capture", driver=driver,
-                     channel=audit.CHANNEL_MISSION_SCREEN,
-                     result=audit.RESULT_FAILURE, note=f"pasted {kind}: {refusal}")
+                     channel=audit_channel,
+                     result=audit.RESULT_FAILURE, note=f"{told_as}: {refusal}")
         outcome["note"] = str(refusal)
         return outcome
 
     audit.record(action="opportunity-capture", driver=driver,
-                 channel=audit.CHANNEL_MISSION_SCREEN,
+                 channel=audit_channel,
                  mission_id=record["opportunity_id"],
                  intent="%s to %s" % (record.get("origin", ""), record.get("destination", "")),
                  new_value=str(record.get("rate") or ""), result=audit.RESULT_SUCCESS,
-                 note="pasted %s; %s" % (kind, record.get("verdict", "NEW").lower()))
-    outcome.update(ok=True, record=record, entry=from_capture(record, extras=extras))
+                 note="%s; %s" % (told_as, record.get("verdict", "NEW").lower()))
+    outcome.update(ok=True, record=record,
+                   entry=from_capture(record, extras=extras, data_origin=data_origin))
     return outcome
