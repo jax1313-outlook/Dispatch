@@ -436,8 +436,17 @@ class TestStopManagement:
     """The screen showed the mission but not where the driver sat inside it."""
 
     def test_it_labels_the_position_in_the_run(self):
+        """Owner ruling, 2026-09-15: each stop card is labelled "1 of _"."""
         stops = cockpit.stops_for(dict(RECORD, stop_number=2, stop_total=5))
-        assert stops["label"] == "STOP 2 OF 5"
+        assert stops["label"] == "2 of 5"
+
+    def test_a_single_stop_run_shows_no_stop_numbering(self):
+        assert cockpit.stops_for(RECORD)["label"] == ""
+        one = dict(RECORD, stops=[{"number": 1, "label": "STOP 1",
+                                   "facility": "Delta TechOps"}])
+        assert cockpit.stops_for(one)["label"] == ""
+        assert cockpit.stop_list(one)[0]["label"] == ""
+        assert cockpit.end_detail(one, "delivery", 1)["stop_label"] == ""
 
     def test_a_middle_stop_offers_both_directions(self):
         stops = cockpit.stops_for(dict(RECORD, stop_number=2, stop_total=3))
@@ -452,68 +461,40 @@ class TestStopManagement:
         assert not stops["has_next"]
 
 
-class TestLoadDiagram:
-    def test_it_reports_where_the_freight_sits(self):
-        record = dict(RECORD, load_position="Back 4 pallets across end")
-        assert "Back 4 pallets" in cockpit.load_diagram_for(record)["position"]
+class TestLoadDiagramIsGone:
+    """Owner ruling, 2026-09-15, on Load Arrangement: *"good idea but delete
+    now. for small operation not really useful."* The load diagram drawer, its
+    arrangement boxes and the Load position row went with it."""
 
-    def test_no_diagram_says_so_rather_than_implying_one(self):
-        assert cockpit.load_diagram_for(RECORD)["position"] == "Not recorded"
-        assert cockpit.load_diagram_for(RECORD)["available"] is False
+    OLDER = dict(RECORD, load_position="Back 4 pallets across end",
+                 pallet_positions=6, load_position_1="1", load_position_2="2",
+                 load_plan=[{"position": 1, "stop": "Stop 1",
+                             "description": "Aviation parts"}])
 
-    def test_it_has_its_own_drawer(self):
-        keys = [d["key"] for d in cockpit.drawers_for(RECORD, cockpit.MODE_PICKUP)]
-        assert "loaddiagram" in keys
+    def test_there_is_no_diagram_drawer(self):
+        keys = [d["key"] for d in cockpit.drawers_for(self.OLDER, cockpit.MODE_PICKUP)]
+        assert "loaddiagram" not in keys
+        assert not any("diagram" in d for d in
+                       cockpit.drawers_for(self.OLDER, cockpit.MODE_PICKUP))
 
+    def test_the_cockpit_code_is_gone(self):
+        for name in ("load_diagram_for", "load_arrangement_for", "LOAD_POSITIONS"):
+            assert not hasattr(cockpit, name), name
+        context = cockpit.cockpit_context(self.OLDER, cockpit.MODE_PICKUP)
+        assert "arrangement" not in context and "load_diagram" not in context
 
-class TestEmptyPositionsAreCapacity:
-    """An empty pallet space is not a gap in a picture. It is capacity.
+    def test_the_cargo_drawer_has_no_load_position(self):
+        rows = [d for d in cockpit.drawers_for(self.OLDER, cockpit.MODE_PICKUP)
+                if d["key"] == "cargo"][0]["rows"]
+        assert [r["key"] for r in rows] == ["Commodity", "Detail"]
+        assert "Back 4 pallets" not in str(rows)
 
-    It answers "can I take two more on the way back", which is a question asked
-    at a truck stop with a phone in one hand -- and a diagram drawing only what
-    is loaded answers half of it.
-    """
-
-    LOADED = {
-        "pallet_positions": 6,
-        "load_plan": [
-            {"position": 1, "stop": "Stop 1", "description": "Aviation parts"},
-            {"position": 2, "stop": "Stop 1", "description": "Aviation parts"},
-            {"position": 3, "stop": "Stop 2", "description": "Fasteners"},
-        ],
-    }
-
-    def test_every_position_is_shown_not_only_the_full_ones(self):
-        diagram = cockpit.load_diagram_for(self.LOADED)
-        assert len(diagram["positions"]) == 6
-
-    def test_the_empty_ones_are_marked_empty(self):
-        diagram = cockpit.load_diagram_for(self.LOADED)
-        assert [p["position"] for p in diagram["positions"] if p["empty"]] == [4, 5, 6]
-
-    def test_it_counts_what_is_still_available(self):
-        diagram = cockpit.load_diagram_for(self.LOADED)
-        assert diagram["occupied_count"] == 3
-        assert diagram["empty_count"] == 3
-        assert "3 available" in diagram["capacity_line"]
-
-    def test_each_loaded_position_says_which_stop_it_belongs_to(self):
-        """Which decides whether stop three is reachable without unloading four."""
-        diagram = cockpit.load_diagram_for(self.LOADED)
-        assert diagram["positions"][2]["stop"] == "Stop 2"
-
-    def test_unknown_capacity_is_reported_not_invented(self):
-        """The van is not bought. A guessed six would sit under a real decision."""
-        diagram = cockpit.load_diagram_for({"load_plan": [{"position": 1}]})
-        assert diagram["total"] is None
-        assert diagram["empty_count"] is None
-        # It says so in the driver's words. It still does not invent a total.
-        assert "not recorded" in diagram["capacity_line"]
-        assert not any(ch.isdigit() for ch
-                       in diagram["capacity_line"].split("occupied")[-1])
-
-    def test_no_plan_produces_no_invented_positions(self):
-        assert cockpit.load_diagram_for({}) ["positions"] == []
+    def test_an_older_record_keeps_its_stored_values(self):
+        record = dict(self.OLDER)
+        cockpit.cockpit_context(record, cockpit.MODE_DELIVERY)
+        assert record["load_position"] == "Back 4 pallets across end"
+        assert record["load_position_1"] == "1"
+        assert record["pallet_positions"] == 6
 
 
 class TestTheStopSelector:
@@ -575,7 +556,14 @@ class TestTheStopSelector:
 
     def test_the_panel_says_which_stop_it_is_showing(self):
         """Otherwise a driver has to trust the screen changed under him."""
-        assert cockpit.end_detail(self.RECORD, "delivery", 2)["stop_label"] == "STOP 2"
+        assert cockpit.end_detail(self.RECORD, "delivery", 2)["stop_label"] == "2 of 2"
+        assert cockpit.end_detail(self.RECORD, "delivery", 1)["stop_label"] == "1 of 2"
+
+    def test_each_stop_button_reads_k_of_n(self):
+        """Owner ruling, 2026-09-15: *"each card should be labeled  1 of _"*.
+        The stored "STOP 1" labels are neither read nor rewritten."""
+        assert [s["label"] for s in cockpit.stop_list(self.RECORD)] == ["1 of 2", "2 of 2"]
+        assert self.RECORD["stops"][0]["label"] == "STOP 1"
 
 
 class TestTheStopSurvivesAModeChange:
@@ -708,11 +696,8 @@ class TestTheEndPanelsCarryTheWholeEnd:
 
 
 class TestCargoOwnsTheDiagram:
-    """Load arrangement folded into Cargo: one section, two controls.
-
-    Where the freight sits and what is still free is a fact about the same
-    cargo, and a section of its own for one line was a section too many.
-    """
+    """Cargo stays one section. The load diagram it used to open is gone --
+    Owner ruling, 2026-09-15: *"good idea but delete now."*"""
 
     @pytest.fixture()
     def client(self):
@@ -730,21 +715,12 @@ class TestCargoOwnsTheDiagram:
     def test_there_is_one_cargo_block(self, client):
         assert self._html(client).count('class="fact-row block cargo-block"') == 1
 
-    def test_the_diagram_button_lives_in_the_cargo_drawer(self, client):
-        """The diagram belongs to the cargo, so it opens from the cargo -- one
-        step in, not a button standing on the glass."""
+    def test_there_is_no_load_diagram_anywhere_on_the_cockpit(self, client):
         html = self._html(client)
-        drawer = html[html.index('id="drawer-cargo"'):]
-        drawer = drawer[:drawer.index("</aside>")]
-        assert "OPEN LOAD DIAGRAM" in drawer
-
-    def test_the_button_is_not_on_the_glass(self, client):
-        """Moving it means moving it. Two ways in is two things to read."""
-        html = self._html(client)
-        assert html.count("OPEN LOAD DIAGRAM") == 1
-        block = html[html.index("cargo-block"):]
-        block = block[:block.index('data-drawer="broker"')]
-        assert "OPEN LOAD DIAGRAM" not in block
+        for gone in ("OPEN LOAD DIAGRAM", 'id="drawer-loaddiagram"',
+                     "LOAD ARRANGEMENT", "SAVE ARRANGEMENT", "load_position_",
+                     "REAR DOORS", "BULKHEAD"):
+            assert gone not in html, gone
 
     def test_load_arrangement_is_no_longer_its_own_row(self, client):
         assert 'fact-row block arrangement' not in self._html(client)
@@ -805,7 +781,7 @@ class TestTheDetailDrawersCarryExecutionInformation:
 
     def test_the_delivery_drawer_names_the_stop_it_is_showing(self):
         """Ambiguity about whose dock is being read is the thing to prevent."""
-        assert self._drawer("delivery", 2)["detail"]["stop_label"] == "STOP 2"
+        assert self._drawer("delivery", 2)["detail"]["stop_label"] == "2 of 2"
 
     def test_the_pickup_drawer_does_not_move_with_the_stop(self):
         assert (self._drawer("pickup", 1)["detail"]["address"]

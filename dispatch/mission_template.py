@@ -325,6 +325,41 @@ STOP_FIELDS: tuple[Field, ...] = (
 
 STOP_KEYS = tuple(f.key for f in STOP_FIELDS)
 
+
+def stop_label(number, total) -> str:
+    """How a stop is labelled wherever it is shown: "2 of 3".
+
+    **Owner ruling, 2026-09-15:** *"stop per mission if multiple stops pre one
+    mission then each card should be labeled  1 of _ . show only additional
+    stops"*. The Delivery section is stop 1, so N counts it. A single-stop
+    mission shows no stop numbering, so the label is empty.
+    """
+    try:
+        number, total = int(number), int(total)
+    except (TypeError, ValueError):
+        return ""
+    if total <= 1:
+        return ""
+    return f"{number} of {total}"
+
+
+def is_delivery_stop(stop: dict, index: int) -> bool:
+    """Whether a stored stop is stop 1 -- the Delivery section itself.
+
+    `to_record` has always stored the Delivery section again as stop 1. It is
+    not rewritten; it is simply not listed a second time as an additional stop.
+    """
+    try:
+        return int((stop or {}).get("number") or index) == 1
+    except (TypeError, ValueError):
+        return index == 1
+
+
+def additional_stops(record: dict) -> list:
+    """The stored stops after Delivery, in order. **Read only.**"""
+    listed = [s for s in ((record or {}).get("stops") or []) if isinstance(s, dict)]
+    return [s for i, s in enumerate(listed, start=1) if not is_delivery_stop(s, i)]
+
 TEMPLATE_KEYS = tuple(f.key for f in TEMPLATE)
 REQUIRED_KEYS = tuple(f.key for f in TEMPLATE if f.required)
 #: What a person may type. Everything but what Dispatch assigns.
@@ -430,7 +465,7 @@ def render_email(values: dict | None = None, *, load_number: str = "") -> str:
     # load control has to be readable at a dock, not decoded.
     lines += ["ADDITIONAL STOPS", "-" * len("ADDITIONAL STOPS"),
               "Copy the block below for each further stop. No extra stops? "
-              "Delete it.", "", render_stop_block(2), ""]
+              "Delete it.", "", render_stop_block(2, total="__"), ""]
     lines += ["* required", ""]
     return "\n".join(lines)
 
@@ -464,14 +499,17 @@ def parse_email(body: str) -> dict:
     return values
 
 
-def render_stop_block(number: int, values: dict | None = None) -> str:
+def render_stop_block(number: int, values: dict | None = None,
+                      total=None) -> str:
     """One stop, as a labelled block rather than a packed line.
 
     The pipe-separated line this replaced could not be read at a dock. Length
-    is worth paying for there.
+    is worth paying for there. With `total` the heading reads "STOP 2 of 3" --
+    or "STOP 2 of __" on a blank template, where the count is not known yet.
     """
     values = values or {}
-    lines = [f"STOP {number}", "-" * len(f"STOP {number}")]
+    head = f"STOP {number}" + (f" of {total}" if total else "")
+    lines = [head, "-" * len(head)]
     for field in STOP_FIELDS:
         mark = " *" if field.required else ""
         lines.append(f"  {field.label}{mark}: {values.get(field.key, '')}")
@@ -494,10 +532,13 @@ def parse_stops(body: str) -> list:
             continue
 
         head = line.rstrip(":").strip().upper()
-        if head.startswith("STOP ") and head[5:].strip().isdigit():
+        # "STOP 2", "STOP 2 of 3" or "STOP 2 of __" -- the count after "of" is
+        # the sender's and is not read.
+        number = head[5:].partition(" OF ")[0].strip()
+        if head.startswith("STOP ") and number.isdigit():
             if current is not None:
                 stops.append(current)
-            current = {"number": int(head[5:].strip())}
+            current = {"number": int(number)}
             continue
 
         if current is None or ":" not in line:
@@ -539,7 +580,7 @@ def validate(values: dict) -> list:
 
 # ---------------------------------------------------------------- create ----
 
-def to_record(values: dict, *, source: str, taken_by: str = "",
+def to_record(values: dict, *, source: str,
               load_number: str = "", existing_load_numbers=None,
               extra_stops=None) -> dict:
     """Turn a completed template into the Mission Record shape.
@@ -616,9 +657,9 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
         "load_number": assigned["load_number"],
         "load_number_origin": assigned["origin"],
         "intake_source": source,
-        # Still recorded -- a mission arrives on somebody's word -- but no
-        # longer shown on the brief (one-page layout, 2026-09-15).
-        "intake_taken_by": taken_by,
+        # No "taken by". Owner ruling, 2026-09-15: *"meaningless AI thought it
+        # was useful. Delete."* An older record that stored one keeps it; nothing
+        # writes or shows it.
         "stops": stops,
         "stop_total": len(stops),
         "stop_number": 1,
@@ -639,19 +680,13 @@ def to_record(values: dict, *, source: str, taken_by: str = "",
     return record
 
 
-def create_mission(values: dict, *, source: str, taken_by: str,
+def create_mission(values: dict, *, source: str,
                    sandbox_module, mission_module, load_number: str = "") -> dict:
     """Create the Mission Record, numbered the way Dispatch numbers everything.
 
-    `taken_by` is required and is a person: JOE may read a template and write
-    down the answers, but a mission arrives on somebody's word and the record
-    says whose. It is the same reason an override carries a reason.
+    Nobody is recorded as having taken it down. Owner ruling, 2026-09-15:
+    *"meaningless AI thought it was useful. Delete."*
     """
-    if not str(taken_by or "").strip():
-        raise TemplateError(
-            "Manual intake requires who took it. A mission arrives on "
-            "somebody's word, and the record has to say whose.")
-
     stored_records = sandbox_module.get_all()
     # get_all() is keyed by id; the records are the values.
     records = (stored_records.values() if hasattr(stored_records, "values")
@@ -659,7 +694,7 @@ def create_mission(values: dict, *, source: str, taken_by: str,
     existing_numbers = [r.get("load_number") for r in records
                         if isinstance(r, dict)]
 
-    record = to_record(values, source=source, taken_by=taken_by,
+    record = to_record(values, source=source,
                        load_number=load_number,
                        existing_load_numbers=existing_numbers)
 
@@ -671,7 +706,7 @@ def create_mission(values: dict, *, source: str, taken_by: str,
         source_id=record["load_number"],
         title=record["title"],
         card_data=record["card_data"],
-        summary=f"Taken by {taken_by} via {source.title()} intake",
+        summary=f"{source.title()} intake",
     )
 
     stored = sandbox_module.get(entry["id"]) or entry

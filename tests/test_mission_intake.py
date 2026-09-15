@@ -128,7 +128,7 @@ class TestItRefusesAnIncompleteLoad:
 
 class TestTheRecordIsTheSameWhateverBroughtItIn:
     def _create(self, source):
-        return mt.create_mission(COMPLETE, source=source, taken_by="Mike",
+        return mt.create_mission(COMPLETE, source=source,
                                  sandbox_module=sandbox, mission_module=mission)
 
     def test_email_and_voice_produce_the_same_freight(self):
@@ -172,13 +172,20 @@ class TestTheRecordIsTheSameWhateverBroughtItIn:
         """Who told us about this load is a real question later."""
         assert self._create(mt.SOURCE_JOE)["intake_source"] == "JOE"
 
-    def test_it_records_who_took_it(self):
-        assert self._create(mt.SOURCE_EMAIL)["intake_taken_by"] == "Mike"
+    def test_it_records_nobody_as_having_taken_it(self):
+        """Owner ruling, 2026-09-15, on "Taken by": *"meaningless AI thought it
+        was useful. Delete."*"""
+        record = self._create(mt.SOURCE_EMAIL)
+        assert not any("taken" in key for key in record), sorted(record)
+        assert "Taken by" not in record.get("summary", "")
 
-    def test_it_refuses_to_create_without_who_took_it(self):
-        """A mission arrives on somebody's word. The record says whose."""
-        with pytest.raises(mt.TemplateError, match="who took it"):
-            mt.create_mission(COMPLETE, source=mt.SOURCE_VOICE, taken_by="",
+    def test_there_is_no_taken_by_to_pass(self):
+        import inspect
+
+        for function in (mt.create_mission, mt.to_record):
+            assert "taken_by" not in inspect.signature(function).parameters
+        with pytest.raises(TypeError):
+            mt.create_mission(COMPLETE, source=mt.SOURCE_VOICE, taken_by="Mike",
                               sandbox_module=sandbox, mission_module=mission)
 
     def test_an_unknown_source_is_refused(self):
@@ -192,7 +199,7 @@ class TestTheCockpitCanReadWhatIntakeWrote:
     def test_a_manually_created_mission_renders(self):
         from portal import cockpit
 
-        record = mt.create_mission(COMPLETE, source=mt.SOURCE_VOICE, taken_by="Mike",
+        record = mt.create_mission(COMPLETE, source=mt.SOURCE_VOICE,
                                    sandbox_module=sandbox, mission_module=mission)
         record["numbers"] = mission.display_numbers(record)
         context = cockpit.cockpit_context(record, cockpit.MODE_PICKUP)
@@ -206,7 +213,7 @@ class TestTheCockpitCanReadWhatIntakeWrote:
     def test_the_pickup_panel_has_no_holes(self):
         from portal import cockpit
 
-        record = mt.create_mission(COMPLETE, source=mt.SOURCE_EMAIL, taken_by="Mike",
+        record = mt.create_mission(COMPLETE, source=mt.SOURCE_EMAIL,
                                    sandbox_module=sandbox, mission_module=mission)
         record["numbers"] = mission.display_numbers(record)
         detail = cockpit.end_detail(record, "pickup")

@@ -367,14 +367,6 @@
 .trip-lane { font-weight: 600; }
 .trip-position-text { flex: 1 1 auto; }
 .trip-cargo-desc { font-weight: 600; }
-.trip-diagram {
-    flex: 0 0 auto; min-height: 38px; padding: 0 14px;
-    font-size: 0.88rem; font-weight: 700; letter-spacing: 0.07em;
-    color: var(--ink); background: rgba(0,0,0,0.3);
-    border: 1px solid #3d6890; border-radius: 7px; cursor: pointer;
-}
-.trip-diagram:hover { background: rgba(0,0,0,0.5); border-color: var(--live); }
-
 /* ARRIVE is the one control that sends by itself. It says so. */
 .action-flag {
     margin-top: 5px; font-size: 0.68rem; font-weight: 700;
@@ -398,32 +390,6 @@
     display: block; font-size: 0.75rem; font-weight: 400;
     color: var(--ink-faint); letter-spacing: 0.02em;
 }
-
-/* ---- Load diagram: what is on the truck, and what is still free --------- */
-.capacity-line {
-    font-size: 0.95rem; font-weight: 700; letter-spacing: 0.03em;
-    padding: 10px 12px; margin-bottom: 12px;
-    border: 1px solid var(--edge-lit); border-radius: 7px; background: var(--panel);
-}
-.positions { list-style: none; margin: 0 0 14px; padding: 0; }
-.slot {
-    display: flex; align-items: center; gap: 12px;
-    min-height: 46px; padding: 6px 10px; margin-bottom: 4px;
-    border: 1px solid var(--edge); border-radius: 6px;
-}
-.slot-no {
-    width: 28px; text-align: center; font-weight: 700;
-    font-family: ui-monospace, Consolas, monospace; color: var(--ink-dim);
-}
-.slot-what { flex: 1 1 auto; font-size: 0.98rem; }
-.slot-stop {
-    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em;
-    padding: 3px 8px; border-radius: 4px;
-    background: rgba(74,158,255,0.15); color: #9ccbff;
-}
-.slot.taken { background: #0f1b28; border-color: var(--edge-lit); }
-.slot.empty { background: transparent; border-style: dashed; }
-.slot.empty .slot-what { color: var(--go); font-weight: 700; letter-spacing: 0.08em; }
 
 /* ---- Current Stop card ------------------------------------------------- */
 /* Stop progress and nothing else, at roughly the width of one details panel
@@ -476,12 +442,6 @@
     border-top: 1px solid var(--edge); font-size: 0.85rem; color: var(--ink-dim);
 }
 
-/* ---- Load arrangement --------------------------------------------------- */
-.fact-row.arrangement { cursor: default; }
-.fact-row.arrangement .fact-value { display: block; margin-top: 4px; }
-.fact-row.arrangement .fact-bracket { display: block; margin-top: 3px; }
-.fact-row.arrangement .trip-diagram { margin-top: 9px; width: 100%; }
-
 /* ---- Details panels, ordered for travel -------------------------------- */
 /* Where, when, how far, who to ring, how to get in. The three that decide
    whether he arrives on time are large; the rest support them. */
@@ -498,7 +458,7 @@
     font-family: ui-monospace, Consolas, monospace;
 }
 
-/* ---- Cargo block, with load arrangement folded in ---------------------- */
+/* ---- Cargo block ------------------------------------------------------ */
 .cargo-block { padding: 0; overflow: hidden; }
 .cargo-head {
     display: block; width: 100%; text-align: left;
@@ -506,13 +466,6 @@
     color: var(--ink); cursor: pointer; font: inherit;
 }
 .cargo-head:hover { background: #101a26; }
-.arrangement-line {
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
-    padding: 8px 14px; border-top: 1px solid var(--edge);
-}
-.cargo-block .trip-diagram {
-    margin: 0; width: calc(100% - 28px); margin: 0 14px 12px;
-}
 
 /* Which stop a panel is showing, on the panel. Without it a driver switching
    stops has to trust that the screen changed under him. */
@@ -546,17 +499,11 @@
     border: 1px solid var(--edge-lit); border-left: 3px solid var(--key);
     border-radius: 0 5px 5px 0; background: rgba(255,255,255,0.03);
 }
-.load-control.varies { border-left-color: var(--live); }
 .control-tag {
     font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em;
     color: var(--ink-dim);
 }
 .control-name { font-size: 1rem; font-weight: 700; color: var(--ink); }
-.control-ref {
-    font-size: 0.8rem; color: var(--ink-dim);
-    font-family: ui-monospace, Consolas, monospace;
-}
-
 /* ---- Special instructions ---------------------------------------------- */
 /* Not access instructions. Access is how you get in on a normal day; this is
    what changes the plan -- a security hold that costs two hours, one permitted
@@ -594,43 +541,6 @@
     display: block; font-size: 0.92rem; font-weight: 600;
     color: var(--ink); line-height: 1.4;
 }
-
-/* ---- Load arrangement: where the driver put the freight ----------------- */
-/* Laid out the way he faces the van -- rear doors nearest, bulkhead deepest.
-   Six boxes he types into. No optimiser, no weight logic, no placement rules:
-   he is the load planner and this only remembers what he did.
-   Grab and go, not hunt and seek. */
-.arrangement { display: block; padding: 4px 0 2px; }
-.arrangement-head {
-    display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px;
-}
-.van {
-    display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
-    padding: 10px 14px; border: 1px solid var(--edge-lit); border-radius: 8px;
-    background: rgba(255,255,255,0.025);
-}
-.van-end {
-    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em;
-    color: var(--ink-dim);
-}
-.van-row { display: flex; gap: 6px; }
-.van-slot {
-    width: 62px; height: 46px; text-align: center;
-    font-size: 1.25rem; font-weight: 800;
-    font-family: ui-monospace, Consolas, monospace;
-    color: var(--ink-dim); background: transparent;
-    border: 1px solid var(--edge-lit); border-radius: 6px;
-}
-/* An empty position is capacity, so it reads as empty rather than as broken. */
-.van-slot.filled { color: #fff; border-color: var(--key); background: var(--panel-deep); }
-.van-slot:focus { outline: 2px solid var(--key); outline-offset: 1px; }
-.van-save {
-    display: block; margin-top: 10px; min-height: var(--tap); padding: 0 18px;
-    font-size: 0.8rem; font-weight: 800; letter-spacing: 0.1em;
-    color: var(--ink); background: transparent;
-    border: 1px solid var(--edge-lit); border-radius: 7px; cursor: pointer;
-}
-.van-save:hover { color: #fff; border-color: var(--key); }
 
 /* ------------------------------------------- driver action drawers ------ */
 /* The Driver Portal's actions, merged into the cockpit (2026-09-14). Same

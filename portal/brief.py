@@ -42,6 +42,10 @@ brief is now exactly the Mission Template's twenty-nine fields in its seven
 sections, IDENTITY included. Status, Intake and Taken by are gone from it, and
 so is every field the template dropped. **An older record keeps every value it
 stored; a removed field is simply not shown.**
+
+Later the same day (Owner rulings, 2026-09-15): the sheet lists only the
+ADDITIONAL stops, labelled "2 of N" -- the Delivery section is stop 1 and
+reads "1 of N" when there are more -- and Load Arrangement is gone from it.
 """
 
 from __future__ import annotations
@@ -138,36 +142,51 @@ def sections_of(record: dict) -> list:
     Built from `mission_template.TEMPLATE`, so every field intake can capture
     appears here, nothing else does, and the two cannot drift.
     """
+    total = stop_total(record)
     sections = []
     for name in mt.SECTIONS:
         fields = [_field(f.label, _value_for(record, f.key), hint=f.hint,
                          key=f.key, choices=f.choices,
                          locked=f.key in LOCKED_KEYS)
                   for f in mt.fields_in(name)]
-        sections.append({"title": name, "fields": fields, "editable": True})
+        sections.append({"title": name, "fields": fields, "editable": True,
+                         # The Delivery section is stop 1: "1 of 3" on a
+                         # multi-stop mission, nothing on a single-stop one.
+                         "stop_label": (mt.stop_label(1, total)
+                                        if name == "DELIVERY" else "")})
     return sections
 
 
+def stop_total(record: dict) -> int:
+    """How many stops the mission has. Delivery is one; the rest are additional."""
+    return 1 + len(mt.additional_stops(record))
+
+
 def stops_of(record: dict) -> list:
-    """Every stop, with the fields the template's STOP block carries.
+    """The ADDITIONAL stops, each labelled "2 of N", "3 of N"...
+
+    Owner ruling, 2026-09-15: *"show only additional stops"*. The Delivery
+    section is the first stop, so a stored stop 1 -- which repeats Delivery on
+    every record `to_record` wrote -- is not listed a second time. It is kept
+    exactly as stored.
 
     Stop-level load control is not shown: it left the template in the one-page
     layout, 2026-09-15. A stop that stored it keeps it.
     """
+    extra = mt.additional_stops(record)
+    total = 1 + len(extra)
     stops = []
-    for stop in record.get("stops") or []:
-        if not isinstance(stop, dict):
-            continue
-        number = stop.get("number") or (len(stops) + 1)
+    for position, stop in enumerate(extra, start=2):
+        number = stop.get("number") or position
 
-        def at(label, key, value):
+        def at(label, key, value, number=number):
             # Keyed per stop, so a dock phone learned on the call is written
             # to the stop it belongs to. Colons because stop field names carry
             # underscores of their own.
             return _field(label, value, key="stop:%s:%s" % (number, key))
 
         stops.append({
-            "label": stop.get("label") or "STOP %s" % number,
+            "label": mt.stop_label(position, total),
             "number": number,
             "fields": [
                 at("Facility", "facility", stop.get("facility")),
@@ -179,13 +198,6 @@ def stops_of(record: dict) -> list:
             ],
         })
     return stops
-
-
-def arrangement_of(record: dict) -> dict:
-    """Where it sits in the van, if he has recorded it."""
-    from portal import cockpit
-
-    return cockpit.load_arrangement_for(record)
 
 
 def card_for(record: dict) -> dict:
@@ -200,7 +212,8 @@ def card_for(record: dict) -> dict:
     return {
         "sections": sections,
         "stops": stops,
-        "arrangement": arrangement_of(record),
+        # No Load Arrangement. Owner ruling, 2026-09-15: *"good idea but delete
+        # now. for small operation not really useful."* Stored values are kept.
         # Counted, not scored. It is the number of questions worth asking
         # while somebody is on the phone -- not a mark out of ten, and nothing
         # anywhere reads it to decide whether the mission may proceed.

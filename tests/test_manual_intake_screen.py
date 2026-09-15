@@ -51,7 +51,7 @@ def client():
 
 
 def _create(client, source="PHONE", **over):
-    # What the page posts since the one-page layout, 2026-09-15: no Taken by.
+    # What the page posts: no Taken by (deleted, Owner ruling 2026-09-15).
     data = dict(COMPLETE, source=source, **over)
     return client.post("/intake", data=data, follow_redirects=False)
 
@@ -91,8 +91,8 @@ class TestTheFormNoLongerAsksHowItCameIn:
         html = client.get("/intake").get_data(as_text=True)
         assert 'name="source"' not in html
         assert "HOW IT CAME IN" not in html
-        # Who took it was a different question, asked until the one-page
-        # layout of 2026-09-15 took it off the page.
+        # Who took it was a different question, and it is deleted (Owner
+        # ruling, 2026-09-15).
         assert 'name="taken_by"' not in html
         assert "WHO TOOK IT" not in html
 
@@ -143,12 +143,26 @@ class TestItRefusesRatherThanLosingTheCall:
         assert response.status_code == 302
         assert "Who took it" not in response.get_data(as_text=True)
 
-    def test_the_record_still_says_whose_word_it_arrived_on(self, client):
-        """Not shown, still recorded: the signed-in user, else "operations" --
-        the same word a REJECT from this screen records."""
-        _create(client)
+    def test_the_record_no_longer_says_who_took_it(self, client):
+        """Owner ruling, 2026-09-15: *"meaningless AI thought it was useful.
+        Delete."* Nothing in the New Mission flow records it -- not from the
+        session, not from a stale form still posting the old field."""
+        with client.session_transaction() as s:
+            s["user_id"] = "mike"
+            s["display_name"] = "Mike"
+        _create(client, taken_by="Somebody")
         record = list(sandbox.get_all().values())[0]
-        assert record["intake_taken_by"] == "operations"
+        assert not any("taken" in key for key in record), sorted(record)
+        assert "Taken by" not in record.get("summary", "")
+        assert "Somebody" not in str(record)
+
+        record_id = record["id"]
+        client.post(f"/brief/mission/{record_id}/save",
+                    data={"customer_poc": "D. Reyes", "taken_by": "Somebody",
+                          "intake_taken_by": "Somebody"})
+        saved = sandbox.get(record_id)
+        assert saved["customer_poc"] == "D. Reyes"
+        assert not any("taken" in key for key in saved), sorted(saved)
 
     def test_the_new_mission_page_shows_the_one_page_layout(self, client):
         html = client.get("/intake").get_data(as_text=True)
