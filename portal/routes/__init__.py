@@ -35,3 +35,7 @@ def register_routes(app: Flask) -> None:
     # brain is rented. The first certified stack is one implementation, not the
     # definition.
     app.register_blueprint(joe_api)
+    # Node health (CO-11): read-only; the Operations page, its JSON, and the cockpit card.
+    from .node import node_bp
+
+    app.register_blueprint(node_bp)

@@ -280,6 +280,38 @@
 
   <div class="action-spacer"></div>
 
+  {# ------------------------------------------------------ NODE CARD (CO-11) #}
+  {# The laptop in the Pelican case, in one glance: temperature where the
+     machine reports one, age of the last good backup, free space, uptime.
+     Self-contained block -- markup and script -- so it can be lifted out whole.
+     Lines come from /portal/node-card already in the driver's words
+     (dispatch/node_health.py driver_card); a reading that is not there is said
+     as not there, never filled in. Fetched after the screen draws, so the
+     temperature query never slows the cockpit. #}
+  <div class="action quiet node-card" id="node-card" role="status" aria-live="polite"
+       data-node-url="{{ url_for('node.node_card') }}">
+    <span class="action-name">NODE</span>
+    <span class="action-sub" id="node-card-lines">Checking the node</span>
+  </div>
+  <script>
+  (function () {
+    var card = document.getElementById('node-card');
+    var lines = document.getElementById('node-card-lines');
+    if (!card || !lines || !window.fetch) { return; }
+    var paint = function () {
+      fetch(card.dataset.nodeUrl, {headers: {'Accept': 'application/json'}})
+        .then(function (r) { if (!r.ok) { throw new Error(); } return r.json(); })
+        .then(function (d) {
+          lines.textContent = (d.lines || []).join(' · ');
+          card.style.borderColor = d.attention ? '#d2a13b' : '';
+        })
+        .catch(function () { lines.textContent = 'Node not answering'; });
+    };
+    paint();
+    setInterval(paint, 60000);
+  })();
+  </script>
+
 </section>
 </main>
 
