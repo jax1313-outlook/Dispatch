@@ -160,11 +160,17 @@ def from_capture(record: dict, extras: dict | None = None, *,
     filled. A capture that reached a screen beats a capture held back for want
     of a number.
     """
+    earlier = sandbox.get(f"SBX-{SOURCE_TYPE.upper()}-{record['opportunity_id']}")
+    # A committed record is never overwritten by a later capture of the same load --
+    # voice, paste or alert. It is the Mission Record now; changes to it go through
+    # the Mission Brief, not through a capture that happens to match its lane.
+    if earlier and is_protected(earlier):
+        return earlier
+
     card = card_data_for(record)
     for key, value in (extras or {}).items():
         if value not in (None, "") and card.get(key) in (None, ""):
             card[key] = value
-    earlier = sandbox.get(f"SBX-{SOURCE_TYPE.upper()}-{record['opportunity_id']}")
     for key, value in ((earlier or {}).get("card_data") or {}).items():
         if value not in (None, "") and card.get(key) in (None, ""):
             card[key] = value
