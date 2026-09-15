@@ -1574,3 +1574,20 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 **Incident, recorded.** With classic Outlook open on the node, `tests/test_joe_api.py` blocked Outlook only for the calendar, and its confirmed send-notice went out through the real mail adapter — twice (11:42 and 12:01), from jax1313@outlook.com to the undeliverable `a@b.test`, subject "S". Nothing was delivered. **Fixed for every test:** `tests/conftest.py::_no_real_outlook` makes every Outlook adapter report Outlook closed and refuses COM attach outright; `tests/test_no_real_outlook.py` holds it. Test runs were stopped until the guard was in place.
 
 ---
+
+## 2026-09-15 — The Mission Template is one page: 29 fields
+
+**PR:** (this change)
+**Capability:** `dispatch/mission_template.py` (`TEMPLATE`, `SERVICE_TYPES`, `STOP_FIELDS`, new keys `controlled_by`, `pieces_pallets`), `dispatch/load_control.py`, `dispatch/joe_update.py`, `dispatch/opportunity.py`, `dispatch/listing.py`, `portal/brief.py`, `portal/cockpit.py`, `portal/models/publisher.py`, `portal/routes/joe_portal.py`, `portal/templates/mission_brief.html`, `portal/templates/mission_intake.html`, `MISSION_INTAKE_ARCHITECTURE.md`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** a marked-up printout of the Mission Brief (OneDrive `Level 1 Build Folder\mission card.pdf`): *"this is the idea trying to get this to one page."* Then *"drop status type is LTL / Courier"*; on load control, *"2) yes either"*; *"cargo: 1) Description 2) Pieces / Pallets/ 3) Weight"*; *"I used to wrong document it should have been the New Mission Document but i find the are the same."* On older records, *"i bow to your needs"*. Then *"go ahead with the one page template"*.
+
+**The layout.** IDENTITY: Load Number · Mission Number (assigned by Dispatch, read-only) · Service Type (LTL / Courier). MISSION SOURCE: Customer / Shipper / Broker · Their contact · Their phone · Their email. LOAD CONTROL: Load control (Customer / Level 1) · Rate · Rate agreed with · Payment type · Paid by · Amount. PICKUP and DELIVERY: facility and address · appointment · contact · phone · access instructions · special instructions. CARGO: Description · Pieces / Pallets · Weight. NOTES. The New Mission screen and the Mission Brief render exactly these, from the one template; the Driver Cockpit keeps its look and shows the load control pick and Pieces / Pallets.
+
+**Removed from view.** Status (brief), Intake, Taken by, the separate "Load number (theirs)", "Load control is the", load control phone and email, Shipper, per-stop load control, Cargo items, and the separate Pallets and Pieces fields. **Older records are not migrated or rewritten:** stored values stay; removed fields stop showing; old separate pallet and piece counts display together under Pieces / Pallets. Guided voice entry field by field is on hold (Owner).
+
+**Unchanged.** COMMIT, PINs, customer messages, the Customer Portal freeze, and the load number assigned at intake (moving it to COMMIT per D8 would change COMMIT; not done).
+
+**Recorded, not resolved.** `CLAUDE.md` §7 and earlier entries in this log say "thirty-three" fields, as history. **Open for Mike:** whether the brief shows only additional stops (stop 1 repeats Delivery); whether Load Arrangement stays on the brief; whether the cockpit shows the customer's name and phone when load control is Customer; whether "Taken by" is still recorded quietly.
+
+---
