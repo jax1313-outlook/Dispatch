@@ -14,6 +14,7 @@ from __future__ import annotations
 #: JOE's words for system conditions. Nothing that names a subsystem reaches
 #: the glass; the driver is talking to JOE, not to a mail transport.
 from dispatch import load_control as lc
+from dispatch import mission_template as mt
 from portal import joe_voice
 
 # ---------------------------------------------------------------- modes ----
@@ -172,14 +173,15 @@ def stop_list(record: dict) -> list:
     facility, its own appointment, its own contact and its own freight, and the
     screen has to switch between them without the driver losing the mission.
     """
-    raw = record.get("stops") or []
+    raw = [entry for entry in (record.get("stops") or []) if isinstance(entry, dict)]
     stops = []
     for i, entry in enumerate(raw, start=1):
-        if not isinstance(entry, dict):
-            continue
         stops.append({
             "number": entry.get("number") or i,
-            "label": entry.get("label") or f"STOP {entry.get('number') or i}",
+            # "1 of 3", and nothing on a single-stop run. Owner ruling,
+            # 2026-09-15: each stop card is labelled "1 of _". The stored
+            # label is not read and not rewritten.
+            "label": mt.stop_label(entry.get("number") or i, len(raw)),
             "facility": entry.get("facility") or entry.get("address") or "",
             "window": entry.get("window") or "",
             "poc": entry.get("poc") or "",
@@ -220,7 +222,8 @@ def stops_for(record: dict, selected: int | None = None) -> dict:
     return {
         "number": number,
         "total": total,
-        "label": f"STOP {number} OF {total}",
+        # "2 of 5"; empty on a single-stop run, which shows no stop numbering.
+        "label": mt.stop_label(number, total),
         "list": listed,
         "selectable": total > 1,
         "has_next": number < total,
@@ -353,9 +356,10 @@ def end_detail(record: dict, end: str, stop_number: int | None = None) -> dict:
                     or _first(record, f"{end}_special", default="")),
         # Who holds load control: the Customer or Level 1, as picked on the
         # Mission Template (one-page layout, 2026-09-15). The stop-level name,
-        # role, phone and reference it replaced are not shown, on any record.
+        # role, phone and reference it replaced are not shown, on any record --
+        # and nor is the customer's name or phone. Owner ruling, 2026-09-15:
+        # *"no redunat not needed. Less is more."*
         "control": lc.held_by(record),
-        "control_varies": False,
     }
 
 
@@ -367,8 +371,9 @@ def end_detail(record: dict, end: str, stop_number: int | None = None) -> dict:
 #: the drawer, because Dispatch generated and sent it when he pressed ARRIVE.
 #: Everything below it is something he has to come back with.
 #:
-#: The Load Diagram is deliberately NOT here. It is a mission-execution item he
-#: works *from*, not an artifact he collects -- see `load_diagram_for`.
+#: The Load Diagram is deliberately NOT here. It was a mission-execution item
+#: he worked *from*, not an artifact he collects -- and it has left the cockpit
+#: with Load Arrangement (Owner ruling, 2026-09-15).
 ARRIVAL_NOTICE = "Arrival Notice"
 
 PICKUP_ARTIFACTS = (
@@ -754,51 +759,12 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
     }
 
 
-#: Cargo positions in the van. Six, because that is what the truck has.
-LOAD_POSITIONS = 6
-
-
-def load_arrangement_for(record: dict) -> dict:
-    """Where the driver put the freight. Recorded, never computed.
-
-        Grab and go, not hunt and seek.
-
-    This is the Penske load chart, which exists for one reason: to tell the
-    driver where freight physically sits so he is not opening doors and
-    digging at stop four in the rain. Route order and load order are related
-    and are not the same thing -- on a three-stop run the first stop loads
-    last, so the route reads 1, 2, 3 while the van reads 3, 2, 1 from the
-    bulkhead out.
-
-    **The driver is the load planner. Dispatch only remembers the
-    arrangement.** No optimiser, no weight balancing, no automatic placement,
-    no stop-sequencing engine -- those are maintenance, and the man who loads
-    the truck already knows where the freight goes. Values are free-form and
-    stored exactly as typed: they mean stop numbers today and could mean COLD,
-    FROZEN, DRY tomorrow without this code caring.
-
-    Laid out the way he faces it: rear doors nearest, bulkhead deepest.
-    """
-    positions = []
-    for number in range(1, LOAD_POSITIONS + 1):
-        value = str(record.get(f"load_position_{number}") or "").strip()
-        positions.append({"position": number, "value": value,
-                          "empty": not value})
-
-    occupied = [p for p in positions if p["value"]]
-    return {
-        "positions": positions,
-        # Two across, three deep. The physical shape of the van, so a glance
-        # maps to the doors rather than to a list.
-        "rows": [positions[i:i + 2] for i in range(0, LOAD_POSITIONS, 2)],
-        "near_label": "REAR DOORS",
-        "far_label": "BULKHEAD",
-        "recorded": bool(occupied),
-        "occupied_count": len(occupied),
-        "empty_count": LOAD_POSITIONS - len(occupied),
-        "summary": (f"{len(occupied)} of {LOAD_POSITIONS} positions loaded"
-                    if occupied else "Not recorded"),
-    }
+#: Load Arrangement (the six-position load chart) and the Load Diagram are
+#: gone from the cockpit. Owner ruling, 2026-09-15: *"good idea but delete
+#: now. for small operation not really useful."* Arrangement values an older
+#: record stored (`load_position_1`..`6`, `load_position`, and the position
+#: numbers in `load_plan`) are kept exactly as stored and are not shown. The
+#: CARGO row still reads `load_plan` for what comes off at each stop.
 
 
 def _notice_delivery(record: dict) -> dict:
@@ -858,72 +824,6 @@ def _all_records():
         return {}
 
 
-def load_diagram_for(record: dict) -> dict:
-    """Where the freight sits, in what order it comes off, and what is still free.
-
-    **Ruled by the operator: the Load Diagram is not a checklist item.** It is
-    something the driver works *from* while loading and unloading, not something
-    he collects and hands over. On a multi-stop run it decides whether stop
-    three is reachable without unloading stop four onto the dock.
-
-    **Empty positions are shown, and they are not decoration.** An empty space is
-    operational capacity -- it is the answer to "can I take another two pallets
-    on the way back", which is a question asked at a truck stop with a phone in
-    one hand. A diagram that draws only what is loaded answers half of it.
-
-    Capacity is reported, never assumed. The van has not been bought, so the
-    position count is frequently unknown, and an invented six would put a number
-    under a decision about real freight.
-    """
-    plan = record.get("load_plan") or []
-    total = record.get("pallet_positions")
-    try:
-        total = int(total) if total not in (None, "", []) else None
-    except (TypeError, ValueError):
-        total = None
-
-    occupied = []
-    for entry in plan:
-        if not isinstance(entry, dict):
-            continue
-        occupied.append({
-            "position": entry.get("position") or "?",
-            "stop": entry.get("stop") or "",
-            "description": entry.get("description") or "",
-        })
-
-    positions = []
-    if total:
-        taken = {str(o["position"]) for o in occupied}
-        for n in range(1, total + 1):
-            match = next((o for o in occupied if str(o["position"]) == str(n)), None)
-            positions.append(match or {"position": n, "stop": "", "description": "",
-                                       "empty": True})
-        for slot in positions:
-            slot.setdefault("empty", False)
-
-    empty_count = (total - len(occupied)) if total is not None else None
-
-    return {
-        "available": bool(plan or record.get("load_position")),
-        "position": record.get("load_position") or "Not recorded",
-        "positions": positions,
-        "occupied_count": len(occupied),
-        "total": total,
-        "empty_count": empty_count,
-        "capacity_line": (
-            f"{len(occupied)} of {total} positions occupied · {empty_count} available"
-            if total is not None
-            # Still refuses to invent a total -- it just says so in his words.
-            # "Capacity not recorded" is a fact about the truck; the other
-            # phrasing was a fact about a config file.
-            else f"{len(occupied)} positions occupied · total capacity not recorded"
-        ),
-        "sub": ("Cargo arrangement and unload order" if plan
-                else "No diagram produced yet"),
-    }
-
-
 def facility_map_for(record: dict, mode: str) -> dict:
     """A button that opens Google, not a map rebuilt inside Dispatch.
 
@@ -980,12 +880,7 @@ def drawers_for(record: dict, mode: str, route_risk: str = "",
         # reading a cargo drawer has to work out which of two names is current.
         {"key": "cargo", "side": "left", "title": "Cargo",
          "rows": rows(("Commodity", cargo["description"]),
-                      ("Detail", cargo["brackets"]),
-                      ("Load position", load_diagram_for(record)["position"]))},
-
-        # Worked from, not collected. Left side: it belongs to the freight.
-        {"key": "loaddiagram", "side": "left", "title": "Load diagram",
-         "diagram": load_diagram_for(record)},
+                      ("Detail", cargo["brackets"]))},
 
         # What ARRIVE will send, visible before it is pressed.
         {"key": "arrival", "side": "right", "title": "Arrival notice",
@@ -1017,7 +912,6 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "",
         "ends": ends_for(record),
         "cargo": cargo_for(record),
         "cargo_by_stop": cargo_by_stop(record),
-        "arrangement": load_arrangement_for(record),
         "pickup_detail": end_detail(record, "pickup", stop_number),
         "delivery_detail": end_detail(record, "delivery", stop_number),
         "broker": broker_for(record),
@@ -1026,7 +920,6 @@ def cockpit_context(record: dict, mode: str, route_risk: str = "",
         "completion": completion_effect(record, mode),
         "arrive": arrive_for(record, mode),
         "arrival_notice": arrival_notice_for(record, mode),
-        "load_diagram": load_diagram_for(record),
         "facility_map": facility_map_for(record, mode),
         "drawers": drawers_for(record, mode, route_risk, stop_number),
     }

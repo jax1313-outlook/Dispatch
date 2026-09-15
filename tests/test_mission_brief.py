@@ -60,7 +60,9 @@ class TestItShowsTheWholeRecord:
     def test_stops_no_longer_show_load_control(self):
         """Stop 1 load control left the template on 2026-09-15, and with it the
         stop-level load control lines."""
-        stops = brief.stops_of(RECORD)
+        record = dict(RECORD, stops=RECORD["stops"] + [
+            {"number": 2, "label": "STOP 2", "facility": "Baptist Beaches"}])
+        stops = brief.stops_of(record)
         labels = [f["label"] for f in stops[0]["fields"]]
         assert labels == ["Facility", "Appointment", "Dock contact", "Dock phone",
                           "Access instructions", "SPECIAL INSTRUCTIONS"]
@@ -360,7 +362,7 @@ class TestTheOnePageBriefThroughItsRoute:
 
         mission = self._store_older()
         html = client.get(f"/brief/mission/{mission}").get_data(as_text=True)
-        body = html[html.index("<h2>IDENTITY</h2>"):html.index("<h2>STOPS</h2>")]
+        body = html[html.index("<h2>IDENTITY</h2>"):html.index("<footer")]
         labels = [re.sub(r"\s+", " ", l).strip()
                   for l in re.findall(r"<dt[^>]*>(.*?)</dt>", body, re.S)]
         assert labels == [f.label for f in mt.TEMPLATE]
@@ -403,3 +405,157 @@ class TestTheOnePageBriefThroughItsRoute:
         assert after["cargo_items"] == self.OLDER["cargo_items"]
         assert after["intake_taken_by"] == "Mike"
         assert after["stops"][0]["control_ref"] == "HRO-5521"
+
+
+class TestOnlyAdditionalStopsAreListed:
+    """Owner ruling, 2026-09-15: *"stop per mission if multiple stops pre one
+    mission then each card should be labeled  1 of _ . show only additional
+    stops"* -- and of the template, *"only additional stops should list 2 of __
+    etc."*
+
+    The Delivery section is stop 1. Every record `to_record` wrote stores it
+    again as stops[0]; that copy is kept exactly as stored and is not listed a
+    second time.
+
+    **Through the real routes.** The mission is opened on the New Mission screen
+    (POST /intake) and read back on /brief/mission and /portal/mission. No
+    screen in the application captures an additional stop today, so the extra
+    stops are added to the stored record the way `mission_template.to_record`
+    stores them from a returned template.
+    """
+
+    NEW_MISSION = {
+        "customer": "Southeast Freight Partners",
+        "pickup_location": "Jacksonville, FL 32202",
+        "pickup_window": "2026-09-20 06:00",
+        "delivery_location": "Publix DC Lakeland",
+        "delivery_window": "2026-09-20 14:00",
+        "delivery_phone": "863-555-0114",
+        "commodity": "Mixed freight",
+    }
+
+    @pytest.fixture(autouse=True)
+    def _isolate(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path))
+        yield
+
+    @pytest.fixture()
+    def client(self):
+        from portal.app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    def _open(self, client, extra=()):
+        response = client.post("/intake", data=self.NEW_MISSION)
+        assert response.status_code == 302
+        record_id = response.headers["Location"].rstrip("/").split("/")[-1]
+        if extra:
+            data = sandbox._load()
+            stored = data[record_id]
+            for number, facility in extra:
+                stored["stops"].append({"number": number, "label": f"STOP {number}",
+                                        "facility": facility, "window": "",
+                                        "poc": "", "phone": "", "notes": "",
+                                        "special": ""})
+            stored["stop_total"] = len(stored["stops"])
+            sandbox._save(data)
+        return record_id
+
+    def test_a_single_stop_mission_shows_no_stop_and_no_numbering(self, client):
+        record_id = self._open(client)
+        stored = sandbox.get(record_id)
+        assert stored["stops"][0]["facility"] == "Publix DC Lakeland"
+
+        html = client.get(f"/brief/mission/{record_id}").get_data(as_text=True)
+        assert "ADDITIONAL STOPS" not in html and "<h2>STOPS</h2>" not in html
+        assert html.count("Publix DC Lakeland") == 1
+        assert 'class="stop-of"' not in html
+        assert " of 1" not in html
+
+        cockpit_html = client.get(f"/portal/mission/{record_id}?view=DELIVERY").get_data(as_text=True)
+        assert "OF 1" not in cockpit_html and " of 1" not in cockpit_html
+        assert 'class="stop-btn' not in cockpit_html
+
+    def test_the_brief_lists_only_the_additional_stops_as_k_of_n(self, client):
+        import re
+
+        record_id = self._open(client, extra=[(2, "Winn-Dixie Orlando"),
+                                              (3, "Sweetbay Tampa")])
+        html = client.get(f"/brief/mission/{record_id}").get_data(as_text=True)
+
+        # Delivery once, in its own section, labelled as the first of three.
+        assert html.count("Publix DC Lakeland") == 1
+        delivery = html[html.index("<h2>DELIVERY</h2>"):html.index("<h2>CARGO</h2>")]
+        assert "Publix DC Lakeland" in delivery
+        assert '<p class="stop-of">1 of 3</p>' in delivery
+
+        stops = html[html.index("<h2>ADDITIONAL STOPS</h2>"):html.index("<footer")]
+        headings = [h.strip() for h in re.findall(r"<h3>(.*?)</h3>", stops, re.S)]
+        assert headings == ["2 of 3", "3 of 3"]
+        assert "Winn-Dixie Orlando" in stops and "Sweetbay Tampa" in stops
+        assert "STOP 1" not in html and "1 of 3</h3>" not in html
+
+        # The editing sheet offers no stop 1 boxes: Delivery is edited once.
+        editing = client.get(f"/brief/mission/{record_id}?edit=1").get_data(as_text=True)
+        assert 'name="stop:1:' not in editing
+        assert 'name="stop:2:facility"' in editing and 'name="stop:3:facility"' in editing
+
+    def test_the_stored_stops_are_not_rewritten(self, client):
+        record_id = self._open(client, extra=[(2, "Winn-Dixie Orlando")])
+        before = sandbox.get(record_id)
+        client.get(f"/brief/mission/{record_id}")
+        client.get(f"/portal/mission/{record_id}?view=DELIVERY")
+        client.post(f"/brief/mission/{record_id}/save",
+                    data={"stop:2:phone": "407-555-0101"})
+        after = sandbox.get(record_id)
+        assert len(after["stops"]) == 2
+        assert after["stops"][0] == before["stops"][0]
+        assert after["stops"][0]["label"] == "STOP 1"
+        assert after["stops"][1]["phone"] == "407-555-0101"
+
+    def test_the_emailed_template_asks_for_stop_2_of_blank(self):
+        """*"only additional stops should list 2 of __ etc."* The blank block
+        reads "STOP 2 of __"; a reply numbered either way is still read."""
+        body = mt.render_email(load_number="L1-0001")
+        assert "STOP 2 of __" in body
+        assert "STOP 1" not in body
+        reply = "\n".join([
+            mt.render_stop_block(2, {"facility": "Winn-Dixie Orlando"}, total=3),
+            mt.render_stop_block(3, {"facility": "Sweetbay Tampa"}),
+            mt.render_stop_block(4, {"facility": "Publix Ocala"}, total="__")])
+        assert "STOP 2 of 3" in reply
+        assert [(s["number"], s["facility"]) for s in mt.parse_stops(reply)] == [
+            (2, "Winn-Dixie Orlando"), (3, "Sweetbay Tampa"), (4, "Publix Ocala")]
+
+    def test_the_label_rule(self):
+        assert mt.stop_label(1, 1) == ""
+        assert mt.stop_label(1, 3) == "1 of 3"
+        assert mt.stop_label(3, 3) == "3 of 3"
+        assert mt.stop_label("x", 3) == ""
+
+    def test_the_count_of_empty_fields_counts_delivery_once(self):
+        record = dict(self.NEW_MISSION, stops=[
+            {"number": 1, "label": "STOP 1", "facility": "Publix DC Lakeland"},
+            {"number": 2, "label": "STOP 2", "facility": "Winn-Dixie Orlando"}])
+        card = brief.card_for(record)
+        assert len(card["stops"]) == 1
+        assert card["stops"][0]["label"] == "2 of 2"
+        shown = sum(1 for s in card["sections"] for f in s["fields"] if f["empty"])
+        shown += sum(1 for st in card["stops"] for f in st["fields"] if f["empty"])
+        assert card["empty_count"] == shown
+
+    def test_the_cockpit_labels_every_stop_k_of_n(self, client):
+        import re
+
+        record_id = self._open(client, extra=[(2, "Winn-Dixie Orlando"),
+                                              (3, "Sweetbay Tampa")])
+        html = client.get(f"/portal/mission/{record_id}?view=DELIVERY&stop=1").get_data(as_text=True)
+        buttons = [b.strip() for b in
+                   re.findall(r'<button class="stop-btn[^"]*"[^>]*>(.*?)</button>', html, re.S)]
+        assert buttons == ["1 of 3", "2 of 3", "3 of 3"]
+        assert "STOP 1 OF 3" in html
+        assert '<span class="end-stop-tag">1 of 3</span>' in html
+        assert ">STOP 1<" not in html and ">STOP 2<" not in html

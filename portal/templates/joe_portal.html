@@ -77,7 +77,8 @@
       {% endfor %}
     </nav>
     {% else %}
-    <div class="stop-single">{{ stops.label }}</div>
+    {# One stop: no stop numbering. The block keeps its place in the bar. #}
+    <div class="stop-single"></div>
     {% endif %}
 
     <nav class="mode-bar" role="tablist" aria-label="Mission phase">
@@ -150,10 +151,8 @@
   {# Truck-wide, summarised by the stop it comes off at -- a summary showing
      only the current stop hides the freight sitting behind it.
 
-     What is on the truck belongs on the glass; where it physically sits does
-     not. The arrangement grid lives one step in, behind OPEN LOAD DIAGRAM in
-     this drawer, because it is worked from at a dock rather than read while
-     driving. #}
+     Where it physically sits is not recorded here any more: Load Arrangement
+     left the cockpit by Owner ruling, 2026-09-15. #}
   <div class="fact-row block cargo-block">
     <button class="cargo-head" data-drawer="cargo" data-side="left">
       <span class="fact-key">CARGO:</span>
@@ -375,12 +374,11 @@
          between stops this is the difference between reporting damage to the
          party responsible and reporting it to one who is not. #}
       {% if d.detail.control and d.detail.control.known %}
-        <div class="load-control {{ 'varies' if d.detail.control_varies }}">
+        {# The pick -- Customer or Level 1 -- and nothing beside it. Owner
+           ruling, 2026-09-15: "no redunat not needed. Less is more." #}
+        <div class="load-control">
           <span class="control-tag">LOAD CONTROL</span>
           <span class="control-name">{{ d.detail.control.line }}</span>
-          {% if d.detail.control.reference %}
-            <span class="control-ref">Ref {{ d.detail.control.reference }}</span>
-          {% endif %}
         </div>
       {% endif %}
       <dl class="detail-list">
@@ -391,67 +389,6 @@
         <dt>Access instructions</dt><dd>{{ d.detail.instructions }}</dd>
         <dt>Items</dt>
         <dd>{% for item in d.detail['items'] %}<span class="end-item">{{ item }}</span>{% endfor %}</dd>
-      </dl>
-    {% elif d.diagram is defined and d.diagram %}
-      {# Where the driver put the freight, laid out the way he faces the van:
-         rear doors nearest, bulkhead deepest. Route order and load order are
-         not the same thing -- on a three-stop run the first stop loads last, so
-         the route reads 1, 2, 3 while the van reads 3, 2, 1 going in.
-
-         Free-form on purpose. He is the load planner; this only remembers.
-         Grab and go, not hunt and seek. #}
-      <form class="arrangement" method="post"
-            action="{{ url_for('joe_portal.portal_save_arrangement',
-                               record_id=record.id) }}">
-        <input type="hidden" name="view" value="{{ requested_view }}">
-        <input type="hidden" name="stop" value="{{ stops.number }}">
-
-        <div class="arrangement-head">
-          <span class="fact-key">LOAD ARRANGEMENT</span>
-          <span class="fact-bracket">{{ arrangement.summary }}</span>
-        </div>
-
-        <div class="van">
-          <span class="van-end">{{ arrangement.near_label }}</span>
-          {% for row in arrangement.rows %}
-            <div class="van-row">
-              {% for slot in row %}
-                <input class="van-slot {{ 'filled' if slot.value }}"
-                       type="text" inputmode="text" autocomplete="off"
-                       name="load_position_{{ slot.position }}"
-                       value="{{ slot.value }}"
-                       aria-label="Position {{ slot.position }}">
-              {% endfor %}
-            </div>
-          {% endfor %}
-          <span class="van-end">{{ arrangement.far_label }}</span>
-        </div>
-
-        <button class="van-save" type="submit">SAVE ARRANGEMENT</button>
-      </form>
-
-      {# Empty positions are shown because an empty position is capacity --
-         the answer to "can I take two more on the way back". #}
-      <div class="capacity-line">{{ d.diagram.capacity_line }}</div>
-      {% if d.diagram.positions %}
-        <ul class="positions">
-          {% for slot in d.diagram.positions %}
-            <li class="slot {{ 'empty' if slot.empty else 'taken' }}">
-              <span class="slot-no">{{ slot.position }}</span>
-              {% if slot.empty %}
-                <span class="slot-what">EMPTY</span>
-              {% else %}
-                <span class="slot-what">{{ slot.description or 'Loaded' }}</span>
-                {% if slot.stop %}<span class="slot-stop">{{ slot.stop }}</span>{% endif %}
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="drawer-note">No position plan recorded for this load.</p>
-      {% endif %}
-      <dl class="detail-list">
-        <dt>Load position</dt><dd>{{ d.diagram.position }}</dd>
       </dl>
     {% elif d.notice is defined and d.notice %}
       <div class="notice">
@@ -526,12 +463,6 @@
           <dt>{{ row.key }}</dt><dd>{{ row.value or '—' }}</dd>
         {% endfor %}
       </dl>
-      {% if d.key == 'cargo' %}
-        {# The diagram belongs to the cargo, so it opens from the cargo. #}
-        <button class="trip-diagram" data-drawer="loaddiagram" data-side="left">
-          OPEN LOAD DIAGRAM
-        </button>
-      {% endif %}
     {% endif %}
   </div>
 </aside>

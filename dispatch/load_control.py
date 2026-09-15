@@ -48,9 +48,12 @@ def held_by(record: dict) -> dict:
     `known` is False when the record carries no pick -- including an older record
     whose load control was the stop-level detail the template no longer shows.
     The screen then leaves the line out rather than showing a removed field.
+
+    The pick and nothing else: no customer name, phone or reference beside it.
+    Owner ruling, 2026-09-15: *"no redunat not needed. Less is more."*
     """
     value = str((record or {}).get("controlled_by") or "").strip()
-    return {"known": bool(value), "line": value, "reference": ""}
+    return {"known": bool(value), "line": value}
 
 #: Which party holds authority for a stop. Recorded, never assumed -- the whole
 #: point is that it differs between stops on the same run.

@@ -36,7 +36,7 @@ RUN = {
 def _record(**over):
     extra = over.pop("extra_stops", None)
     return mt.to_record(dict(RUN, **over), source=mt.SOURCE_JOE,
-                        taken_by="Mike", extra_stops=extra)
+                        extra_stops=extra)
 
 
 class TestTheTemplateAsksForThePick:
@@ -145,8 +145,15 @@ class TestWhatTheDriverReads:
         assert control["line"] == "Gulf Coast Paper (Shipper)"
 
     def test_the_pick_is_the_whole_line(self):
+        """Owner ruling, 2026-09-15, asked whether a Customer pick should also
+        show the customer's name and phone: *"no redunat not needed. Less is
+        more."* The pick, and nothing beside it."""
         assert lc.held_by({"controlled_by": "Level 1"}) == {
-            "known": True, "line": "Level 1", "reference": ""}
+            "known": True, "line": "Level 1"}
+        record = {"controlled_by": "Customer", "customer": "Southeast Freight Partners",
+                  "customer_phone": "904-555-0199", "broker": "Southeast Freight Partners",
+                  "broker_phone": "904-555-0199"}
+        assert lc.held_by(record) == {"known": True, "line": "Customer"}
         assert lc.held_by({})["known"] is False
 
 
@@ -185,8 +192,8 @@ class TestTheCockpitShowsThePickNotTheRemovedDetail:
         for number in (1, 2):
             detail = cockpit.end_detail(self.RECORD, "delivery", stop_number=number)
             assert detail["control"]["known"] is False
-            assert detail["control"]["reference"] == ""
-            assert detail["control_varies"] is False
+            assert "reference" not in detail["control"]
+            assert "control_varies" not in detail
         stop = cockpit.selected_stop(self.RECORD, 2)
         assert not any(key.startswith("control") for key in stop)
 
@@ -204,6 +211,39 @@ class TestTheCockpitShowsThePickNotTheRemovedDetail:
         detail = cockpit.end_detail(record, "delivery", stop_number=2)
         assert detail["control"]["known"] is True
         assert detail["control"]["line"] == "Customer"
+
+    def test_the_cockpit_line_carries_only_the_pick_through_its_route(self, tmp_path,
+                                                                     monkeypatch):
+        """Through /portal/mission, as the driver sees it: LOAD CONTROL and the
+        pick, with no customer name, phone or reference beside it. The CUSTOMER
+        fact row on the glass is unchanged and still names the customer."""
+        import re
+
+        from portal.app import create_app
+        from portal.models import sandbox
+
+        monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path))
+        entry = sandbox.create_entry(
+            source_type="dispatch", source_id="LC-1", title="Load control probe",
+            card_data={"load_id": "LC-1", "broker": "Southeast Freight Partners",
+                       "broker_phone": "904-555-0199"}, summary="")
+        data = sandbox._load()
+        data[entry["id"]]["controlled_by"] = "Customer"
+        sandbox._save(data)
+
+        app = create_app()
+        app.config["TESTING"] = True
+        with app.test_client() as client:
+            html = client.get(f"/portal/mission/{entry['id']}?view=DELIVERY").get_data(as_text=True)
+
+        blocks = re.findall(r'<div class="load-control[^"]*">(.*?)</div>', html, re.S)
+        assert blocks, "the load control line is shown"
+        for block in blocks:
+            text = re.sub(r"<[^>]+>", " ", block).split()
+            assert text == ["LOAD", "CONTROL", "Customer"], text
+        assert "control-ref" not in html
+        glass = html[:html.index("<aside")]
+        assert "Southeast Freight Partners" in glass
 
     def test_the_screen_says_it_in_the_drivers_words(self):
         from portal import joe_voice

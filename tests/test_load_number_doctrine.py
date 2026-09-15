@@ -43,24 +43,24 @@ class TestNoMissionRecordWithoutOne:
         """The old code refused this outright. A direct customer, a phone call
         and a courier run all arrive without anybody else's number."""
         assert mt.validate(MINIMUM) == []
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_PHONE, taken_by="Mike")
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_PHONE)
         assert record["load_number"]
 
     def test_the_generated_number_is_ours_and_says_so(self):
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_PHONE, taken_by="Mike")
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_PHONE)
         assert record["load_number"].startswith("L1-")
         assert record["load_number_origin"] == ln.GENERATED
         assert ln.is_generated(record["load_number"])
 
     def test_a_generated_number_never_poses_as_a_broker_reference(self):
         """Our number in the broker's field is how a payment goes missing."""
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_PHONE, taken_by="Mike")
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_PHONE)
         assert record["card_data"]["load_id"] == ""
         assert mission.external_load_number(record) == ""
 
     def test_every_source_produces_a_numbered_record(self):
         for source in mt.INTAKE_SOURCES:
-            record = mt.to_record(MINIMUM, source=source, taken_by="Mike")
+            record = mt.to_record(MINIMUM, source=source)
             assert record["load_number"], f"{source} produced an orphan"
 
 
@@ -71,13 +71,13 @@ class TestASuppliedNumberIsUsedExactly:
         """No case folding, no stripping dashes, no tidying. A number we
         cleaned up no longer matches theirs on an invoice."""
         values = dict(MINIMUM, load_number=supplied)
-        record = mt.to_record(values, source=mt.SOURCE_EMAIL, taken_by="Mike")
+        record = mt.to_record(values, source=mt.SOURCE_EMAIL)
         assert record["load_number"] == supplied.strip()
         assert record["load_number_origin"] == ln.SUPPLIED
 
     def test_a_supplied_number_stays_the_brokers_reference(self):
         values = dict(MINIMUM, load_number="847261")
-        record = mt.to_record(values, source=mt.SOURCE_EMAIL, taken_by="Mike")
+        record = mt.to_record(values, source=mt.SOURCE_EMAIL)
         assert record["card_data"]["load_id"] == "847261"
         assert mission.external_load_number(record) == "847261"
 
@@ -106,19 +106,16 @@ class TestGeneratedNumbersDoNotCollide:
         assert all(c in ln.LOAD_NUMBER_ALPHABET for c in body)
 
     def test_two_missions_created_in_a_row_get_different_numbers(self):
-        first = mt.create_mission(MINIMUM, source=mt.SOURCE_PHONE,
-                                  taken_by="Mike", sandbox_module=sandbox,
+        first = mt.create_mission(MINIMUM, source=mt.SOURCE_PHONE, sandbox_module=sandbox,
                                   mission_module=mission)
-        second = mt.create_mission(MINIMUM, source=mt.SOURCE_PHONE,
-                                   taken_by="Mike", sandbox_module=sandbox,
+        second = mt.create_mission(MINIMUM, source=mt.SOURCE_PHONE, sandbox_module=sandbox,
                                    mission_module=mission)
         assert first["load_number"] != second["load_number"]
         assert all(ln.is_generated(r["load_number"]) for r in (first, second))
 
     def test_the_record_is_retrievable_by_its_load_number(self):
         """The whole point of the doctrine."""
-        created = mt.create_mission(MINIMUM, source=mt.SOURCE_COURIER,
-                                    taken_by="Mike", sandbox_module=sandbox,
+        created = mt.create_mission(MINIMUM, source=mt.SOURCE_COURIER, sandbox_module=sandbox,
                                     mission_module=mission)
         stored = [r for r in sandbox.get_all().values()
                   if r.get("load_number") == created["load_number"]]
@@ -170,7 +167,7 @@ class TestOneTemplateForEveryKindOfWork:
         assert "service" in mt.TEMPLATE_KEYS
         for source in mt.INTAKE_SOURCES:
             record = mt.to_record(dict(MINIMUM, service="Courier"),
-                                  source=source, taken_by="Mike")
+                                  source=source)
             assert record["service"] == "Courier"
 
     def test_the_sections_are_the_operators(self):
@@ -220,14 +217,14 @@ class TestMultiStopWorkNeedsNoSecondTemplate:
                                      "window": "2026-09-02 17:00",
                                      "phone": "407-555-0198"}),
         ])
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE, taken_by="Mike",
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE,
                               extra_stops=mt.parse_stops(body))
         assert record["stop_total"] == 3
         assert record["stops"][2]["facility"] == "Winn-Dixie Orlando"
         assert record["stops"][2]["phone"] == "407-555-0198"
 
     def test_no_extra_stops_is_the_normal_case_not_an_error(self):
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE, taken_by="Mike")
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE)
         assert record["stop_total"] == 1
         assert record["stops"][0]["facility"] == "Gainesville, FL 32608"
 
@@ -236,6 +233,6 @@ class TestMultiStopWorkNeedsNoSecondTemplate:
         body = "\n".join(mt.render_stop_block(i, {"facility": f"Consignee {i}",
                                                   "window": f"2026-09-02 1{i}:00"})
                          for i in range(2, 9))
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE, taken_by="Mike",
+        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE,
                               extra_stops=mt.parse_stops(body))
         assert record["stop_total"] == 8

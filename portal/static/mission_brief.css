@@ -112,25 +112,12 @@ dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
 }
 .cargo td { padding: 5px 8px; border-bottom: 1px solid #eef1f3; }
 
-/* ---- load arrangement -------------------------------------------------- */
-.van {
-    display: inline-flex; flex-direction: column; align-items: center; gap: 5px;
-    padding: 10px 14px; border: 1px solid var(--rule); border-radius: 6px;
+/* "1 of 3" beside DELIVERY on a multi-stop mission: the Delivery section is
+   the first stop. */
+.stop-of {
+    margin: 0 0 6px; font-size: 0.82rem; font-weight: 700;
+    letter-spacing: 0.06em; color: var(--ink-dim);
 }
-.van-end {
-    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em;
-    color: var(--ink-dim);
-}
-.van-row { display: flex; gap: 5px; }
-.van-slot {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 54px; height: 40px;
-    font-family: ui-monospace, Consolas, monospace;
-    font-size: 1.1rem; font-weight: 800;
-    border: 1px solid var(--rule); border-radius: 4px;
-}
-.van-slot.empty { background: var(--gap); border-color: #f3d4d4; }
-.van-note { margin: 8px 0 0; font-size: 0.82rem; color: var(--ink-dim); }
 
 .brief-foot {
     margin-top: 24px; padding-top: 10px;
@@ -148,7 +135,7 @@ dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
     .brief-actions, .brief-gaps { display: none; }
     .card-section { margin-bottom: 14px; }
     dd input { border: none; padding: 0; }
-    dt.empty, dd.empty, .van-slot.empty {
+    dt.empty, dd.empty {
         background: var(--gap) !important;
         -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }

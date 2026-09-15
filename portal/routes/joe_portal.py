@@ -44,7 +44,6 @@ DRIVER_COCKPIT_ENDPOINTS = frozenset({
     "joe_portal.portal_mission",
     "joe_portal.portal_arrive",
     "joe_portal.portal_mark_artifact",
-    "joe_portal.portal_save_arrangement",
     "joe_portal.cockpit_milestone",
     "joe_portal.cockpit_pod",
     "joe_portal.cockpit_photos",
@@ -345,13 +344,8 @@ def mission_intake_create():
     # The form no longer asks how it came in, because a person sitting at it is
     # always the direct door. A machine sets SWEEP; a screen never offers it.
     source = mt.SOURCE_DIRECT
-    # Nor who took it: Taken by left the page in the one-page layout
-    # (2026-09-15). The record still says whose word it arrived on -- the
-    # signed-in user, or "operations" as a REJECT from this screen records.
-    taken_by = (str(request.form.get("taken_by") or "").strip()
-                or str(session.get("display_name") or "").strip()
-                or str(session.get("user_id") or "").strip()
-                or "operations")
+    # Nor who took it, and nothing records it. Owner ruling, 2026-09-15:
+    # *"meaningless AI thought it was useful. Delete."*
 
     problems = mt.validate(values)
 
@@ -363,7 +357,7 @@ def mission_intake_create():
             sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
             problems=problems, values=dict(mt.blank_template(), **values)), 400
 
-    record = mt.create_mission(values, source=source, taken_by=taken_by,
+    record = mt.create_mission(values, source=source,
                                sandbox_module=sandbox, mission_module=mission_svc)
     return redirect(url_for("joe_portal.mission_brief", record_id=record["id"]))
 
@@ -1033,31 +1027,9 @@ def portal_mark_artifact(record_id: str):
                     "checklist": cockpit.document_checklist(merged, mode)})
 
 
-@joe_bp.route("/portal/mission/<path:record_id>/arrangement", methods=["POST"])
-def portal_save_arrangement(record_id: str):
-    """Record where the driver put the freight. Six boxes, stored as typed.
-
-    No validation and no interpretation. The values mean stop numbers today
-    and could mean COLD, FROZEN, DRY tomorrow -- the driver is the load
-    planner and this only remembers what he did.
-    """
-    record = sandbox.get(record_id)
-    if not record:
-        return redirect(url_for("joe_portal.portal_home"))
-
-    data = sandbox._load()
-    stored = data.get(record_id)
-    if stored is not None:
-        for number in range(1, cockpit.LOAD_POSITIONS + 1):
-            key = f"load_position_{number}"
-            stored[key] = str(request.form.get(key) or "").strip()
-        sandbox._save(data)
-
-    # Back to the view he was on, at the stop he was looking at. Saving a load
-    # chart should not move him.
-    return redirect(url_for("joe_portal.portal_mission", record_id=record_id,
-                            view=request.form.get("view") or "PICKUP",
-                            stop=request.form.get("stop") or None))
+# Load Arrangement has no save route. Owner ruling, 2026-09-15: *"good idea but
+# delete now. for small operation not really useful."* Arrangement values an
+# older record stored are kept as they are; nothing writes or shows them.
 
 
 def _act_on_load(record_id: str, act):

@@ -87,6 +87,10 @@
   {% for section in card.sections %}
   <section class="card-section">
     <h2>{{ section.title }}</h2>
+    {% if section.stop_label %}
+      {# The Delivery section is stop 1 of a multi-stop mission. #}
+      <p class="stop-of">{{ section.stop_label }}</p>
+    {% endif %}
     <dl>
       {% for f in section.fields %}
         <dt class="{{ 'empty' if f.empty }}">{{ f.label }}</dt>
@@ -118,9 +122,11 @@
   </section>
   {% endfor %}
 
+  {# Only the stops after Delivery, each "2 of N". Owner ruling, 2026-09-15:
+     "show only additional stops". #}
   {% if card.stops %}
   <section class="card-section">
-    <h2>STOPS</h2>
+    <h2>ADDITIONAL STOPS</h2>
     {% for stop in card.stops %}
       <div class="stop">
         <h3>{{ stop.label }}</h3>
@@ -141,22 +147,6 @@
     {% endfor %}
   </section>
   {% endif %}
-
-  <section class="card-section">
-    <h2>LOAD ARRANGEMENT</h2>
-    <div class="van">
-      <span class="van-end">{{ card.arrangement.near_label }}</span>
-      {% for row in card.arrangement.rows %}
-        <div class="van-row">
-          {% for slot in row %}
-            <span class="van-slot {{ 'empty' if slot.empty }}">{{ slot.value }}</span>
-          {% endfor %}
-        </div>
-      {% endfor %}
-      <span class="van-end">{{ card.arrangement.far_label }}</span>
-    </div>
-    <p class="van-note">{{ card.arrangement.summary }}</p>
-  </section>
 
   <footer class="brief-foot">
     Level 1 Transport &middot; Jacksonville Regional Micro-Response Carrier
