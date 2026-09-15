@@ -1535,3 +1535,20 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 **Inquiry threshold.** `PORTAL_INQUIRY_THRESHOLD` defaults to 81: the same share of the 90-point maximum as 90 was of 100, and the start of the High Value Match band.
 
 ---
+
+## 2026-09-15 — Load-board alert emails become cards; a capture never overwrites a committed card
+
+**PR:** (this change)
+**Capability:** `dispatch/connectors/alert_mailbox.py`, `dispatch/connectors/outlook_alert_mailbox.py`, `dispatch/alert_reader.py`, `portal/models/load_alerts.py`, `portal/models/opportunity_card.py`, Loads screen strip and `/loads/alerts/settings`, `docs/operations/LOAD_ALERT_EMAILS.md`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** on "Load-board alert emails become cards automatically": *"i like this very much"* ... *"i will setup. can we use Ops@l1truck .com? if we can create a small email sort to push the incoming emails from specific senders to a box then the reader can do it's thing."*; *"go ahead"*. On the two open questions: *"keep SWEEP channel, keep it"*.
+
+**What changed.** Dispatch reads one folder, **Load Alerts**, in the Ops@l1truck.com mailbox, **read-only** — it never moves, deletes, replies to, flags or marks a message. Only approved senders are read (settings page; exact address or domain). An alert is split into its loads; what cannot be read is kept as "needs a look", never guessed. Each load goes through the paste's capture path, marked source "email alert" with the board and sender; handled messages are remembered so nothing is carded twice; expired pickups are not carded; committed records are not touched. CHECK ALERTS NOW on the Loads screen; scheduled checking is opt-in and needs classic Outlook open on the node. No link in an alert is followed.
+
+**Rulings applied.** Alert loads are captured on the ratified **SWEEP** channel (no EMAIL channel added). The alert mailbox adapter stays **outside** the eight registered connectors.
+
+**Defect fixed.** A voice capture, paste or alert that matched a committed load's lane, rate and pickup replaced that committed card's data through `from_capture`. A committed record is now returned untouched; changes go through the Mission Brief. The test was shown to fail without the fix.
+
+**Found on the operator's machine, 2026-09-15 (recorded).** The first four items in Load Alerts were loads Mike shared from the TruckSmarter app, each holding only a public link and no load details. Turning a shared link into a card would mean Dispatch opening the board's public page — a question under D1 (*"only API / MCP connected boards will be swept"*) held for Mike. Dispatch reads mail only through classic Outlook; Outlook on the web and the new Outlook app give it no access.
+
+---
