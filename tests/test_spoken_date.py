@@ -83,6 +83,77 @@ class TestItRefusesRatherThanGuesses:
         assert spoken_date.looks_resolved("") is False
 
 
+class TestOrdinaryWordsAreNotDates:
+    """CO-2, 2026-09-14. "may", "sat" and "sun" are English before they are dates."""
+
+    @pytest.mark.parametrize("said,expected", [
+        ("Thursday, may load late", "2026-09-10"),
+        ("may need 2 straps", ""),
+        ("sun is out", ""),
+        ("sat on the dock 2 hours", ""),
+        ("sat", "2026-09-12"),
+        ("sat 0800", "2026-09-12 08:00"),
+        ("next sun", "2026-09-20"),
+        ("May 3", "2027-05-03"),
+        ("3rd of May", "2027-05-03"),
+        ("15 Sept", "2026-09-15"),
+    ])
+    def test_a_word_only_counts_in_the_shape_of_a_date(self, said, expected):
+        assert spoken_date.resolve(said, today=WEDNESDAY) == expected
+
+
+class TestTheDayIsTheHomeTerminals:
+    def test_the_default_day_comes_from_the_home_clock(self, monkeypatch):
+        """At 9pm Eastern a UTC-clocked machine is already on tomorrow. The
+        default day is the one `clock.home_date` gives, never `date.today()`."""
+        from dispatch import clock
+
+        monkeypatch.setattr(clock, "home_date", lambda: WEDNESDAY)
+        assert spoken_date.resolve("tomorrow") == "2026-09-10"
+        assert spoken_date.resolve("Thursday") == "2026-09-10"
+
+
+class TestCaptureReadsTheDateWhenItIsSaid:
+    """Through the capture contract, the way the Owner's voice reaches it."""
+
+    def test_a_dictated_weekday_reaches_the_card_as_a_date(self, tmp_path, monkeypatch):
+        from dispatch import clock
+        from dispatch.db import set_db_path
+        from portal.app import create_app
+        from portal.models import sandbox
+
+        set_db_path(tmp_path / "dispatch.db")
+        monkeypatch.setenv("DISPATCH_JOE_TOKEN", "test-token")
+        monkeypatch.setattr(clock, "home_date", lambda: WEDNESDAY)
+        # The capture's own timestamp is today; pin the day it is read against.
+        from portal.models import opportunity_card
+        monkeypatch.setattr(opportunity_card, "capture_day", lambda record: WEDNESDAY)
+        try:
+            app = create_app()
+            app.config["TESTING"] = True
+            with app.test_client() as client:
+                resp = client.post(
+                    "/api/joe/opportunity",
+                    json={"origin": "Jacksonville FL", "destination": "Tampa FL",
+                          "rate": 750, "pickup_date": "Thursday 6am",
+                          "delivery_date": "asap"},
+                    headers={"Authorization": "Bearer test-token", "X-Driver": "mike"},
+                )
+            data = resp.get_json()
+            assert data["ok"] is True
+            # The contract's own record keeps the words exactly as said.
+            assert data["opportunity"]["pickup_date"] == "Thursday 6am"
+            card = next(e for e in sandbox.get_all().values()
+                        if e["source_id"] == data["opportunity_id"])["card_data"]
+            assert card["pickup_window"] == "2026-09-10 06:00"
+            assert card["pickup_as_said"] == "Thursday 6am"
+            # What cannot be read stays as the words, visibly undated.
+            assert card["delivery_window"] == "asap"
+            assert "delivery_as_said" not in card
+        finally:
+            set_db_path(None)
+
+
 class TestTheBookingSeam:
     """`_extract_window_start` is where the miss happened."""
 

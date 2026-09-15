@@ -65,6 +65,57 @@ def title_for(record: dict) -> str:
     return f"{equipment} - {lane}" if equipment and lane else (lane or equipment or "Untitled")
 
 
+#: The card's window field, and where the words he said are kept beside it once
+#: they have been read as a date.
+WINDOWS = (("pickup_window", "pickup_as_said"), ("delivery_window", "delivery_as_said"))
+
+
+def capture_day(record: dict):
+    """The home-terminal day the capture was taken on.
+
+    A spoken "Thursday" means the Thursday after the day it was said, not the
+    Thursday after whatever day a screen happens to be looked at. Reading it
+    against the capture's own timestamp is what keeps a card from drifting a
+    week when it is re-scored on Friday.
+    """
+    from datetime import datetime, timezone
+
+    from dispatch import clock
+
+    stamp = str(record.get("captured_at") or "").strip()
+    if stamp:
+        try:
+            when = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            return when.astimezone(clock.home_zone()).date()
+        except ValueError:
+            pass
+    return clock.home_date()
+
+
+def resolve_windows(card: dict, *, day) -> dict:
+    """Read spoken pickup and delivery words as dates, at capture (CO-2).
+
+    A window that already carries a date is left exactly as written. One that
+    can be read -- "Thursday 6am", "9/15" -- becomes `YYYY-MM-DD[ HH:MM]` so the
+    calendar, scoring and COMMIT all see a date, and the words he said are kept
+    beside it under `*_as_said`. One that cannot be read stays as the words,
+    visibly undated, exactly as before.
+    """
+    from dispatch import spoken_date
+
+    for window, as_said in WINDOWS:
+        said = str(card.get(window) or "").strip()
+        if not said or spoken_date.looks_resolved(said):
+            continue
+        resolved = spoken_date.resolve(said, today=day)
+        if resolved:
+            card[window] = resolved
+            card[as_said] = said
+    return card
+
+
 def card_data_for(record: dict) -> dict:
     """The card body. Every mapped field the capture actually carries, plus the
     capture-time facts that have no place on the card but should not be lost."""
@@ -77,7 +128,7 @@ def card_data_for(record: dict) -> dict:
         value = record.get(field)
         if value not in (None, ""):
             card[field] = value
-    return card
+    return resolve_windows(card, day=capture_day(record))
 
 
 def from_capture(record: dict) -> dict:
