@@ -168,8 +168,27 @@ def from_capture(record: dict, extras: dict | None = None) -> dict:
         if value not in (None, "") and card.get(key) in (None, ""):
             card[key] = value
 
-    score = None
-    scoring = None
+    score, scoring = score_card(card)
+
+    entry = sandbox.create_entry(
+        source_type=SOURCE_TYPE,
+        source_id=record["opportunity_id"],
+        title=title_for(record),
+        card_data=card,
+        score=score,
+    )
+    if scoring:
+        updated = sandbox.update_scoring(entry["id"], scoring)
+        if updated:
+            entry = updated
+    return entry
+
+
+def score_card(card: dict) -> tuple:
+    """`(score, scoring)` for one card, from the engine. `(None, None)` if it cannot.
+
+    Mutates `card` only to fill a missing distance the engine's table knows.
+    """
     try:
         from dispatch.scoring import known_distance, score_load
 
@@ -186,22 +205,84 @@ def from_capture(record: dict, extras: dict | None = None) -> dict:
                 card["distance_miles"] = miles
 
         scoring = score_load(dict(card))
-        score = scoring.get("score")
+        return scoring.get("score"), scoring
     except Exception:  # noqa: BLE001 - an unscored card still beats no card
-        scoring = None
+        return None, None
 
-    entry = sandbox.create_entry(
-        source_type=SOURCE_TYPE,
-        source_id=record["opportunity_id"],
-        title=title_for(record),
-        card_data=card,
-        score=score,
-    )
-    if scoring:
-        updated = sandbox.update_scoring(entry["id"], scoring)
-        if updated:
-            entry = updated
-    return entry
+
+# ------------------------------------------------------------ sweep results ----
+
+def from_acquired(loads, *, skip_expired: bool = False, now=None) -> dict:
+    """Save acquired loads -- a sweep's results -- as cards carrying their true origin.
+
+    CO-2, 2026-09-14. `dispatch.sweep.start` used to count what acquisition
+    returned and keep none of it, so a sweep that "found 5" put nothing on a
+    screen. This is the one place acquired loads become cards; the Dispatch
+    screen's seeding uses it too, so the two cannot drift.
+
+    **The origin travels with the load.** Acquisition marks bundled samples
+    `SIMULATED` and a configured source `LIVE`; a load that arrives with no
+    origin at all is saved `SIMULATED`, never `LIVE` -- a sample must never be
+    laundered into live freight by being saved (`sandbox.create_entry` keeps an
+    entry that was ever SIMULATED that way).
+
+    **A committed record is never overwritten** by a board's copy of the same
+    load. `skip_expired` leaves out loads whose pickup has already gone by (D12:
+    uncommitted load information is not kept, so it is not saved either).
+
+    Returns `{"saved", "skipped_expired", "skipped_committed", "origins", "ids"}`.
+    """
+    from dispatch import clock
+
+    from portal.models import conflict
+
+    now = now or clock.home_now()
+    report = {"saved": 0, "skipped_expired": 0, "skipped_committed": 0,
+              "origins": {}, "ids": []}
+    for load in loads or []:
+        if not isinstance(load, dict):
+            continue
+        load_id = str(load.get("load_id") or "unknown")
+        sid = f"SBX-{SOURCE_TYPE.upper()}-{load_id}"
+        if is_protected(sandbox.get(sid) or {}):
+            report["skipped_committed"] += 1
+            continue
+        if skip_expired:
+            deadline = pickup_deadline(load.get("pickup_window") or "")
+            if deadline is not None and now > deadline:
+                report["skipped_expired"] += 1
+                continue
+
+        origin = load.get("data_origin") or "SIMULATED"
+        card = dict(load)
+        scoring = card.pop("_scoring", None)
+        if scoring is None:
+            score, scoring = score_card(card)
+        else:
+            score = load.get("score")
+        entry = sandbox.create_entry(
+            source_type=SOURCE_TYPE,
+            source_id=load_id,
+            title=load.get("title", "Unknown"),
+            card_data=card,
+            score=score,
+            data_origin=origin,
+        )
+        if scoring:
+            sandbox.update_scoring(entry["id"], scoring)
+        conflict.check_dispatch_card(load, entry["id"])
+        report["saved"] += 1
+        report["ids"].append(entry["id"])
+        report["origins"][origin] = report["origins"].get(origin, 0) + 1
+    return report
+
+
+def save_sweep(loads) -> dict:
+    """What a sweep does with its results: clear what expired, then save the rest."""
+    cleared = discard_expired(driver="sweep")
+    report = from_acquired(loads, skip_expired=True)
+    report["cleared_expired"] = len(cleared)
+    return report
 
 
 # ----------------------------------------------------------- one card story ----

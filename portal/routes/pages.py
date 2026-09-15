@@ -131,23 +131,13 @@ def dispatch():
     dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
 
     if not dispatch_entries or request.args.get("refresh"):
-        loads = helpers.load_dispatch_data()
-        for load in loads:
-            load_id = load.get("load_id", "unknown")
-            entry = sandbox.create_entry(
-                source_type="dispatch",
-                source_id=load_id,
-                title=load.get("title", "Unknown"),
-                card_data=load,
-                score=load.get("score"),
-                # The origin acquisition gave it. Left out, create_entry's LIVE
-                # default put bundled sample loads on cards as live freight.
-                data_origin=load.get("data_origin") or "SIMULATED",
-            )
-            scoring = load.get("_scoring")
-            if scoring:
-                sandbox.update_scoring(entry["id"], scoring)
-            conflict.check_dispatch_card(load, entry["id"])
+        # One path from acquired load to card, shared with the sweep
+        # (opportunity_card.from_acquired). It carries the origin acquisition gave
+        # each load -- left out, create_entry's LIVE default put bundled sample
+        # loads on cards as live freight -- and never overwrites a committed record.
+        from portal.models import opportunity_card
+
+        opportunity_card.from_acquired(helpers.load_dispatch_data())
         all_entries = sandbox.get_all()
         dispatch_entries = {k: v for k, v in all_entries.items() if v["source_type"] == "dispatch"}
 
