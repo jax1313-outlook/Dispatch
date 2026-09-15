@@ -110,7 +110,8 @@ class TestHOSRisk:
         assert "High" in result or "Medium" in result
 
     def test_exceeds_limit(self):
-        load = {**SAMPLE_LOAD_GOOD, "distance_miles": 600}
+        # 700 miles at the 55 mph planning speed is past a driving day.
+        load = {**SAMPLE_LOAD_GOOD, "distance_miles": 700}
         result = compute_hos_risk(load)
         assert "Critical" in result
 

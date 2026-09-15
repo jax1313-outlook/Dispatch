@@ -107,20 +107,15 @@ class TestCandidatesAppearAndNeverCount:
         assert "candidate" in html and "Tampa, FL" in html
 
 
-class TestTimeHelp:
-    def test_the_card_carries_the_earliest_legal_delivery(self, client):
-        client.post("/loads/paste", data={"pasted": (
-            "Jacksonville, FL to Atlanta, GA\nPickup: 2099-09-22 06:00\n"
-            "Delivery: 2099-09-22 10:00\nRate: $1,200")})
-        card = next(iter(sandbox.get_all().values()))["card_data"]
-        # 345 table miles at 50 mph is 6.9 h: 12:54, after a 10:00 appointment.
-        assert "Earliest legal delivery Tue 22 Sep 12:54" in card["delivery_timing"]
-        assert "cannot be made" in card["delivery_timing"]
+class TestDeliveryTimingIsParked:
+    """Mike Zachary, 2026-09-15: "this system does not need to track drive times for nay
+    reason. it does not enter into the decision process." A card carries no delivery
+    timing and no timing warning, even for an appointment no truck could make."""
 
-    def test_a_makeable_appointment_is_not_flagged(self, client):
+    def test_no_card_carries_delivery_timing(self, client):
         client.post("/loads/paste", data={"pasted": (
             "Jacksonville, FL to Atlanta, GA\nPickup: 2099-09-22 06:00\n"
-            "Delivery: 2099-09-22 16:00\nRate: $1,200")})
+            "Delivery: 2099-09-22 07:00\nRate: $1,200")})
         card = next(iter(sandbox.get_all().values()))["card_data"]
-        assert "cannot be made" not in card["delivery_timing"]
+        assert "delivery_timing" not in card
         assert "CANNOT_MAKE_DELIVERY" not in [w["code"] for w in card["warnings"]]

@@ -212,7 +212,7 @@ def create_inquiry():
 
     card = entry["card_data"]
     score = entry.get("score")
-    threshold = int(os.environ.get("PORTAL_INQUIRY_THRESHOLD", "90"))
+    threshold = int(os.environ.get("PORTAL_INQUIRY_THRESHOLD", "81"))
 
     if card.get("hard_stop"):
         return jsonify({"status": "BLOCKED_HARD_STOP", "reason": "Hard stop active on this load."})

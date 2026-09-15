@@ -266,9 +266,15 @@ def cargo_by_stop(record: dict) -> dict:
 
 
 def _drive_time(miles) -> str:
-    """Planning drive time from distance. Stated as planning, not as a promise."""
+    """Planning drive time from distance. Stated as planning, not as a promise.
+
+    Distance at the planning speed, 55 mph (Mike Zachary, 2026-09-15: "keep the cockpit
+    drive time line" ... "for planning purpose use 55mph").
+    """
+    from dispatch.scoring import _DRIVE_SPEED_MPH
+
     try:
-        hours = float(miles) / 50.0
+        hours = float(miles) / float(_DRIVE_SPEED_MPH)
     except (TypeError, ValueError):
         return ""
     whole = int(hours)

@@ -35,7 +35,7 @@ class Config:
     DATA_DIR = _resolve_data_dir()
     UPLOAD_FOLDER = _resolve_upload_dir()
     MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25 MB
-    INQUIRY_THRESHOLD = int(os.environ.get("PORTAL_INQUIRY_THRESHOLD", "90"))
+    INQUIRY_THRESHOLD = int(os.environ.get("PORTAL_INQUIRY_THRESHOLD", "81"))
     INQUIRY_MODE = os.environ.get("PORTAL_INQUIRY_MODE", "HUMAN_REVIEW")
     HOST = os.environ.get("PORTAL_HOST", "127.0.0.1")
     PORT = int(os.environ.get("PORTAL_PORT", "8080"))

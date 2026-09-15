@@ -27,7 +27,9 @@ _OPERATING_RADIUS_MILES = 500
 _FUEL_COST_PER_MILE = 0.62
 
 _HOURS_AVAILABLE_DEFAULT = 11.0
-_DRIVE_SPEED_MPH = 50
+#: Planning speed for estimates only (Mike Zachary, 2026-09-15: "for planning purpose use
+#: 55mph"). Drive time does not enter the decision process.
+_DRIVE_SPEED_MPH = 55
 
 _RATE_PER_MILE_FLOOR = 2.50
 _RATE_PER_MILE_GOOD = 4.00
@@ -193,22 +195,10 @@ def compute_return_home(load: dict) -> str:
     if distance_home is None:
         return "Unknown"
 
-    drive_hours = distance_home / _DRIVE_SPEED_MPH
-
-    if distance_home <= 50:
-        return "Same-day return likely"
-
-    if delivery_end:
-        hour = delivery_end.hour
-        if hour <= 14 and drive_hours <= 6:
-            return f"Same-day return possible ({drive_hours:.1f}h drive)"
-        if drive_hours <= _HOURS_AVAILABLE_DEFAULT:
-            return f"Next-day return ({drive_hours:.1f}h drive)"
-        return f"Multi-day return ({drive_hours:.1f}h drive, layover required)"
-
-    if drive_hours <= _HOURS_AVAILABLE_DEFAULT:
-        return f"Return requires {drive_hours:.1f}h drive"
-    return f"Extended return — {drive_hours:.1f}h drive, layover required"
+    # Miles only. Drive time does not enter the decision process (Mike Zachary,
+    # 2026-09-15); `delivery_end` is no longer used to guess a same-day return.
+    del delivery_end
+    return f"Return home {distance_home:.0f} mi"
 
 
 def compute_tomorrow_position_risk(load: dict) -> str:

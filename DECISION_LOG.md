@@ -1520,3 +1520,18 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 **Backups.** Rotating drives sit beside the home NAS in R8; `CLAUDE.md` §5A records it. The NAS backup remains unbuilt.
 
 ---
+
+## 2026-09-15 — Drive time parked from decisions; 55 mph planning speed; inquiry threshold 81
+
+**PR:** (this change)
+**Capability:** `dispatch/load_assessment.py`, `portal/models/opportunity_card.py`, `dispatch/scoring.py` (`_DRIVE_SPEED_MPH`, `compute_return_home`), `portal/cockpit.py` (`_drive_time`), `portal/templates/_card_dispatch.html`, `portal/templates/brief.html`, `portal/config.py`, `portal/routes/api.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"1) this system does not need to track drive times for nay reason. it does not enter into the decision process. this was a legacy idea i thought had been parked or deleted."*; on the cockpit's drive-time line, *"yes keep this. it is a pure estimate i am assuming calculated by distance and 60MPH? for planning purpose use 55mph. keep the cockpit drive time line"*; *"the new number 2) 81 score keep old intent."*
+
+**Parked, not deleted.** The "cannot legally deliver in time" warning and the earliest-legal-delivery line are gone from cards and the Loads screen; `dispatch/drive_time.py` is kept and still tested, but nothing uses it. The drive-time risk line is gone from the card and the brief (the engine still computes the field). The return-home line says miles only, no drive hours.
+
+**Planning speed.** 55 mph (was 50) for the Driver Cockpit's "· Xh Ym drive" line and the scoring engine's internal estimates. The cockpit line stays, as a planning estimate.
+
+**Inquiry threshold.** `PORTAL_INQUIRY_THRESHOLD` defaults to 81: the same share of the 90-point maximum as 90 was of 100, and the start of the High Value Match band.
+
+---

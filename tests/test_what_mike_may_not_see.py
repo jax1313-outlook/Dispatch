@@ -144,16 +144,19 @@ class TestEquipment:
 
 
 class TestWarnings:
-    def test_a_delivery_that_cannot_legally_be_made(self):
+    def test_delivery_timing_is_parked(self):
+        """Mike Zachary, 2026-09-15: drive times do not enter the decision process. The
+        check in dispatch/drive_time.py is kept, but no warning comes from it."""
         result = load_assessment.assess(
             {"origin": "A", "destination": "B", "rate": 2000, "distance_miles": 700,
              "pickup_window": "2026-09-22 06:00", "delivery_window": "2026-09-22 14:00"},
             records=[], today=TODAY)
-        assert "CANNOT_MAKE_DELIVERY" in _codes(result)
-        assert "1 overnight 10 h reset" in result["timing"]["line"]
+        assert "CANNOT_MAKE_DELIVERY" not in _codes(result)
+        assert result["timing"] == {}
 
     def test_the_breaks_are_counted(self):
-        trip = drive_time.earliest_arrival(datetime(2026, 9, 22, 6, 0), 450)
+        # The parked module still counts correctly; the speed is passed explicitly.
+        trip = drive_time.earliest_arrival(datetime(2026, 9, 22, 6, 0), 450, mph=50)
         # 9 h driving: a 30-minute break after 8 hours, no reset.
         assert (trip["breaks"], trip["resets"]) == (1, 0)
         assert trip["arrive"] == datetime(2026, 9, 22, 15, 30)
@@ -263,11 +266,13 @@ class TestThroughTheScreens:
                     if e["id"] != "SBX-DISPATCH-L1-0001")["card_data"]
         assert card["distance_basis"].startswith(distance.BASIS_TABLE)
         codes = [w["code"] for w in card["warnings"]]
-        assert "CANNOT_MAKE_DELIVERY" in codes
+        assert "BELOW_FLOOR_AFTER_DEADHEAD" in codes
+        # Delivery timing is parked (Mike Zachary, 2026-09-15): not a warning, not on the screen.
+        assert "CANNOT_MAKE_DELIVERY" not in codes
 
         page = client.get("/loads").get_data(as_text=True)
-        assert "cannot be made" in page
-        assert "Earliest legal delivery" in page
+        assert "below the $2.50 floor" in page
+        assert "Earliest legal delivery" not in page
 
     def test_a_swept_load_without_a_rate_says_needs_rate(self, client):
         from portal.models import opportunity_card

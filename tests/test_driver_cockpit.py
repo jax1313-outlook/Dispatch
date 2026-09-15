@@ -685,7 +685,8 @@ class TestTheEndPanelsCarryTheWholeEnd:
         """Travel facts. Needed to decide whether the appointment is reachable."""
         detail = cockpit.end_detail(dict(self.RECORD, distance_miles=350), "delivery")
         assert detail["distance"] == "350 mi"
-        assert detail["drive_time"] == "7h 00m"
+        # 350 mi at the 55 mph planning speed (Mike Zachary, 2026-09-15).
+        assert detail["drive_time"] == "6h 22m"
 
     def test_the_near_end_claims_no_distance(self):
         """Dispatch does not know where the truck is now, so it says nothing."""

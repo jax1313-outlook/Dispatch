@@ -69,10 +69,9 @@
                 {% endif %}
                 <div><strong>Distance:</strong> {{ '%s mi'|format(cd.distance_miles) if cd.distance_miles else 'Unknown' }}{% if cd.distance_basis %} <small>({{ cd.distance_basis }})</small>{% endif %}</div>
             </div>
-            {% if cd.delivery_timing or cd.deadhead_basis or cd.equipment_note %}
+            {% if cd.deadhead_basis or cd.equipment_note %}
             <div class="card-timing">
                 <small>
-                    {% if cd.delivery_timing %}{{ cd.delivery_timing }}<br>{% endif %}
                     {% if cd.deadhead_basis %}Empty miles to pickup: {{ '%s mi'|format(cd.position_deadhead_miles|round|int) if cd.position_deadhead_miles is not none else 'Unknown' }} ({{ cd.deadhead_basis }})<br>{% endif %}
                     {% if cd.equipment_note %}Equipment: {{ cd.equipment_note }}{% endif %}
                 </small>
@@ -95,7 +94,6 @@
                 <small>
                     <strong>Operational Considerations:</strong>
                     Position Impact: {{ entry.position_impact or 'Unknown' }} |
-                    Drive-Time Risk (estimated, no ELD): {{ entry.hos_risk or 'Unknown' }} |
                     Return Route: {{ entry.return_home_required or 'Unknown' }} |
                     Deadhead: {{ cd.deadhead_miles ~ ' mi' if cd.deadhead_miles else 'Unknown' }} |
                     Fuel Est: {{ '$' ~ cd.fuel_estimate if cd.fuel_estimate else 'Unknown' }}

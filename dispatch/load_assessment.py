@@ -160,7 +160,7 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
     """
     from datetime import timedelta
 
-    from dispatch import booking, capacity, clock, commitment, distance, drive_time, scoring
+    from dispatch import booking, capacity, clock, commitment, distance, scoring
 
     card = dict(card or {})
     records = list(booking._iter(records))
@@ -197,10 +197,12 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
         warnings.append({"code": "NEEDS_RATE",
                          "text": "Needs a rate. No score until it has one."})
 
-    # --- can it legally be delivered in time (CO-3.4, CO-4.3) ---
-    timing = drive_time.delivery_check(pickup_window, delivery_window, miles)
-    if timing["can_make"] is False:
-        warnings.append({"code": "CANNOT_MAKE_DELIVERY", "text": timing["line"]})
+    # --- delivery timing: PARKED ---
+    # Mike Zachary, 2026-09-15: "this system does not need to track drive times for nay
+    # reason. it does not enter into the decision process." The legal-delivery check in
+    # dispatch/drive_time.py is kept, not deleted, but nothing on a card or in a warning
+    # uses it. The cockpit's planning drive-time line stays (portal/cockpit.py).
+    timing = {}
 
     # --- the day it delivers ---
     delivery_day = booking._as_date(delivery_window)

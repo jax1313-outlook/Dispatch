@@ -204,7 +204,7 @@ def assess_card(card: dict, *, exclude_id: str = "") -> dict | None:
       distance_miles / distance_basis   the miles and where they came from
       position_deadhead_miles / deadhead_basis   empty miles to pickup, and from where
       equipment_match / equipment_note  the load's equipment against the fleet
-      warnings / needs_rate / delivery_timing   the checks, in plain words
+      warnings / needs_rate             the checks, in plain words
 
     Never costs the card: an assessment that cannot run returns None.
     """
@@ -236,7 +236,8 @@ def assess_card(card: dict, *, exclude_id: str = "") -> dict | None:
     card["equipment_note"] = assessment["equipment"]["note"]
     card["warnings"] = assessment["warnings"]
     card["needs_rate"] = assessment["needs_rate"]
-    card["delivery_timing"] = assessment["timing"]["line"]
+    # Delivery timing is parked (Mike Zachary, 2026-09-15): no card carries it.
+    card.pop("delivery_timing", None)
     return assessment
 
 
