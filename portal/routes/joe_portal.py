@@ -377,6 +377,12 @@ def candidate_queue():
     and a queue that keeps showing it is a queue he stops trusting to mean
     "these need me".
     """
+    return render_template("candidates.html", rows=_candidate_rows(),
+                           notices=get_flashed_messages(), paste=None)
+
+
+def _candidate_rows() -> list:
+    """The Loads workbench rows: every uncommitted record still waiting on a decision."""
     from dispatch import commitment
 
     rows = []
@@ -396,12 +402,64 @@ def candidate_queue():
             "destination": card.get("destination") or record.get("delivery_location") or "",
             "when": record.get("pickup_window") or card.get("pickup_window") or "",
             "rate": record.get("rate") or card.get("rate") or "",
-            "source": record.get("intake_source") or card.get("source") or "",
+            "source": (record.get("intake_source") or card.get("source")
+                       or card.get("captured_via") or ""),
             "gaps": brief_gaps(merged),
         })
 
     rows.sort(key=lambda r: (r["when"] or "~", r["customer"]))
-    return render_template("candidates.html", rows=rows)
+    return rows
+
+
+#: What the paste form may type beside the pasted text. Typed wins over read.
+PASTE_TYPED_FIELDS = ("origin", "destination", "rate", "pickup_date", "delivery_date",
+                      "equipment", "contact", "distance_miles")
+
+
+@joe_bp.route("/loads/paste", methods=["POST"])
+def paste_listing():
+    """Paste a load listing or a broker's offer email; a card is made from it.
+
+    CO-2, 2026-09-14 -- *"A rapid way to capture load information for later
+    decision making."* The text is what the person copied. Nothing here reads a
+    board or a mailbox (D1), and nothing is written for any one board.
+
+    A paste that carries a lane and a rate is logged through the capture
+    contract's own function and lands on this screen as a card, with what is
+    still missing named. One that does not comes back with what was read filled
+    in, and asks for exactly what the contract needs -- nothing is stored.
+    """
+    from portal.models import opportunity_card
+
+    text = str(request.form.get("pasted") or "")
+    kind = str(request.form.get("kind") or "listing").lower()
+    if kind not in opportunity_card.PASTE_KINDS:
+        kind = "listing"
+    typed = {key: request.form.get(key) for key in PASTE_TYPED_FIELDS}
+    if not text.strip() and not any(str(v or "").strip() for v in typed.values()):
+        flash("Nothing was pasted.")
+        return redirect(url_for("joe_portal.candidate_queue"))
+
+    driver = str(session.get("user_id") or "").strip() or "operations"
+    outcome = opportunity_card.capture_from_text(text, kind=kind, driver=driver, typed=typed)
+
+    if outcome["ok"]:
+        record = outcome["record"]
+        line = "Card made: %s to %s, $%s." % (
+            record.get("origin", ""), record.get("destination", ""),
+            ("%.2f" % record["rate"]).rstrip("0").rstrip(".") if record.get("rate") else "")
+        if record.get("verdict") == "MERGED":
+            line = "Already on a card; filled in what it was missing."
+        if outcome["missing"]:
+            line += " Still missing: %s." % ", ".join(outcome["missing"])
+        flash(line)
+        return redirect(url_for("joe_portal.candidate_queue"))
+
+    return render_template(
+        "candidates.html", rows=_candidate_rows(), notices=[],
+        paste={"text": text, "kind": kind, "fields": outcome["fields"],
+               "extras": outcome["extras"], "note": outcome["note"],
+               "missing": outcome["missing"]}), 400
 
 
 def brief_gaps(record: dict) -> int:

@@ -131,8 +131,14 @@ def card_data_for(record: dict) -> dict:
     return resolve_windows(card, day=capture_day(record))
 
 
-def from_capture(record: dict) -> dict:
+def from_capture(record: dict, extras: dict | None = None) -> dict:
     """Create or update the card for one captured Opportunity, and score it.
+
+    `extras` are card facts the capture contract has no field for -- miles, a
+    numeric weight, the customer's load number, a phone -- read from a pasted
+    listing or offer email (`dispatch/listing.py`). They fill the card and
+    never overwrite what the capture itself carries. On a re-capture of the
+    same load, facts the earlier card already held are kept rather than lost.
 
     Returns the sandbox entry. Safe to call on every capture: NEW makes the card,
     MERGED finds the same one, fills it in, and scores it again on what is now
@@ -154,6 +160,13 @@ def from_capture(record: dict) -> dict:
     of a number.
     """
     card = card_data_for(record)
+    for key, value in (extras or {}).items():
+        if value not in (None, "") and card.get(key) in (None, ""):
+            card[key] = value
+    earlier = sandbox.get(f"SBX-{SOURCE_TYPE.upper()}-{record['opportunity_id']}")
+    for key, value in ((earlier or {}).get("card_data") or {}).items():
+        if value not in (None, "") and card.get(key) in (None, ""):
+            card[key] = value
 
     score = None
     scoring = None
@@ -189,3 +202,77 @@ def from_capture(record: dict) -> dict:
         if updated:
             entry = updated
     return entry
+
+
+# ------------------------------------------------------ paste a listing ----
+
+#: What a pasted text is. A listing is copied off a board's screen; an offer is
+#: a broker's email, copied out of the mail program. Neither is ever fetched.
+PASTE_KINDS = ("listing", "email")
+
+
+def capture_from_text(text: str, *, kind: str = "listing", driver: str,
+                      typed: dict | None = None) -> dict:
+    """Paste a listing or an offer email; get a card, and a list of what is missing.
+
+    CO-2, 2026-09-14. The text is read by `dispatch/listing.py` -- deterministic,
+    no board-specific reading, nothing fetched. Anything the person typed into
+    the form beside the paste (`typed`) wins over what was read, because he is
+    looking at the listing and the parser is not.
+
+    The capture goes through the same contract function the voice capture uses
+    (`dispatch.opportunity.capture`), so deduplication, the rehearsal tag and
+    the one-card rule all hold. The contract still refuses a capture without a
+    lane and a rate; this returns `ok: False` with what was read so the screen
+    can ask for exactly those, and stores nothing.
+
+    Returns `{"ok", "parsed", "missing", "record", "entry", "note"}`.
+    """
+    from dispatch import audit, listing, opportunity
+
+    parsed = (listing.parse_offer_email(text) if kind == "email"
+              else listing.parse_listing(text))
+    fields = dict(parsed["fields"])
+    extras = dict(parsed["card_extras"])
+
+    for key, value in (typed or {}).items():
+        value = str(value if value is not None else "").strip()
+        if not value:
+            continue
+        if key == "distance_miles":
+            try:
+                extras["distance_miles"] = float(value.replace(",", ""))
+            except ValueError:
+                continue
+        elif key in opportunity.FIELDS:
+            fields[key] = value
+
+    required_missing = [k for k in listing.REQUIRED if not str(fields.get(k) or "").strip()]
+    outcome = {"ok": False, "parsed": parsed, "fields": fields, "extras": extras,
+               "missing": list(parsed["missing"]), "required_missing": required_missing,
+               "record": None, "entry": None, "note": ""}
+    outcome["missing"] = [name for key, name in listing.WANTED
+                          if not dict(fields, **extras).get(key)]
+    if required_missing:
+        outcome["note"] = "Needs %s before it can be logged." % ", ".join(
+            name for key, name in listing.WANTED if key in required_missing)
+        return outcome
+
+    fields["captured_via"] = "MISSIONSCREEN"
+    try:
+        record = opportunity.capture(fields, driver=driver, channel="MISSIONSCREEN")
+    except opportunity.OpportunityError as refusal:
+        audit.record(action="opportunity-capture", driver=driver,
+                     channel=audit.CHANNEL_MISSION_SCREEN,
+                     result=audit.RESULT_FAILURE, note=f"pasted {kind}: {refusal}")
+        outcome["note"] = str(refusal)
+        return outcome
+
+    audit.record(action="opportunity-capture", driver=driver,
+                 channel=audit.CHANNEL_MISSION_SCREEN,
+                 mission_id=record["opportunity_id"],
+                 intent="%s to %s" % (record.get("origin", ""), record.get("destination", "")),
+                 new_value=str(record.get("rate") or ""), result=audit.RESULT_SUCCESS,
+                 note="pasted %s; %s" % (kind, record.get("verdict", "NEW").lower()))
+    outcome.update(ok=True, record=record, entry=from_capture(record, extras=extras))
+    return outcome
