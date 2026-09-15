@@ -149,6 +149,11 @@ def create_app(config: dict | None = None) -> Flask:
 
             if request.endpoint in DRIVER_COCKPIT_ENDPOINTS:
                 return None
+            # The NODE card's short lines (CO-11). Read-only; see portal/routes/node.py.
+            from portal.routes.node import NODE_DRIVER_ENDPOINTS
+
+            if request.endpoint in NODE_DRIVER_ENDPOINTS:
+                return None
         if not session.get("user_id"):
             return redirect(url_for("auth.login"))
         return None

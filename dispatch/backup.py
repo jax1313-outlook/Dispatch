@@ -172,7 +172,10 @@ class _SourceSpec:
 
 
 _SOURCES: tuple[_SourceSpec, ...] = (
-    _SourceSpec("portal_data", "PortalData", "PORTAL_DATA_DIR", False, _resolve_portal_data),
+    # Recursive since CO-12 (2026-09-14). It used to capture top-level *.json only, which
+    # silently left out joe_audit.jsonl, security_events.jsonl and every file under
+    # LibraryDocuments -- the exact "omitted silently" failure this module exists to prevent.
+    _SourceSpec("portal_data", "PortalData", "PORTAL_DATA_DIR", True, _resolve_portal_data),
     _SourceSpec("uploads", "Uploads", "PORTAL_UPLOAD_DIR", True, _resolve_uploads),
     _SourceSpec("archive_records", "ArchiveRecords", "DISPATCH_ARCHIVE_ROOT", True, _resolve_archive_records),
     _SourceSpec("memory", "Memory", "DISPATCH_MEMORY_ROOT", True, _resolve_memory),
@@ -266,6 +269,24 @@ def _plan_roots() -> list[_Root]:
     return planned
 
 
+def configured_source_paths() -> list[Path]:
+    """Every directory and database file a backup reads from, resolved the way the app does.
+
+    Public so a caller choosing a backup *destination* can refuse one that sits on top of
+    the data it is meant to protect (see dispatch/backup_drives.py). Resolution failures
+    are left out rather than raised: this answers "where is the data", not "is it healthy".
+    """
+    paths = [r.path for r in _plan_roots() if not r.error]
+    try:
+        paths.append(_norm(_current_db_path()))
+    except Exception:  # noqa: BLE001 - an unresolvable database path is not a location
+        pass
+    catalog = _resolve_library_catalog()
+    if catalog is not None:
+        paths.append(catalog)
+    return paths
+
+
 def _assign_relative_layout(planned: list[_Root]) -> None:
     """Give each root its position inside the archive, preserving nesting.
 
@@ -323,13 +344,52 @@ def _is_db_artifact(path: Path, db_path: Path) -> bool:
     return any(path.name == db_path.name + suffix for suffix in _DB_SIDECAR_SUFFIXES)
 
 
+def _is_link_like(path: Path) -> bool:
+    """A symlink or a Windows junction: a door out of the configured root.
+
+    Both are refused rather than followed. A junction inside PortalData that points at
+    the whole data drive would otherwise sweep the drive into the backup, and a backup
+    must hold what the configured roots hold -- nothing outside them.
+    """
+    try:
+        if path.is_symlink():
+            return True
+        is_junction = getattr(path, "is_junction", None)
+        return bool(is_junction and is_junction())
+    except OSError:
+        return True
+
+
 def _iter_files(root: _Root) -> Iterator[Path]:
-    if root.recursive:
-        yield from sorted(p for p in root.path.rglob("*"))
-    else:
-        # portal_data's contract is "every *.json in the portal data dir" -- the
-        # stores themselves, not the uploads subtree beneath them.
+    if not root.recursive:
         yield from sorted(root.path.glob("*.json"))
+        return
+    # os.walk with followlinks=False, pruning link-like directories, instead of rglob:
+    # whether rglob descends through a junction has changed between Python versions,
+    # and the answer here must not depend on the interpreter.
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root.path, followlinks=False):
+        here = Path(dirpath)
+        kept = []
+        for name in dirnames:
+            candidate = here / name
+            if _is_link_like(candidate):
+                found.append(candidate)  # reported as skipped by _plan_files
+            else:
+                kept.append(name)
+        dirnames[:] = sorted(kept)
+        found.extend(here / name for name in filenames)
+    yield from sorted(found)
+
+
+def _inside(path: Path, root: Path) -> bool:
+    """Whether *path*, with every link resolved, still lies inside *root*."""
+    try:
+        real = Path(os.path.realpath(path))
+        real_root = Path(os.path.realpath(root))
+    except OSError:
+        return False
+    return real == real_root or real.is_relative_to(real_root)
 
 
 def _plan_files(
@@ -345,12 +405,15 @@ def _plan_files(
             continue
         role_label = ",".join(root.roles)
         for path in _iter_files(root):
-            if path.is_dir():
-                continue
-            if path.is_symlink():
+            if _is_link_like(path):
                 notes.append(f"skipped symlink (not followed): {path}")
                 continue
+            if path.is_dir():
+                continue
             if not path.is_file():
+                continue
+            if not _inside(path, root.path):
+                notes.append(f"skipped {path}: resolves outside its configured root")
                 continue
             if _is_scratch(path):
                 continue
@@ -513,15 +576,31 @@ class BackupResult:
     absent_sources: list[dict[str, str]]
     notes: list[str]
     dry_run: bool = False
+    #: The archive re-read against its own manifest the moment it was written (CO-12).
+    #: None for a dry run, which writes nothing to check, or when the caller opted out.
+    self_check: "VerifyResult | None" = None
+
+    @property
+    def hash_check(self) -> str | None:
+        """PASS or FAIL for the immediate re-hash; None when none was run.
+
+        A PASS says the bytes on the backup media match the manifest. It does not say
+        the backup restores -- that is a restore test, recorded separately.
+        """
+        if self.self_check is None:
+            return None
+        return "PASS" if self.self_check.ok else "FAIL"
 
     @property
     def ok(self) -> bool:
-        """True when every configured source was present.
+        """True when every configured source was present and the re-hash did not fail.
 
         Deliberately not "the copy did not raise": a backup that ran cleanly
         while one of its five sources had moved out from under it is the exact
         failure this module exists to make loud.
         """
+        if self.self_check is not None and not self.self_check.ok:
+            return False
         return not self.absent_sources
 
 
@@ -576,8 +655,14 @@ def create_backup(
     dry_run: bool = False,
     compress: bool = False,
     name: str | None = None,
+    self_verify: bool = True,
 ) -> BackupResult:
     """Capture the whole estate into a timestamped archive under *destination*.
+
+    With self_verify (the default) the finished archive -- directory or tarball -- is
+    immediately re-read and every hash recomputed against its own manifest, so a run
+    reports PASS or FAIL for what actually landed on the media rather than for what was
+    meant to.
 
     With compress=True the staged directory is rolled into a .tar.gz and removed,
     for backup media where one file is easier to move than a tree. Either form is
@@ -745,9 +830,12 @@ def create_backup(
             tar.add(archive_dir, arcname=archive_name)
         shutil.rmtree(archive_dir)
 
+    self_check = verify(archive_path) if self_verify else None
+
     return BackupResult(
         archive_path=archive_path, manifest=manifest, file_count=len(entries),
         total_bytes=sum(int(e["size"]) for e in entries), absent_sources=absent, notes=notes,
+        self_check=self_check,
     )
 
 

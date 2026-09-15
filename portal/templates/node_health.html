@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Node — Dispatch{% endblock %}
+{% block page_title %}Node{% endblock %}
+{% block page_actions %}
+<a class="btn btn-sm" href="{{ url_for('node.node_page', refresh=1) }}">Check now</a>
+{% endblock %}
+
+{% block body %}
+{# CO-11. Read-only. Every value is what dispatch/node_health.py observed at
+   checked_at; nothing here configures or repairs the machine. #}
+<section class="card-section">
+  <p style="margin:0;font-size:13px;">
+    Checked {{ report.checked_at }} (kept for one minute; <em>Check now</em> reads again).
+    The Driver Cockpit's NODE card shows: <strong>{{ card.lines|join(' · ') }}</strong>
+  </p>
+  {% if report.attention %}
+  <ul style="margin:8px 0 0;font-size:13px;">
+    {% for item in report.attention %}<li><strong>{{ item }}</strong></li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="card-section">
+  <h2>Temperature</h2>
+  {% set t = report.temperature %}
+  <p style="font-size:13px;">
+    <strong>{{ t.status }}</strong>
+    {% if t.celsius is not none %} &middot; {{ '%.0f'|format(t.celsius) }} °C, {{ t.zone }}{% endif %}
+    &middot; {{ t.detail }}
+    &middot; called out at {{ '%.0f'|format(report.hot_threshold_celsius) }} °C
+  </p>
+  {% if t.zones %}
+  <table class="data-table">
+    <thead><tr><th>Zone</th><th>°C</th><th>Counted</th></tr></thead>
+    <tbody>
+    {% for z in t.zones %}
+      <tr><td>{{ z.zone }}</td><td>{{ z.celsius }}</td><td>{{ 'yes' if z.reported else 'no — not a plausible reading' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="card-section">
+  <h2>Data drive</h2>
+  {% set d = report.disk %}
+  <p style="font-size:13px;">
+    <strong>{{ d.status }}</strong> &middot; {{ d.path }}
+    {% if d.free_bytes is not none %}
+      &middot; {{ '%.0f'|format(d.free_bytes / 1000000000) }} GB free of
+      {{ '%.0f'|format(d.total_bytes / 1000000000) }} GB
+    {% else %} &middot; {{ d.detail }}{% endif %}
+  </p>
+</section>
+
+<section class="card-section">
+  <h2>Backups (rotating drives)</h2>
+  {% set b = report.backup %}
+  {% if b.recorded %}
+  <table class="data-table">
+    <thead><tr><th>Drive</th><th>Runs</th><th>Last run</th><th>Last hash check</th><th>Newest passing backup</th></tr></thead>
+    <tbody>
+    {% for dr in b.drives %}
+      <tr>
+        <td>{{ dr.name }}</td><td>{{ dr.runs }}</td><td>{{ dr.last_run_at }}</td><td>{{ dr.last_hash_check }}</td>
+        <td>{% if dr.last_pass_age_hours is not none %}{{ dr.last_pass_at }} ({{ dr.last_pass_age_hours }} h ago){% else %}none{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p style="font-size:13px;">In use now: <strong>{{ b.current_drive }}</strong> since {{ b.current_drive_since }}
+    ({{ b.current_drive_days }} days; swap every {{ b.swap_days }}).</p>
+  {% else %}
+  <p style="font-size:13px;"><strong>{{ b.state }}</strong> &middot; no rotating-drive backup recorded.</p>
+  {% endif %}
+  {% for w in b.warnings %}<p style="font-size:13px;margin:2px 0;">{{ w }}</p>{% endfor %}
+  <p style="font-size:12px;color:#666;">{{ b.hash_check_meaning }} How to run, swap and restore:
+    docs/operations/ROTATING_BACKUP_DRIVES.md.</p>
+</section>
+
+<section class="card-section">
+  <h2>Joe</h2>
+  <p style="font-size:13px;"><strong>{{ report.joe.status }}</strong> &middot; {{ report.joe.detail }}
+    Last audited Joe action: {{ report.joe.last_audited_action_at or 'none recorded' }}.</p>
+</section>
+
+<section class="card-section">
+  <h2>Uptime</h2>
+  {% set u = report.uptime %}
+  <p style="font-size:13px;">
+    Machine: {% if u.node_seconds is not none %}{{ '%.1f'|format(u.node_seconds / 3600) }} h{% else %}not reported{% endif %}
+    &middot; This portal process: {{ '%.1f'|format(u.portal_seconds / 3600) }} h
+  </p>
+</section>
+{% endblock %}
