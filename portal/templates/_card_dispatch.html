@@ -27,13 +27,20 @@
         <div class="card card-dispatch">
             <div class="card-header {{ vis.css }}">
                 <span class="card-badge">{{ vis.icon }} {{ vis.label }}</span>
-                <span class="card-score">Score {{ format_score(entry.score) }}</span>
+                <span class="card-score">{% if cd.needs_rate %}Score: needs rate{% else %}Score {{ format_score(entry.score) }}{% endif %}</span>
             </div>
             <h3><a href="{{ url_for('pages.brief', sandbox_id=entry.id) }}">{{ entry.title }}</a></h3>
             <div class="card-meta">
                 <span class="status-tag status-{{ entry.status|lower }}">{{ entry.status }}</span>
                 {% if compact and entry.data_origin == 'SIMULATED' %}<span class="origin-tag origin-simulated" title="Bundled sample data. This is not a real load.">SAMPLE DATA</span>{% endif %}
             </div>
+            {# What Mike may not see (CO-3, 2026-09-14). Advisory: each line names a
+               fact; none of them decides. #}
+            {% if cd.warnings %}
+            <ul class="card-warnings">
+                {% for w in cd.warnings %}<li class="card-warning warn-{{ w.code|lower }}">&#9888; {{ w.text }}</li>{% endfor %}
+            </ul>
+            {% endif %}
             {% if compact %}
             <div class="card-fields">
                 <div><strong>Origin:</strong> {{ cd.origin or 'Unknown' }}</div>
@@ -60,8 +67,17 @@
                 {% else %}
                 <div><strong>Source:</strong> Unknown</div>
                 {% endif %}
-                <div><strong>Distance:</strong> {{ '%s mi'|format(cd.distance_miles) if cd.distance_miles else 'Unknown' }}</div>
+                <div><strong>Distance:</strong> {{ '%s mi'|format(cd.distance_miles) if cd.distance_miles else 'Unknown' }}{% if cd.distance_basis %} <small>({{ cd.distance_basis }})</small>{% endif %}</div>
             </div>
+            {% if cd.delivery_timing or cd.deadhead_basis or cd.equipment_note %}
+            <div class="card-timing">
+                <small>
+                    {% if cd.delivery_timing %}{{ cd.delivery_timing }}<br>{% endif %}
+                    {% if cd.deadhead_basis %}Empty miles to pickup: {{ '%s mi'|format(cd.position_deadhead_miles|round|int) if cd.position_deadhead_miles is not none else 'Unknown' }} ({{ cd.deadhead_basis }})<br>{% endif %}
+                    {% if cd.equipment_note %}Equipment: {{ cd.equipment_note }}{% endif %}
+                </small>
+            </div>
+            {% endif %}
 
             <div class="card-indicators">
                 {% if cd.detention_history %}

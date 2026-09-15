@@ -25,6 +25,18 @@ not, because it looks like data.
 
 **Deterministic, given a day.** `today` is a parameter, defaulted rather than
 assumed, so the same words on the same day always resolve the same way.
+
+**The default day is the home terminal's** (`dispatch.clock.home_date`), not the
+machine's. Between 8pm and midnight Eastern a UTC-clocked laptop is already on
+tomorrow, and "Thursday" said on Wednesday evening would have skipped a week.
+Changed 2026-09-14 (CO-2), when capture started resolving dates at the moment
+they are said rather than only at booking.
+
+**Words that are also ordinary words are held to a stricter shape.** "may" is a
+month and a verb, "sat" and "sun" are weekdays and English. A month counts only
+when a day number sits right beside it ("May 3", "3rd of May"), and "sat" or
+"sun" count only when nothing but time words stands with them ("sat 0800",
+"next sun"). "Thursday, may load late" is Thursday, never the 3rd of May.
 """
 
 from __future__ import annotations
@@ -64,6 +76,39 @@ _TIME = re.compile(
     r"|\b(?P<h24>[01]?\d|2[0-3]):(?P<m24>[0-5]\d)\b"
     r"|\b(?P<hmil>[01]\d|2[0-3])(?P<mmil>[0-5]\d)\b"
 )
+
+
+#: Weekday abbreviations that are also everyday English. They only count when
+#: every other word said with them is a time or one of these small words.
+_AMBIGUOUS_WEEKDAYS = ("sat", "sun")
+
+#: What may stand beside an ambiguous weekday and still leave it a date.
+_TIME_COMPANIONS = frozenset((
+    "next", "this", "on", "by", "at", "am", "pm", "morning", "afternoon",
+    "evening", "night", "noon", "early", "late",
+))
+
+
+def _only_time_words_besides(said: str, word: str) -> bool:
+    """True when `word` stands alone apart from time words and small fillers."""
+    rest = re.sub(r"\b%s\b" % re.escape(word), " ", said, count=1)
+    rest = _TIME.sub(" ", rest)
+    for token in re.findall(r"[a-z0-9:]+", rest):
+        if token not in _TIME_COMPANIONS:
+            return False
+    return True
+
+
+def _month_day(said: str, name: str):
+    """The day number written right beside a month name, or None.
+
+    "September 15", "Sept 15th", "15 Sept", "15th of September". A number
+    elsewhere in the sentence is not the day -- "May, 2 pallets" is not a date.
+    """
+    after = re.search(r"\b%s\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b" % name, said)
+    if after:
+        return after
+    return re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?%s\b" % name, said)
 
 
 def looks_resolved(text: str) -> bool:
@@ -123,7 +168,10 @@ def resolve(text: str, *, today: date | None = None) -> str:
     if not said:
         return ""
 
-    today = today or date.today()
+    if today is None:
+        from dispatch import clock
+
+        today = clock.home_date()
     when: date | None = None
     # What is left once the date has been taken out. The time is read from this
     # and never from the whole sentence, because a four-digit year and a bare
@@ -159,18 +207,20 @@ def resolve(text: str, *, today: date | None = None) -> str:
 
     if when is None:
         for name, month in _MONTHS.items():
-            if re.search(r"\b%s\b" % name, said):
-                day = _ORDINAL.search(said) or re.search(r"\b(\d{1,2})\b", said)
-                if day:
-                    when = _with_year(month, int(day.group(1)), today)
-                    if when is None:
-                        return ""
-                    rest = said.replace(day.group(0), " ", 1)
+            day = _month_day(said, name)
+            if day:
+                when = _with_year(month, int(day.group(1)), today)
+                if when is None:
+                    return ""
+                rest = said.replace(day.group(0), " ", 1)
                 break
 
     if when is None:
         for name, index in _WEEKDAYS.items():
             if re.search(r"\b%s\b" % name, said):
+                if (name in _AMBIGUOUS_WEEKDAYS
+                        and not _only_time_words_besides(said, name)):
+                    continue
                 when = _next_weekday(index, today)
                 # "next Thursday" is the one after this week's.
                 if "next" in said:

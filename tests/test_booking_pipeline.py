@@ -34,40 +34,44 @@ def client(tmp_path, monkeypatch):
 
 
 class TestCardVisualTiers:
-    def test_high_value_90(self):
-        v = helpers.card_visual(90)
+    # The bands were 90 / 75 / 60 / 40 against a 100-point score. The engine's
+    # maximum is 90 (dispatch.scoring.MAX_SCORE), so since CO-3 (2026-09-14) each
+    # band keeps its share of the real maximum: 81 / 67.5 / 54 / 36.
+    def test_high_value_at_ninety_percent_of_max(self):
+        v = helpers.card_visual(81)
         assert v["css"] == "card-high"
         assert "HIGH VALUE" in v["label"]
 
-    def test_high_value_100(self):
-        v = helpers.card_visual(100)
-        assert v["css"] == "card-high"
+    def test_the_real_maximum_is_high_value(self):
+        from dispatch.scoring import MAX_SCORE
+        assert helpers.card_visual(MAX_SCORE)["css"] == "card-high"
+        assert helpers.card_visual(100)["css"] == "card-high"
 
-    def test_strong_match_75(self):
-        v = helpers.card_visual(75)
+    def test_strong_match_68(self):
+        v = helpers.card_visual(68)
         assert v["css"] == "card-strong"
         assert "STRONG" in v["label"]
 
-    def test_strong_match_89(self):
-        v = helpers.card_visual(89)
+    def test_strong_match_80(self):
+        v = helpers.card_visual(80)
         assert v["css"] == "card-strong"
 
-    def test_moderate_60(self):
-        v = helpers.card_visual(60)
+    def test_moderate_54(self):
+        v = helpers.card_visual(54)
         assert v["css"] == "card-moderate"
         assert "MODERATE" in v["label"]
 
-    def test_moderate_74(self):
-        v = helpers.card_visual(74)
+    def test_moderate_67(self):
+        v = helpers.card_visual(67)
         assert v["css"] == "card-moderate"
 
-    def test_low_value_40(self):
-        v = helpers.card_visual(40)
+    def test_low_value_36(self):
+        v = helpers.card_visual(36)
         assert v["css"] == "card-low"
         assert "LOW" in v["label"]
 
-    def test_low_value_59(self):
-        v = helpers.card_visual(59)
+    def test_low_value_53(self):
+        v = helpers.card_visual(53)
         assert v["css"] == "card-low"
 
     def test_poor_match_0(self):
@@ -75,8 +79,8 @@ class TestCardVisualTiers:
         assert v["css"] == "card-poor"
         assert "POOR" in v["label"]
 
-    def test_poor_match_39(self):
-        v = helpers.card_visual(39)
+    def test_poor_match_35(self):
+        v = helpers.card_visual(35)
         assert v["css"] == "card-poor"
 
     def test_none_score_with_decision(self):

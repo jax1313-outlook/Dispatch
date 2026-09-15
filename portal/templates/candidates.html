@@ -35,6 +35,57 @@
     </nav>
   </header>
 
+  {% for notice in notices or [] %}
+    <p class="brief-gaps paste-notice">{{ notice }}</p>
+  {% endfor %}
+
+  {# Paste a listing or a broker's offer email. CO-2, 2026-09-14: "A rapid way
+     to capture load information for later decision making." What is pasted is
+     what he copied -- nothing here reads a board or a mailbox. #}
+  <section class="card-section paste-capture">
+    <form method="post" action="{{ url_for('joe_portal.paste_listing') }}">
+      <label for="pasted"><strong>PASTE A LOAD</strong> &mdash; a board listing or a broker's email</label>
+      <textarea id="pasted" name="pasted" rows="{{ 8 if paste else 4 }}"
+                style="width:100%;box-sizing:border-box">{{ paste.text if paste else '' }}</textarea>
+      <div class="paste-kind">
+        <label><input type="radio" name="kind" value="listing"
+               {% if not paste or paste.kind != 'email' %}checked{% endif %}> Listing</label>
+        <label><input type="radio" name="kind" value="email"
+               {% if paste and paste.kind == 'email' %}checked{% endif %}> Offer email</label>
+      </div>
+      {% if paste %}
+        <p class="brief-gaps">{{ paste.note or 'Check what was read, then make the card.' }}</p>
+        {% if paste.missing %}<p class="cand-gaps">Missing: {{ paste.missing|join(', ') }}</p>{% endif %}
+        <div class="paste-fields">
+          {% for key, label in [('origin', 'Pickup city'), ('destination', 'Delivery city'),
+                                ('rate', 'Rate'), ('pickup_date', 'Pickup'),
+                                ('delivery_date', 'Delivery'), ('equipment', 'Equipment'),
+                                ('contact', 'Customer')] %}
+            <label>{{ label }}
+              <input name="{{ key }}" value="{{ paste.fields.get(key, '') }}"></label>
+          {% endfor %}
+          <label>Miles <input name="distance_miles" value="{{ paste.extras.get('distance_miles', '') }}"></label>
+        </div>
+      {% else %}
+        <div class="paste-fields">
+          <label>Miles, if you know them <input name="distance_miles" value=""></label>
+        </div>
+      {% endif %}
+      <button class="btn primary" type="submit">MAKE CARD</button>
+    </form>
+  </section>
+
+  {% set expired_count = rows|selectattr('expired')|list|length %}
+  {% if expired_count %}
+  <section class="card-section expired-loads">
+    <form method="post" action="{{ url_for('joe_portal.clear_expired_loads') }}">
+      <span class="cand-gaps">{{ expired_count }} load{{ '' if expired_count == 1 else 's' }}
+        past pickup and not committed. Uncommitted loads are not kept.</span>
+      <button class="btn reject" type="submit">CLEAR</button>
+    </form>
+  </section>
+  {% endif %}
+
   {% if not rows %}
     <p class="brief-gaps">Nothing waiting. Sweep something, or open one by hand.</p>
   {% endif %}
@@ -52,7 +103,12 @@
       {{ row.origin or 'Origin not recorded' }}
       &rarr; {{ row.destination or 'Destination not recorded' }}
     </div>
-    <div class="cand-when">{{ row.when or 'No pickup appointment recorded' }}</div>
+    <div class="cand-when">{{ row.when or 'No pickup appointment recorded' }}
+      {% if row.expired %}<strong class="cand-expired">PICKUP PASSED</strong>{% endif %}</div>
+
+    {% if row.score %}<div class="cand-score">Score {{ row.score }}</div>{% endif %}
+    {% if row.timing %}<div class="cand-when">{{ row.timing }}</div>{% endif %}
+    {% for text in row.warnings %}<div class="cand-gaps">&#9888; {{ text }}</div>{% endfor %}
 
     {# Counted, never scored. It is the number of questions worth asking while
        somebody is on the phone, and nothing reads it to decide anything. #}

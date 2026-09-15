@@ -62,7 +62,10 @@ class TestTheCardIsMadeAtCaptureTime:
         assert card["rate"] == 1150
         assert card["broker"] == "Southeast Freight Partners"
         assert card["equipment_required"] == "Dry Van"
-        assert card["pickup_window"] == "Thursday"
+        # Read as a date at capture (CO-2, 2026-09-14); the words stay beside it.
+        assert card["pickup_as_said"] == "Thursday"
+        from dispatch import spoken_date
+        assert spoken_date.looks_resolved(card["pickup_window"])
 
     def test_the_card_is_the_one_the_dispatch_tab_reads(self):
         record = _capture()

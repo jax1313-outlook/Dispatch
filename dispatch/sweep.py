@@ -121,11 +121,29 @@ def set_schedule(timer_enabled: bool, daily_at: str = "") -> dict:
 
 # ---- running -----------------------------------------------------------
 
-def start(runner=None) -> dict:
-    """Run a sweep now.
+def _save_as_cards(loads) -> dict:
+    """The default saver: the portal's one path from acquired load to card.
+
+    Imported late, the same way `_state_path` reaches the portal's data
+    directory, so this module still imports with no portal present.
+    """
+    from portal.models import opportunity_card
+
+    return opportunity_card.save_sweep(loads)
+
+
+def start(runner=None, saver=None) -> dict:
+    """Run a sweep now, and keep what it found as cards.
 
     `runner` is injected so this can be exercised without touching the real
     acquisition engine. Left unset, it uses the real one.
+
+    `saver` turns the results into Opportunity cards. Until CO-2 (2026-09-14)
+    there was none: the sweep counted what acquisition returned and kept
+    nothing, so "5 opportunity records" put nothing on any screen. Left unset,
+    results are saved through `portal/models/opportunity_card.save_sweep`, each
+    card carrying the origin acquisition gave it -- a SIMULATED sample is never
+    saved as LIVE.
     """
     state = _read()
     state["state"] = STATE_RUNNING
@@ -139,10 +157,12 @@ def start(runner=None) -> dict:
             result = acquisition.acquire()
         else:
             result = runner()
+        saved = (saver or _save_as_cards)(
+            result if isinstance(result, (list, tuple)) else [])
         state = _read()
         state["state"] = STATE_IDLE
         state["last_run"] = _now().isoformat()
-        state["last_result"] = _describe(result)
+        state["last_result"] = _describe(result, saved)
         state["message"] = ""
     except Exception as error:  # noqa: BLE001 - reported, never swallowed
         state = _read()
@@ -154,14 +174,25 @@ def start(runner=None) -> dict:
     return status(_write(state))
 
 
-def _describe(result) -> str:
-    """What the sweep actually did, in words."""
+def _describe(result, saved: dict | None = None) -> str:
+    """What the sweep actually did, in words -- found, saved, and what the saved are."""
     if isinstance(result, dict):
         found = result.get("created", result.get("count"))
         if found is not None:
             return "%s opportunity record(s)" % found
     if isinstance(result, (list, tuple)):
-        return "%d opportunity record(s)" % len(result)
+        line = "%d opportunity record(s)" % len(result)
+        if saved:
+            line += ", %d saved as cards" % int(saved.get("saved") or 0)
+            origins = saved.get("origins") or {}
+            if origins:
+                line += " (%s)" % ", ".join(
+                    "%d %s" % (count, word) for word, count in sorted(origins.items()))
+            if saved.get("skipped_expired"):
+                line += ", %d left out: pickup already passed" % saved["skipped_expired"]
+            if saved.get("skipped_committed"):
+                line += ", %d already committed and left alone" % saved["skipped_committed"]
+        return line
     return "completed"
 
 

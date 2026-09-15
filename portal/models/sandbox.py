@@ -353,6 +353,21 @@ def run_hold_sweep(source_type: str = SANDBOX_SOURCE_FREIGHT, now: datetime | No
     return expired_ids
 
 
+def discard_entry(sandbox_id: str) -> bool:
+    """Delete one entry outright. True when there was one.
+
+    The store half of D12 (*"it makes no sense to keep any uncommitted load
+    information"*). Deciding whether an entry may be discarded -- never a
+    committed one -- is the caller's job: `portal/models/opportunity_card.discard`.
+    """
+    data = _load()
+    if sandbox_id not in data:
+        return False
+    del data[sandbox_id]
+    _save(data)
+    return True
+
+
 def clear_simulated(source_type: str | None = None) -> list[str]:
     """Remove every SIMULATED entry. Returns the ids removed.
 

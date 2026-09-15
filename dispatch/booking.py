@@ -124,6 +124,27 @@ def _as_date(value):
         return None
 
 
+def windows_of(record: dict) -> tuple:
+    """`(pickup_window, delivery_window)` as the record or its card carries them."""
+    card = (record or {}).get("card_data") or {}
+    return ((record or {}).get("pickup_window") or card.get("pickup_window") or "",
+            (record or {}).get("delivery_window") or card.get("delivery_window") or "")
+
+
+def span_of(record: dict) -> list:
+    """Every day a load occupies, pickup through delivery. CO-4, 2026-09-14.
+
+    A load that picks up Monday and delivers Wednesday takes Tuesday too -- the
+    truck is not sellable on a day it is driving somebody's freight. Only one
+    end known gives that one day; neither gives nothing. A delivery written
+    before its pickup is not stretched backwards into a span.
+    """
+    pickup, delivery = (_as_date(w) for w in windows_of(record))
+    if pickup and delivery and delivery >= pickup:
+        return [pickup + timedelta(days=n) for n in range((delivery - pickup).days + 1)]
+    return sorted({d for d in (pickup, delivery) if d})
+
+
 def commitments_from(records) -> dict:
     """Freight already committed, by the day it happens.
 
@@ -141,10 +162,10 @@ def commitments_from(records) -> dict:
         if not commitment.is_committed(record):
             continue
         card = record.get("card_data") or {}
-        for phase, window in (
-                ("Pickup", record.get("pickup_window") or card.get("pickup_window")),
-                ("Delivery", record.get("delivery_window") or card.get("delivery_window"))):
-            when = _as_date(window)
+        pickup_window, delivery_window = windows_of(record)
+        ends = {"Pickup": _as_date(pickup_window), "Delivery": _as_date(delivery_window)}
+        for phase, window in (("Pickup", pickup_window), ("Delivery", delivery_window)):
+            when = ends[phase]
             if not when:
                 continue
             by_day.setdefault(when, []).append({
@@ -156,6 +177,18 @@ def commitments_from(records) -> dict:
                 "where": (card.get("origin") if phase == "Pickup"
                           else card.get("destination")) or "",
                 "when": str(window or ""),
+            })
+        # CO-4, 2026-09-14: the days between are taken too. A truck driving
+        # somebody's freight on Tuesday is not sellable on Tuesday, and a board
+        # that shows it open is showing a gap that is not there.
+        for day in span_of(record)[1:-1]:
+            by_day.setdefault(day, []).append({
+                "phase": "Transit",
+                "record_id": record.get("id"),
+                "load_number": record.get("load_number") or card.get("load_id") or "",
+                "customer": record.get("customer") or card.get("broker") or "",
+                "where": "%s to %s" % (card.get("origin") or "", card.get("destination") or ""),
+                "when": "",
             })
     return by_day
 
@@ -245,7 +278,10 @@ def build(records=None, calendar=None, *, today=None, weeks=2) -> dict:
     to keep the week whole and are marked past -- they cannot be sold and are
     not counted among the days that can.
     """
-    today = today or date.today()
+    if today is None:
+        from dispatch import clock
+
+        today = clock.home_date()
     start = week_start(today)
     days = int(weeks) * 7
     commitments = commitments_from(records)

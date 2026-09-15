@@ -566,17 +566,34 @@ class TestInquiryBlockedMissingEmail:
 
 # ---------- 15. Archive candidate created on PASS ----------
 class TestArchiveCandidate:
-    def test_pass_creates_archive_record(self, client, sample_load_good):
+    # Owner ruling D12, 2026-09-14: "program only processes committed loads. due to
+    # the life span of only hours to minuties it makes no sense to keep any
+    # uncommitted load information." A PASS on an uncommitted freight load used to
+    # archive it; it is now discarded. A committed record is never discarded and
+    # keeps the archive path, which these tests still hold.
+    def test_pass_discards_an_uncommitted_freight_load(self, client, sample_load_good):
         from portal.models import archive as arc_model
+        from portal.models import sandbox
         entry = _create_dispatch_entry(client, sample_load_good)
+        resp = client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
+        assert resp.get_json()["discarded"] is True
+        assert sandbox.get(entry["id"]) is None
+        assert arc_model.get_section("load") == []
+
+    def test_pass_on_a_committed_load_still_creates_archive_record(self, client, sample_load_good):
+        from portal.models import archive as arc_model
+        from portal.models import sandbox
+        entry = _create_dispatch_entry(client, sample_load_good)
+        sandbox.mark_accepted(entry["id"], 1)
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
         records = arc_model.get_section("load")
         assert len(records) >= 1
         assert records[0]["source_id"] == entry["id"]
 
-    def test_pass_adds_archived_note(self, client, sample_load_good):
+    def test_pass_on_a_committed_load_adds_archived_note(self, client, sample_load_good):
         from portal.models import sandbox
         entry = _create_dispatch_entry(client, sample_load_good)
+        sandbox.mark_accepted(entry["id"], 1)
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
         updated = sandbox.get(entry["id"])
         assert "Archived" in updated["notes"]
@@ -752,14 +769,15 @@ class TestSandboxModel:
 
 # ---------- Card visual rules ----------
 class TestCardVisual:
+    # Bands are shares of the engine's real maximum of 90 since CO-3 (2026-09-14).
     def test_score_90_plus(self):
         from portal.helpers import card_visual
         vis = card_visual(90)
         assert vis["css"] == "card-high"
 
-    def test_score_below_90(self):
+    def test_score_below_the_high_band(self):
         from portal.helpers import card_visual
-        vis = card_visual(89)
+        vis = card_visual(80)
         assert vis["css"] == "card-strong"
 
     def test_decision_approve_proposal(self):
@@ -942,9 +960,10 @@ class TestArchiveAllSections:
             assert section in html, f"Missing archive section: {section}"
 
     def test_archive_candidate_preserves_data(self, client, sample_load_good):
+        # Archived explicitly: a PASS on an uncommitted freight load is discarded (D12).
         from portal.models import archive as arc_model
         entry = _create_dispatch_entry(client, sample_load_good)
-        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
+        client.post("/api/archive/create", json={"sandbox_id": entry["id"]})
         records = arc_model.get_section("load")
         assert len(records) >= 1
         record = records[0]
@@ -953,7 +972,9 @@ class TestArchiveAllSections:
         assert record["record_data"]["source_type"] == "dispatch"
 
     def test_archive_table_shows_columns(self, client, sample_load_good):
+        from portal.models import sandbox
         entry = _create_dispatch_entry(client, sample_load_good)
+        sandbox.mark_accepted(entry["id"], 1)
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
         resp = client.get("/archive")
         html = resp.data.decode("utf-8")

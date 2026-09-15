@@ -377,8 +377,33 @@ def candidate_queue():
     and a queue that keeps showing it is a queue he stops trusting to mean
     "these need me".
     """
-    from dispatch import commitment
+    return render_template("candidates.html", rows=_candidate_rows(),
+                           notices=get_flashed_messages(), paste=None)
 
+
+@joe_bp.route("/loads/clear-expired", methods=["POST"])
+def clear_expired_loads():
+    """Discard every uncommitted load whose pickup has gone by. D12, 2026-09-14.
+
+    A button because looking at the Loads screen must never change it (D9); the
+    screen counts what has expired and this is the act that clears it. A paste
+    and a sweep clear the same way on their own.
+    """
+    from portal.models import opportunity_card
+
+    actor = str(session.get("user_id") or "").strip() or "operations"
+    gone = opportunity_card.discard_expired(driver=actor)
+    flash("Cleared %d load%s whose pickup had passed." % (len(gone), "" if len(gone) == 1 else "s")
+          if gone else "Nothing had expired.")
+    return redirect(url_for("joe_portal.candidate_queue"))
+
+
+def _candidate_rows() -> list:
+    """The Loads workbench rows: every uncommitted record still waiting on a decision."""
+    from dispatch import commitment
+    from portal.models import opportunity_card
+
+    expired = set(opportunity_card.expired_card_ids())
     rows = []
     for record in sandbox.get_all().values():
         if not isinstance(record, dict) or commitment.is_committed(record):
@@ -396,12 +421,72 @@ def candidate_queue():
             "destination": card.get("destination") or record.get("delivery_location") or "",
             "when": record.get("pickup_window") or card.get("pickup_window") or "",
             "rate": record.get("rate") or card.get("rate") or "",
-            "source": record.get("intake_source") or card.get("source") or "",
+            "source": (record.get("intake_source") or card.get("source")
+                       or card.get("captured_via") or ""),
             "gaps": brief_gaps(merged),
+            "expired": record.get("id") in expired,
+            "warnings": [w.get("text", "") for w in (card.get("warnings") or [])
+                         if isinstance(w, dict)],
+            "timing": card.get("delivery_timing") or "",
+            "score": ("needs rate" if card.get("needs_rate") else
+                      "" if record.get("score") is None else str(record.get("score"))),
         })
 
     rows.sort(key=lambda r: (r["when"] or "~", r["customer"]))
-    return render_template("candidates.html", rows=rows)
+    return rows
+
+
+#: What the paste form may type beside the pasted text. Typed wins over read.
+PASTE_TYPED_FIELDS = ("origin", "destination", "rate", "pickup_date", "delivery_date",
+                      "equipment", "contact", "distance_miles")
+
+
+@joe_bp.route("/loads/paste", methods=["POST"])
+def paste_listing():
+    """Paste a load listing or a broker's offer email; a card is made from it.
+
+    CO-2, 2026-09-14 -- *"A rapid way to capture load information for later
+    decision making."* The text is what the person copied. Nothing here reads a
+    board or a mailbox (D1), and nothing is written for any one board.
+
+    A paste that carries a lane and a rate is logged through the capture
+    contract's own function and lands on this screen as a card, with what is
+    still missing named. One that does not comes back with what was read filled
+    in, and asks for exactly what the contract needs -- nothing is stored.
+    """
+    from portal.models import opportunity_card
+
+    text = str(request.form.get("pasted") or "")
+    kind = str(request.form.get("kind") or "listing").lower()
+    if kind not in opportunity_card.PASTE_KINDS:
+        kind = "listing"
+    typed = {key: request.form.get(key) for key in PASTE_TYPED_FIELDS}
+    if not text.strip() and not any(str(v or "").strip() for v in typed.values()):
+        flash("Nothing was pasted.")
+        return redirect(url_for("joe_portal.candidate_queue"))
+
+    driver = str(session.get("user_id") or "").strip() or "operations"
+    # D12: expired uncommitted loads go when work is done, never on a look (D9).
+    opportunity_card.discard_expired(driver=driver)
+    outcome = opportunity_card.capture_from_text(text, kind=kind, driver=driver, typed=typed)
+
+    if outcome["ok"]:
+        record = outcome["record"]
+        line = "Card made: %s to %s, $%s." % (
+            record.get("origin", ""), record.get("destination", ""),
+            ("%.2f" % record["rate"]).rstrip("0").rstrip(".") if record.get("rate") else "")
+        if record.get("verdict") == "MERGED":
+            line = "Already on a card; filled in what it was missing."
+        if outcome["missing"]:
+            line += " Still missing: %s." % ", ".join(outcome["missing"])
+        flash(line)
+        return redirect(url_for("joe_portal.candidate_queue"))
+
+    return render_template(
+        "candidates.html", rows=_candidate_rows(), notices=[],
+        paste={"text": text, "kind": kind, "fields": outcome["fields"],
+               "extras": outcome["extras"], "note": outcome["note"],
+               "missing": outcome["missing"]}), 400
 
 
 def brief_gaps(record: dict) -> int:
@@ -416,15 +501,27 @@ def brief_gaps(record: dict) -> int:
 
 @joe_bp.route("/brief/mission/<path:record_id>/reject", methods=["POST"])
 def mission_reject(record_id: str):
-    """Leave it. Recorded rather than deleted.
+    """Leave it. The Loads screen's PASS.
 
-    A candidate turned down is a fact worth keeping: the same broker rings back
-    with the same lane, and what he offered last time is the useful thing to
-    have. Nothing is removed.
+    This used to record the rejection and keep the candidate, on the reasoning
+    that the same broker rings back with the same lane. **Superseded by Owner
+    ruling D12, 2026-09-14:** *"program only processes committed loads. due to
+    the life span of only hours to minuties it makes no sense to keep any
+    uncommitted load information."* An uncommitted candidate is discarded, card
+    and capture together. A committed one is never discarded; it keeps the old
+    behaviour and records the rejection on the record.
     """
     from datetime import datetime, timezone
 
+    from portal.models import opportunity_card
+
     if not sandbox.get(record_id):
+        return redirect(url_for("joe_portal.candidate_queue"))
+
+    actor = str(session.get("user_id") or "").strip() or "operations"
+    outcome = opportunity_card.discard(record_id, reason="REJECT", driver=actor)
+    if outcome["discarded"]:
+        flash(outcome["note"])
         return redirect(url_for("joe_portal.candidate_queue"))
 
     now = datetime.now(timezone.utc).isoformat()

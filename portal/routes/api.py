@@ -96,6 +96,21 @@ def card_action():
             resp["warnings"] = [c["explanation"] for c in booking_conflicts]
         return jsonify(resp)
 
+    if action == "PASS" and entry.get("source_type") == "dispatch":
+        # Owner ruling D12, 2026-09-14: "program only processes committed loads.
+        # due to the life span of only hours to minuties it makes no sense to keep
+        # any uncommitted load information." A passed freight load is discarded --
+        # card and capture together -- rather than archived. A committed record is
+        # never discarded; opportunity_card.discard refuses it and the old path runs.
+        from portal.models import opportunity_card
+
+        outcome = opportunity_card.discard(
+            sandbox_id, reason="PASS", driver=str(session.get("user_id") or "operations"))
+        if outcome["discarded"]:
+            passed = dict(entry, status="PASS")
+            return jsonify({"status": "ok", "entry": passed, "discarded": True,
+                            "note": outcome["note"]})
+
     updated = sandbox.update_status(sandbox_id, new_status)
 
     if action == "PURSUE":

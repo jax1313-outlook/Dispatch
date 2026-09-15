@@ -163,17 +163,34 @@ class TestTheCandidateQueue:
         client.post(f"/brief/mission/{record_id}/commit")
         assert "Baptist Health" not in client.get("/candidates").get_data(as_text=True)
 
-    def test_rejecting_records_rather_than_deletes(self, client):
-        """The same broker rings back with the same lane, and what he offered
-        last time is the useful thing to have."""
+    def test_rejecting_an_uncommitted_candidate_discards_it(self, client):
+        """This test used to hold that a rejection is recorded, not deleted.
+        Superseded by Owner ruling D12, 2026-09-14: "program only processes
+        committed loads. due to the life span of only hours to minuties it makes
+        no sense to keep any uncommitted load information." """
         _create(client)
         record_id = list(sandbox.get_all())[0]
         client.post(f"/brief/mission/{record_id}/reject",
                     data={"reason": "Rate too low"})
-        record = sandbox.get(record_id)
-        assert record is not None
-        assert record["rejected_at"]
-        assert record["rejected_reason"] == "Rate too low"
+        assert sandbox.get(record_id) is None
+
+    def test_rejecting_a_committed_mission_records_rather_than_deletes(self, client, tmp_path):
+        """A committed record is never discarded."""
+        from dispatch.db import set_db_path
+
+        set_db_path(tmp_path / "dispatch.db")
+        try:
+            _create(client)
+            record_id = list(sandbox.get_all())[0]
+            client.post(f"/brief/mission/{record_id}/commit")
+            client.post(f"/brief/mission/{record_id}/reject",
+                        data={"reason": "Rate too low"})
+            record = sandbox.get(record_id)
+            assert record is not None
+            assert record["rejected_at"]
+            assert record["rejected_reason"] == "Rate too low"
+        finally:
+            set_db_path(None)
 
     def test_a_rejected_candidate_leaves_the_queue(self, client):
         _create(client)

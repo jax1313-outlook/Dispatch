@@ -9,7 +9,30 @@ from cin_lite import acquisition, processing
 from cin_lite.agents import summarizer, router
 
 
-SCORE_HIGH_THRESHOLD = 90
+#: The bands, as shares of the engine's real maximum (`dispatch.scoring.MAX_SCORE`).
+#:
+#: They were written as 90 / 75 / 60 / 40 against a 100-point score. Broker trust
+#: left the engine and the maximum became 90, so HIGH VALUE MATCH needed a perfect
+#: score and every band sat ten percent too high -- the "calibrated against" note in
+#: `scoring.py` said so and nothing followed it. Fixed 2026-09-14 (CO-3) by keeping
+#: each band's share of the maximum, which is the policy as written; the shares
+#: themselves remain the Owner's to change.
+SCORE_BAND_SHARES = (
+    (0.90, {"icon": "✅", "label": "HIGH VALUE MATCH", "css": "card-high"}),
+    (0.75, {"icon": "🟢", "label": "STRONG MATCH", "css": "card-strong"}),
+    (0.60, {"icon": "🟡", "label": "MODERATE", "css": "card-moderate"}),
+    (0.40, {"icon": "🟠", "label": "LOW VALUE", "css": "card-low"}),
+)
+
+
+def _score_max() -> int:
+    from dispatch.scoring import MAX_SCORE
+
+    return MAX_SCORE
+
+
+#: Kept for callers that read it: the score at which a card is HIGH VALUE.
+SCORE_HIGH_THRESHOLD = 81
 
 INQUIRY_TEMPLATE_SUBJECT = "Load Inquiry - Level 1 Transport"
 
@@ -70,14 +93,9 @@ def load_dispatch_data() -> list[dict]:
 def card_visual(score: int | None, decision: dict | None = None) -> dict:
     """Determine card visual header based on score or routing decision."""
     if score is not None:
-        if score >= SCORE_HIGH_THRESHOLD:
-            return {"icon": "✅", "label": "HIGH VALUE MATCH", "css": "card-high"}
-        if score >= 75:
-            return {"icon": "🟢", "label": "STRONG MATCH", "css": "card-strong"}
-        if score >= 60:
-            return {"icon": "🟡", "label": "MODERATE", "css": "card-moderate"}
-        if score >= 40:
-            return {"icon": "🟠", "label": "LOW VALUE", "css": "card-low"}
+        for share, visual in SCORE_BAND_SHARES:
+            if score >= share * _score_max():
+                return dict(visual)
         return {"icon": "🔴", "label": "POOR MATCH", "css": "card-poor"}
 
     if decision:
