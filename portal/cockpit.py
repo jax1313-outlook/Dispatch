@@ -166,6 +166,20 @@ def broker_for(record: dict) -> dict:
     }
 
 
+def _delivery_as_stop(record: dict) -> dict:
+    """The Delivery section, in the shape of a stop. Only what Delivery actually
+    holds: a field the record leaves empty does not blank the stored stop."""
+    fields = {
+        "facility": _first(record, "delivery_location", "destination", default=""),
+        "window": _first(record, "delivery_window", "delivery_appointment", default=""),
+        "poc": _first(record, "delivery_contact", "delivery_poc", default=""),
+        "phone": _first(record, "delivery_phone", default=""),
+        "notes": _first(record, "delivery_notes", default=""),
+        "special": _first(record, "delivery_special", default=""),
+    }
+    return {key: value for key, value in fields.items() if value}
+
+
 def stop_list(record: dict) -> list:
     """Every stop on the run, each with its own delivery information.
 
@@ -176,6 +190,13 @@ def stop_list(record: dict) -> list:
     raw = [entry for entry in (record.get("stops") or []) if isinstance(entry, dict)]
     stops = []
     for i, entry in enumerate(raw, start=1):
+        # Stop 1 IS the Delivery section (Owner ruling, 2026-09-15: *"read stop 1
+        # from delivery"*). The brief edits Delivery and lists only the additional
+        # stops, so a stored stop 1 can hold what Delivery held before an edit.
+        # Reading Delivery here keeps one place to change it; the stored stop is
+        # left exactly as it is.
+        if (entry.get("number") or i) == 1:
+            entry = dict(entry, **_delivery_as_stop(record))
         stops.append({
             "number": entry.get("number") or i,
             # "1 of 3", and nothing on a single-stop run. Owner ruling,
@@ -416,9 +437,12 @@ DELIVERY_ARTIFACTS = (
 
 #: What each notice promises will follow. Reproduced from the operator's
 #: templates rather than summarised: this text goes to a broker.
+#: The Load Diagram came out on the Owner's ruling, 2026-09-15: *"yes remove the
+#: load diagram line"*. It left the cockpit with Load Arrangement, so the notice
+#: stopped promising a customer a document nobody can produce.
 ARRIVAL_NOTICE_FOLLOWS = {
     "PICKUP": ("Bill of Lading (BOL)", "Packing List",
-               "Load Diagram", "Load Securement Photos"),
+               "Load Securement Photos"),
     "DELIVERY": ("Signed POD / Signed BOL", "Packing List (if included)",
                  "Delivery Photos", "Invoice"),
 }

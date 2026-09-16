@@ -1610,3 +1610,16 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 **Recorded, not resolved.** No screen can enter additional stops today (they arrive only through the emailed intake template or older data). The Arrival Notice's pickup list still promises a "Load Diagram" — a customer message, left unchanged pending the Owner. `DRIVER_COCKPIT_LOCKED_DIRECTION.md` and `docs/DISPATCH_LOAD_ARRANGEMENT_SPEC.md` still describe load arrangement, as history. A stored stop 1 can drift from Delivery after the brief is edited, because the cockpit reads stop 1 first.
 
 ---
+
+## 2026-09-15 — The Arrival Notice stops promising a Load Diagram; stop 1 is read from Delivery
+
+**PR:** (this change)
+**Capability:** `portal/cockpit.py` (`ARRIVAL_NOTICE_FOLLOWS`, `_delivery_as_stop`, `stop_list`).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"yes remove the load diagram line and read stop 1 from delivery"*, then: *"load diagram is a intenal document used by the driver , it is promised to no one except the driver."* and *"Stop 1 vs Delivery: should the cockpit read stop 1 straight from Delivery, so there's only one place to edit it? I recommend yes, i agree"*.
+
+**Arrival Notice.** The pickup notice no longer lists a Load Diagram among the documents that will follow. It is an internal document for the driver and is promised to nobody; the notice had been promising it to the customer, and the diagram itself left the cockpit with Load Arrangement.
+
+**Stop 1.** The cockpit reads stop 1 from the Delivery section: facility, appointment, contact, phone, access and special instructions. A stored stop 1 is read, never rewritten, and a field Delivery leaves empty falls back to what that stop stored, so nothing already recorded is blanked. Delivery is edited in one place — the brief, which lists only the additional stops.
+
+---

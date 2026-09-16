@@ -378,7 +378,30 @@ class TestTheArrivalNotice:
         notice = cockpit.arrival_notice_for(RECORD, cockpit.MODE_PICKUP)
         follows = [f.lower() for f in notice["follows"]]
         assert any("bill of lading" in f for f in follows)
-        assert any("load diagram" in f for f in follows)
+        # Owner ruling, 2026-09-15: "yes remove the load diagram line". The
+        # notice stopped promising a document that left with Load Arrangement.
+        assert not any("load diagram" in f for f in follows)
+        assert any("securement" in f for f in follows)
+
+    def test_stop_one_is_read_from_delivery(self):
+        """Owner ruling, 2026-09-15: "read stop 1 from delivery". The brief edits
+        Delivery and lists only additional stops, so a stored stop 1 that is out of
+        date must never be what the driver reads."""
+        record = dict(RECORD,
+                      delivery_location="Publix DC, Lakeland FL",
+                      delivery_window="2026-09-22 14:00 - 16:00",
+                      delivery_contact="Ray at receiving",
+                      stops=[{"number": 1, "facility": "Old Atlanta dock",
+                              "window": "old window", "poc": "old contact"},
+                             {"number": 2, "facility": "Second stop"}])
+        stops = cockpit.stop_list(record)
+        assert stops[0]["facility"] == "Publix DC, Lakeland FL"
+        assert stops[0]["window"] == "2026-09-22 14:00 - 16:00"
+        assert stops[0]["poc"] == "Ray at receiving"
+        assert stops[0]["label"] == "1 of 2"
+        assert stops[1]["facility"] == "Second stop"
+        # The stored stop is read, never rewritten.
+        assert record["stops"][0]["facility"] == "Old Atlanta dock"
 
     def test_delivery_promises_different_documents(self):
         notice = cockpit.arrival_notice_for(RECORD, cockpit.MODE_DELIVERY)
@@ -528,7 +551,9 @@ class TestTheStopSelector:
         assert cockpit.stops_for({"card_data": {}})["selectable"] is False
 
     def test_selecting_a_stop_changes_the_delivery_facility(self):
-        assert cockpit.end_detail(self.RECORD, "delivery", 1)["address"] == "Delta TechOps"
+        """Stop 1 is the Delivery section (Owner ruling, 2026-09-15: "read stop 1
+        from delivery"); the additional stops are their own."""
+        assert cockpit.end_detail(self.RECORD, "delivery", 1)["address"] == "Atlanta, GA"
         assert cockpit.end_detail(self.RECORD, "delivery", 2)["address"] == "Aviall Services"
 
     def test_selecting_a_stop_changes_the_appointment(self):
@@ -776,7 +801,8 @@ class TestTheDetailDrawersCarryExecutionInformation:
             assert self._drawer(key)["detail"]["load_number"] == "Load 847261"
 
     def test_the_delivery_drawer_follows_the_selected_stop(self):
-        assert self._drawer("delivery", 1)["detail"]["address"] == "Delta TechOps"
+        # Stop 1 reads the Delivery section; stop 2 is its own (2026-09-15).
+        assert self._drawer("delivery", 1)["detail"]["address"] == "Atlanta, GA"
         assert self._drawer("delivery", 2)["detail"]["address"] == "Aviall Services"
 
     def test_the_delivery_drawer_names_the_stop_it_is_showing(self):
