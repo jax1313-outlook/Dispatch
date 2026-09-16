@@ -88,6 +88,10 @@ _CARD_KEYS = {
     "customer_email": ("broker_email",),
     "load_number": ("load_id",),
     "rate": ("rate",),
+    # Typed miles, for the lane neither the provider nor the table answers for
+    # (2026-09-16). Here so miles that came in on a capture show on the sheet;
+    # the brief does not score, and saving one does not score either.
+    "distance_miles": ("distance_miles",),
     "commodity": ("commodity",),
     "weight_lbs": ("weight_lbs",),
     "pickup_location": ("origin",),

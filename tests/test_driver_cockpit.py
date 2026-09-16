@@ -230,20 +230,49 @@ class TestItInventsNothing:
         assert "no cargo detail" in cargo["brackets"]
 
     def test_the_checklists_are_the_operators_lists_not_invented_ones(self):
-        """Specified on 31 August 2026. Nothing added, nothing dropped."""
+        """Specified on 31 August 2026. Nothing added, nothing dropped -- except
+        by him: **2026-09-16, "cockpit needs the extra photo lines."** His Pickup
+        Confirmation asks for freight condition, securement, loaded vehicle and
+        final condition separately, and one tick called "Photos - Load
+        Securement" was answering all four."""
         assert cockpit.PICKUP_ARTIFACTS == (
             "Arrival Notice",
             "Packing List",
             "Bill of Lading (BOL)",
-            "Photos - Load Securement",
+            "Photos - Loaded Vehicle",
         )
         assert cockpit.DELIVERY_ARTIFACTS == (
             "Arrival Notice",
             "Proof Of Delivery Document",
             "Packing List (if included)",
-            "Photos - Condition / Delivery",
+            "Photos - Mid-Route Securement",
+            "Photos - Final Condition",
             "Invoice To Broker",
         )
+
+    def test_the_photo_workflow_is_the_operators_three_names(self):
+        """**PUBLISHER HARDENING RULING, 2026-09-16.** The authoritative
+        sequence, and these exact words:
+
+            PICKUP     Photos - Loaded Vehicle
+            EN ROUTE   Photos - Mid-Route Securement
+            DELIVERY   Photos - Final Condition
+
+        Two passes the same day got it wrong: four lines taken from his
+        template's placeholders rather than from the trip, then three named
+        after the cockpit's modes rather than after the evidence."""
+        photos = [a for a in cockpit.PICKUP_ARTIFACTS + cockpit.DELIVERY_ARTIFACTS
+                  if a.startswith("Photos")]
+        assert photos == ["Photos - Loaded Vehicle",
+                          "Photos - Mid-Route Securement",
+                          "Photos - Final Condition"]
+
+    def test_freight_condition_is_gone_from_the_cockpit(self):
+        """*"Not a separate operational event. Creates duplicate evidence
+        concepts."* The loaded vehicle photographed at the shipper already
+        carries what the freight looked like."""
+        every = cockpit.PICKUP_ARTIFACTS + cockpit.DELIVERY_ARTIFACTS
+        assert not any("Freight Condition" in a for a in every)
 
 
 class TestWhatTheLastCheckDoes:

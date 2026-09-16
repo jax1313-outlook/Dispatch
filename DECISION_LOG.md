@@ -1763,3 +1763,395 @@ This also matches the build as it already stands: **Mission Card** is the existi
 The first ruling is left standing above rather than edited, so the correction can be read.
 
 ---
+
+## 2026-09-16 — Saving the brief does not score the card again
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"why would i rescore if i saved a amount i agreed to with broker. that would not make sense. just save and move on."*
+
+**Built, then taken back out the same hour.** Having found that `mission_brief_save` wrote a typed rate and never scored again, an engineer added `opportunity_card.rescore_stored` and called it on save. The argument sounded right — a rate agreed on a call is new information, so read it. The Owner corrected it.
+
+**Why it was wrong.** The score ranks loads **he has not decided about yet**. A rate agreed with a broker *is* the decision; that card is going to COMMIT. Re-ranking a load already taken is arithmetic nobody reads, and it puts churn on a screen whose whole value is that it does not argue with the man using it.
+
+**What stands.** The sheet is written exactly as typed and nothing is recomputed. `tests/test_brief_save_does_not_rescore.py` holds the ruling by behaviour *and* by name, so the helper is not quietly reintroduced by a later pass over that route.
+
+**Known consequence, not a defect.** A rate typed on the brief is stored on the record and shown on the sheet; the Opportunity Card on the Dispatch and Home screens still reads `Rate: *` and its "* Rate pending" line, because those come from `card_data` written at capture. The Owner has seen this described and ruled *"just save and move on"*; it is recorded here rather than fixed, and is one for the tab walk if the card ever needs to agree with the sheet.
+
+**Unchanged by this.** The city fix, the "* Miles unknown for this lane" line and the Loaded miles box all sit at capture, where scoring already happens. `portal/brief.py::_CARD_KEYS` keeps its `distance_miles` entry so miles that arrive on a capture show on the sheet — display only.
+
+---
+
+## 2026-09-16 — EDIT and SAVE changes the card; and the word "lane" is off the glass
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"'* Miles unknown for this lane' please remove - there is no lane use in dispatch."* and, on the consequence recorded in the entry above: *"to correct this i can open the LOADS screen move to the Load I just finished negociating and EDIIT and save this changes the card -Correct? If so problem solved. then i accept and the card follows path."*
+
+**The answer was no, so it was built.** Editing a brief wrote the value onto the record and stopped. The Opportunity Card reads `card_data`, written at capture, so a load whose rate had just been agreed on the phone still showed `Rate: *` and its "* Rate pending" line on the Dispatch and Home screens. His described workflow — LOADS, open the load, EDIT, SAVE — now does exactly what he expected it to do.
+
+**What the save now does.** The edited values reach the card through the brief's own mapping (`portal/brief.py::_CARD_KEYS`), and the two lines that state whether a fact is *present* are refreshed: a card carrying a rate stops saying "* Rate pending"; a card carrying typed miles stops saying "* Miles unknown". A card showing a rate and "* Rate pending" together is telling a man two things at once.
+
+**What it still does not do: score.** The ruling in the entry above stands unchanged. The number is left exactly as it was, the engine's own inputs are not disturbed, and `tests/test_brief_save_does_not_rescore.py` holds both halves — the card follows the sheet, the score does not move.
+
+**"Lane" is off the glass.** `MILES_UNKNOWN_LINE` is now **"* Miles unknown"**. `dispatch/distance.py`'s basis word and notes read *built-in distance table* and *"the cities are not in the built-in table"*. Engineering prose inside the modules still uses the word; nothing a person reads does.
+
+**Recorded, not resolved.** The Dispatch screen carries a **Lane Templates** panel (`portal/templates/dispatch.html`). That is a feature with a name, not a stray word, so it is not deleted in passing — one for the tab walk.
+
+---
+
+## 2026-09-16 — The labels are the word and nothing else; the empties stay
+
+**PR:** (this change)
+**Capability:** `dispatch/mission_template.py` (25 labels, `LEGACY_LABELS`, section-aware `parse_email`), `portal/templates/mission_brief.html`, `tests/test_template_labels.py` (new), `tests/test_mission_brief.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"i thought we reduced this massive document to the information that matters."* then, clarifying: *"The document is too busy and wordy to be functional. It needs to be more simple and direct in the field labels. the current function of the high lighted empty fields is great. and very useful. the document should be the exact same across the program so that no learning labels or design when opening it. reducing cognitive load. The brief is the expanded version of the simple card presentation with the entire information load. So when a card is expanded inside of Dispatch the same document appears each time."*
+
+**Built and taken back out within the hour.** Read on its own, the first sentence sounded like *fewer fields*, and a change hiding empty fields from the read-only brief was built on that reading. The clarification says the opposite: the highlighted empties are *"great. and very useful."* They are how he knows what to ask for on the call. Reverted, and `tests/test_mission_brief.py::test_the_brief_draws_every_field_filled_or_not` holds it so it is not built a third time.
+
+**What was actually too wordy: the labels.** Under a heading that already says PICKUP, *"Pickup facility and address"* says pickup twice and address once too often. Twenty-five labels are now the word and nothing else:
+
+```
+MISSION SOURCE   Customer / Shipper / Broker  ->  Customer
+                 Their contact/phone/email    ->  Contact · Phone · Email
+LOAD CONTROL     Load control                 ->  Controlled by
+                 Loaded miles                 ->  Miles
+                 Rate agreed with             ->  Agreed with
+PICKUP           Pickup facility and address  ->  Facility
+                 Pickup SPECIAL INSTRUCTIONS  ->  Special instructions
+DELIVERY         the same six words as PICKUP, plus Consignee and BOL
+CARGO            Weight (lbs, total)          ->  Weight
+```
+
+**"Customer" restores an older ruling.** The 2026-09-06 vocabulary ruling made the party who controls a load *the Customer* — *"I use Shipper/Broker synonymously ... because I have no idea which is booking the load."* The label had been arguing with it ever since.
+
+**Hints, per his second answer** (*keep only on the ones that need it*): dropped from Rate, Description, Pieces / Pallets, Consignee, BOL, both Access lines, both Special instructions and Notes. Kept where the label cannot carry it alone — Load number, Service, Controlled by, **Miles**, Agreed with, Payment, Paid by, Amount.
+
+**The parser had to learn sections.** Short labels repeat: `Phone` is asked under PICKUP and again under DELIVERY. `parse_email` mapped label to key with no idea which end it was reading, so a returned template would have filed the delivery phone as the pickup phone. It now tracks the section headings the template already prints. `LEGACY_LABELS` keeps every old label working, because a template emailed on the fifteenth and answered on the seventeenth comes back carrying the old words, and losing a driver's completed template because the form was tidied in between is not a trade worth making.
+
+**Recorded, not resolved — the real "same document" problem.** There are **two** brief documents, and opening the same load two ways shows different ones:
+
+| reached from | template | lines |
+|---|---|---|
+| LOADS, Booking | `mission_brief.html` — the one-page Mission Brief | 150 |
+| **expanding a card in Dispatch**, Archive, Conflicts | `brief.html` | 265 |
+
+`brief.html` carries actions the Mission Brief has no counterpart for — Interested, Pursue, Pass, Watch, Send Inquiry Draft, Book Load, Publisher triggers, conflict resolution. Merging them is what *"the same document appears each time"* requires, and what happens to those actions is the Owner's call, not an engineer's. **Open for the tab walk**, alongside the Dispatch screen's **Lane Templates** panel.
+
+---
+
+## 2026-09-16 — The Publisher templates arrived, and passed the inventory check
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"FYI - D:\Memory/Templates , D:\Memory/Company Library are created and filled with documents ready for testing."*
+
+**`D:\Memory\Templates`** holds his placeholder policy, seven Word templates and a W9: Invoice, POD Cover Sheet, Delivery Confirmation, Billing Package Cover, Pickup Confirmation, Closeout Thank You Letter, Detention Time Policy. **`D:\Memory\Company Library`** holds the fixed company documents. **Read only — Dispatch never writes to `D:\Memory`.**
+
+**The contract, his:** `00_PUBLISHER_PLACEHOLDER_POLICY_v1_LOCKED`. `{{field_name}}`, lowercase, underscores, **exact match only**, one continuous text run per placeholder, the same name for the same fact in every document, and — the rule that matters most here — **7. Missing or unverified values must remain visible or produce a structured validation failure. Publisher must not invent facts.** That is Honest Reporting written as a document standard, and Publisher is built to it.
+
+**Inventory check (his rule 9), run read-only across all eight documents:**
+
+- **0 placeholders split across Word runs. 0 malformed.** This is the failure that normally sinks template filling: Word stores `{{load_number}}` as three separate runs, it reads perfectly on screen, and exact-match replacement finds nothing. Every one of his is a single intact run.
+- **34 names appear in the templates that the locked registry does not list** — `receiver_name`, `prepared_by`, `remit_to`, `point_of_contact`, `gps_location_link`, `delivery_status`, `pod_status`, the `*_attached` flags, and the detention signature block (`authorized_name`, `authorized_title`, `authorized_signature`, `acknowledgment_date`). They read as deliberate, not as typos. Rule 9 makes extending the registry a document revision, which is his.
+- **The footer prints template instructions.** Every template carries `Production template | Replace exact {{placeholders}} only | Missing facts remain visible` in `footer1.xml`. Left alone it appears on the invoice a customer receives. `{{placeholders}}` there is prose, not a field, and under rule 7 an unknown name is left visible — so it would print. Raised with him.
+
+**Next:** the Mission Record to placeholder-name mapping. The registry's names are not the template's keys — `{{pickup_appointment}}` against `pickup_window`, `{{cargo_description}}` against `commodity`, `{{weight}}` against `weight_lbs`, `{{customer_load_number}}` against the broker's own `load_id` — and `{{invoice_number}}`, `{{invoice_date}}`, `{{payment_terms}}`, `{{payment_due_date}}` and `{{driver_name}}` have no counterpart on the Mission Template at all. That mapping is the first thing Publisher needs and the first thing to put in front of the Owner.
+
+---
+
+## 2026-09-16 — Short labels repeat, so the two readers learned to ask which one
+
+**Follows the label ruling above.** `Contact`, `Phone`, `Facility`, `Appointment`, `Access` and `Special instructions` are now asked under MISSION SOURCE, PICKUP and DELIVERY in the same words. On the page the heading above them settles it. **Two readers have no heading**, and both would have filed a delivery fact as a pickup fact without saying a word about it.
+
+**The email.** A returned template is plain text, and `Phone: 912-555-0199` names three fields. `mission_template.parse_email` now tracks the section rules the template already prints, and falls back to `LEGACY_LABELS` for a line it meets before any heading. A template emailed before the change and answered after it still parses.
+
+**JOE.** `joe_update._labels()` built its addressable names from the labels, so three fields collapsed onto `phone` and the last one won. Now: **a label used once is said on its own** — Rate, Consignee, BOL, Weight, Miles. **A label used more than once is addressable only with its section in front of it** — "delivery phone", "pickup facility", "customer contact" — which is how a man says it anyway. `"phone 904-555-0100"` on its own comes back **unplaced**, not guessed, and `tests/test_joe_update_routing.py::test_a_shared_label_alone_is_not_guessed_at` holds that. `"service type"` is kept as a spoken alias: a shortened label does not change a man's vocabulary.
+
+**Why this is worth the trouble.** Writing a delivery phone into the pickup because a sentence was ambiguous is the exact failure `joe_update` exists to prevent, and it is silent — the number is there, it looks right, and it is the wrong number until somebody calls it.
+
+---
+
+## 2026-09-16 — Publisher fills the Owner's Word templates
+
+**PR:** (this change)
+**Capability:** `dispatch/template_fill.py` (new), `dispatch/publisher_values.py` (new), `portal/cockpit.py` (`PICKUP_ARTIFACTS`), `tests/test_template_fill.py` (new), `tests/test_driver_cockpit.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"lets do it - Say the word and I'll build the fill engine next: read a Word template, replace exact matches, leave the rest visible, write the output beside your Dispatch folders — never into D:\Memory."*
+
+**His contract, implemented rather than interpreted.** `00_PUBLISHER_PLACEHOLDER_POLICY_v1_LOCKED`: `{{field_name}}`, lowercase, underscores, exact match only, one uninterrupted run per placeholder, and rule 7 — *"Missing or unverified values must remain visible or produce a structured validation failure. Publisher must not invent facts."*
+
+Rule 7 shapes the code. A template filled with blanks where the facts were missing **looks finished and is not**; one still saying `{{invoice_number}}` is telling the truth about what nobody supplied. So an unfilled placeholder is left standing, is reported, and is not an error. A placeholder Word has split across runs **is** an error — it reads perfectly on screen and can never match — and is reported as `split_runs` rather than silently skipped. Stdlib `zipfile` only; nothing to install on the node. **The template is never written to.**
+
+**Two vocabularies meet in one place.** `publisher_values.values_for` maps a Mission Record onto his registry's names — `{{pickup_appointment}}` against `pickup_window`, `{{cargo_description}}` against `commodity`, `{{weight}}` against `weight_lbs` — so neither has to bend to the other: *"the variations between documents and field names must be allowed. not 2 companies are the same."* A name it does not produce is not a failure.
+
+**The load number is the customer's.** *"why would system generate a load number when the BOL one is clearly provided ... this is how this company actually list load numbers: Tallahassee-1487."* `load_number.assign` already did exactly this — a supplied number is kept verbatim and one is generated only when nobody numbered the work. Nothing needed changing; the question was the engineer's, not the code's.
+
+**Money is absent by construction.** *"these are accounting issues not mission issues. not the concern of this program."* `invoice_number`, `invoice_date`, `payment_terms`, `payment_due_date` and `remit_to` are never supplied and are reported in their own bucket, apart from mission gaps, so nobody chases the wrong one. The **rate** and the **C.O.D. amount** are filled: they are facts of the mission he agreed on a call, not accounting's arithmetic.
+
+**Proven against real documents**, not fixtures: his `Tallahassee-1487` Mission Record and the Penske BOL `PNSK-2026-19865`, filling all seven templates.
+
+---
+
+## 2026-09-16 — What Dispatch already knows, wired to the documents
+
+**Approval, verbatim:** *"wire the fields dispatch already knows."*
+
+Five names that the program was holding and making a man retype:
+
+| placeholder | source |
+|---|---|
+| `driver_name`, `prepared_by` | who ran the load, passed in by the caller |
+| `gps_location_link` | the fix the tablet recorded at ARRIVE (`pickup_gps`), never built from the facility address |
+| `pod_attached`, `signed_bol_attached`, `delivery_photos_attached`, `invoice_attached`, the four photo lines | the cockpit checklist he ticked |
+| `delivery_status` | the Delivered milestone |
+| `pod_status` | the POD line on the checklist |
+
+**A tick means "I have it in hand"** — his ruling of 2026-09-05 — so these report what *he said*, never what a machine inferred from a folder listing. **An untouched checklist answers nothing at all**: printing "No" against every line would be a document asserting an absence nobody checked, so the placeholders stay visible. An *empty* list he did work is an answer, and prints "No". A GPS link is only ever built from a real fix, because one built from the address would look like evidence the truck was there and be nothing of the kind.
+
+---
+
+## 2026-09-16 — Four photo lines in the cockpit, and the footer comes off
+
+**Approval, verbatim:** *"remove the footer, cockpit needs the extra photo lines"*
+
+**The cockpit.** His Pickup Confirmation asks for freight condition, securement, loaded vehicle and final condition **separately**, and the cockpit offered one line called "Photos - Load Securement". Publisher was answering four placeholders from that single tick — three facts invented from one. `PICKUP_ARTIFACTS` now carries the four, in the order the work happens, and each placeholder reads only its own line. A test holds that every placeholder maps to a line a driver can actually tick, because one that does not would always say No and nobody would notice.
+
+**The cost, priced by the Owner.** That is four taps at a dock where there was one, and Driver-First says that is real. It buys four true answers instead of one true answer and three assumptions. Recorded in the code so a later pass does not "simplify" it back.
+
+**The footer.** *"Production template | Replace exact {{placeholders}} only | Missing facts remain visible"* was printing on the bottom of a customer's invoice. Publisher now empties it.
+
+**Matched on the instruction, never on the position.** Six templates carry that footer; **the seventh carries `Onboarding packet policy | Current approved detention-rate policy controls`** — a real statement of terms that belongs on the page. Stripping "the footer" as a position would have quietly deleted it. A header or footer whose words say *"Replace exact"* is emptied; every other one is left exactly as written. The part is emptied rather than removed: a footer Word still expects but cannot find is a file it refuses to open. `{{placeholders}}` inside that sentence is prose, so once the sentence is gone it is not reported as a gap — a report listing it teaches a man to ignore the list.
+
+**Still unanswerable, and honestly so:** `consignee` (on the card since 2026-09-15; the test record predates it), `receiver_name`, `receiver_title`, `customer_address`, `point_of_contact`, `pickup_company`, `shipper_name`, `tracking_reference`, `pickup_on_time_status`, `amount`, the exception/supporting/accessorial flags and the detention signature block. Two look wirable and were **offered, not built**: `pickup_on_time_status` from the appointment against the ARRIVE stamp, and `receiver_name` if the cockpit asks who signed.
+
+---
+
+## 2026-09-16 — PUBLISHER TEST RULING, REVISIONS 2 and 3
+
+**Approved by:** Mike (owner). Issued as two written rulings during the first Publisher test.
+
+**A contradiction, put back to him rather than resolved.** Revision 2's body struck `receiver_name`, `receiver_title` and `pickup_on_time_status` with reasons; its last line read *"wire pickup_on_time_status and receiver_name too"* — five words reversing a page of reasoning. An engineer picking either way would have been guessing at the Owner's intent. Asked, he answered: **"REVISION 2 stands — do not wire them."** Revision 3 then refined it.
+
+**The governing rule**, verbatim, now in `CLAUDE.md` §8A because it reaches past Publisher:
+
+```
+Federal BOL  = controlling freight document.
+Signed POD   = controlling delivery evidence.
+Dispatch stores freight facts.
+Archive preserves freight evidence.
+Publisher creates payment-readiness documents.
+```
+> *"Do not duplicate information already preserved inside a controlling document."*
+
+**Struck outright** (`publisher_values.REMOVED_FIELDS`). A template still asking for one is reported as `removed`: revise the document.
+- `receiver_title` — *"no operational value. Titles are generally not collected in freight operations ... not required for delivery proof, claims defense, payment readiness, archive retention."*
+- `pickup_on_time_status` — *"Derived interpretation. Dispatch already stores Pickup appointment, ARRIVE event, Timeline, Detention records, Communications. The underlying facts remain authoritative."*
+
+**Evidence only** (`publisher_values.EVIDENCE_IN_POD`), reported as `in_the_pod`: the answer exists, go and get the POD.
+- `receiver_name`, `receiver_signature` — *"The signed POD remains the authoritative source ... The POD image/PDF already preserves printed receiver name and receiver signature. No duplicate tracking field is required. When delivery proof is needed: Retrieve POD."*
+
+**The two lists are separate on purpose.** The remedies are opposite — one says delete the placeholder, the other says the answer is already in your hand. Reporting them together would send a man to delete something he needs.
+
+**Consignee stays, and stays optional.** *"Consignee may be UNKNOWN at Commit. Commit must not fail. Mission Record must not fail. Publisher must not fail."* His reason is worth keeping: *"most large corps home office is listed on BOL not delivery location. this is confusing factor even for drivers when home office is local and delivery is to plane miles away but still local. Consignee location is nearly always unknow at time of commit and only listed on BOL when pickup is effected."* Already optional on the template; a test now holds it so, and holds that a filled document with no consignee reports `ok`.
+
+**Three photo moments, not four.** *"there should only be 3 at pick up during trip and delivery"*, then his own names: *"1) -Pickup 2) mid route securement 3) delivery"*. An earlier pass that day put four lines on the pickup checklist, taken from the four photo placeholders in his Pickup Confirmation rather than from the trip. `PICKUP_ARTIFACTS` carries **Photos - Pickup**; `DELIVERY_ARTIFACTS` carries **Photos - Mid Route Securement** and **Photos - Delivery**, because the cockpit is in DELIVERY from the moment the truck leaves the shipper and a line he cannot reach from where he stands never gets ticked.
+
+**Left deliberately unanswered as a result.** His Pickup Confirmation still asks for `freight_condition_photos_attached`, `loaded_vehicle_photos_attached` and `final_condition_photos_attached`, and no checklist line answers any of them. They stay visible on the document rather than borrowing a neighbouring tick — one placeholder, one line, one tick, or nothing. Named in `tests/test_template_fill.py` so the gap is a recorded decision rather than an oversight, and **open for him**: either the templates lose those three, or the cockpit gains lines for them.
+
+**Also raised, not decided.** Rule 7 leaves an unknown consignee printing as `{{consignee}}` on the document. His *"If unknown: UNKNOWN is acceptable"* may mean it should print the truth word **UNKNOWN** instead. Current behaviour is unchanged.
+
+**Scope, his:** *"Focus on: Mission Record + BOL + POD + Approved Templates + Payment Readiness Package. Do not expand scope. Do not add convenience fields. Do not add inferred status."*
+
+---
+
+## 2026-09-16 — PUBLISHER HARDENING RULING: the photo workflow is three named events
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** the authoritative operational sequence —
+
+```
+PICKUP     Photos - Loaded Vehicle
+EN ROUTE   Photos - Mid-Route Securement
+DELIVERY   Photos - Final Condition
+```
+
+*"REMOVE Photos - Freight Condition from: cockpit, templates, placeholder registry, Publisher mappings, tests. Reason: Not a separate operational event. Creates duplicate evidence concepts. Does not represent a distinct workflow milestone."* And: *"Publisher, Cockpit, Mission Record, and Placeholder Registry must use the same three names."*
+
+**One vocabulary, not four.** The checklist strings are what `artifacts_held` stores, so they are the vocabulary itself rather than a label for it. `portal/cockpit.py` and `dispatch/publisher_values.py` now carry exactly these three words, one placeholder to one line to one tick.
+
+**Three passes in one day, and the last one is his.** First four lines on the pickup checklist, taken from the four photo placeholders in his Pickup Confirmation rather than from the trip. Then three, named after the cockpit's modes — Pickup, Mid Route Securement, Delivery. He named them after the **evidence**, which is what a claims file needs: what the loaded vehicle looked like, how it rode, what condition it arrived in. Recorded because the engineering instinct twice was to name things after the screen.
+
+**Where they sit.** Loaded Vehicle is photographed at the shipper, so it is on the pickup checklist. The cockpit is in DELIVERY from the moment the truck rolls — which is where the driver stands at a rest area checking straps and again when he opens the doors — so EN ROUTE and DELIVERY are both on the delivery checklist. A line he cannot reach from where he is standing never gets ticked.
+
+**Open for him, not decided.** His POD Cover Sheet asks for `{{delivery_photos_attached}}` — a **fourth** photo name where the approved workflow has three. Its work is done by `final_condition_photos_attached`. Left unanswered and raised rather than quietly pointed at the same tick: two placeholders reading one tick is exactly how the four-photo pass went wrong. `tests/test_template_fill.py::test_what_his_templates_ask_and_nothing_answers` names it and `freight_condition_photos_attached` together, so both stay visible until his templates are revised.
+
+---
+
+## 2026-09-16 — `{{consignee}}` is not UNKNOWN, and Publisher preserves the difference
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"Leave {{consignee}} visible. Do NOT replace with UNKNOWN. Reason: UNKNOWN means Dispatch has determined the fact is unknown. {{consignee}} means the Mission Record does not currently provide the fact and Publisher has not yet resolved it. Those are different conditions."*
+
+```
+{{consignee}}  =  missing required source data
+UNKNOWN        =  known to be unknown
+```
+
+**No code changed** — this is what rule 7 already does. It is recorded and held by test because the instinct to "tidy" a placeholder into a truth word is a strong one, and acting on it would put a word from the locked vocabulary (`UNKNOWN`, §6) on a customer's document asserting that Dispatch went and determined the fact could not be had. Where nobody has looked yet, that is a lie in the program's own language.
+
+---
+
+## 2026-09-16 — The Owner revised his templates, and the two sides now ask the same things
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"i have altered document and replacing in folder"*, then *"done"* — twice, over three documents.
+
+Rather than widen Publisher to meet documents that asked for struck fields, he took the struck fields out of the documents. The direction matters: **the rulings governed the paper, not the other way round.**
+
+| template | now |
+|---|---|
+| `02_..._POD_Cover_Sheet_Template_REVISED_v2` | `receiver_name`, `delivery_photos_attached`, `exception_note_attached` removed |
+| `03_..._Delivery_Confirmation_Template_REVISED` | `receiver_name`, `receiver_title` removed |
+| `05_..._Pickup_Confirmation_Template_REVISED` | `pickup_on_time_status`, `freight_condition_photos_attached` removed |
+
+**Inventory across all eight documents: 0 split across runs, 0 malformed.** Every template he has touched has come back clean, which is not the usual outcome — Word normally breaks a placeholder into several runs the moment one is edited, and it reads perfectly on screen while never matching.
+
+**Nothing Publisher will never fill remains in any template.** No `removed` and no `in_the_pod` finding on any document.
+
+**`tests/test_template_fill.py::test_his_templates_and_this_program_now_ask_the_same_things`** holds the new state as an equality: every name his documents ask for that Dispatch could answer, Dispatch answers; every name Dispatch produces, a document of his asks for. If it ever fails, one side moved without the other.
+
+**He kept all three photo placeholders on the Pickup Confirmation.** Two of the three events — mid-route securement and final condition — happen after the truck leaves the shipper, and this was put to him before he revised. His document, his call: the Pickup Confirmation carries the mission's photo evidence rather than only the dock's.
+
+**Still unanswerable, and correctly so:** `consignee` where it is not yet known (left as `{{consignee}}`, never `UNKNOWN`), `customer_address`, `amount`, `point_of_contact`, `pickup_company`, `shipper_name`, `shipper_signature_status`, `tracking_reference`, `pickup_notes`, `supporting_documents_attached`, `rate_confirmation_attached`, `accessorial_documents_attached`, and the detention signature block.
+
+---
+
+## 2026-09-16 — PARKED FOR THE TAB WALK: photo listings leave the documents; the customer screen stands alone
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"place this on the list to be changed during TAB WALK because I will remove the listing of photos from all documents. the customer will be notified on new documents that photos are available for view or download on the Customer screen inside the website. once website is created. I will park the stake holder portal and build a screen similar to the Driver screen but it will not be inside either drive or operations."*
+
+**Nothing is built for this yet. It is written down so the tab walk finds it.**
+
+**1. Photo listings come out of every document.** A document will no longer carry `{{loaded_vehicle_photos_attached}}` and its two companions listing which photographs exist. In their place, one line telling the customer the photographs can be **viewed or downloaded on the Customer screen**.
+
+**The photographs themselves do not go anywhere.** This is a change to what a *document* says, not to what the truck *captures*. The three cockpit lines — **Photos - Loaded Vehicle**, **Photos - Mid-Route Securement**, **Photos - Final Condition** — stay exactly as ruled, because the evidence is the point and a claims file is built from it. What changes is that a PDF stops reciting a list of attachments and points at the place they actually live.
+
+**Expect a test to fail, and it is the right one.** `tests/test_template_fill.py::test_his_templates_and_this_program_now_ask_the_same_things` asserts the templates and Publisher ask for the same names. When the photo placeholders leave his documents, that equality breaks — which is the canary doing its job, not a defect. The three mappings in `publisher_values.ATTACHED_FROM_CHECKLIST` come out with them; the checklist lines do not.
+
+**2. The Stakeholder portal is parked.** In its place a **customer screen built like the Driver screen** — and, explicitly, **not inside Driver and not inside Operations**. A third surface of its own.
+
+Consistent with what is already ruled: the **load number is the Mission Visibility Key** ([[library-pin-service-direction]]), the screen is display-only, and it reads what Operations and the cockpit already hold. It is not built until the website exists, and the website is not a priority — *"Dispatch doesn't need a website to put me to work."*
+
+**Open when it is taken up:** the Customer Portal frozen earlier stays frozen and this replaces it rather than reviving it; emails keep going without portal links until there is a link worth sending.
+
+---
+
+## 2026-09-16 — BOOKING CONFLICT PREVENTION DOCTRINE  *(recorded; the Owner's message was cut off — see the end)*
+
+**Approved by:** Mike (owner). Verbatim, as far as it was received:
+
+> *"This is a trucking capacity rule, not a scheduling rule. Every day begins OPEN.*
+>
+> *Dispatch does not decide: when Mike works, when Mike rests, when Mike performs maintenance, when Mike reserves capacity, which days are closed. **Human authority remains final.***
+>
+> *Booking exists to protect Mike from creating conflicts. Booking does NOT schedule Mike. Booking does NOT reserve days automatically. Booking does NOT close days automatically. **Booking only identifies conflicts and consequences.***
+>
+> *At COMMIT, Dispatch performs a conflict check. If a potential conflict exists, display an informational warning.*
+>
+> ```
+> CAPACITY WARNING
+>
+> Current Truck Position:      Atlanta, GA
+> Next Committed Work:         Wednesday 07:00  Jacksonville, FL
+>
+> Potential Capacity Conflict
+> Review Before Commit
+> ```
+>
+> *Use pale red background. Use black text. Do not use modal dialogs. Do not require a response. No `COMMIT ANYWAY`. No `CANCEL`. No additional buttons."*
+
+**This corrects an engineer's proposal made minutes earlier.** Asked to protect against an Atlanta overnight followed by a Jacksonville start, the suggestion was to **HELD** the following day automatically, with a distance threshold. That is Booking reserving capacity and deciding when he works — the exact thing this doctrine forbids. The concern was real; the mechanism was wrong. **State the consequence and let the man decide.**
+
+**It also settles the week pattern.** `booking.WEEK_PATTERN` currently holds Thursday and Friday and closes Sunday. **Every day begins OPEN.** Where "which days I work" lives is already answered: Outlook is the scheduling authority (§5.5) and the Booking board already reads it, so a day he blocks there is a day the board sees — no stored day-state, no second calendar. This generalises his own 2026-09-10 Saturday ruling: *"just leave it open not committed so I can close or take a run."*
+
+**Almost nothing needs inventing.** `load_assessment.truck_position()` (CO-3.2) already resolves where the truck is, *"and the basis is always said"*; `dispatch/booking.py` already indexes committed freight by the day it happens. The warning runs that same reasoning **forward** — after this load delivers, what is the next committed work and where does it start — instead of backward.
+
+**No drive time.** Parked by his ruling of 2026-09-15 and not reintroduced through capacity.
+
+**The rest of the ruling, received in full.** Verbatim:
+
+> *"The normal COMMIT workflow remains exactly where it is. This warning exists only to draw attention to a potential problem.*
+>
+> *HUMAN AUTHORITY — The warning never blocks a commitment. The warning never reserves a day. The warning never creates calendar entries. The warning never changes mission status. The warning never overrides human authority. **Mike reviews the warning and decides.***
+>
+> *CALENDAR MODEL — Days are OPEN by default. Booking reflects capacity usage. Calendar exists to show capacity reality. **Driver and Operations may view the same capacity through different presentations.** Conflict detection is informational only.*
+>
+> *GOAL — Protect Mike from creating conflicts."*
+
+**Five "nevers", and they are the specification.** The warning is a **read** that draws a line under two facts. It writes nothing: not a day, not a calendar entry, not a status, not a flag on the record. Anything that persists is out of scope for it. An engineer who finds himself storing a `conflict_detected` field has left the doctrine.
+
+**"Driver and Operations may view the same capacity through different presentations"** settles the front-door question from the same conversation: **one calendar, two ways in.** Operations reaches it from its nav; the tablet reaches it after a PIN. The month grid carrying Booking's day state is the presentation; the capacity underneath is one thing, computed, never stored.
+
+**What still has to be worked out and is not ruled here:** *what counts as a potential conflict*. The example is a truck in Atlanta against a 07:00 Jacksonville start — the shape is obvious, the threshold is not, and **no drive time** (parked 2026-09-15). Miles from the delivery to the next pickup is the fact available. That number, or the rule that uses it, is the Owner's.
+
+---
+
+## 2026-09-16 — BOOKING CONFLICT TYPES, and one clause they contradict
+
+**Approved by:** Mike (owner). Verbatim:
+
+> **LEVEL 1 · Position Conflict** — *"Truck physically unlikely to be where the next commitment requires."*
+> **LEVEL 2 · Time Conflict** — *"Two commitments overlap or create an impossible sequence."*
+> **LEVEL 3 · HOS Awareness** — *"Route duration and commitments suggest an unusually long duty day."*
+>
+> **RULE** — *"Display warning only. Do not block. Do not reserve capacity. Do not reject commitment. Human authority remains final."*
+
+**They are types, not severities.** The display rule is one rule for all three — pale red, black text, no modal, no response required, no buttons. Nothing here asks for three colours or a ranking, and inventing one would be an engineer grading the Owner's freight.
+
+**Level 1** needs miles from this delivery to the next commitment's pickup. `dispatch/distance.py` answers it and `load_assessment.truck_position()` already resolves where the truck is, *"and the basis is always said"*.
+
+**Level 2** is computable today: `booking.span_of()` gives every day a load occupies, and two spans that intersect are an overlap. No new fact required.
+
+**Level 3 contradicts a standing ruling, and is not built until the Owner settles it.**
+
+`dispatch/load_assessment.py:225` carries this, from the day before:
+
+> *"Mike Zachary, 2026-09-15: 'this system does not need to track drive times for nay reason. it does not enter into the decision process.' The legal-delivery check in `dispatch/drive_time.py` is kept, not deleted, but **nothing on a card or in a warning uses it**."*
+
+Level 3 is a warning that uses it. *"Route duration ... suggest an unusually long duty day"* cannot be answered from miles alone.
+
+**The two are reconcilable, and the reconciliation is his to make, not an engineer's.** The 2026-09-15 ruling bars drive time from **the decision process**; this doctrine says the warning **decides nothing** — *"Display warning only ... Human authority remains final."* So drive time may return as **awareness and never as a judgement**. That reading is consistent with both, and it is still a reversal of the clause's plain words, so it is put to him rather than assumed.
+
+**Until he rules: Levels 1 and 2 are buildable. Level 3 is not started.**
+
+---
+
+## 2026-09-16 — Level 3 resolved: a clock gap, not a route duration. The drive-time ruling stands.
+
+**Approved by:** Mike (owner). Verbatim:
+
+> *"rule still stands this is an advisory warning base on prior day destination and the beginning time for the proposed next start. if less than 12 hours a warning should go out. example: return back to Jacksonville at 11pm and next proposed load is 4am there is not enough time for 10hr break"*
+
+**No contradiction, and no drive time.** The engineer read *"route duration"* as something Dispatch would compute from a route — which the 2026-09-15 ruling forbids. The Owner means the **gap between two times already written on two records**:
+
+```
+prior load's delivery window  ->  next load's pickup window
+   less than 12 hours between them  ->  advisory warning
+```
+
+Delivery Wednesday 23:00, next pickup Thursday 04:00 is five hours. **A 10-hour break does not fit in five hours**, and nothing had to be calculated to know it — both times were typed by the man who agreed them.
+
+**Twelve, not ten**, and the reason is in his example: the break is ten, and fuelling, paperwork, a shower and getting to the shipper are not part of it. The margin is his, not a computation.
+
+**`dispatch/load_assessment.py:225` is unchanged and remains binding.** Nothing on a card or in a warning uses `drive_time.py`. Level 3 does not touch it.
+
+**All three levels are now buildable from facts already stored:**
+
+| level | reads |
+|---|---|
+| 1 · Position | miles, this delivery to the next pickup (`dispatch/distance.py`) |
+| 2 · Time | overlapping days (`booking.span_of`) |
+| 3 · HOS awareness | the hours between two windows. Under 12, say so. |
+
+Display, for all three: pale red, black text, no modal, no response required, no buttons, never blocks, never reserves, never writes.
+
+---

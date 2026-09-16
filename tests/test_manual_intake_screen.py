@@ -264,13 +264,15 @@ class TestTheOnePageMissionRunsEndToEnd:
             assert match, label
             return match.group(1)
 
-        assert shown("Service Type") == "LTL"
-        assert shown("Load control") == "Level 1"
-        assert shown("Their email") == "ops@baptist.example"
+        # The labels were shortened on 2026-09-16: under a heading that already
+        # says PICKUP, "Pickup facility and address" said pickup twice.
+        assert shown("Service") == "LTL"
+        assert shown("Controlled by") == "Level 1"
+        assert shown("Email") == "ops@baptist.example"
         assert shown("Pieces / Pallets") == "2 pallets / 14 pieces"
-        assert shown("Weight (lbs, total)") == "1200"
+        assert shown("Weight") == "1200"
         assert shown("Amount") == "450"
-        assert shown("Mission Number") == str(record["mission_number"])
+        assert shown("Mission number") == str(record["mission_number"])
         for gone in (">Status<", ">Intake<", ">Taken by<", "operations"):
             assert gone not in brief_html, gone
 

@@ -101,13 +101,36 @@ class TestWhatJoeHears:
         assert heard["understood"] is False
         assert "no value" in heard["note"]
 
-    def test_every_template_field_is_addressable_by_its_own_label(self):
+    def test_every_template_field_is_addressable(self):
+        """**Since the labels were shortened, 2026-09-16:** a label used once is
+        said on its own; one used in two or three places is said with its
+        section in front of it -- "delivery phone", not "phone". The page has a
+        heading above the field and speech has nothing, and writing a delivery
+        phone into the pickup because the sentence was ambiguous is exactly what
+        this module exists not to do."""
+        from collections import Counter
+
         from dispatch import mission_template as mt
 
+        shared = {label for label, n in
+                  Counter(f.label.lower() for f in mt.TEMPLATE).items() if n > 1}
+        prefix = {"MISSION SOURCE": "customer", "PICKUP": "pickup",
+                  "DELIVERY": "delivery"}
+
         for field in mt.TEMPLATE:
-            said = "%s %s" % (field.label, field.choices[0] if field.choices
+            name = field.label
+            if field.label.lower() in shared:
+                name = "%s %s" % (prefix[field.section], field.label)
+            said = "%s %s" % (name, field.choices[0] if field.choices
                               else "something")
-            assert joe.understand(said)["field"] == field.key, field.label
+            assert joe.understand(said)["field"] == field.key, name
+
+    def test_a_shared_label_alone_is_not_guessed_at(self):
+        """"Phone 904-555-0100" names three fields. JOE says so rather than
+        picking one."""
+        heard = joe.understand("phone 904-555-0100")
+        assert heard["understood"] is False
+        assert heard["field"] == ""
 
     def test_a_pick_list_field_takes_only_its_picks(self):
         """Load control is the Customer or Level 1 (2026-09-15). "Load control

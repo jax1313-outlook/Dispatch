@@ -577,6 +577,43 @@ term and that `Mission Card` is already the word throughout the build, and corre
 names and module names do not change for it — the same discipline as the Customer ruling above.
 `portal/models/opportunity_card.py` is correctly named for pre-COMMIT work and stays.
 
+### Controlling documents — ruled 2026-09-16, and it governs more than Publisher
+
+**PUBLISHER TEST RULING - REVISION 3**, Mike's own words:
+
+```
+Federal BOL  = controlling freight document.
+Signed POD   = controlling delivery evidence.
+
+Dispatch stores freight facts.
+Archive preserves freight evidence.
+Publisher creates payment-readiness documents.
+```
+
+> **"Do not duplicate information already preserved inside a controlling document."**
+
+A fact already carried on the BOL or the signed POD does **not** get a Mission Record field, a
+capture screen or a placeholder mapping of its own. The printed receiver name and the receiver's
+signature are the worked example: they are real, they matter for claims, and they are **on the POD
+already**. *"When delivery proof is needed: Retrieve POD."*
+
+Two refusals decided under it, so the pattern is visible:
+
+- **`receiver_title`** — struck outright. *"no operational value ... not required for delivery
+  proof, claims defense, payment readiness, archive retention."*
+- **`pickup_on_time_status`** — struck as **derived interpretation**. The pickup appointment, the
+  ARRIVE event, the timeline, detention records and communications are stored and authoritative;
+  a calculated "on time" adds a judgement on top of facts that already answer the question.
+
+**Consignee is the counter-example and stays.** It is the receiving organisation, a freight fact of
+its own — and it is **optional**: *"Consignee may be UNKNOWN at Commit. Commit must not fail.
+Mission Record must not fail. Publisher must not fail."* Most large corporations put the home
+office on the BOL rather than the dock, so the delivery location is often not known until the
+pickup is effected.
+
+`dispatch/publisher_values.py` holds the two lists — `REMOVED_FIELDS` and `EVIDENCE_IN_POD` —
+because the remedies differ: one means revise the template, the other means go and get the POD.
+
 ### The contracts are seven, not six
 
 `POST /api/joe/opportunity` — Opportunity Capture — was ratified 2026-09-06 and built 2026-09-07.

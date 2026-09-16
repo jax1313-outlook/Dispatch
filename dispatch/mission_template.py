@@ -199,16 +199,16 @@ TEMPLATE: tuple[Field, ...] = (
     # --- IDENTITY: what this mission is called, and what kind of run it is
     #     The load number is not required from the driver. If nobody else
     #     numbered this work, Dispatch numbers it -- see `dispatch/load_number.py`.
-    Field("load_number", "Load Number", "IDENTITY",
+    Field("load_number", "Load number", "IDENTITY",
           hint="Their number exactly as given. Leave blank and Dispatch assigns one",
           spoken="Do they have a load number for it?"),
     # Dispatch's own sequence. Assigned, never typed -- the same number a swept
     # mission gets (`dispatch/mission.py::next_mission_number`).
-    Field("mission_number", "Mission Number", "IDENTITY",
+    Field("mission_number", "Mission number", "IDENTITY",
           hint="Assigned by Dispatch",
           spoken="Dispatch assigns the mission number. Anything to add?",
           assigned=True),
-    Field("service", "Service Type", "IDENTITY",
+    Field("service", "Service", "IDENTITY",
           hint="What kind of run",
           choices=SERVICE_TYPES,
           spoken="What kind of run is it?"),
@@ -217,23 +217,23 @@ TEMPLATE: tuple[Field, ...] = (
     # One party, three names depending on who the work came from. A direct
     # customer, the shipper, or a broker -- the record does not need three
     # fields for it, and three fields would only ask which one is current.
-    Field("customer", "Customer / Shipper / Broker", "MISSION SOURCE",
+    Field("customer", "Customer", "MISSION SOURCE",
           required=True, spoken="Who is the customer, shipper or broker?"),
-    Field("customer_poc", "Their contact", "MISSION SOURCE",
+    Field("customer_poc", "Contact", "MISSION SOURCE",
           spoken="Who is the contact there?"),
-    Field("customer_phone", "Their phone", "MISSION SOURCE",
+    Field("customer_phone", "Phone", "MISSION SOURCE",
           spoken="What is their phone number?"),
     # Stored under the key existing records and the Customer Portal already
     # read (`portal/portal_access.py::customer_email`).
-    Field("customer_email", "Their email", "MISSION SOURCE",
+    Field("customer_email", "Email", "MISSION SOURCE",
           spoken="What is their email address?"),
 
     # --- LOAD CONTROL: who holds it, and what the work pays
-    Field("controlled_by", "Load control", "LOAD CONTROL",
+    Field("controlled_by", "Controlled by", "LOAD CONTROL",
           hint="Who holds load control",
           choices=LOAD_CONTROL_CHOICES,
           spoken="Who has load control -- the customer, or Level 1?"),
-    Field("rate", "Rate", "LOAD CONTROL", hint="Linehaul, before accessorials",
+    Field("rate", "Rate", "LOAD CONTROL", 
           spoken="What does it pay?"),
     # Miles sit beside the rate because together they are the economics: without
     # them the engine cannot score the card at all. Added 2026-09-16. The lane
@@ -241,10 +241,10 @@ TEMPLATE: tuple[Field, ...] = (
     # answer for the rest; this box is for the lane neither of them knows, so a
     # load he can price himself is never left unranked. **Optional** -- blank is
     # the normal case and is not an error.
-    Field("distance_miles", "Loaded miles", "LOAD CONTROL",
-          hint="Only if Dispatch cannot work the lane out",
+    Field("distance_miles", "Miles", "LOAD CONTROL",
+          hint="Only if Dispatch cannot work it out",
           spoken="Loaded miles, if you know them -- otherwise say skip?"),
-    Field("rate_basis", "Rate agreed with", "LOAD CONTROL",
+    Field("rate_basis", "Agreed with", "LOAD CONTROL",
           hint="Posted, or who you negotiated it with",
           spoken="Was the rate posted, or did you negotiate it with somebody?"),
     # The payment arrangement is encoded here, once, when the record is
@@ -252,7 +252,7 @@ TEMPLATE: tuple[Field, ...] = (
     # the arrival notice, invoice, POD packet and courtesy email run the same
     # sequence on every load. The driver never has to work out which kind of
     # load he is on.
-    Field("payment_type", "Payment type", "LOAD CONTROL",
+    Field("payment_type", "Payment", "LOAD CONTROL",
           hint="Broker Invoice, or C.O.D.",
           spoken="Is it billed to the broker, or C.O.D.?"),
     Field("payor", "Paid by", "LOAD CONTROL",
@@ -263,23 +263,23 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="How much do you collect?"),
 
     # --- PICKUP
-    Field("pickup_location", "Pickup facility and address", "PICKUP",
+    Field("pickup_location", "Facility", "PICKUP",
           required=True, spoken="Where does the truck load?"),
-    Field("pickup_window", "Pickup appointment", "PICKUP", required=True,
+    Field("pickup_window", "Appointment", "PICKUP", required=True,
           spoken="When is the pickup appointment?"),
-    Field("pickup_contact", "Pickup contact", "PICKUP",
+    Field("pickup_contact", "Contact", "PICKUP",
           spoken="Who is the contact at the shipper?"),
-    Field("pickup_phone", "Pickup phone", "PICKUP",
+    Field("pickup_phone", "Phone", "PICKUP",
           spoken="What is the shipper's phone number?"),
-    Field("pickup_notes", "Pickup access instructions", "PICKUP",
-          hint="Gate, dock, check-in -- what gets the truck in",
+    Field("pickup_notes", "Access", "PICKUP",
+          
           spoken="Any access instructions for the pickup?"),
     # Distinct from access instructions on purpose. Access is how you get in
     # on a normal day; a special instruction changes the plan -- a security
     # hold, a single permitted gate, an escort. Buried among routine notes it
     # gets read at the gate instead of before leaving.
-    Field("pickup_special", "Pickup SPECIAL INSTRUCTIONS", "PICKUP",
-          hint="Anything that changes the plan: security holds, gate restrictions, escorts",
+    Field("pickup_special", "Special instructions", "PICKUP",
+          
           spoken="Anything special about getting in there -- security, gate restrictions?"),
 
     # --- DELIVERY
@@ -291,23 +291,23 @@ TEMPLATE: tuple[Field, ...] = (
     # different Bill of Lading. because the consignee is different. all three
     # signed Bill of Lading is returned to the shipper as POD."*
     Field("consignee", "Consignee", "DELIVERY",
-          hint="Who signs for it",
+          
           spoken="Who is the consignee -- who signs for it?"),
-    Field("bol_number", "BOL number", "DELIVERY",
-          hint="This card's bill of lading",
+    Field("bol_number", "BOL", "DELIVERY",
+          
           spoken="What is the bill of lading number for this one?"),
-    Field("delivery_location", "Delivery facility and address", "DELIVERY",
+    Field("delivery_location", "Facility", "DELIVERY",
           required=True, spoken="Where does it deliver?"),
-    Field("delivery_window", "Delivery appointment", "DELIVERY", required=True,
+    Field("delivery_window", "Appointment", "DELIVERY", required=True,
           spoken="When is the delivery appointment?"),
-    Field("delivery_contact", "Delivery contact", "DELIVERY",
+    Field("delivery_contact", "Contact", "DELIVERY",
           spoken="Who is the contact at the receiver?"),
-    Field("delivery_phone", "Delivery phone", "DELIVERY",
+    Field("delivery_phone", "Phone", "DELIVERY",
           spoken="What is the receiver's phone number?"),
-    Field("delivery_notes", "Delivery access instructions", "DELIVERY",
+    Field("delivery_notes", "Access", "DELIVERY",
           spoken="Any access instructions for the delivery?"),
-    Field("delivery_special", "Delivery SPECIAL INSTRUCTIONS", "DELIVERY",
-          hint="Anything that changes the plan at this end",
+    Field("delivery_special", "Special instructions", "DELIVERY",
+          
           spoken="Anything special at the delivery end?"),
     #: There are no additional stops. One card is one delivery -- see
     #: `dispatch/shipper_group.py`.
@@ -315,20 +315,20 @@ TEMPLATE: tuple[Field, ...] = (
     # --- CARGO
     # Stored under `commodity`, the key every existing record and reader uses.
     Field("commodity", "Description", "CARGO", required=True,
-          hint="What the freight is",
+          
           spoken="What is the freight?"),
     # One field for the count, in his words: "4 pallets", "20 pieces", or both.
     # Free text on purpose -- a count that has to be a number is a count that
     # cannot say which of the two it is.
     Field("pieces_pallets", "Pieces / Pallets", "CARGO",
-          hint="How many, and of what -- pieces, pallets or both",
+          
           spoken="How many pieces or pallets?"),
-    Field("weight_lbs", "Weight (lbs, total)", "CARGO",
+    Field("weight_lbs", "Weight", "CARGO",
           spoken="What does it weigh altogether?"),
 
     # --- NOTES
     Field("notes", "Notes", "NOTES",
-          hint="Anything else that matters on this run",
+          
           spoken="Anything else I should put down?"),
 )
 
@@ -461,6 +461,40 @@ def voice_script() -> list:
 
 # ----------------------------------------------------------------- parse ----
 
+#: What each field was called before the labels were shortened on 2026-09-16.
+#:
+#: A template emailed on the fifteenth and answered on the seventeenth comes back
+#: carrying the old words. Losing a driver's completed template because the form
+#: was tidied in between is not a trade worth making, so the parser reads both.
+#: Every one of these was unique, which is why a flat map answers for them.
+LEGACY_LABELS = {
+    "load number": "load_number",
+    "service type": "service",
+    "customer / shipper / broker": "customer",
+    "their contact": "customer_poc",
+    "their phone": "customer_phone",
+    "their email": "customer_email",
+    "load control": "controlled_by",
+    "loaded miles": "distance_miles",
+    "rate agreed with": "rate_basis",
+    "payment type": "payment_type",
+    "pickup facility and address": "pickup_location",
+    "pickup appointment": "pickup_window",
+    "pickup contact": "pickup_contact",
+    "pickup phone": "pickup_phone",
+    "pickup access instructions": "pickup_notes",
+    "pickup special instructions": "pickup_special",
+    "bol number": "bol_number",
+    "delivery facility and address": "delivery_location",
+    "delivery appointment": "delivery_window",
+    "delivery contact": "delivery_contact",
+    "delivery phone": "delivery_phone",
+    "delivery access instructions": "delivery_notes",
+    "delivery special instructions": "delivery_special",
+    "weight (lbs, total)": "weight_lbs",
+}
+
+
 def parse_email(body: str) -> dict:
     """Read a returned template back into values.
 
@@ -468,15 +502,31 @@ def parse_email(body: str) -> dict:
     blank lines, the section rules -- and deliberately not tolerant of
     inventing a value it could not find. A value written against a field
     Dispatch assigns is not read: the mission number is Dispatch's to give.
+
+    **It reads the section headings.** Since the labels were shortened
+    (2026-09-16) the same word appears in more than one place -- Contact, Phone,
+    Facility, Appointment, Access, Special instructions are all asked once under
+    PICKUP and once under DELIVERY. That repetition is the point of the short
+    labels, and it is only unambiguous because the section above them says which
+    end of the run they belong to. A line found before any heading, or under one
+    that is not a section, falls back to `LEGACY_LABELS`.
     """
-    label_to_key = {f.label.lower(): f.key for f in TEMPLATE if not f.assigned}
+    by_section = {(f.section, f.label.lower()): f.key
+                  for f in TEMPLATE if not f.assigned}
     values = blank_template()
+    section = ""
     for raw in (body or "").splitlines():
         line = raw.strip().lstrip(">").strip()
-        if not line or ":" not in line or set(line) <= {"-"}:
+        if not line or set(line) <= {"-"}:
+            continue
+        if line.upper() in SECTIONS and ":" not in line:
+            section = line.upper()
+            continue
+        if ":" not in line:
             continue
         label, _, value = line.partition(":")
-        key = label_to_key.get(label.strip().rstrip("*").strip().lower())
+        label = label.strip().rstrip("*").strip().lower()
+        key = by_section.get((section, label)) or LEGACY_LABELS.get(label)
         if key and not values[key]:
             values[key] = value.strip()
     return values

@@ -82,41 +82,50 @@ class TestItPublishesTheWholeForm:
 #: **Thirty-one since one card per delivery, 2026-09-15.** Consignee and BOL
 #: number joined DELIVERY: the card is now one delivery, and those are the two
 #: facts that make one delivery different from the next.
+#: **The labels are the word and nothing else (Owner ruling, 2026-09-16):** *"The
+#: document is too busy and wordy to be functional. It needs to be more simple
+#: and direct in the field labels."* Under a heading that already says PICKUP,
+#: "Pickup facility and address" said pickup twice and address once too often.
+#:
+#: So the same words appear under PICKUP and again under DELIVERY, on purpose.
+#: Two readers had to be taught about it: `mission_template.parse_email` now
+#: reads the section headings a returned template prints, and `joe_update` asks
+#: for the section out loud -- "delivery phone", never "phone".
 ONE_PAGE = (
-    ("IDENTITY", "load_number", "Load Number"),
-    ("IDENTITY", "mission_number", "Mission Number"),
-    ("IDENTITY", "service", "Service Type"),
-    ("MISSION SOURCE", "customer", "Customer / Shipper / Broker"),
-    ("MISSION SOURCE", "customer_poc", "Their contact"),
-    ("MISSION SOURCE", "customer_phone", "Their phone"),
-    ("MISSION SOURCE", "customer_email", "Their email"),
-    ("LOAD CONTROL", "controlled_by", "Load control"),
+    ("IDENTITY", "load_number", "Load number"),
+    ("IDENTITY", "mission_number", "Mission number"),
+    ("IDENTITY", "service", "Service"),
+    ("MISSION SOURCE", "customer", "Customer"),
+    ("MISSION SOURCE", "customer_poc", "Contact"),
+    ("MISSION SOURCE", "customer_phone", "Phone"),
+    ("MISSION SOURCE", "customer_email", "Email"),
+    ("LOAD CONTROL", "controlled_by", "Controlled by"),
     ("LOAD CONTROL", "rate", "Rate"),
     # 2026-09-16: miles sit beside the rate because together they are the
     # economics. Optional, and the only field on the page Dispatch would rather
     # work out itself.
-    ("LOAD CONTROL", "distance_miles", "Loaded miles"),
-    ("LOAD CONTROL", "rate_basis", "Rate agreed with"),
-    ("LOAD CONTROL", "payment_type", "Payment type"),
+    ("LOAD CONTROL", "distance_miles", "Miles"),
+    ("LOAD CONTROL", "rate_basis", "Agreed with"),
+    ("LOAD CONTROL", "payment_type", "Payment"),
     ("LOAD CONTROL", "payor", "Paid by"),
     ("LOAD CONTROL", "amount", "Amount"),
-    ("PICKUP", "pickup_location", "Pickup facility and address"),
-    ("PICKUP", "pickup_window", "Pickup appointment"),
-    ("PICKUP", "pickup_contact", "Pickup contact"),
-    ("PICKUP", "pickup_phone", "Pickup phone"),
-    ("PICKUP", "pickup_notes", "Pickup access instructions"),
-    ("PICKUP", "pickup_special", "Pickup SPECIAL INSTRUCTIONS"),
+    ("PICKUP", "pickup_location", "Facility"),
+    ("PICKUP", "pickup_window", "Appointment"),
+    ("PICKUP", "pickup_contact", "Contact"),
+    ("PICKUP", "pickup_phone", "Phone"),
+    ("PICKUP", "pickup_notes", "Access"),
+    ("PICKUP", "pickup_special", "Special instructions"),
     ("DELIVERY", "consignee", "Consignee"),
-    ("DELIVERY", "bol_number", "BOL number"),
-    ("DELIVERY", "delivery_location", "Delivery facility and address"),
-    ("DELIVERY", "delivery_window", "Delivery appointment"),
-    ("DELIVERY", "delivery_contact", "Delivery contact"),
-    ("DELIVERY", "delivery_phone", "Delivery phone"),
-    ("DELIVERY", "delivery_notes", "Delivery access instructions"),
-    ("DELIVERY", "delivery_special", "Delivery SPECIAL INSTRUCTIONS"),
+    ("DELIVERY", "bol_number", "BOL"),
+    ("DELIVERY", "delivery_location", "Facility"),
+    ("DELIVERY", "delivery_window", "Appointment"),
+    ("DELIVERY", "delivery_contact", "Contact"),
+    ("DELIVERY", "delivery_phone", "Phone"),
+    ("DELIVERY", "delivery_notes", "Access"),
+    ("DELIVERY", "delivery_special", "Special instructions"),
     ("CARGO", "commodity", "Description"),
     ("CARGO", "pieces_pallets", "Pieces / Pallets"),
-    ("CARGO", "weight_lbs", "Weight (lbs, total)"),
+    ("CARGO", "weight_lbs", "Weight"),
     ("NOTES", "notes", "Notes"),
 )
 

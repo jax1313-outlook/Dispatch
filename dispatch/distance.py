@@ -23,7 +23,7 @@ from __future__ import annotations
 
 BASIS_PROVIDER = "mapping provider"
 BASIS_TYPED = "as typed or listed"
-BASIS_TABLE = "built-in lane table"
+BASIS_TABLE = "built-in distance table"
 BASIS_NONE = "no source"
 
 
@@ -90,10 +90,10 @@ def miles_between(origin: str, destination: str, *, typed=None) -> dict:
     if table is not None:
         return {"miles": float(table), "basis": BASIS_TABLE, "status": "UNVERIFIED",
                 "provider_status": provider_word,
-                "note": "Miles from the built-in lane table; the mapping provider is %s."
+                "note": "Miles from the built-in distance table; the mapping provider is %s."
                         % provider_word}
 
     return {"miles": None, "basis": BASIS_NONE, "status": "ABSENT",
             "provider_status": provider_word,
             "note": "No miles: the mapping provider is %s, none were typed, and the "
-                    "lane is not in the built-in table." % provider_word}
+                    "cities are not in the built-in table." % provider_word}

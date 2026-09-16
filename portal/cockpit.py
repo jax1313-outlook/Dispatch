@@ -400,11 +400,39 @@ def end_detail(record: dict, end: str, stop_number: int | None = None) -> dict:
 #: with Load Arrangement (Owner ruling, 2026-09-15).
 ARRIVAL_NOTICE = "Arrival Notice"
 
+#: **The photo workflow. PUBLISHER HARDENING RULING, 2026-09-16** -- the Owner's
+#: authoritative sequence, and these exact three names:
+#:
+#:     PICKUP     Photos - Loaded Vehicle
+#:     EN ROUTE   Photos - Mid-Route Securement
+#:     DELIVERY   Photos - Final Condition
+#:
+#: **One vocabulary.** *"Publisher, Cockpit, Mission Record, and Placeholder
+#: Registry must use the same three names."* The ticks are what the Mission
+#: Record stores, so these strings are the vocabulary, not a label for it.
+#:
+#: **"Photos - Freight Condition" is struck**: *"Not a separate operational
+#: event. Creates duplicate evidence concepts. Does not represent a distinct
+#: workflow milestone."*
+#:
+#: Two earlier passes the same day got this wrong and are worth remembering:
+#: four lines taken from his template's placeholders rather than from the trip,
+#: then three named after the modes rather than after the evidence. The names
+#: here are his.
+#:
+#: **Where they sit follows the cockpit's own modes.** The loaded vehicle is
+#: photographed at the shipper, so it is on the pickup list. From the moment the
+#: truck rolls the cockpit is in DELIVERY -- which is where the driver stands
+#: when he checks his straps at a rest area and again when he opens the doors --
+#: so EN ROUTE and DELIVERY are both on the delivery list. A line he cannot
+#: reach from where he is standing is a line that never gets ticked.
+#:
+#: A record that stored an earlier name keeps it, untouched.
 PICKUP_ARTIFACTS = (
     ARRIVAL_NOTICE,
     "Packing List",
     "Bill of Lading (BOL)",
-    "Photos - Load Securement",
+    "Photos - Loaded Vehicle",
 )
 
 #: The delivery list. **Fixed, for every mission.**
@@ -433,7 +461,11 @@ DELIVERY_ARTIFACTS = (
     ARRIVAL_NOTICE,
     "Proof Of Delivery Document",
     "Packing List (if included)",
-    "Photos - Condition / Delivery",
+    # EN ROUTE and DELIVERY, the second and third photo moments. Both are ticked
+    # from where the driver actually is: the cockpit is in DELIVERY from the
+    # moment he leaves the shipper.
+    "Photos - Mid-Route Securement",
+    "Photos - Final Condition",
     "Invoice To Broker",
 )
 

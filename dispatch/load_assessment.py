@@ -160,13 +160,16 @@ def _rate(card: dict):
 RATE_PENDING_LINE = "* Rate pending"
 
 #: The neutral line a card carries when nothing can supply its miles -- no
-#: mapping provider, none typed, and the lane not in the built-in table. Written
-#: 2026-09-16 after two of the Owner's cards showed `Score Unknown` with nothing
-#: saying why. Economics cannot compute without miles, so the card cannot be
-#: ranked; that is a fact about the card, not a fault, and it is one the Owner
+#: mapping provider, none typed, and no stored distance for the two cities.
+#: Written 2026-09-16 after two of the Owner's cards showed `Score Unknown` with
+#: nothing saying why. Economics cannot compute without miles, so the card cannot
+#: be ranked; that is a fact about the card, not a fault, and it is one the Owner
 #: can fix himself by typing the miles on the mission. Same shape as
 #: RATE_PENDING_LINE: neutral, on its own line, never in the warning list.
-MILES_UNKNOWN_LINE = "* Miles unknown for this lane"
+#:
+#: **It does not say "lane".** Owner ruling, 2026-09-16: *"there is no lane use
+#: in dispatch"* -- the same word he struck from the cards on 2026-09-15.
+MILES_UNKNOWN_LINE = "* Miles unknown"
 
 
 def assess(card: dict, *, records=None, fleet=None, today: date | None = None,

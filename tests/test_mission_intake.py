@@ -78,9 +78,9 @@ class TestTheEmailRoundTrip:
 
     def test_a_mission_number_written_into_the_email_is_not_read(self):
         """Dispatch assigns it. A number typed into the reply is not taken."""
-        body = mt.render_email(COMPLETE).replace("Mission Number: ",
-                                                 "Mission Number: 999")
-        assert "Mission Number: 999" in body
+        body = mt.render_email(COMPLETE).replace("Mission number: ",
+                                                 "Mission number: 999")
+        assert "Mission number: 999" in body
         assert mt.parse_email(body)["mission_number"] == ""
 
     def test_pieces_pallets_is_words_not_a_number(self):

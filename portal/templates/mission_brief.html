@@ -99,6 +99,11 @@
       else 's' }} with no entry. Worth asking about on the call.</p>
   {% endif %}
 
+  {# **Every field is drawn, filled or not.** An empty one is pale red and that
+     is the point: *"the current function of the high lighted empty fields is
+     great. and very useful."* (Owner, 2026-09-16.) Hiding them was tried the
+     same day and taken straight back out -- what he wanted shorter was the
+     **labels**, not the document. #}
   {% for section in card.sections %}
   <section class="card-section">
     <h2>{{ section.title }}</h2>

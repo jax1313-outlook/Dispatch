@@ -939,6 +939,32 @@ def mission_brief_save(record_id: str):
     # different day."* No copy is made and no status is touched, so the card
     # stays exactly as open as it was.
 
+    # What he typed reaches the card, so the card shows what the sheet shows.
+    # Owner, 2026-09-16: *"i can open the LOADS screen move to the Load I just
+    # finished negociating and EDIIT and save this changes the card"* -- it did
+    # not, until this. The rate went onto the record and the card kept reading
+    # `card_data` as written at capture, so it still showed `Rate: *`.
+    #
+    # **This is not scoring.** *"why would i rescore if i saved a amount i agreed
+    # to with broker. that would not make sense. just save and move on."* The
+    # score is a pre-decision tool and a rate agreed on the phone is the
+    # decision; the number is left exactly as it was. Only the two lines that
+    # state whether a fact is *present* are refreshed, because a card showing a
+    # rate and "* Rate pending" together is telling a man two things at once.
+    card = dict(stored.get("card_data") or {})
+    for template_key, card_keys in brief_view._CARD_KEYS.items():
+        value = stored.get(template_key)
+        if value in (None, ""):
+            continue
+        for card_key in card_keys:
+            card[card_key] = value
+    if card.get("rate"):
+        card["rate_pending"] = False
+        card.pop("rate_line", None)
+    if card.get("distance_miles"):
+        card.pop("miles_line", None)
+    stored["card_data"] = card
+
     data[record_id] = stored
     sandbox._save(data)
 

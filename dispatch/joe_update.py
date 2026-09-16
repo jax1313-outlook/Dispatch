@@ -64,6 +64,9 @@ SPOKEN = {
     "cod": "cod",
     "payment": "payment_type",
     "service": "service",
+    # The label was "Service Type" until 2026-09-16 and that is still how it is
+    # said out loud. A shortened label does not change a man's vocabulary.
+    "service type": "service",
     # A two-choice pick since 2026-09-15: the Customer, or Level 1. Its phone
     # and email left the template with it.
     "load control": "controlled_by",
@@ -102,9 +105,46 @@ _LEAD = re.compile(
 _JOIN = re.compile(r"\s*(?:is|=|:|to)\s+", re.I)
 
 
+#: The word he puts in front of a shared label when he says it out loud. The
+#: page has a heading above the field; speech has nothing, so "phone" on its own
+#: names three different fields and must not be guessed at.
+_SPOKEN_SECTION = {
+    "MISSION SOURCE": "customer",
+    "PICKUP": "pickup",
+    "DELIVERY": "delivery",
+}
+
+
 def _labels() -> dict:
-    """The template's own labels, lowercased, as addressable names."""
-    return {f.label.lower(): f.key for f in mt.TEMPLATE}
+    """The template's labels as names JOE can be addressed by.
+
+    **A label used once is addressable on its own.** Rate, Consignee, BOL,
+    Weight, Miles -- say the word and the value.
+
+    **A label used more than once needs its section said first.** When the
+    labels were shortened on 2026-09-16 several became deliberately the same
+    word in two or three places: Contact, Phone, Facility, Appointment, Access
+    and Special instructions are asked under MISSION SOURCE, PICKUP and
+    DELIVERY. On the page the heading above them settles which is which. Out
+    loud there is no heading, so "delivery phone" is addressable and "phone" is
+    not -- which is how a man says it anyway. Writing a delivery phone into the
+    pickup because the sentence was ambiguous is exactly what this module exists
+    not to do.
+    """
+    seen = {}
+    for field in mt.TEMPLATE:
+        seen[field.label.lower()] = seen.get(field.label.lower(), 0) + 1
+
+    names = {}
+    for field in mt.TEMPLATE:
+        label = field.label.lower()
+        if seen[label] == 1:
+            names[label] = field.key
+            continue
+        prefix = _SPOKEN_SECTION.get(field.section)
+        if prefix:
+            names["%s %s" % (prefix, label)] = field.key
+    return names
 
 
 def understand(spoken: str) -> dict:

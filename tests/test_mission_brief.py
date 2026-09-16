@@ -358,15 +358,36 @@ class TestTheOnePageBriefThroughItsRoute:
                            "Harbor Receiving Office", "HRO-5521", "Mike", "OPEN"):
                 assert stored not in html, (url, stored)
 
-    def test_the_brief_shows_exactly_the_twenty_nine_labels(self, client):
+    @staticmethod
+    def _labels(html: str) -> list:
         import re
 
+        body = html[html.index("<h2>"):html.index("<footer")]
+        return [re.sub(r"\s+", " ", l).strip()
+                for l in re.findall(r"<dt[^>]*>(.*?)</dt>", body, re.S)]
+
+    def test_the_brief_draws_every_field_filled_or_not(self, client):
+        """**Owner ruling, 2026-09-16:** *"the current function of the high
+        lighted empty fields is great. and very useful."*
+
+        Hiding the empty ones was built earlier the same day and taken back out.
+        What he wanted shorter was the **labels**, not the document: an empty
+        field in pale red tells him what to ask for on the call, which is what
+        the brief is for."""
+        mission = self._store_older()
+        for url in (f"/brief/mission/{mission}", f"/brief/mission/{mission}?edit=1"):
+            labels = self._labels(client.get(url).get_data(as_text=True))
+            assert labels == [f.label for f in mt.TEMPLATE], url
+
+    def test_an_empty_field_is_marked_as_empty(self, client):
         mission = self._store_older()
         html = client.get(f"/brief/mission/{mission}").get_data(as_text=True)
-        body = html[html.index("<h2>IDENTITY</h2>"):html.index("<footer")]
-        labels = [re.sub(r"\s+", " ", l).strip()
-                  for l in re.findall(r"<dt[^>]*>(.*?)</dt>", body, re.S)]
-        assert labels == [f.label for f in mt.TEMPLATE]
+        assert 'class="empty"' in html
+
+    def test_the_count_of_what_is_missing_still_shows(self, client):
+        mission = self._store_older()
+        html = client.get(f"/brief/mission/{mission}").get_data(as_text=True)
+        assert "with no entry" in html
 
     def test_an_older_record_loads_renders_and_keeps_every_stored_value(self, client):
         mission = self._store_older()
