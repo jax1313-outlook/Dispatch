@@ -1642,3 +1642,17 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 **Next, from his filing ruling:** at closeout a load's POD, invoice and closing documents are filed in **one folder named by that load number** — the tracing number — for retrieval from the Archive.
 
 ---
+
+## 2026-09-16 — A pull does not reach a running Dispatch
+
+**Not a code change.** An operating note, recorded because it cost real time.
+
+**What happened.** `/candidates` failed with `AttributeError: 'Field' object has no attribute 'assigned'`. The attribute was present in `dispatch/mission_template.py` on disk and the same line imported cleanly against that source. The portal process had started at **11:02**; the pull rewrote `portal/brief.py` and `dispatch/mission_template.py` at **19:48**. The process was running nine hours of stale code.
+
+**Why it surfaced only then.** `portal/brief.py` is imported inside the request, not at startup. So its module body ran for the first time that evening, reading the **new** file, while `dispatch.mission_template` had been held in memory since morning from the **old** one. A lazily imported module moves the failure from start-up, where it would have been obvious, to whenever someone first opens the page that needs it.
+
+**How to recognise it.** The traceback printed source lines that did not match the reported functions — `flash("Load alert settings saved.")` shown as a line inside `_candidate_rows`. Python reads the current file to print lines for code objects that are no longer in it. That mismatch means a stale process, not a defect.
+
+**The rule.** **After every pull into `D:\Dispatch`, restart Dispatch** — `python -m dispatch_launcher restart` — before treating the new code as running. Nothing was damaged and nothing was lost; the restart was the whole fix.
+
+---
