@@ -92,6 +92,10 @@ ONE_PAGE = (
     ("MISSION SOURCE", "customer_email", "Their email"),
     ("LOAD CONTROL", "controlled_by", "Load control"),
     ("LOAD CONTROL", "rate", "Rate"),
+    # 2026-09-16: miles sit beside the rate because together they are the
+    # economics. Optional, and the only field on the page Dispatch would rather
+    # work out itself.
+    ("LOAD CONTROL", "distance_miles", "Loaded miles"),
     ("LOAD CONTROL", "rate_basis", "Rate agreed with"),
     ("LOAD CONTROL", "payment_type", "Payment type"),
     ("LOAD CONTROL", "payor", "Paid by"),
@@ -124,8 +128,13 @@ class TestTheOnePageLayout:
     control *"2) yes either"*, *"cargo: 1) Description 2) Pieces / Pallets/ 3)
     Weight"*, then *"go ahead with the one page template"*."""
 
-    def test_the_template_is_exactly_the_thirty_one_fields_in_order(self):
-        assert len(mt.TEMPLATE) == 31
+    def test_the_template_is_exactly_the_one_page_fields_in_order(self):
+        """Twenty-nine when the Owner ruled the one page on 2026-09-15; thirty-one
+        when one card per delivery gave DELIVERY its own Consignee and BOL number;
+        thirty-two when Loaded miles joined the rate on 2026-09-16. The count is
+        held by `ONE_PAGE` above, which is the list, so a field cannot be added
+        without editing the document this test stands for."""
+        assert len(mt.TEMPLATE) == len(ONE_PAGE) == 32
         assert [(f.section, f.key, f.label) for f in mt.TEMPLATE] == list(ONE_PAGE)
 
     def test_the_delivery_section_names_who_signs_and_which_bol(self):

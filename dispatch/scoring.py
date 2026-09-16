@@ -122,11 +122,32 @@ def _normalize_city(location: str) -> str:
 
     A trailing two-letter token is a state abbreviation. No city's name ends in
     a bare two-letter word, so taking it off cannot swallow part of one.
+
+    **The city is not always first.** A broker writes the facility before the
+    town -- "Mayo Clinic, San Pablo Rd, Jacksonville, FL 32250", "XPO Logistics,
+    Savannah, GA". Taking the text before the first comma read those as "mayo
+    clinic" and "xpo logistics", no lane matched, economics could not compute,
+    and the card came back scored `Unknown` with nothing saying why. Two of the
+    Owner's own cards sat like that on 2026-09-16. So find the **state** and take
+    the part in front of it; the city is the piece next to the state, wherever
+    the facility name put it.
     """
     if not location:
         return ""
-    city = location.split(",")[0].strip().lower()
-    city = re.sub(r"\s+", " ", city)
+    parts = [p.strip() for p in location.split(",") if p.strip()]
+    if not parts:
+        return ""
+    # "FL", "FL 32250", "FL 32250-1234" -- a bare state, optionally with its ZIP.
+    state = re.compile(r"^[A-Za-z]{2}(\s+\d{5}(-\d{4})?)?$")
+    for index, part in enumerate(parts):
+        if index and state.match(part):
+            city = parts[index - 1]
+            break
+    else:
+        # No state to anchor on: the first part, with a trailing bare state
+        # taken off ("Jacksonville FL", which is how a dictated load arrives).
+        city = parts[0]
+    city = re.sub(r"\s+", " ", city.lower())
     return re.sub(r"\s+[a-z]{2}$", "", city)
 
 

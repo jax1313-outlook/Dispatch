@@ -250,6 +250,13 @@ def assess_card(card: dict, *, exclude_id: str = "") -> dict | None:
         card["rate_line"] = assessment["rate_line"]
     else:
         card.pop("rate_line", None)
+    # Absent miles say so, for the same reason (2026-09-16). Without miles the
+    # engine cannot compute economics and the card scores Unknown; the card now
+    # names that rather than leaving a man to guess which input was missing.
+    if assessment.get("miles_line"):
+        card["miles_line"] = assessment["miles_line"]
+    else:
+        card.pop("miles_line", None)
     card.pop("needs_rate", None)  # the old flag; a re-scored card no longer carries it
     # Delivery timing is parked (Mike Zachary, 2026-09-15): no card carries it.
     card.pop("delivery_timing", None)

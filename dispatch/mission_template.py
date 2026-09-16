@@ -235,6 +235,15 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="Who has load control -- the customer, or Level 1?"),
     Field("rate", "Rate", "LOAD CONTROL", hint="Linehaul, before accessorials",
           spoken="What does it pay?"),
+    # Miles sit beside the rate because together they are the economics: without
+    # them the engine cannot score the card at all. Added 2026-09-16. The lane
+    # table answers for the lanes this truck runs and a mapping provider will
+    # answer for the rest; this box is for the lane neither of them knows, so a
+    # load he can price himself is never left unranked. **Optional** -- blank is
+    # the normal case and is not an error.
+    Field("distance_miles", "Loaded miles", "LOAD CONTROL",
+          hint="Only if Dispatch cannot work the lane out",
+          spoken="Loaded miles, if you know them -- otherwise say skip?"),
     Field("rate_basis", "Rate agreed with", "LOAD CONTROL",
           hint="Posted, or who you negotiated it with",
           spoken="Was the rate posted, or did you negotiate it with somebody?"),
@@ -580,6 +589,12 @@ def to_record(values: dict, *, source: str,
         card["weight_lbs"] = number("weight_lbs")
     if value("rate"):
         card["rate"] = value("rate")
+    # Typed miles beat the lane table and are beaten by a live mapping provider
+    # (`dispatch/distance.py::miles_between`), which marks them MANUAL and says
+    # so on the card. Absent is absent: never a zero, which would read as a
+    # measured distance of nothing.
+    if number("distance_miles"):
+        card["distance_miles"] = number("distance_miles")
 
     record = {
         "title": f"{value('commodity')} - {value('pickup_location')} "

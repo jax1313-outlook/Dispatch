@@ -556,6 +556,27 @@ occurrences across 115 Python files, plus `broker_shipper`, `broker_contacts` an
 the schema. **Renaming those is one deliberate mission after the screen walk, never in passing.**
 The register of every legacy name is `D:\AAA-Dispatch-Screen-Build\_SHARED\NAME_REGISTER.md`.
 
+### Vocabulary ruled 2026-09-16 — the card has two names, and COMMIT is the line
+
+**Pre-COMMIT it is an `Opportunity Card`. Post-COMMIT it is a `Mission Card`.**
+
+The same card, on either side of the boundary that already divides this program (D5: Intelligence
+owns everything before COMMIT, Dispatch everything after). The name changes because the standing
+changes — an Opportunity Card can be discarded and is nobody's obligation; a Mission Card is work
+this truck has taken on.
+
+**`Mission Record` is untouched.** It is the record in the Spine; the card is how the record is
+seen. A Mission Card displays a Mission Record.
+
+**`Load Card` retires**, as `docs/campaign/CONOPS_v1.1.md` already said. Mike first ruled it
+*"Pre-Commit: Opportunity Card / Post-Commit: Load Card"*, was shown that those drafts retire the
+term and that `Mission Card` is already the word throughout the build, and corrected it himself:
+*"then keep mission card!"* Do not reintroduce Load Card.
+
+**No renaming in passing.** Display text follows this ruling as screens are touched. Stored field
+names and module names do not change for it — the same discipline as the Customer ruling above.
+`portal/models/opportunity_card.py` is correctly named for pre-COMMIT work and stays.
+
 ### The contracts are seven, not six
 
 `POST /api/joe/opportunity` — Opportunity Capture — was ratified 2026-09-06 and built 2026-09-07.

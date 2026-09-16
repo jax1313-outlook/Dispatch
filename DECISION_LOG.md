@@ -1705,3 +1705,61 @@ signed BOL + invoice  ->  broker (email)
 **Also ruled.** Test freight will carry **broker names and mailboxes the Owner controls** — *"I'm going to be loading email paths and broker names that I control."* So the ten-real-load test does not put mail in front of real brokers, and needs no send-path freeze beforehand. The `tests/conftest.py::_no_real_outlook` guard is unaffected and stays: **no test ever reaches Outlook**, whoever owns the mailbox.
 
 ---
+
+## 2026-09-16 — Opportunity Card before COMMIT, Load Card after
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"just to tighten up the terminology a bit: Pre-Commit: Opportunity Card / Post-Commit: Load Card"*
+
+One card, two names, with COMMIT as the line — the same boundary that already divides Intelligence from Dispatch (D5). An **Opportunity Card** can be discarded and binds nobody; a **Load Card** is work this truck has taken on. `Mission Record` is unchanged: it is the record, and a Load Card is how that record is seen.
+
+**Reverses a draft.** `docs/campaign/CONOPS_v1.1.md` and `docs/campaign/CONOPS_EVALUATION.md` both say *"'Load Card' retires"* and propose `Mission Card` instead. Those are evaluation drafts. The Owner's ruling is the authority; the term returns with a defined meaning, and the drafts are history. Recorded rather than edited, so the reversal is visible.
+
+**Scope.** `CLAUDE.md` §8A carries the vocabulary. Display text follows as screens are touched. **Nothing is renamed in passing** — stored fields and module names are unaffected, the same discipline the 2026-09-06 Customer ruling set. `portal/models/opportunity_card.py` is correctly named for pre-COMMIT work and keeps its name.
+
+---
+
+## 2026-09-16 — A typed card can be scored: the city, the missing line, the miles box
+
+**PR:** (this change)
+**Capability:** `dispatch/scoring.py` (`_normalize_city`), `dispatch/load_assessment.py` (`MILES_UNKNOWN_LINE`, `miles_known`/`miles_line`, `CARD_FACTS`), `dispatch/mission_template.py` (`distance_miles`), `portal/models/opportunity_card.py`, `portal/templates/_card_dispatch.html`, `tests/test_miles_unknown.py` (new).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"start scoring fix"*
+
+**What he saw.** Two Opportunity Cards on the Home strip showing **Score Unknown** on 2026-09-16 — *Surgical equipment, XPO Logistics Savannah GA → Mayo Clinic, San Pablo Rd, Jacksonville FL*, and *Medical specimens, Jacksonville → Gainesville* — the second carrying a rate of $475. An unscored card cannot be ranked, and a stack of them is a list, not a decision aid.
+
+**Cause.** `_normalize_city` read the city as everything before the **first** comma. A broker writes the facility first, so the lane became `("xpo logistics", "mayo clinic")`, matched nothing, economics could not compute, and `score_card` swallowed the failure and returned `None`. The same miss as the 2026-09-09 comma fix, one layer out: invisible while every load came from a board in `City, ST` form, and certain to appear the moment real freight is typed in.
+
+**Fixed, three ways.**
+
+1. **Find the city beside the state.** `_normalize_city` now scans the comma-separated parts for a bare state token (`FL`, `FL 32250`, `FL 32250-1234`) and takes the part in front of it, wherever the facility name put it. No state to anchor on falls back to the old reading, so `"Jacksonville FL"` — how a dictated load arrives — still works. The XPO → Mayo card now resolves to **140 mi** and scores.
+2. **Say which input is missing.** A card nothing can supply miles for carries `MILES_UNKNOWN_LINE` — **"* Miles unknown for this lane"** — in the same neutral shape as `"* Rate pending"`: on its own line, never in the warning list. `Jacksonville → Gainesville` is genuinely not in the table and now says so instead of shrugging.
+3. **Let him type them.** `distance_miles` — **"Loaded miles"** — joins LOAD CONTROL directly after the rate, because together they are the economics. Optional; blank is the normal case and is not an error. Typed miles beat the lane table and are beaten by a live mapping provider, which marks them `MANUAL` and says so. Blank stores nothing rather than a zero, which would read as a measured distance of nothing. The template is **thirty-two** fields.
+
+**Also removed.** `("distance_miles", "miles")` is out of `CARD_FACTS`. Miles used to appear in *"Missing: equipment, weight, miles"* as well, which buried the one input whose absence stops scoring among the nice-to-haves and named the same gap twice — *"no redundant not needed hurts cognitive load."* One line, in the place that means it.
+
+**Not done.** The lane table is still a table, not a mapping provider. Lanes it does not hold are answered by the box or not at all, which stays the honest position until the mapping connector is live.
+
+---
+
+## 2026-09-16 — Correction: the post-COMMIT card is a Mission Card, not a Load Card
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"sorry then keep mission card!, your correction accepted"*
+
+The entry above records his first ruling — *"Pre-Commit: Opportunity Card / Post-Commit: Load Card"* — and the note that `docs/campaign/CONOPS_v1.1.md` and `CONOPS_EVALUATION.md` had already retired **Load Card** in favour of **Mission Card**. Shown that, he corrected himself.
+
+**The vocabulary, settled:**
+
+```
+capture  ->  OPPORTUNITY CARD  --[ COMMIT ]-->  MISSION CARD
+                                                displays a MISSION RECORD
+```
+
+**Load Card retires.** Do not reintroduce it.
+
+This also matches the build as it already stands: **Mission Card** is the existing word in `CLAUDE.md` §5A, `dispatch/opportunity.py` (the dictation sequence is *derived from the Mission Card*), `portal/brief.py` and `docs/operations/COCKPIT_VOICE_CAPTURE.md`. Load Card would have been the only new term, and the one nothing else used.
+
+The first ruling is left standing above rather than edited, so the correction can be read.
+
+---

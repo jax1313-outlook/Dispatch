@@ -31,7 +31,12 @@ CARD_FACTS = (
     ("delivery_window", "delivery date"),
     ("equipment_required", "equipment"),
     ("weight_lbs", "weight"),
-    ("distance_miles", "miles"),
+    # Miles are **not** here. They used to be, listed among the nice-to-haves as
+    # "Missing: equipment, weight, miles", which buried the one input whose
+    # absence stops the card being scored at all. They have their own neutral
+    # line now (MILES_UNKNOWN_LINE), and they say it once: two lines naming the
+    # same gap is the redundancy the Owner rules against -- *"no redundant not
+    # needed hurts cognitive load."* 2026-09-16.
 )
 
 #: Words a listing uses for a trailer, onto the fleet's own equipment types
@@ -154,6 +159,15 @@ def _rate(card: dict):
 #: not negative."* It is not a warning and does not sit in the warning list.
 RATE_PENDING_LINE = "* Rate pending"
 
+#: The neutral line a card carries when nothing can supply its miles -- no
+#: mapping provider, none typed, and the lane not in the built-in table. Written
+#: 2026-09-16 after two of the Owner's cards showed `Score Unknown` with nothing
+#: saying why. Economics cannot compute without miles, so the card cannot be
+#: ranked; that is a fact about the card, not a fault, and it is one the Owner
+#: can fix himself by typing the miles on the mission. Same shape as
+#: RATE_PENDING_LINE: neutral, on its own line, never in the warning list.
+MILES_UNKNOWN_LINE = "* Miles unknown for this lane"
+
 
 def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
            exclude_id: str = "") -> dict:
@@ -163,7 +177,8 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
     "equipment", "timing", "warnings", "rate_pending", "rate_line", "missing"}`.
     `warnings` is a list of `{"code", "text"}` in the order a man reading the card
     needs them. A pending rate is not among them: `rate_line` carries the neutral
-    "* Rate pending" (Owner ruling 2026-09-15).
+    "* Rate pending" (Owner ruling 2026-09-15). Absent miles are the same shape:
+    `miles_known` / `miles_line`, added 2026-09-16.
     """
     from datetime import timedelta
 
@@ -314,5 +329,7 @@ def assess(card: dict, *, records=None, fleet=None, today: date | None = None,
         "warnings": warnings,
         "rate_pending": rate is None,
         "rate_line": RATE_PENDING_LINE if rate is None else "",
+        "miles_known": miles is not None,
+        "miles_line": MILES_UNKNOWN_LINE if miles is None else "",
         "missing": missing,
     }

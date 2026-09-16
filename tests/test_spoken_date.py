@@ -203,6 +203,26 @@ class TestADictatedCityStillFindsItsLane:
         assert known_distance("Jacksonville, FL", "Savannah, GA") == 140
         assert known_distance("Jacksonville FL", "Savannah GA") == 140
 
+    def test_a_facility_written_before_the_town_still_finds_the_lane(self):
+        """The same silent miss, one layer out. A broker writes the building
+        first -- "Mayo Clinic, San Pablo Rd, Jacksonville, FL 32250" -- and the
+        city was read as everything before the first comma, so the lane was
+        "mayo clinic" and matched nothing. Two of Mike's own cards sat on the
+        Home strip showing `Score Unknown` on 2026-09-16 because of it, one of
+        them carrying a rate.
+        """
+        from dispatch.scoring import known_distance
+
+        assert known_distance("XPO Logistics, Savannah, GA",
+                              "Mayo Clinic, San Pablo Rd, Jacksonville, FL 32250") == 140
+        assert known_distance("Jacksonville, FL 32202", "Atlanta, GA 30301") == 345
+
+    def test_a_line_with_no_state_is_not_forced_into_a_lane(self):
+        """"Publix DC Lakeland" names no state. Absent beats invented."""
+        from dispatch.scoring import known_distance
+
+        assert known_distance("Publix DC Lakeland", "Winn-Dixie Orlando") is None
+
     def test_a_lane_the_table_does_not_hold_stays_unknown(self):
         """None, not an estimate. Scoring says so rather than pricing a guess."""
         from dispatch.scoring import known_distance

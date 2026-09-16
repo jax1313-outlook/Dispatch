@@ -42,6 +42,12 @@
             {% if cd.rate_pending %}
             <div class="card-rate-pending">{{ cd.rate_line or '* Rate pending' }}</div>
             {% endif %}
+            {# Same shape, the other missing input (2026-09-16). A card with no
+               miles cannot be scored at all, so say which input is missing
+               rather than showing "Score Unknown" and nothing else. #}
+            {% if cd.miles_line %}
+            <div class="card-rate-pending">{{ cd.miles_line }}</div>
+            {% endif %}
             {% if cd.warnings %}
             <ul class="card-warnings">
                 {% for w in cd.warnings %}<li class="card-warning warn-{{ w.code|lower }}">&#9888; {{ w.text }}</li>{% endfor %}
