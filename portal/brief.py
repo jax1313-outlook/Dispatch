@@ -38,14 +38,16 @@ ONE PAGE, 2026-09-15
 
 Mike marked up a printout of this sheet -- *"this is the idea trying to get
 this to one page."* -- and found it is the same document as New Mission. The
-brief is now exactly the Mission Template's twenty-nine fields in its seven
+brief is now exactly the Mission Template's fields in its seven
 sections, IDENTITY included. Status, Intake and Taken by are gone from it, and
 so is every field the template dropped. **An older record keeps every value it
 stored; a removed field is simply not shown.**
 
-Later the same day (Owner rulings, 2026-09-15): the sheet lists only the
-ADDITIONAL stops, labelled "2 of N" -- the Delivery section is stop 1 and
-reads "1 of N" when there are more -- and Load Arrangement is gone from it.
+Later the same day (Owner rulings, 2026-09-15): Load Arrangement is gone from it,
+and so are stops. **One card is one delivery.** The sheet has no ADDITIONAL STOPS
+section and no stop boxes to edit; what it carries in the corner instead is the
+group label -- "1 of 3" -- from `dispatch/shipper_group.py`. Stop data an older
+record stored is left exactly as it is.
 """
 
 from __future__ import annotations
@@ -136,82 +138,46 @@ def _value_for(record: dict, key: str) -> str:
     return value
 
 
+def value_of(record: dict, key: str) -> str:
+    """What the record holds for one template field, wherever it lives.
+
+    The public name for what the sheet already does on every line. A caller that
+    wants one fact off a Mission Record -- the customer's name to put on a
+    button, say -- asks here rather than guessing which of two places it sits in.
+    """
+    return _value_for(record, key)
+
+
 def sections_of(record: dict) -> list:
     """The whole card: the Mission Template's sections, IDENTITY first.
 
     Built from `mission_template.TEMPLATE`, so every field intake can capture
     appears here, nothing else does, and the two cannot drift.
     """
-    total = stop_total(record)
     sections = []
     for name in mt.SECTIONS:
         fields = [_field(f.label, _value_for(record, f.key), hint=f.hint,
                          key=f.key, choices=f.choices,
                          locked=f.key in LOCKED_KEYS)
                   for f in mt.fields_in(name)]
-        sections.append({"title": name, "fields": fields, "editable": True,
-                         # The Delivery section is stop 1: "1 of 3" on a
-                         # multi-stop mission, nothing on a single-stop one.
-                         "stop_label": (mt.stop_label(1, total)
-                                        if name == "DELIVERY" else "")})
+        sections.append({"title": name, "fields": fields, "editable": True})
     return sections
 
 
-def stop_total(record: dict) -> int:
-    """How many stops the mission has. Delivery is one; the rest are additional."""
-    return 1 + len(mt.additional_stops(record))
-
-
-def stops_of(record: dict) -> list:
-    """The ADDITIONAL stops, each labelled "2 of N", "3 of N"...
-
-    Owner ruling, 2026-09-15: *"show only additional stops"*. The Delivery
-    section is the first stop, so a stored stop 1 -- which repeats Delivery on
-    every record `to_record` wrote -- is not listed a second time. It is kept
-    exactly as stored.
-
-    Stop-level load control is not shown: it left the template in the one-page
-    layout, 2026-09-15. A stop that stored it keeps it.
-    """
-    extra = mt.additional_stops(record)
-    total = 1 + len(extra)
-    stops = []
-    for position, stop in enumerate(extra, start=2):
-        number = stop.get("number") or position
-
-        def at(label, key, value, number=number):
-            # Keyed per stop, so a dock phone learned on the call is written
-            # to the stop it belongs to. Colons because stop field names carry
-            # underscores of their own.
-            return _field(label, value, key="stop:%s:%s" % (number, key))
-
-        stops.append({
-            "label": mt.stop_label(position, total),
-            "number": number,
-            "fields": [
-                at("Facility", "facility", stop.get("facility")),
-                at("Appointment", "window", stop.get("window")),
-                at("Dock contact", "poc", stop.get("poc")),
-                at("Dock phone", "phone", stop.get("phone")),
-                at("Access instructions", "notes", stop.get("notes")),
-                at("SPECIAL INSTRUCTIONS", "special", stop.get("special")),
-            ],
-        })
-    return stops
-
-
 def card_for(record: dict) -> dict:
-    """The complete Mission Card, ready to read, edit or print."""
+    """The complete Mission Card, ready to read, edit or print.
+
+    No stops. **One card is one delivery** (Owner ruling, 2026-09-15), so the
+    sheet is the Mission Template's sections and nothing beside them. A second
+    delivery for the same shipper is a second card, labelled "2 of 3" in the
+    corner by `dispatch/shipper_group.py`.
+    """
     sections = sections_of(record)
-    stops = stops_of(record)
-    # Every highlighted field on the sheet, including the stops. The headline
-    # counting fewer than the page shows is the kind of small lie that stops a
-    # man trusting the number.
+    # Every highlighted field on the sheet. The headline counting fewer than the
+    # page shows is the kind of small lie that stops a man trusting the number.
     empty = sum(1 for s in sections for f in s["fields"] if f["empty"])
-    empty += sum(1 for stop in stops for f in stop["fields"] if f["empty"])
     return {
         "sections": sections,
-        "stops": stops,
         # No Load Arrangement. Owner ruling, 2026-09-15: *"good idea but delete
         # now. for small operation not really useful."* Stored values are kept.
         # Counted, not scored. It is the number of questions worth asking
@@ -221,34 +187,17 @@ def card_for(record: dict) -> dict:
     }
 
 
-#: Stop fields EDIT may write, by their key on the stop -- the template's STOP
-#: block, and nothing it no longer carries.
-STOP_KEYS = mt.STOP_KEYS
+def another_delivery_values(record: dict) -> dict:
+    """A fresh New Mission form for the same shipper, and nothing else carried.
 
-
-def apply_stop_edits(record: dict, form) -> list:
-    """Write `stop:N:field` values back onto the stops they name.
-
-    Returns the updated stop list. Values are stored exactly as typed and
-    nothing is validated, for the same reason the rest of EDIT does not: a
-    brief that argues with what a broker just said on the phone is a brief he
-    stops using.
+    `mission_template.SHIPPER_KEYS` says *which* facts belong to the shipper
+    rather than to the delivery; this resolves each one off the record wherever
+    it happens to live, which is already this module's job. Consignee, BOL, the
+    delivery block, the freight, the rate and the notes come back blank: they
+    are what makes the next card a different delivery.
     """
-    stops = [dict(s) for s in (record.get("stops") or []) if isinstance(s, dict)]
-    by_number = {}
-    for index, stop in enumerate(stops, start=1):
-        by_number[str(stop.get("number") or index)] = stop
-
-    for name in list(form):
-        parts = str(name).split(":")
-        if len(parts) != 3 or parts[0] != "stop":
-            continue
-        number, key = parts[1], parts[2]
-        if key not in STOP_KEYS or number not in by_number:
-            continue
-        by_number[number][key] = str(form.get(name) or "").strip()
-
-    return stops
+    return mt.another_delivery({key: _value_for(record, key)
+                                for key in mt.SHIPPER_KEYS})
 
 
 def editable_keys(record: dict) -> list:

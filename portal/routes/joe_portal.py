@@ -329,6 +329,40 @@ def mission_intake():
         sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
         problems=[],
         values=mt.blank_template(),
+        another_for="", group_from="",
+    )
+
+
+@joe_bp.route("/intake/another/<path:record_id>")
+def mission_intake_another(record_id: str):
+    """ANOTHER DELIVERY FOR THIS SHIPPER. A fresh card, same shipper and pickup.
+
+    **Owner's model, 2026-09-15.** Three pallets from one customer to three car
+    dealerships are three cards, not three stops: *"rain stops one stop from
+    completing so the driver returns with one load still onboard. This is why
+    each must stand alone totally. the only binding item is the shipper.
+    Everything thing else stands alone."*
+
+    So this opens New Mission with the shipper and the pickup already filled in
+    and everything that makes a delivery its own left blank -- consignee, BOL,
+    the delivery block, the freight, the rate, the notes. The card gets its own
+    Load Number (theirs if typed, ours if not) and its own mission number at
+    COMMIT, exactly as any other card does.
+    """
+    from dispatch import mission_template as mt
+    from portal import brief as brief_view
+
+    source = sandbox.get(record_id)
+    if not source:
+        return redirect(url_for("joe_portal.mission_intake"))
+
+    return render_template(
+        "mission_intake.html",
+        sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
+        problems=[],
+        values=brief_view.another_delivery_values(source),
+        another_for=brief_view.value_of(source, "customer"),
+        group_from=record_id,
     )
 
 
@@ -341,6 +375,11 @@ def mission_intake_create():
     # value posted for it is never read.
     values = {key: str(request.form.get(key) or "").strip()
               for key in mt.ENTERED_KEYS}
+    # Which card this one is a second delivery for, if any. It travels on the
+    # address rather than in a hidden box, so the form's controls stay exactly
+    # the Mission Template's fields. Never a value the record carries -- only
+    # which group tag to join.
+    group_from = str(request.args.get("another_for") or "").strip()
     # The form no longer asks how it came in, because a person sitting at it is
     # always the direct door. A machine sets SWEEP; a screen never offers it.
     source = mt.SOURCE_DIRECT
@@ -352,14 +391,56 @@ def mission_intake_create():
     if problems:
         # Everything he typed comes back with it. Losing a call's worth of
         # notes to a validation message is how a screen stops being used.
+        from portal import brief as brief_view
+
         return render_template(
             "mission_intake.html",
             sections=[(name, mt.fields_in(name)) for name in mt.SECTIONS],
-            problems=problems, values=dict(mt.blank_template(), **values)), 400
+            problems=problems, values=dict(mt.blank_template(), **values),
+            another_for=brief_view.value_of(sandbox.get(group_from) or {},
+                                            "customer") if group_from else "",
+            group_from=group_from), 400
 
     record = mt.create_mission(values, source=source,
                                sandbox_module=sandbox, mission_module=mission_svc)
+
+    if group_from:
+        _join_shipper_group(record["id"], group_from)
+
+    # ANOTHER DELIVERY, pressed instead of CREATE: this card is made, and the
+    # next one opens with the shipper and the pickup already in it. Three
+    # pallets for three dealerships are typed in one sitting.
+    if str(request.form.get("another") or "").strip():
+        return redirect(url_for("joe_portal.mission_intake_another",
+                                record_id=record["id"]))
     return redirect(url_for("joe_portal.mission_brief", record_id=record["id"]))
+
+
+def _join_shipper_group(record_id: str, source_id: str) -> str:
+    """Tag both cards with the group, and write nothing else on either.
+
+    **This is the only write one card ever makes to another, and it is a label.**
+    The first card names the group with its own Load Number and is stamped with
+    the moment it joined; the new card joins the same one. No status, no money,
+    no cascade -- *"Nothing about it binds them together."*
+    """
+    from dispatch import shipper_group as sg
+
+    data = sandbox._load()
+    source = data.get(source_id) or {}
+    tag = sg.tag_for(source)
+    if not tag or record_id not in data:
+        return ""
+
+    stamp = sg.now()
+    if source_id in data and not source.get(sg.KEY):
+        source[sg.KEY] = tag
+        source.setdefault(sg.JOINED_KEY, stamp)
+        data[source_id] = source
+    data[record_id][sg.KEY] = tag
+    data[record_id][sg.JOINED_KEY] = sg.now()
+    sandbox._save(data)
+    return tag
 
 
 @joe_bp.route("/loads")
@@ -677,7 +758,20 @@ def mission_brief(record_id: str):
         card=brief_view.card_for(merged),
         editing=request.args.get("edit") == "1",
         gate=commitment.describe(merged),
+        # "1 of 3" in the corner, and nothing else shared. A card that stands
+        # alone carries no label at all.
+        group=_shipper_group(record),
     )
+
+
+def _shipper_group(record: dict) -> dict:
+    """Where this card sits among the shipper's other deliveries. Read only."""
+    from dispatch import shipper_group as sg
+
+    try:
+        return sg.position(record, sandbox.get_all())
+    except Exception:  # noqa: BLE001 - a corner label must never take a screen down
+        return {"tag": "", "number": 0, "total": 0, "label": ""}
 
 
 def _open_operational_load(record_id: str, record: dict) -> dict:
@@ -833,13 +927,17 @@ def mission_brief_save(record_id: str):
     if control:
         stored["load_control"] = control
 
-    # Stop-level edits: a dock phone on stop 2 is learned on the same call as
-    # everything else. Stop-level load control is no longer written here -- it
-    # left the Mission Template in the one-page layout (2026-09-15) -- so no
-    # resolved control block is rebuilt; a stop that stored one keeps it as is.
-    stops = brief_view.apply_stop_edits(stored, request.form)
-    if stops:
-        stored["stops"] = stops
+    # No stop edits. One card is one delivery (Owner ruling, 2026-09-15), so the
+    # sheet has no stop boxes to write back. **A record that stored stops keeps
+    # every one of them, untouched** -- this route no longer reads or rewrites
+    # them.
+    #
+    # Rolling a delivery happens right here and is nothing more than this: the
+    # delivery appointment is typed over. *"a new appointment for one that rolls
+    # to the next day, is still the same pallet, still going to the same location
+    # and it is still the <OPEN LOAD.> using the same everything except a
+    # different day."* No copy is made and no status is touched, so the card
+    # stays exactly as open as it was.
 
     data[record_id] = stored
     sandbox._save(data)
@@ -1177,7 +1275,8 @@ def portal_mission(record_id: str):
         route_risk=risk,
         facility_intel=_facility_intel(record, phase),
         actions_for=_actions_for,
-        **cockpit.cockpit_context(merged, mode, risk, stop_number),
+        **cockpit.cockpit_context(merged, mode, risk, stop_number,
+                                  group=_shipper_group(record)),
     )
 
 

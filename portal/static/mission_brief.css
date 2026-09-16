@@ -102,8 +102,6 @@ dd input {
 }
 dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
 
-.stop { padding-left: 10px; border-left: 3px solid var(--rule); }
-
 .cargo { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .cargo th {
     text-align: left; padding: 4px 8px; font-size: 0.74rem;
@@ -112,11 +110,12 @@ dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
 }
 .cargo td { padding: 5px 8px; border-bottom: 1px solid #eef1f3; }
 
-/* "1 of 3" beside DELIVERY on a multi-stop mission: the Delivery section is
-   the first stop. */
-.stop-of {
-    margin: 0 0 6px; font-size: 0.82rem; font-weight: 700;
-    letter-spacing: 0.06em; color: var(--ink-dim);
+/* "1 of 3" in the top right: how many deliveries came off this shipper's
+   pickup. One card per delivery, 2026-09-15 -- the label is all they share. */
+.group-of {
+    font-size: 1.05rem; font-weight: 800; letter-spacing: 0.06em;
+    color: var(--ink); align-self: flex-start;
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 4px;
 }
 
 .brief-foot {

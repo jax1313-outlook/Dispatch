@@ -331,15 +331,18 @@ def parse_offer_email(text: str) -> dict:
     """A broker's offer email, pasted. Template labels first, then listing shapes.
 
     A reply on the Mission Template (`mission_template.render_email`) carries
-    the template's own labels, and `mission_template.parse_email` and
-    `parse_stops` already read those -- so they are asked first and their
-    answers win. Whatever the email says in its own words fills the gaps
-    through `parse_listing`. Nothing reads a mailbox: the text is pasted.
+    the template's own labels and `mission_template.parse_email` already reads
+    those -- so it is asked first and its answers win. Whatever the email says in
+    its own words fills the gaps through `parse_listing`. Nothing reads a
+    mailbox: the text is pasted.
+
+    **No STOP blocks are read.** The template stopped asking for them on
+    2026-09-15 -- one card is one delivery -- so a reply on the current template
+    has none to read.
     """
     from dispatch import mission_template as mt
 
     values = mt.parse_email(text)
-    stops = mt.parse_stops(text)
 
     fields: dict = {}
     extras: dict = {}
@@ -374,9 +377,6 @@ def parse_offer_email(text: str) -> dict:
     extra_notes = []
     if values.get("service"):
         extra_notes.append(f"Service: {values['service']}")
-    for stop in stops:
-        extra_notes.append("Stop %s: %s %s" % (stop.get("number"), stop.get("facility", ""),
-                                               stop.get("window", "")))
     if extra_notes:
         fields["notes"] = " | ".join(
             ([fields["notes"]] if fields.get("notes") else []) + extra_notes)

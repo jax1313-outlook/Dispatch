@@ -207,32 +207,21 @@ class TestOneTemplateForEveryKindOfWork:
         assert set(offered) <= set(mt.INTAKE_SOURCES)
 
 
-class TestMultiStopWorkNeedsNoSecondTemplate:
-    def test_additional_stops_become_the_stop_list_the_cockpit_reads(self):
-        body = "\n".join([
-            mt.render_stop_block(2, {"facility": "Publix DC Lakeland",
-                                     "window": "2026-09-02 14:00",
-                                     "phone": "863-555-0114"}),
-            mt.render_stop_block(3, {"facility": "Winn-Dixie Orlando",
-                                     "window": "2026-09-02 17:00",
-                                     "phone": "407-555-0198"}),
-        ])
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE,
-                              extra_stops=mt.parse_stops(body))
-        assert record["stop_total"] == 3
-        assert record["stops"][2]["facility"] == "Winn-Dixie Orlando"
-        assert record["stops"][2]["phone"] == "407-555-0198"
+class TestMultiDeliveryWorkNeedsNoSecondTemplate:
+    """**One card per delivery, 2026-09-15.** Eight deliveries in a day is eight
+    cards on the one Mission Template, each with its own Load Number -- not one
+    record carrying eight stops. Mike: *"One card pre load mission."*"""
 
-    def test_no_extra_stops_is_the_normal_case_not_an_error(self):
+    def test_a_record_carries_its_own_delivery_and_no_stop_list(self):
         record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE)
-        assert record["stop_total"] == 1
-        assert record["stops"][0]["facility"] == "Gainesville, FL 32608"
+        assert record["delivery_location"] == "Gainesville, FL 32608"
+        assert "stops" not in record
+        assert "stop_total" not in record and "stop_number" not in record
 
-    def test_eight_stops_is_within_reach(self):
-        """The operator's stated maximum in a day."""
-        body = "\n".join(mt.render_stop_block(i, {"facility": f"Consignee {i}",
-                                                  "window": f"2026-09-02 1{i}:00"})
-                         for i in range(2, 9))
-        record = mt.to_record(MINIMUM, source=mt.SOURCE_JOE,
-                              extra_stops=mt.parse_stops(body))
-        assert record["stop_total"] == 8
+    def test_eight_deliveries_are_eight_numbered_cards(self):
+        """The operator's stated maximum in a day, one card each. Every one is
+        numbered: *"YES!!! EITHER FROM THE SHIPPER OR WE CREATE IT."*"""
+        cards = [mt.to_record(dict(MINIMUM, delivery_location=f"Consignee {i}"),
+                              source=mt.SOURCE_JOE) for i in range(1, 9)]
+        assert len({c["load_number"] for c in cards}) == 8
+        assert all(c["load_number"] for c in cards)

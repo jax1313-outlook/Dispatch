@@ -52,34 +52,24 @@
   <div class="banner-title-row">
     <h1 class="cockpit-title">DRIVER COCKPIT</h1>
     <div class="banner-state">
-      {% if stops.total > 1 %}
-        <div class="stop-counter">STOP {{ stops.number }} OF {{ stops.total }}</div>
+      {# "1 of 3" -- how many deliveries came off this shipper's pickup, and the
+         only thing this card shares with the others. Owner ruling, 2026-09-15:
+         "The '1 of 3' label on each card that is enough! not more!" A card that
+         stands alone shows nothing here. #}
+      {% if group.label %}
+        <div class="group-of">{{ group.label }}</div>
       {% endif %}
       <div class="status-chip">STATUS: {{ mode_label }}</div>
     </div>
   </div>
 
-  {# Stops on the left, modes on the right. The stop toggle switches which
-     delivery the screen is showing -- a multi-stop run is not one delivery seen
-     three times, and each stop has its own facility, appointment, contact and
-     freight. CURRENT is gone: a driver is going to a pickup or making a
-     delivery, and a button for "whichever of those you are already in" answers
-     a question he did not ask. #}
+  {# Modes, and nothing beside them. The stop toggle is gone: one card is one
+     delivery, so there is no second delivery on this screen to switch to.
+     CURRENT is gone too -- a driver is going to a pickup or making a delivery,
+     and a button for "whichever of those you are already in" answers a question
+     he did not ask. #}
   <div class="control-bar">
-    {% if stops.selectable %}
-    <nav class="stop-bar" role="tablist" aria-label="Stop">
-      {% for stop in stops.list %}
-        <button class="stop-btn {% if stop.number == stops.number %}active{% endif %}"
-                data-stop="{{ stop.number }}" role="tab"
-                aria-selected="{{ 'true' if stop.number == stops.number else 'false' }}">
-          {{ stop.label }}
-        </button>
-      {% endfor %}
-    </nav>
-    {% else %}
-    {# One stop: no stop numbering. The block keeps its place in the bar. #}
     <div class="stop-single"></div>
-    {% endif %}
 
     <nav class="mode-bar" role="tablist" aria-label="Mission phase">
       {% for m in modes %}
@@ -885,9 +875,7 @@ document.querySelectorAll('.tick-row').forEach(function (row) {
   });
 });
 
-document.querySelectorAll('.stop-btn').forEach(function (b) {
-  b.addEventListener('click', function () { go('stop', b.dataset.stop); });
-});
+// No stop toggle. One card is one delivery, so there is nothing to switch to.
 
 // Drawers. One at a time, from either side, with the record still behind it.
 var scrim = document.getElementById('scrim');

@@ -135,15 +135,22 @@ class TestOfferEmail:
                       pickup_location="Jacksonville, FL", pickup_window="9/21 07:00",
                       delivery_location="Valdosta, GA", delivery_window="9/21 13:00",
                       rate="$720", load_number="CB-5521", commodity="Paper goods")
-        body = mt.render_email(values) + "\n" + mt.render_stop_block(
-            2, {"facility": "Tifton, GA", "window": "9/21 15:00"})
+        body = mt.render_email(values)
         read = listing.parse_offer_email(body)
         assert read["fields"]["origin"] == "Jacksonville, FL"
         assert read["fields"]["destination"] == "Valdosta, GA"
         assert read["fields"]["rate"] == 720.0
         assert read["fields"]["contact"] == "Coastal Brokerage"
         assert read["card_extras"]["load_id"] == "CB-5521"
-        assert "Stop 2: Tifton, GA" in read["fields"]["notes"]
+
+    def test_the_emailed_template_carries_no_stop_block(self):
+        """**One card per delivery, 2026-09-15.** The template stopped asking
+        for additional stops, so a reply on it has none to read and the reader
+        no longer looks for any."""
+        body = mt.render_email(mt.blank_template(), load_number="L1-0001")
+        assert "ADDITIONAL STOPS" not in body
+        assert "STOP 2" not in body
+        assert not hasattr(mt, "parse_stops")
 
     def test_a_plain_email_falls_back_to_the_listing_reader(self):
         read = listing.parse_offer_email(OFFER_EMAIL)

@@ -186,6 +186,13 @@ LOAD_CONTROL_CHOICES = lc.HELD_BY
 #: Cargo items; and separate Pallets and Pieces, merged into one field (*"cargo:
 #: 1) Description 2) Pieces / Pallets/ 3) Weight"*).
 #:
+#: **One card per delivery: thirty-one fields, 2026-09-15.** Consignee and BOL
+#: number join the DELIVERY section, because the card is now one delivery and
+#: those are the two facts that make one delivery different from the next. Mike:
+#: *"each mission which becomes a load card at commit list the delivery ... the
+#: customer is the same but each delivery is a different location and a different
+#: Bill of Lading. because the consignee is different."*
+#:
 #: **Nothing stored was deleted or rewritten.** An older record keeps every value
 #: it holds; a removed field simply stops being shown.
 TEMPLATE: tuple[Field, ...] = (
@@ -267,6 +274,19 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="Anything special about getting in there -- security, gate restrictions?"),
 
     # --- DELIVERY
+    #
+    # **One card per delivery, 2026-09-15.** The card *is* the delivery, so the
+    # two facts that make one delivery different from another lead the section:
+    # who signs for it, and which bill of lading travels with it. Mike's case:
+    # *"the customer is the same but each delivery is a different location and a
+    # different Bill of Lading. because the consignee is different. all three
+    # signed Bill of Lading is returned to the shipper as POD."*
+    Field("consignee", "Consignee", "DELIVERY",
+          hint="Who signs for it",
+          spoken="Who is the consignee -- who signs for it?"),
+    Field("bol_number", "BOL number", "DELIVERY",
+          hint="This card's bill of lading",
+          spoken="What is the bill of lading number for this one?"),
     Field("delivery_location", "Delivery facility and address", "DELIVERY",
           required=True, spoken="Where does it deliver?"),
     Field("delivery_window", "Delivery appointment", "DELIVERY", required=True,
@@ -280,8 +300,8 @@ TEMPLATE: tuple[Field, ...] = (
     Field("delivery_special", "Delivery SPECIAL INSTRUCTIONS", "DELIVERY",
           hint="Anything that changes the plan at this end",
           spoken="Anything special at the delivery end?"),
-    #: Additional stops are captured as repeating STOP blocks rather than as
-    #: fields here -- see STOP_FIELDS.
+    #: There are no additional stops. One card is one delivery -- see
+    #: `dispatch/shipper_group.py`.
 
     # --- CARGO
     # Stored under `commodity`, the key every existing record and reader uses.
@@ -303,62 +323,18 @@ TEMPLATE: tuple[Field, ...] = (
           spoken="Anything else I should put down?"),
 )
 
-#: A stop, captured as a repeating block. Every delivery on the run carries
-#: these.
+#: **Stops are gone as an entry concept, 2026-09-15.** `STOP_FIELDS`,
+#: `render_stop_block`, `parse_stops` and the ADDITIONAL STOPS section left with
+#: them. Mike ruled one card per delivery and said why stops could not carry it:
 #:
-#: The stop-level load control fields (name, role, phone, reference) left with
-#: "Stop 1 load control" in the one-page layout, 2026-09-15. Stops already
-#: stored with them keep them; they are no longer asked or shown.
-STOP_FIELDS: tuple[Field, ...] = (
-    Field("facility", "Facility", "STOP", required=True,
-          spoken="Where does this one go?"),
-    Field("window", "Appointment", "STOP", required=True,
-          spoken="When is the appointment?"),
-    Field("poc", "Dock contact", "STOP", spoken="Who is the contact at the dock?"),
-    Field("phone", "Dock phone", "STOP", spoken="What is the dock number?"),
-    Field("notes", "Access instructions", "STOP",
-          spoken="Any access instructions?"),
-    Field("special", "SPECIAL INSTRUCTIONS", "STOP",
-          hint="Anything that changes the plan at this stop",
-          spoken="Anything special about this stop?"),
-)
-
-STOP_KEYS = tuple(f.key for f in STOP_FIELDS)
-
-
-def stop_label(number, total) -> str:
-    """How a stop is labelled wherever it is shown: "2 of 3".
-
-    **Owner ruling, 2026-09-15:** *"stop per mission if multiple stops pre one
-    mission then each card should be labeled  1 of _ . show only additional
-    stops"*. The Delivery section is stop 1, so N counts it. A single-stop
-    mission shows no stop numbering, so the label is empty.
-    """
-    try:
-        number, total = int(number), int(total)
-    except (TypeError, ValueError):
-        return ""
-    if total <= 1:
-        return ""
-    return f"{number} of {total}"
-
-
-def is_delivery_stop(stop: dict, index: int) -> bool:
-    """Whether a stored stop is stop 1 -- the Delivery section itself.
-
-    `to_record` has always stored the Delivery section again as stop 1. It is
-    not rewritten; it is simply not listed a second time as an additional stop.
-    """
-    try:
-        return int((stop or {}).get("number") or index) == 1
-    except (TypeError, ValueError):
-        return index == 1
-
-
-def additional_stops(record: dict) -> list:
-    """The stored stops after Delivery, in order. **Read only.**"""
-    listed = [s for s in ((record or {}).get("stops") or []) if isinstance(s, dict)]
-    return [s for i, s in enumerate(listed, start=1) if not is_delivery_stop(s, i)]
+#:     "rain stops one stop from completing so the driver returns with one load
+#:      still onboard. This is why each must stand alone totally. the only
+#:      binding item is the shipper. Everything thing else stands alone."
+#:
+#: **Stored stop data on older records is not deleted and not rewritten.** It is
+#: read where it is still read -- the Driver Cockpit renders an older multi-stop
+#: record exactly as it is stored -- and it is no longer entered, shown on the
+#: brief, or asked for by email.
 
 TEMPLATE_KEYS = tuple(f.key for f in TEMPLATE)
 REQUIRED_KEYS = tuple(f.key for f in TEMPLATE if f.required)
@@ -461,11 +437,9 @@ def render_email(values: dict | None = None, *, load_number: str = "") -> str:
                 lines.append(f"    ({field.hint})")
         lines.append("")
 
-    # Additional stops, if the run has any. Blocks rather than a packed line:
-    # load control has to be readable at a dock, not decoded.
-    lines += ["ADDITIONAL STOPS", "-" * len("ADDITIONAL STOPS"),
-              "Copy the block below for each further stop. No extra stops? "
-              "Delete it.", "", render_stop_block(2, total="__"), ""]
+    # No ADDITIONAL STOPS block. One card is one delivery, so a second delivery
+    # for the same shipper is a second template, not a block at the bottom of
+    # this one.
     lines += ["* required", ""]
     return "\n".join(lines)
 
@@ -499,60 +473,38 @@ def parse_email(body: str) -> dict:
     return values
 
 
-def render_stop_block(number: int, values: dict | None = None,
-                      total=None) -> str:
-    """One stop, as a labelled block rather than a packed line.
+# ------------------------------------------------ another for this shipper ----
 
-    The pipe-separated line this replaced could not be read at a dock. Length
-    is worth paying for there. With `total` the heading reads "STOP 2 of 3" --
-    or "STOP 2 of __" on a blank template, where the count is not known yet.
+#: What a second delivery for the same shipper carries over, and nothing else.
+#:
+#: **Mike, 2026-09-15:** *"Nothing about it binds them together ... the only
+#: binding item is the shipper. Everything thing else stands alone."* So the
+#: shipper, how to reach him, how the work is paid for, and the pickup the truck
+#: is already going to. The consignee, the BOL, the whole delivery block, the
+#: freight and the notes start blank, because those are what make this card a
+#: different delivery. The rate starts blank too: *"2 out of three get paid that
+#: day"* -- the money is the card's own.
+SHIPPER_KEYS = (
+    "service",
+    "customer", "customer_poc", "customer_phone", "customer_email",
+    "controlled_by", "payment_type", "payor", "amount",
+    "pickup_location", "pickup_window", "pickup_contact", "pickup_phone",
+    "pickup_notes", "pickup_special",
+)
+
+
+def another_delivery(values) -> dict:
+    """A blank template carrying only the shipper and the pickup facts.
+
+    `values` is anything that answers `.get(key)` for a template key -- the
+    caller resolves each one from the record it came off (`portal.brief`
+    already knows where a value can live), so this stays the one place that
+    says *which* facts belong to the shipper rather than to the delivery.
     """
-    values = values or {}
-    head = f"STOP {number}" + (f" of {total}" if total else "")
-    lines = [head, "-" * len(head)]
-    for field in STOP_FIELDS:
-        mark = " *" if field.required else ""
-        lines.append(f"  {field.label}{mark}: {values.get(field.key, '')}")
-        if field.hint:
-            lines.append(f"      ({field.hint})")
-    return "\n".join(lines)
-
-
-def parse_stops(body: str) -> list:
-    """Every STOP block in a returned template, in order.
-
-    No blocks is one delivery, which is the common case and is not an error.
-    """
-    label_to_key = {f.label.lower(): f.key for f in STOP_FIELDS}
-    stops, current = [], None
-
-    for raw in (body or "").splitlines():
-        line = raw.strip().lstrip(">").strip()
-        if not line or set(line) <= {"-"}:
-            continue
-
-        head = line.rstrip(":").strip().upper()
-        # "STOP 2", "STOP 2 of 3" or "STOP 2 of __" -- the count after "of" is
-        # the sender's and is not read.
-        number = head[5:].partition(" OF ")[0].strip()
-        if head.startswith("STOP ") and number.isdigit():
-            if current is not None:
-                stops.append(current)
-            current = {"number": int(number)}
-            continue
-
-        if current is None or ":" not in line:
-            continue
-        label, _, value = line.partition(":")
-        key = label_to_key.get(label.strip().rstrip("*").strip().lower())
-        if key and not current.get(key):
-            current[key] = value.strip()
-
-    if current is not None:
-        stops.append(current)
-
-    return [stop for stop in stops
-            if any(stop.get(k) for k in STOP_KEYS)]
+    blank = blank_template()
+    for key in SHIPPER_KEYS:
+        blank[key] = str((values or {}).get(key) or "").strip()
+    return blank
 
 
 # -------------------------------------------------------------- validate ----
@@ -581,8 +533,7 @@ def validate(values: dict) -> list:
 # ---------------------------------------------------------------- create ----
 
 def to_record(values: dict, *, source: str,
-              load_number: str = "", existing_load_numbers=None,
-              extra_stops=None) -> dict:
+              load_number: str = "", existing_load_numbers=None) -> dict:
     """Turn a completed template into the Mission Record shape.
 
     Populates the fields existing Mission Records already use. It does not
@@ -630,24 +581,6 @@ def to_record(values: dict, *, source: str,
     if value("rate"):
         card["rate"] = value("rate")
 
-    stops = [{
-        "number": 1,
-        "label": "STOP 1",
-        "facility": value("delivery_location"),
-        "window": value("delivery_window"),
-        "poc": value("delivery_contact"),
-        "phone": value("delivery_phone"),
-        "notes": value("delivery_notes"),
-        "special": value("delivery_special"),
-    }]
-    for stop in extra_stops or []:
-        stop_number = int(stop.get("number") or len(stops) + 1)
-        stops.append({
-            "number": stop_number,
-            "label": f"STOP {stop_number}",
-            **{key: str(stop.get(key) or "").strip() for key in STOP_KEYS},
-        })
-
     record = {
         "title": f"{value('commodity')} - {value('pickup_location')} "
                  f"to {value('delivery_location')}",
@@ -660,9 +593,10 @@ def to_record(values: dict, *, source: str,
         # No "taken by". Owner ruling, 2026-09-15: *"meaningless AI thought it
         # was useful. Delete."* An older record that stored one keeps it; nothing
         # writes or shows it.
-        "stops": stops,
-        "stop_total": len(stops),
-        "stop_number": 1,
+        #
+        # No stop list either. One card is one delivery (2026-09-15), so there is
+        # nothing for a stop list to hold that the DELIVERY fields do not. An
+        # older record that stored one keeps it exactly as written.
     }
     for key, target in (("customer", "broker"), ("customer_poc", "broker_poc"),
                         ("customer_phone", "broker_phone")):
@@ -671,6 +605,7 @@ def to_record(values: dict, *, source: str,
     for key in ("customer_email", "controlled_by", "pickup_location",
                 "pickup_window", "pickup_contact", "pickup_phone",
                 "pickup_notes", "pickup_special", "delivery_special",
+                "consignee", "bol_number",
                 "delivery_location", "delivery_window", "delivery_contact",
                 "delivery_phone", "delivery_notes", "commodity",
                 "pieces_pallets", "service", "notes", "rate_basis",

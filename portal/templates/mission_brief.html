@@ -39,6 +39,12 @@
       <a class="btn" href="{{ url_for('joe_portal.candidate_queue') }}">&larr; LOADS</a>
       <a class="btn" href="{{ url_for('joe_portal.portal_mission',
                                       record_id=record.id) }}">COCKPIT</a>
+      {% if not editing %}
+        {# Same shipper, same pickup, a different consignee and a different BOL.
+           A whole card of its own -- nothing about it binds it to this one. #}
+        <a class="btn" href="{{ url_for('joe_portal.mission_intake_another',
+                                        record_id=record.id) }}">ANOTHER DELIVERY FOR THIS SHIPPER</a>
+      {% endif %}
       {% if editing %}
         <button class="btn primary" type="submit">SAVE</button>
         <a class="btn" href="{{ url_for('joe_portal.mission_brief',
@@ -49,6 +55,15 @@
         <button class="btn" type="button" onclick="window.print()">PRINT</button>
       {% endif %}
     </nav>
+
+    {# Top right corner, on the screen and on the printed card -- the buttons
+       beside it do not print, so this is the last thing on the line either way.
+       Owner ruling, 2026-09-15: *"Top right corner is 1 of 3, 2 of 3, 3 of 3."*
+       It says how many deliveries came off this shipper's pickup, and it is the
+       only thing the cards share. A card that stands alone carries no label. #}
+    {% if group.label %}
+      <div class="group-of">{{ group.label }}</div>
+    {% endif %}
   </header>
 
   {# Which side of the gate this record is on. Booking before, Dispatch after,
@@ -87,10 +102,6 @@
   {% for section in card.sections %}
   <section class="card-section">
     <h2>{{ section.title }}</h2>
-    {% if section.stop_label %}
-      {# The Delivery section is stop 1 of a multi-stop mission. #}
-      <p class="stop-of">{{ section.stop_label }}</p>
-    {% endif %}
     <dl>
       {% for f in section.fields %}
         <dt class="{{ 'empty' if f.empty }}">{{ f.label }}</dt>
@@ -122,31 +133,10 @@
   </section>
   {% endfor %}
 
-  {# Only the stops after Delivery, each "2 of N". Owner ruling, 2026-09-15:
-     "show only additional stops". #}
-  {% if card.stops %}
-  <section class="card-section">
-    <h2>ADDITIONAL STOPS</h2>
-    {% for stop in card.stops %}
-      <div class="stop">
-        <h3>{{ stop.label }}</h3>
-        <dl>
-          {% for f in stop.fields %}
-            <dt class="{{ 'empty' if f.empty }}">{{ f.label }}</dt>
-            <dd class="{{ 'empty' if f.empty }}">
-              {% if editing and f.key %}
-                <input type="text" name="{{ f.key }}" value="{{ f.value }}"
-                       autocomplete="off">
-              {% else %}
-                {{ f.value }}
-              {% endif %}
-            </dd>
-          {% endfor %}
-        </dl>
-      </div>
-    {% endfor %}
-  </section>
-  {% endif %}
+  {# No ADDITIONAL STOPS section. One card is one delivery (Owner ruling,
+     2026-09-15): a second delivery for the same shipper is its own card, with
+     its own consignee, BOL, POD and load number. Stop data an older record
+     stored is left exactly where it is. #}
 
   <footer class="brief-foot">
     Level 1 Transport &middot; Jacksonville Regional Micro-Response Carrier
