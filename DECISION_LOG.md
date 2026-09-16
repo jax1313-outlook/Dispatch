@@ -1684,3 +1684,24 @@ The authoritative intake document still described **"Multi-stop work"** — an "
 **Left standing on purpose.** The 2026-09-15 removal list still names "Stop 1 load control and the per-stop load control lines" — that is the record of what that ruling removed, not a live description.
 
 ---
+
+## 2026-09-16 — The payment side is outside Dispatch, by design
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"Getting paid is not the problem because at the end, what is going to happen is that in the closing documents as part of the architecture, once the BOL is signed and emailed to the broker, that small packet includes an invoice. That invoice is then the document that will be forwarded to the accounting software. The accounting software is yet to be determined. I'm calling it QuickBooks for a placeholder name. [It will] communicate with the factor. Getting paid is not going to be the issue. The factor company will pre-authorize the load prior to me making the commit. So that's not in my software program for a reason. The payment side is not part of getting the job done."*
+
+**The boundary.** Dispatch produces the closing packet and hands it off. It does not track receivables, chase payment, age an invoice, or talk to a factor.
+
+```
+signed BOL + invoice  ->  broker (email)
+                      ->  accounting software (placeholder: QuickBooks)
+                                             ->  factor
+```
+
+**Why the factor is absent on purpose.** The factoring company pre-authorises a load **before** COMMIT. That approval happens outside Dispatch and reaches the Owner directly, so COMMIT needs no credit field, no approval status and no factor connector. Do not add one, and do not treat its absence as a gap.
+
+**What this corrects.** A build note written earlier today (*"Finishing Dispatch"*) said Dispatch *"does not yet help you get paid"* and called that the distance to done. That conflated two things: **producing closing documents**, which is Dispatch's work and is genuinely unbuilt, and **managing receivables**, which is ruled out of scope. The first stands; the second was an engineer inventing a requirement the Owner had already excluded. The note is amended.
+
+**Also ruled.** Test freight will carry **broker names and mailboxes the Owner controls** — *"I'm going to be loading email paths and broker names that I control."* So the ten-real-load test does not put mail in front of real brokers, and needs no send-path freeze beforehand. The `tests/conftest.py::_no_real_outlook` guard is unaffected and stays: **no test ever reaches Outlook**, whoever owns the mailbox.
+
+---
