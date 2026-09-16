@@ -129,10 +129,12 @@ answers down and hands them over.
 
 ## The template
 
-**The one-page layout, ruled 2026-09-15** (Owner: *"go ahead with the one page template"*).
-Twenty-nine fields in seven sections, in the operator's order. The New Mission screen and
-the Mission Brief are the same document and both render exactly this; `dispatch/mission_template.py`
-is the definition and `tests/test_mission_template_published.py` holds it to this list.
+**The one-page layout, ruled 2026-09-15** (Owner: *"go ahead with the one page template"*),
+**extended to thirty-one fields on 2026-09-16** when one card per delivery gave DELIVERY its
+own Consignee and BOL number. Seven sections, in the operator's order. The New Mission screen
+and the Mission Brief are the same document and both render exactly this;
+`dispatch/mission_template.py` is the definition and `tests/test_mission_template_published.py`
+holds it to this list.
 
 ```
 IDENTITY           Load Number · Mission Number (assigned by Dispatch) ·
@@ -142,8 +144,8 @@ LOAD CONTROL       Load control (Customer / Level 1) · rate · rate agreed with
                    payment type · paid by · amount
 PICKUP             facility and address · appointment · contact · phone ·
                    access instructions · SPECIAL INSTRUCTIONS
-DELIVERY           facility and address · appointment · contact · phone ·
-                   access instructions · SPECIAL INSTRUCTIONS
+DELIVERY           Consignee · BOL number · facility and address · appointment ·
+                   contact · phone · access instructions · SPECIAL INSTRUCTIONS
 CARGO              description · pieces / pallets · weight (lbs, total)
 NOTES              anything else that matters on this run
 ```
@@ -157,22 +159,44 @@ every stored value; a removed field is simply not shown.**
 Do not invent a courier structure or a medical structure. The Mission Record remains
 authoritative; the template populates it.
 
-### Multi-stop work
+### One card per delivery
 
-Additional stops are one per line, pipe separated, inside the DELIVERY section:
+**Ruled by the Owner, 2026-09-15.** Stops are no longer entered. There is no "additional
+stops" line in the template, on the New Mission screen, or in the emailed template.
 
-```
-Additional stops: Publix DC Lakeland | 2026-09-02 14:00 | Dock 7 | 863-555-0114
-                  Winn-Dixie Orlando | 2026-09-02 17:00 | Dock 2 | 407-555-0198
-```
+> *"One card pre load mission."*
+>
+> *"rain stops one stop from completing so the driver returns with one load still onboard.
+> This is why each must stand alone totally. the only binding item is the shipper. Everything
+> thing else stands alone."*
 
-They become the `stops` list the Driver Cockpit already reads, so a phoned-in three-stop run
-renders exactly like a swept one. Blank means one delivery, which is the common case and is
-not an error.
+Three pallets for three dealerships are three cards. Each carries its own consignee, BOL
+number, delivery address, appointment, freight, signed POD, invoice and load number, and each
+is committed, delivered, invoiced, paid, rolled or discarded without touching the others —
+*"2 out of three get paid that day."*
 
-*This format is an engineering choice, not doctrine — it keeps multi-stop capture inside the
-one template and inside a plain-text email a driver can finish with one thumb. Worth
-revisiting after real use.*
+**Capturing them.** "ANOTHER DELIVERY FOR THIS SHIPPER" — a submit button on the New Mission
+screen, a link on a saved brief — files the card in hand and opens the next one carrying the
+shipper and the pickup only (`mission_template.SHIPPER_KEYS`). Consignee, BOL, delivery,
+freight, rate and notes start blank. Three deliveries phoned in at one sitting are typed
+once each, not once plus two edits.
+
+**The only tie is a label.** `dispatch/shipper_group.py` tags the cards with the first card's
+load number and renders "1 of 3" on the card, the brief and the cockpit banner. It binds
+nothing — *"The '1 of 3' label on each card that is enough! not more!"*
+
+**A roll is not a new card.** A delivery pushed to another day is the same card with a new
+appointment, still OPEN: *"a new appointment for one that rolls to the next day, is still the
+same pallet, still going to the same location and it is still the <OPEN LOAD.> using the same
+everything except a different day. Which may be a week later."*
+
+**Older records are untouched.** A record captured before this ruling keeps its stored `stops`
+list and the Driver Cockpit still renders it. Nothing is deleted or rewritten; the entry
+concept is gone, the stored data is not.
+
+*Cargo and the Load Diagram in `DRIVER_COCKPIT_LOCKED_DIRECTION.md` still read by stop, which
+is deliberate: they describe what is physically on the truck for inspection, which can be
+freight for several cards at once.*
 
 ---
 
@@ -181,6 +205,7 @@ revisiting after real use.*
 | | |
 |---|---|
 | `dispatch/load_number.py` | assignment, generation, the COMI prefix rule |
-| `dispatch/mission_template.py` | the one template, both intake methods |
+| `dispatch/mission_template.py` | the one template, both intake methods; `SHIPPER_KEYS` |
+| `dispatch/shipper_group.py` | the "1 of 3" label, and nothing else |
 | `tests/test_load_number_doctrine.py` | no orphans, exact storage, COMI recognition |
 | `tests/test_mission_intake.py` | equivalence: every source, one record |

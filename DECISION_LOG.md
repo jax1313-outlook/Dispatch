@@ -1670,3 +1670,17 @@ The cockpit's stop selector was removed in code by the card-per-delivery change 
 **Left standing on purpose.** Cargo and the Load Diagram still read *by stop*. They describe what is physically on the truck, which can be freight for several deliveries at once — the Owner's own three-dealership example — and exist for agriculture and security inspection, where the question is what is on the vehicle, not what belongs to the open card. The amendment note says so, so the next reader does not take it for an oversight.
 
 ---
+
+## 2026-09-16 — Mission intake architecture updated for one card per delivery
+
+**Document:** `MISSION_INTAKE_ARCHITECTURE.md`
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"now update the mission intake architecture doc"*
+
+The authoritative intake document still described **"Multi-stop work"** — an "Additional stops:" line, pipe separated, inside the DELIVERY section, becoming the `stops` list the cockpit read. That capture format no longer exists.
+
+**Changed.** That section is replaced by **"One card per delivery"**, carrying the Owner's own words on why each card stands alone, how "ANOTHER DELIVERY FOR THIS SHIPPER" carries only the shipper and the pickup, that the "1 of 3" label binds nothing, that a roll is a new appointment on the same OPEN card, and that older records keep their stored `stops` and still render. The template is recorded at **thirty-one** fields with Consignee and BOL number leading DELIVERY. `dispatch/shipper_group.py` and `mission_template.SHIPPER_KEYS` are added to "Where it lives".
+
+**Left standing on purpose.** The 2026-09-15 removal list still names "Stop 1 load control and the per-stop load control lines" — that is the record of what that ruling removed, not a live description.
+
+---
