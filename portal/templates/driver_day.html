@@ -1,0 +1,96 @@
+{# One day, behind the square he tapped.
+
+   Committed freight first, then anything still in play -- marked, and never
+   counted as capacity, because until COMMIT the day is still sellable to
+   somebody else.
+
+   Still viewing. OPEN takes him into the cockpit to read the mission. Nothing
+   on this page starts one.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ day.strftime('%a %d %b') }} — Level 1 Transport</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 12px 12px 64px; }
+
+  .header { background: #1e293b; padding: 16px 20px; border-radius: 8px;
+            border-bottom: 3px solid #3b82f6; margin-bottom: 14px; }
+  .header h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; }
+  .header .sub { font-size: 13px; color: #94a3b8; margin-top: 3px; }
+
+  .back { display: inline-block; background: #334155; color: #f1f5f9; text-decoration: none;
+          padding: 12px 18px; border-radius: 8px; font-size: 14px; font-weight: 700;
+          margin-bottom: 14px; }
+
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+          padding: 16px; margin-bottom: 12px; }
+  .card.committed { border-left: 4px solid #38bdf8; }
+  .card.candidate { border-left: 4px solid #fbbf24; }
+
+  .phase { font-size: 12px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase;
+           color: #38bdf8; }
+  .card.candidate .phase { color: #fbbf24; }
+  .num { font-size: 19px; font-weight: 800; margin: 4px 0 2px; }
+  .line { font-size: 14px; color: #cbd5e1; margin: 3px 0; }
+  .when { font-size: 14px; color: #f8fafc; font-weight: 600; }
+
+  .open-btn { display: inline-block; margin-top: 12px; background: #0284c7; color: #fff;
+              text-decoration: none; padding: 14px 22px; border-radius: 8px;
+              font-size: 15px; font-weight: 800; letter-spacing: 0.5px; }
+
+  .empty { background: #1e293b; border: 1px dashed #475569; border-radius: 8px;
+           padding: 28px 18px; text-align: center; color: #94a3b8; }
+  .empty b { display: block; font-size: 17px; color: #f8fafc; margin-bottom: 6px; }
+  .note { font-size: 12px; color: #64748b; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <a class="back" href="{{ url_for('driver_portal.driver_calendar',
+                                   year=day.year, month=day.month) }}">&larr; Calendar</a>
+
+  <div class="header">
+    <h1>{{ day.strftime('%A %d %B') }}</h1>
+    <div class="sub">
+      {% if day == today %}Today{% elif day < today %}Past{% else %}
+        {{ (day - today).days }} day{{ '' if (day - today).days == 1 else 's' }} out
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not loads %}
+    <div class="empty">
+      <b>Nothing on this day.</b>
+      Open, and nobody has sold it.
+    </div>
+  {% endif %}
+
+  {% for entry in loads %}
+    <div class="card {{ 'committed' if entry.committed else 'candidate' }}">
+      <div class="phase">
+        {{ entry.phase }}{% if not entry.committed %} &middot; not committed{% endif %}
+      </div>
+      <div class="num">{{ entry.load_number or 'No load number' }}</div>
+      {% if entry.customer %}<div class="line">{{ entry.customer }}</div>{% endif %}
+      {% if entry.where %}<div class="line">{{ entry.where }}</div>{% endif %}
+      {% if entry.when %}<div class="when">{{ entry.when }}</div>{% endif %}
+      {% if entry.record_id %}
+        <a class="open-btn" href="{{ url_for('joe_portal.portal_mission',
+                                             record_id=entry.record_id) }}">OPEN</a>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <div class="note">
+    Opening a mission shows it. Work begins only when you deliberately start it.
+  </div>
+
+</div>
+</body>
+</html>

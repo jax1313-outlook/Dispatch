@@ -5,22 +5,23 @@
 Not to be confused with `test_booking.py`, which covers booking a load into the
 engine. This is the two-week board.
 
-The week is a business model, not a calendar:
+**Every day begins OPEN** (BOOKING CONFLICT PREVENTION DOCTRINE, 2026-09-16).
+The board used to carry a week pattern that held Thursday and Friday and closed
+Sunday. It decides none of that now:
 
-    MON TUE WED     sellable
-    THU FRI         held for high-value expedited
-    SAT             sellable
-    SUN             closed
+    *"Dispatch does not decide: when Mike works, when Mike rests, when Mike
+    performs maintenance, when Mike reserves capacity, which days are closed.
+    Human authority remains final."*
 
-That pattern is policy and lives in four lines. What is booked is read from the
-records. Nothing about a day is stored, because Outlook is the single source of
-scheduling truth and a stored day-state would be exactly the second calendar the
-doctrine forbids.
+What is booked is read from the records. Nothing about a day is stored, because
+Outlook is the single source of scheduling truth and a stored day-state would be
+exactly the second calendar the doctrine forbids -- which is also where a day he
+wants off now lives.
 
 Two ideas here are easy to lose and both are guarded:
 
-  - Thursday and Friday are not empty. They are unsold on purpose, and a screen
-    drawing them as gaps says he has a problem where he has a position.
+  - An empty day is unsold inventory, and it expires worthless. That is what the
+    board is for.
 
   - Personal appointments are flagged, never blocking. Only he can weigh a
     09:00 dentist against a 06:00 gate time in Savannah.
@@ -58,34 +59,35 @@ def _board(records=None, calendar=None, today=MONDAY, weeks=2):
     return booking.build(records or {}, calendar or {}, today=today, weeks=weeks)
 
 
-class TestTheWeekIsABusinessModel:
-    @pytest.mark.parametrize("offset,expected", [
-        (0, booking.OPEN), (1, booking.OPEN), (2, booking.OPEN),
-        (3, booking.HELD), (4, booking.HELD),
-        (5, booking.OPEN), (6, booking.CLOSED),
-    ])
-    def test_the_pattern_is_the_operators_week(self, offset, expected):
-        assert booking.pattern_for(MONDAY + timedelta(days=offset)) == expected
+class TestEveryDayBeginsOpen:
+    """**BOOKING CONFLICT PREVENTION DOCTRINE, 2026-09-16.**
 
-    def test_saturday_is_open_and_no_day_is_reserved_for_the_shop(self):
-        """Mike's ruling, 2026-09-10: "just leave it open not committed so I can
-        close or take a run." Saturday was MAINTENANCE, which reserved the day
-        whether or not he wanted it reserved that week.
+    *"Dispatch does not decide: when Mike works, when Mike rests, when Mike
+    performs maintenance, when Mike reserves capacity, which days are closed.
+    Human authority remains final."*
 
-        Thursday and Friday stay held for a different reason that has not
-        changed: Friday afternoon is prime expedited freight and the weekend
-        deadline is what makes shippers pay premium.
-        """
-        values = list(booking.WEEK_PATTERN.values())
-        assert booking.MAINTENANCE not in values
-        assert booking.WEEK_PATTERN[5] == booking.OPEN
-        assert booking.WEEK_PATTERN[3] == booking.WEEK_PATTERN[4] == booking.HELD
+    The board used to hold Thursday and Friday for expedited freight and close
+    Sunday. Those were his rulings, made before he had watched the board work,
+    and a held Thursday reserved the day whether or not he wanted it reserved
+    that week. This finishes what the Saturday ruling started on 2026-09-10:
+    *"just leave it open not committed so I can close or take a run."*
+    """
 
-    def test_the_maintenance_state_is_kept_not_deleted(self):
-        """Parked, like everything else. The day Saturday goes back to being the
-        shop day it is one line in WEEK_PATTERN."""
-        assert booking.MAINTENANCE in booking.LABELS
-        assert booking.MAINTENANCE in booking.SUBTITLES
+    @pytest.mark.parametrize("offset", range(7))
+    def test_no_day_of_the_week_is_spoken_for(self, offset):
+        assert booking.pattern_for(MONDAY + timedelta(days=offset)) == booking.OPEN
+
+    def test_the_pattern_reserves_nothing(self):
+        values = set(booking.WEEK_PATTERN.values())
+        assert values == {booking.OPEN}
+
+    def test_the_other_states_are_kept_not_deleted(self):
+        """Nothing produces HELD, MAINTENANCE or CLOSED now. They stay as the
+        vocabulary for a day Outlook -- the scheduling authority -- or a later
+        ruling says is not sellable."""
+        for state in (booking.HELD, booking.MAINTENANCE, booking.CLOSED):
+            assert state in booking.LABELS
+            assert state in booking.SUBTITLES
 
     def test_booked_is_resolved_never_planned(self):
         assert booking.BOOKED not in booking.WEEK_PATTERN.values()
@@ -98,26 +100,17 @@ class TestTheWeekIsABusinessModel:
         assert "sandbox" not in source
 
 
-class TestHeldIsAPositionNotAGap:
-    def test_thursday_and_friday_read_as_held(self):
-        held = [d for d in _board()["board"] if d["state"] == booking.HELD]
-        assert len(held) == 4          # two Thursdays, two Fridays
-        assert all(d["sub"] == "Expedited capacity" for d in held)
+class TestAnEmptyDayIsUnsoldInventory:
+    def test_no_day_is_held_back(self):
+        assert [d for d in _board()["board"] if d["state"] == booking.HELD] == []
 
-    def test_held_days_are_not_counted_as_unsold(self):
-        """Thursday empty is success. Monday empty in four days is not."""
+    def test_every_empty_day_counts_as_unsold(self):
+        """*"Open days are the number that matters. They are unsold inventory
+        and they expire worthless."* With nothing reserved, a fortnight of
+        nothing booked is fourteen days nobody has sold."""
         book = _board()
         assert all(d["planned"] == booking.OPEN for d in book["unsold"])
-        # Two weeks of Mon-Wed plus Saturday, since Mike opened it 2026-09-10.
-        assert book["unsold_count"] == book["sellable_count"] == 8
-
-    def test_taking_an_expedited_load_on_a_held_day_is_marked(self):
-        """Not a problem -- it is the position paying off -- but worth seeing."""
-        thursday = (MONDAY + timedelta(days=3)).isoformat()
-        day = [d for d in _board({"a": _record(pickup=thursday)})["board"]
-               if d["iso"] == thursday][0]
-        assert day["state"] == booking.BOOKED
-        assert day["held_and_taken"] is True
+        assert book["unsold_count"] == book["sellable_count"] == 14
 
     def test_a_booked_sellable_day_is_not_marked_as_expedited(self):
         day = _board({"a": _record(pickup=MONDAY.isoformat())})["board"][0]
@@ -273,9 +266,9 @@ class TestItRunsMondayToSunday:
         """A day that has gone is not unsold inventory. It is just gone."""
         wednesday = MONDAY + timedelta(days=2)
         book = _board(today=wednesday)
-        # Wed and Sat, then Mon Tue Wed Sat. Saturday counts since Mike opened
-        # it on 2026-09-10.
-        assert book["sellable_count"] == 6
+        # Wednesday onward: twelve of the fortnight left, every one of them open
+        # now that no day is reserved (2026-09-16).
+        assert book["sellable_count"] == 12
         assert all(not d["past"] for d in book["unsold"])
 
 
@@ -291,8 +284,8 @@ class TestTheHorizonSwitches:
         assert month["board"][:14] == fortnight["board"]
 
     def test_the_sellable_count_scales_with_the_horizon(self):
-        # Four weeks of Mon-Wed plus Saturday.
-        assert _board(weeks=4)["sellable_count"] == 16
+        # Four weeks, nothing reserved.
+        assert _board(weeks=4)["sellable_count"] == 28
 
     def test_the_pattern_holds_at_any_depth(self):
         for day in _board(weeks=6)["board"]:

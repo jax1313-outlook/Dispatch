@@ -5,41 +5,47 @@
 A verb, not a noun. It is the thing being done -- booking out two weeks -- and
 not a record kept about it.
 
-THE WEEK IS A BUSINESS MODEL, NOT A CALENDAR
-============================================
+EVERY DAY BEGINS OPEN
+=====================
 
-    MON TUE WED     sellable
-    THU FRI         held for high-value expedited
-    SAT             maintenance
-    SUN             closed
+**BOOKING CONFLICT PREVENTION DOCTRINE, 2026-09-16.** This module used to carry
+a week pattern -- Mon to Wed sellable, Thu and Fri held for expedited, Saturday
+maintenance, Sunday closed -- and that pattern decided things:
 
-That pattern is **policy**: it is true every week regardless of what is on it,
-so it lives here as four lines rather than as fourteen stored days. Dispatch is
-not a calendar and must not become one -- Outlook is the single source of
-scheduling truth, and a stored day-state would be exactly the second calendar
-that doctrine forbids.
+    *"Dispatch does not decide: when Mike works, when Mike rests, when Mike
+    performs maintenance, when Mike reserves capacity, which days are closed.
+    Human authority remains final."*
 
-What is actually booked is read, never stored. Pattern plus commitments equals
-the view, and there is nothing to keep in sync because nothing is kept.
+So it decides none of them now. Every day is OPEN until freight is on it.
 
-THURSDAY AND FRIDAY ARE NOT EMPTY
-=================================
+    Booking exists to protect Mike from creating conflicts.
+    Booking does NOT schedule Mike.
+    Booking does NOT reserve days automatically.
+    Booking does NOT close days automatically.
+    Booking only identifies conflicts and consequences.
 
-They are unsold on purpose. Capacity held for expedited freight is a position,
-and a screen that draws it as a gap is telling the operator he has a problem
-where he has a strategy. Saturday maintenance is the same: a decision, not an
-absence.
+Dispatch is not a calendar and must not become one -- Outlook is the single
+source of scheduling truth, and a stored day-state would be exactly the second
+calendar that doctrine forbids. A day he wants off is a day he blocks in
+Outlook, which this board already reads.
 
-**Open Monday to Wednesday days are the number that matters.** They are the
-unsold inventory, and they expire worthless. Thursday empty is success;
-Monday empty in four days is not.
+What is booked is read, never stored. Pattern plus commitments equals the view,
+and there is nothing to keep in sync because nothing is kept.
+
+AN EMPTY DAY IS A GAP, AND A GAP IS THE POINT
+=============================================
+
+**Open days are the number that matters.** They are unsold inventory and they
+expire worthless. The month view exists to answer the owner-operator's
+questions rather than the driver's: *"Where are my gaps? What capacity is
+available? Where am I overcommitted? What opportunities exist?"*
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from dispatch import commitment
+from dispatch import clock, commitment
 
 #: How far out the operator books. Two weeks is the horizon he works to.
 HORIZON_DAYS = 14
@@ -51,29 +57,35 @@ HELD = "HELD"
 MAINTENANCE = "MAINTENANCE"
 CLOSED = "CLOSED"
 
-#: The week, by weekday number (Monday is 0). Change the business model here
-#: and the whole view follows; there is no migration because there is no data.
+#: **Every day begins OPEN. BOOKING CONFLICT PREVENTION DOCTRINE, 2026-09-16.**
 #:
-#: Thursday and Friday are both held, on the operator's ruling: Friday afternoon
-#: is prime expedited freight -- the weekend deadline is what makes shippers pay
-#: premium -- and giving it up would cost the best-paying loads of the week.
+#: *"Dispatch does not decide: when Mike works, when Mike rests, when Mike
+#: performs maintenance, when Mike reserves capacity, which days are closed.
+#: Human authority remains final."*
 #:
-#: **Saturday opened on 2026-09-10, Mike's ruling:** *"just leave it open not
-#: committed so I can close or take a run."* It was MAINTENANCE, which reserved
-#: the day whether or not he wanted it reserved that week. Open is the honest
-#: state for a day he decides on when it arrives -- he can take the run or close
-#: it, and the board stops deciding for him.
+#: This finishes what his Saturday ruling started on 2026-09-10 -- *"just leave
+#: it open not committed so I can close or take a run"* -- and the reason given
+#: then is the reason for all seven days now: **open is the honest state for a
+#: day he decides on when it arrives.** Thursday and Friday were HELD and Sunday
+#: CLOSED on rulings made before he had seen the board work, and a held Thursday
+#: reserved the day whether or not he wanted it reserved that week.
 #:
-#: `MAINTENANCE` is kept as a state rather than deleted. No day uses it now, and
-#: the day Saturday goes back to being the shop day it is one line here.
+#: **Where "which days I work" lives is already answered.** Outlook is the
+#: scheduling authority (CLAUDE.md §5.5) and the board reads it, so a day he
+#: blocks there is a day the board sees. Nothing is stored here -- a stored
+#: day-state is the second calendar the scheduling doctrine forbids.
+#:
+#: `HELD`, `MAINTENANCE` and `CLOSED` are kept as states, not deleted. Nothing
+#: in this pattern produces one now; they remain the vocabulary for a day
+#: Outlook or a future ruling says is not sellable.
 WEEK_PATTERN = {
     0: OPEN,          # Monday
     1: OPEN,          # Tuesday
     2: OPEN,          # Wednesday
-    3: HELD,          # Thursday
-    4: HELD,          # Friday
-    5: OPEN,          # Saturday -- his call each week, not the board's
-    6: CLOSED,        # Sunday
+    3: OPEN,          # Thursday
+    4: OPEN,          # Friday
+    5: OPEN,          # Saturday
+    6: OPEN,          # Sunday
 }
 
 #: Days whose whole purpose is being available. Empty is the point.
@@ -358,3 +370,95 @@ def depth_of(board: list) -> dict:
         "days_out": days_out,
         "line": "Booked through %s" % last["date"].strftime("%a %d %b"),
     }
+
+
+# ------------------------------------------------------------- the month ----
+
+def month_of(year: int, month: int, records=None, *, today=None) -> dict:
+    """One month of capacity: every day, its state, and what is on it.
+
+    **One calendar, one source of truth, multiple views** (Owner, 2026-09-16).
+    The Booking board and the driver's month grid are two presentations of this
+    one calculation; neither computes capacity for itself, so neither can
+    disagree with the other about a Tuesday.
+
+    **A month rather than a week, and his reason for it:** *"Where are my gaps?
+    What capacity is available? Where am I overcommitted? What opportunities
+    exist?"* Those are the owner-operator's questions, and an empty square is
+    the answer to the first one. `HORIZON_DAYS` bounds the Booking board's
+    fortnight; it does not bound this, because a day's state is resolved from
+    the pattern and the commitments rather than looked up in a window.
+
+    **Nothing is stored and nothing is decided.** Days are OPEN unless freight
+    is on them. Candidates are carried so he can see what is in play, and are
+    never counted as capacity -- until COMMIT the day is still sellable to
+    somebody else.
+
+    Returns `{"year", "month", "label", "first", "weeks", "days",
+    "committed_days", "open_days", "prev", "next"}`. `weeks` is a list of
+    seven-day rows, Monday first, padded with `None` outside the month, ready
+    for a grid. `days` is the same days flat.
+    """
+    import calendar as _calendar
+
+    today = today or clock.home_date()
+    first = date(year, month, 1)
+    last = date(year, month, _calendar.monthrange(year, month)[1])
+
+    committed = commitments_from(records)
+    candidates = candidates_from(records)
+
+    days = []
+    for offset in range((last - first).days + 1):
+        day = first + timedelta(days=offset)
+        loads = committed.get(day, [])
+        days.append({
+            "date": day,
+            "day": day.day,
+            "state": day_state(day, loads),
+            "loads": loads,
+            "candidates": candidates.get(day, []),
+            "past": day < today,
+            "today": day == today,
+            # An empty square is a day nobody has sold. That is the thing he
+            # opens this screen to see.
+            "gap": not loads and day >= today,
+        })
+
+    grid = []
+    row = [None] * first.weekday()
+    for entry in days:
+        row.append(entry)
+        if len(row) == 7:
+            grid.append(row)
+            row = []
+    if row:
+        grid.append(row + [None] * (7 - len(row)))
+
+    prev_month = first - timedelta(days=1)
+    next_month = last + timedelta(days=1)
+    return {
+        "year": year,
+        "month": month,
+        "label": first.strftime("%B %Y"),
+        "first": first,
+        "weeks": grid,
+        "days": days,
+        "committed_days": len([d for d in days if d["loads"]]),
+        "open_days": len([d for d in days if d["gap"]]),
+        "prev": {"year": prev_month.year, "month": prev_month.month},
+        "next": {"year": next_month.year, "month": next_month.month},
+    }
+
+
+def loads_on(day: date, records=None) -> list:
+    """What the truck is doing on one day: committed freight, then candidates.
+
+    The driver taps a square and this is what is behind it. Candidates are
+    included and marked, because "what is in play on Thursday" is a real
+    question -- but they are not capacity and nothing here counts them as any.
+    """
+    committed = commitments_from(records).get(day, [])
+    pending = candidates_from(records).get(day, [])
+    return ([dict(entry, committed=True) for entry in committed]
+            + [dict(entry, committed=False) for entry in pending])

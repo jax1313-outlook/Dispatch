@@ -2155,3 +2155,57 @@ Delivery Wednesday 23:00, next pickup Thursday 04:00 is five hours. **A 10-hour 
 Display, for all three: pale red, black text, no modal, no response required, no buttons, never blocks, never reserves, never writes.
 
 ---
+
+## 2026-09-16 — The Driver Portal gets its own front door: PIN, then the calendar
+
+**PR:** (this change)
+**Capability:** `dispatch/booking.py` (`WEEK_PATTERN`, `month_of`, `loads_on`), `portal/routes/driver_portal.py` (`_cockpit`, `driver_calendar`, `driver_day`), `portal/templates/driver_calendar.html`, `portal/templates/driver_day.html`, `tests/test_driver_front_door.py` (new).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"build the driver front door"*, and the model —
+
+> *"The Driver Portal is a separate workspace from Operations. Operations creates and commits work. The Driver executes work. Therefore the Driver Portal requires its own front door."*
+>
+> ```
+> Driver PIN -> Driver Calendar -> Select Day -> Driver Cockpit -> Work
+> ```
+>
+> *"The calendar is the driver's landing page. Not the Driver Cockpit. Not a blank screen. Not a mission card."*
+
+**The gap, found by him while planning the end-to-end test.** *"when you sign in to the driver screen through a pin code you are taken directly there. You don't get to see a map. Excuse me, A calendar? All you see is a blank screen."* Verified: `driver_portal._cockpit()` returned `joe_portal.portal_home` — **Operations' front page, reached with a driver PIN** — and the parked Driver Portal home listed every active load regardless of date. Neither is a front door.
+
+**A month, not a week, and his reason beat the engineer's.** The suggestion was a week, to keep the tap targets large. His answer: *"The need is not simply: What am I doing today? The need is: Where are my gaps? What capacity is available? Where am I overcommitted? What opportunities exist?"* An empty day is money not earned, and that only reads across a month. **An open square is drawn as space** — dashed, quiet, empty — because that is the thing he opens the screen to see.
+
+**One calendar, one source of truth, multiple views.** `booking.month_of()` is the single calculation; the Booking board and this grid are two presentations of it and cannot disagree about a Tuesday. Nothing is stored — *"a stored day-state would be exactly the second calendar the doctrine forbids."*
+
+**Every day begins OPEN.** `WEEK_PATTERN` held Thursday and Friday for expedited freight and closed Sunday, on rulings made before he had watched the board work. All seven are OPEN now, finishing what his Saturday ruling started on 2026-09-10: *"just leave it open not committed so I can close or take a run."* `HELD`, `MAINTENANCE` and `CLOSED` are kept as vocabulary, not deleted — a day he blocks in **Outlook**, which the board already reads, is where "which days I work" lives.
+
+**Looking is not acting, and it is held by test.** Every month, every day, every square: nothing is reserved, nothing advances, nothing is written. `test_any_month_opens_and_nothing_changes` and `test_opening_a_day_changes_nothing` compare the whole store before and after. *"The system must never turn a glance into a commitment."*
+
+**A candidate is shown and never counted.** Until COMMIT the day is still sellable to somebody else, so an uncommitted load appears marked and the day still reads as a gap.
+
+**Consequences taken:** `CLOSED_DAY` no longer fires from the week pattern (the check is kept for a day Outlook or a later ruling closes); the Booking board's unsold counts rise because nothing is held back. Both are recorded in the tests that used to assert the old week.
+
+---
+
+## 2026-09-16 — The one act is called START RUN
+
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"START RUN"*, on a name put to him with reasons.
+
+**It is his own word.** He has called the job a run all day without being asked to — *"there are no runs for Monday. There are runs scheduled and on the calendar"*, and, from 2026-09-10, *"so I can close or take a run."* He has never said "start mission" except reading it off the screen. The program uses the word the man already has.
+
+**Per load, not per day — and he corrected himself to it.** Thinking aloud he reached for a day-level activation on the calendar, then reversed: *"No, I think I'm incorrect. I think it is an activation for that load. Should there be a second load, then I would have to activate it for that specific load also."*
+
+He is right, and his own card doctrine is why. *"rain stops one stop from completing so the driver returns with one load still onboard. This is why each must stand alone totally ... Nothing about it binds them together."* A day-level press would bind them: three cards started at once, rain stops the third, and a card sits in a started state it never earned with an arrival notice already sent for freight still on the truck. Everything the act triggers — arrival notice, POD, invoice, closeout folder under its own load number — is per load. There is no day-shaped thing for a day-shaped switch to start.
+
+**It also keeps the calendar clean.** Had the button lived there, the calendar would have become an acting surface. One surface for viewing, one act in one place.
+
+**It is a one-way gate, not an on/off switch.** He asked whether it was a toggle; it is not, and the reason is his own: *"That action changes reality."* Pressing it sends an arrival notice to a broker and that cannot be un-sent. "Off" is three different things — **pause**, **cancel** and **done** — with different consequences, and *done* is not a control at all but where the workflow arrives. Press DRIVE on an ELD and you may go to On Duty afterwards; you do not un-drive.
+
+**Where it lives.** The blue status area, which reads `STATUS: READY` with `START RUN` as the only control on it. After the press the area goes back to being a display and tracks the real milestone.
+
+**PICKUP and DELIVERY are display modes and always were.** `cockpit.normalise_mode()` is pure — it resolves a mode and writes nothing. What was wrong is the label: the chip renders `STATUS: {{ mode_label }}`, announcing *which half you are looking at* as your *status*. That is why it felt like an execution control.
+
+**Not built yet.** This entry records the ruling and the name. The trigger, the status area and the chip's wording are the next piece of work.
+
+---

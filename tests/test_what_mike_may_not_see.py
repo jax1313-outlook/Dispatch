@@ -165,13 +165,23 @@ class TestWarnings:
         check = drive_time.delivery_check("Thursday", "2026-09-22", 300)
         assert check["can_make"] is None and "pickup date and time" in check["line"]
 
-    def test_closed_day_and_weekend_delivery(self):
-        sunday = load_assessment.assess({"origin": "A", "destination": "B", "rate": 900,
-                                         "delivery_window": "2026-09-27"}, today=TODAY)
+    def test_a_weekend_delivery_is_worth_checking(self):
+        """The receiver may not be open. That is about the consignee's door, not
+        about Mike's week."""
         saturday = load_assessment.assess({"origin": "A", "destination": "B", "rate": 900,
                                            "delivery_window": "2026-09-26"}, today=TODAY)
-        assert "CLOSED_DAY" in _codes(sunday)
         assert "WEEKEND_DELIVERY" in _codes(saturday)
+
+    def test_no_day_is_closed_against_him_any_more(self):
+        """**BOOKING CONFLICT PREVENTION DOCTRINE, 2026-09-16:** every day begins
+        OPEN and *"Dispatch does not decide ... which days are closed."* Sunday
+        used to raise CLOSED_DAY off the week pattern. The check is kept -- a day
+        Outlook or a later ruling closes would still raise it -- but the pattern
+        no longer closes one."""
+        sunday = load_assessment.assess({"origin": "A", "destination": "B", "rate": 900,
+                                         "delivery_window": "2026-09-27"}, today=TODAY)
+        assert "CLOSED_DAY" not in _codes(sunday)
+        assert "WEEKEND_DELIVERY" in _codes(sunday), "a Sunday is still a weekend"
 
     def test_collides_with_a_committed_load_including_its_transit_day(self):
         committed = _committed(pickup="2026-09-21 06:00", delivery="2026-09-23 10:00")

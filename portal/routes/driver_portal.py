@@ -93,8 +93,23 @@ def _driver_login_with_pin_service():
 
 
 def _cockpit() -> str:
-    """Where a driver lands: the Driver Cockpit (Mike Zachary, 2026-09-14)."""
-    return url_for("joe_portal.portal_home")
+    """Where a driver lands: **his calendar** (Mike Zachary, 2026-09-16).
+
+    It used to be `joe_portal.portal_home` -- Operations' front page, reached by
+    a driver PIN. He found it while planning the end-to-end test:
+
+        *"when you sign in to the driver screen through a pin code you are taken
+        directly there. You don't get to see a map. Excuse me, A calendar? All
+        you see is a blank screen."*
+
+    **The Driver Portal is a separate workspace from Operations.** Operations
+    creates and commits work; the driver executes it. So the driver's front door
+    is his own, and it is the calendar rather than a cockpit, because on a
+    Sunday evening the question is not *what am I doing today* -- it is *what is
+    Monday, and where are my gaps*. A cockpit cannot answer that and a blank
+    screen answers nothing.
+    """
+    return url_for("driver_portal.driver_calendar")
 
 
 def _open_driver_portal():
@@ -338,3 +353,73 @@ def driver_fuel_receipt():
     return _tell_driver(*driver_actions.fuel_receipt(
         request.form, request.files, driver_id,
         load_allowed=lambda load_id: bool(_verify_driver_load(load_id, driver_id))))
+
+
+# ------------------------------------------------------- the driver's door ----
+
+@driver_portal_bp.route("/calendar")
+def driver_calendar():
+    """**The driver's landing page. Owner ruling, 2026-09-16.**
+
+        Driver PIN -> Driver Calendar -> Select Day -> Driver Cockpit -> Work
+
+    *"The calendar is the driver's landing page. Not the Driver Cockpit. Not a
+    blank screen. Not a mission card."*
+
+    **A month, not a week.** He is the driver and the owner: *"The need is not
+    simply: What am I doing today? The need is: Where are my gaps? What capacity
+    is available? Where am I overcommitted? What opportunities exist?"* A month
+    answers those; a week answers the first one only.
+
+    **Looking is not acting.** He can open Monday through Sunday, this month or
+    any month, and nothing happens. No day is reserved, no status moves, no
+    calendar entry is written. *"The system must never turn a glance into a
+    commitment."*
+
+    **One calendar, one source of truth, multiple views.** The capacity behind
+    this grid is `dispatch.booking.month_of` -- the same calculation the Booking
+    board reads. Two presentations, one set of facts, so they cannot disagree
+    about a Tuesday.
+    """
+    from datetime import date as _date
+
+    from dispatch import booking, clock
+    from portal.models import sandbox
+
+    today = clock.home_date()
+    try:
+        year = int(request.args.get("year", today.year))
+        month = int(request.args.get("month", today.month))
+        _date(year, month, 1)
+    except (TypeError, ValueError):
+        year, month = today.year, today.month
+
+    grid = booking.month_of(year, month, sandbox._load(), today=today)
+    return render_template("driver_calendar.html", grid=grid, today=today,
+                           states=booking.LABELS)
+
+
+@driver_portal_bp.route("/day/<day>")
+def driver_day(day: str):
+    """What the truck is doing on one day, behind the square he tapped.
+
+    Committed freight first, then candidates -- marked, and never counted as
+    capacity, because until COMMIT the day is still sellable to somebody else.
+    A day with nothing on it says so; that is a gap, and a gap is information.
+
+    **Still viewing.** Reaching a load from here opens its cockpit to be read.
+    Nothing here starts a mission.
+    """
+    from datetime import datetime as _datetime
+
+    from dispatch import booking, clock
+    from portal.models import sandbox
+
+    try:
+        when = _datetime.strptime(day, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return redirect(url_for("driver_portal.driver_calendar"))
+
+    return render_template(
+        "driver_day.html", day=when, today=clock.home_date(),
+        loads=booking.loads_on(when, sandbox._load()))

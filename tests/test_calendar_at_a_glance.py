@@ -64,8 +64,9 @@ class TestTransitDaysAreBooked:
         assert [l["phase"] for l in days["2026-09-23"]["loads"]] == ["Delivery"]
         assert all(days[d]["state"] == booking.BOOKED
                    for d in ("2026-09-21", "2026-09-22", "2026-09-23"))
-        # Mon-Wed of week one are all taken; only Saturday and next week remain.
-        assert book["unsold_count"] == 5
+        # Three days of the fortnight are taken; the other eleven are open, since
+        # no day is reserved any more (2026-09-16).
+        assert book["unsold_count"] == 11
 
     def test_a_same_day_load_has_both_ends_on_one_day(self):
         book = booking.build({"a": _committed("2026-09-21 06:00", "2026-09-21 14:00")},
