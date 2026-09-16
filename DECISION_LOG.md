@@ -1656,3 +1656,17 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 **The rule.** **After every pull into `D:\Dispatch`, restart Dispatch** — `python -m dispatch_launcher restart` — before treating the new code as running. Nothing was damaged and nothing was lost; the restart was the whole fix.
 
 ---
+
+## 2026-09-16 — The stop selector is deleted from the locked direction
+
+**Document:** `DRIVER_COCKPIT_LOCKED_DIRECTION.md`
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"delete the stop selector from the locked direction doc"*
+
+The cockpit's stop selector was removed in code by the card-per-delivery change on 2026-09-15, but `DRIVER_COCKPIT_LOCKED_DIRECTION.md` still drew it and called it *"the primary operational navigation mechanism"*. Because that document is a **locked direction**, the drawing was left standing and put to the Owner rather than removed by an engineer. He ruled it deleted.
+
+**Changed.** Section 2 (Stop selector) is gone and the sections below it are renumbered; the "Stop selector as primary navigation" row is out of the built table; the CURRENT note no longer credits the selector with reducing the need for CURRENT; the detail-card note now reads "There is one pickup and one delivery: the card's own." An amendment note at the top of the document records the deletion and its date, so a locked direction is not silently edited.
+
+**Left standing on purpose.** Cargo and the Load Diagram still read *by stop*. They describe what is physically on the truck, which can be freight for several deliveries at once — the Owner's own three-dealership example — and exist for agriculture and security inspection, where the question is what is on the vehicle, not what belongs to the open card. The amendment note says so, so the next reader does not take it for an oversight.
+
+---

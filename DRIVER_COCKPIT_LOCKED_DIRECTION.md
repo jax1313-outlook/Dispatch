@@ -5,6 +5,17 @@ screen.
 
 **Do not reintroduce dashboard concepts. Do not redesign. Refine the existing cockpit.**
 
+> **Amended by the operator, 16 September 2026: the stop selector is deleted.**
+>
+> One card per delivery replaced it. A card carries one pickup and one delivery, so there is
+> nothing on the glass to select between — another delivery is another card, and the driver
+> reaches it from the Loads list. The section describing the selector as the primary
+> navigation mechanism is removed rather than rewritten.
+>
+> Cargo and the Load Diagram still read by stop below, and that is deliberate: they describe
+> what is physically on the truck, which can be freight for several deliveries at once. An
+> inspector asks what is on the vehicle, not what belongs to the open card.
+
 ---
 
 ## 1. What is built and holding
@@ -13,7 +24,6 @@ Verified against the running code, not asserted:
 
 | | |
 |---|---|
-| Stop selector as primary navigation | built |
 | `[PICKUP] [DELIVERY]` mode bar | built |
 | Detail drawers carrying execution information | built |
 | Cargo, truck-wide by stop | built |
@@ -24,25 +34,7 @@ Verified against the running code, not asserted:
 | Checklists at READY / COMPLETE only | built |
 | Manual mission creation, email and voice | built — see `MISSION_INTAKE_ARCHITECTURE.md` |
 
-## 2. Stop selector
-
-```
-[ STOP 1 ] [ STOP 2 ] ...
-```
-
-**The primary operational navigation mechanism.** Selecting a stop changes delivery details,
-contacts, appointment times, access instructions, facility-map target and stop-specific cargo
-visibility — **without creating another screen.**
-
-**Preferred over PREVIOUS STOP / NEXT STOP**, which were removed.
-
-> **Mission advancement and stop viewing are separate concepts.**
-
-That distinction is the reason the buttons went. Advancing a mission is an act with
-consequences; looking at another stop is not, and one control doing both would make every
-glance a commitment.
-
-## 3. Modes
+## 2. Modes
 
 ```
 [PICKUP] [DELIVERY]
@@ -55,14 +47,13 @@ immediately.
 
 CURRENT was removed, restored as a transit panel, and withdrawn again after live review.
 
-**The stop selector substantially reduced the need for it.** No further CURRENT redesign
-until operational testing says otherwise: the question is whether a driver misses it in a
-cab, and that cannot be answered from a chair.
+No further CURRENT redesign until operational testing says otherwise: the question is whether
+a driver misses it in a cab, and that cannot be answered from a chair.
 
 The transit panel exists in history and can be recovered in one command if real use asks for
 it.
 
-## 4. Detail cards are execution cards
+## 3. Detail cards are execution cards
 
 Both drawers contain, in this order:
 
@@ -79,13 +70,14 @@ Items
 **The load number leads because it often functions as the facility access code.** Load
 number, pickup number, reference number — the gate asks for it before it asks anything else.
 
-Delivery follows the selected stop and shows a stop tag. Pickup does not move: there is one
-pickup.
+There is one pickup and one delivery: the card's own. Nothing on the glass moves between
+deliveries, because another delivery is another card.
 
-## 5. Ownership of information
+## 4. Ownership of information
 
 **Broker belongs exclusively in BROKER** — name, contact, phone, reference number. Not on the
-stop card, not in cargo. Two names on one screen means working out which is current.
+pickup or delivery card, not in cargo. Two names on one screen means working out which is
+current.
 
 *(The arrival notice names the broker because it is addressed to them. That is not a
 duplicate identity.)*
@@ -116,7 +108,7 @@ Position 2 - Stop 1      Position 5 - EMPTY
 Position 3 - Stop 2      Position 6 - EMPTY
 ```
 
-## 6. ARRIVE, notices and checklists
+## 5. ARRIVE, notices and checklists
 
 **ARRIVE creates a documented arrival event** — date, time, GPS, facility, load number.
 Publisher generates the Arrival Notice, COMI routes it, it **auto-sends**, blind-copied to
@@ -128,7 +120,7 @@ guard logging it.
 
 Checklists have two statuses only: **READY** and **COMPLETE**.
 
-## 7. The cockpit is not an alert system
+## 6. The cockpit is not an alert system
 
 ```
 Route Risk discovers  →  JOE communicates
@@ -140,7 +132,7 @@ speak, and a driver would learn to trust neither.
 
 ---
 
-## 8. MANUAL MISSION CREATION — new, and not built
+## 7. MANUAL MISSION CREATION — new, and not built
 
 **The operator names this a major discovery.** Built 1 September 2026.
 
@@ -201,7 +193,7 @@ Dispatch rather than by JOE.
 
 ---
 
-## 9. What this locks
+## 8. What this locks
 
 Nothing above is a proposal. The screen is refined from here, not redesigned, and the next
 open question is **operational testing** — whether a driver in a cab misses CURRENT, and
