@@ -226,12 +226,18 @@ class TestDriverPortalRoutes:
         assert resp.status_code == 302
         assert "/driver/login" in resp.headers["Location"]
 
-    def test_login_success_lands_in_the_driver_cockpit(self, client, driver):
-        """One Driver Cockpit (Mike Zachary, 2026-09-14): /driver/home is parked."""
+    def test_login_success_lands_on_the_driver_calendar(self, client, driver):
+        """**His own front door (Mike Zachary, 2026-09-16):** *"The calendar is
+        the driver's landing page. Not the Driver Cockpit. Not a blank screen.
+        Not a mission card."*
+
+        It landed on `/portal` -- Operations' front page, reached with a driver
+        PIN. The Driver Portal is a separate workspace: Operations creates and
+        commits work, the driver executes it."""
         pin_registry.create_pin_card(driver["driver_id"], "1234", "anchor", "mike")
         resp = client.post("/driver/login", data={"phone": driver["phone"], "pin": "1234"})
         assert resp.status_code == 302
-        assert resp.headers["Location"].endswith("/portal")
+        assert resp.headers["Location"].endswith("/driver/calendar")
 
     def test_login_failure_returns_401(self, client, driver):
         pin_registry.create_pin_card(driver["driver_id"], "1234", "anchor", "mike")

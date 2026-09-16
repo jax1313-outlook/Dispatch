@@ -181,11 +181,13 @@ class TestDrivers:
         assert b'name="phone"' not in page.data and b"Set up a PIN" in page.data
         window = client.get("/driver/choose-pin")
         assert window.status_code == 200 and b'name="driver_id"' not in window.data
-        # A driver lands in the Driver Cockpit (Mike Zachary, 2026-09-14); the parked
-        # Driver Portal home still renders.
+        # A driver lands on his own calendar (Mike Zachary, 2026-09-16). It was
+        # /portal -- Operations' front page, reached with a driver PIN. The
+        # parked Driver Portal home still renders.
         resp = self.window(client, "q7z4")
-        assert resp.status_code == 302 and resp.headers["Location"].endswith("/portal")
-        assert client.get("/portal", follow_redirects=True).status_code == 200
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith("/driver/calendar")
+        assert client.get("/driver/calendar").status_code == 200
         assert client.get("/driver/home").status_code == 200
         assert client.get("/home").status_code == 302  # a Driver session is not an Operations session
 
@@ -193,7 +195,8 @@ class TestDrivers:
         assert client.get("/driver/home").status_code == 302
         assert client.get("/portal").status_code == 302  # signed out, the cockpit is closed
         resp = client.post("/driver/login", data={"pin": "Q7Z4"})
-        assert resp.status_code == 302 and resp.headers["Location"].endswith("/portal")
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith("/driver/calendar")
 
     @pytest.mark.parametrize("pin", ["12345", "123"])
     def test_a_driver_pin_is_four_characters(self, client, pin):
