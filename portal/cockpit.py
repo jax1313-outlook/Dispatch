@@ -14,7 +14,7 @@ from __future__ import annotations
 #: JOE's words for system conditions. Nothing that names a subsystem reaches
 #: the glass; the driver is talking to JOE, not to a mail transport.
 from dispatch import load_control as lc
-from dispatch import mission_template as mt
+from dispatch import shipper_group as sg
 from portal import joe_voice
 
 # ---------------------------------------------------------------- modes ----
@@ -181,11 +181,13 @@ def _delivery_as_stop(record: dict) -> dict:
 
 
 def stop_list(record: dict) -> list:
-    """Every stop on the run, each with its own delivery information.
+    """Every stop a record **already stored**, each with its delivery information.
 
-    A multi-stop run is not one delivery seen three times. Each stop has its own
-    facility, its own appointment, its own contact and its own freight, and the
-    screen has to switch between them without the driver losing the mission.
+    **Stops are no longer entered** (Owner ruling, 2026-09-15: one card per
+    delivery). Nothing written since carries a stop list, and the cockpit shows
+    the card's own Delivery instead. This stays because a record written before
+    that ruling still holds its stops, and *"do not delete or rewrite stored
+    data"* means it still has to render.
     """
     raw = [entry for entry in (record.get("stops") or []) if isinstance(entry, dict)]
     stops = []
@@ -199,10 +201,11 @@ def stop_list(record: dict) -> list:
             entry = dict(entry, **_delivery_as_stop(record))
         stops.append({
             "number": entry.get("number") or i,
-            # "1 of 3", and nothing on a single-stop run. Owner ruling,
-            # 2026-09-15: each stop card is labelled "1 of _". The stored
-            # label is not read and not rewritten.
-            "label": mt.stop_label(entry.get("number") or i, len(raw)),
+            # "1 of 3", and nothing on a single-stop run. One rule for the
+            # label, and it lives in `dispatch/shipper_group.py` now -- the same
+            # "k of N" a card carries in its corner. The stored label is not
+            # read and not rewritten.
+            "label": sg.label(entry.get("number") or i, len(raw)),
             "facility": entry.get("facility") or entry.get("address") or "",
             "window": entry.get("window") or "",
             "poc": entry.get("poc") or "",
@@ -244,7 +247,7 @@ def stops_for(record: dict, selected: int | None = None) -> dict:
         "number": number,
         "total": total,
         # "2 of 5"; empty on a single-stop run, which shows no stop numbering.
-        "label": mt.stop_label(number, total),
+        "label": sg.label(number, total),
         "list": listed,
         "selectable": total > 1,
         "has_next": number < total,
@@ -926,9 +929,17 @@ def drawers_for(record: dict, mode: str, route_risk: str = "",
 
 
 def cockpit_context(record: dict, mode: str, route_risk: str = "",
-                    stop_number: int | None = None) -> dict:
-    """Everything the template needs, and nothing it has to look up itself."""
+                    stop_number: int | None = None, group: dict | None = None) -> dict:
+    """Everything the template needs, and nothing it has to look up itself.
+
+    `group` is the card's "1 of 3" (`dispatch/shipper_group.py`), resolved by
+    the route because counting the group means reading the store and this module
+    reads nothing. An empty group is a card that stands alone, and it shows no
+    label -- which is every card until a second delivery is opened for the same
+    shipper.
+    """
     return {
+        "group": group or {"tag": "", "number": 0, "total": 0, "label": ""},
         "modes": MODES,
         "requested_view": mode,
         "mode_label": MODE_LABELS[mode],

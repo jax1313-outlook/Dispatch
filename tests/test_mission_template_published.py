@@ -78,6 +78,10 @@ class TestItPublishesTheWholeForm:
 #: The ruled one-page layout, 2026-09-15, section by section, in order. Written
 #: out here on purpose: this is the one place a second list is the point -- it is
 #: the Owner's ruling the template is checked against, not a copy JOE reads.
+#:
+#: **Thirty-one since one card per delivery, 2026-09-15.** Consignee and BOL
+#: number joined DELIVERY: the card is now one delivery, and those are the two
+#: facts that make one delivery different from the next.
 ONE_PAGE = (
     ("IDENTITY", "load_number", "Load Number"),
     ("IDENTITY", "mission_number", "Mission Number"),
@@ -98,6 +102,8 @@ ONE_PAGE = (
     ("PICKUP", "pickup_phone", "Pickup phone"),
     ("PICKUP", "pickup_notes", "Pickup access instructions"),
     ("PICKUP", "pickup_special", "Pickup SPECIAL INSTRUCTIONS"),
+    ("DELIVERY", "consignee", "Consignee"),
+    ("DELIVERY", "bol_number", "BOL number"),
     ("DELIVERY", "delivery_location", "Delivery facility and address"),
     ("DELIVERY", "delivery_window", "Delivery appointment"),
     ("DELIVERY", "delivery_contact", "Delivery contact"),
@@ -118,9 +124,21 @@ class TestTheOnePageLayout:
     control *"2) yes either"*, *"cargo: 1) Description 2) Pieces / Pallets/ 3)
     Weight"*, then *"go ahead with the one page template"*."""
 
-    def test_the_template_is_exactly_the_twenty_nine_fields_in_order(self):
-        assert len(mt.TEMPLATE) == 29
+    def test_the_template_is_exactly_the_thirty_one_fields_in_order(self):
+        assert len(mt.TEMPLATE) == 31
         assert [(f.section, f.key, f.label) for f in mt.TEMPLATE] == list(ONE_PAGE)
+
+    def test_the_delivery_section_names_who_signs_and_which_bol(self):
+        """**One card per delivery, 2026-09-15.** Mike's case: *"the customer is
+        the same but each delivery is a different location and a different Bill
+        of Lading. because the consignee is different."* Both are asked on the
+        card, and neither is required -- a consignee learned on the call is
+        written in later, and that is what the brief's pale red is for."""
+        delivery = [f.key for f in mt.fields_in("DELIVERY")]
+        assert delivery[:2] == ["consignee", "bol_number"]
+        for key in ("consignee", "bol_number"):
+            field = next(f for f in mt.TEMPLATE if f.key == key)
+            assert field.spoken and not field.required
 
     def test_the_sections_are_his_seven_in_his_order(self):
         assert mt.SECTIONS == ("IDENTITY", "MISSION SOURCE", "LOAD CONTROL",
@@ -158,9 +176,15 @@ class TestTheOnePageLayout:
                                     "commodity")
         assert opportunity.REQUIRED == ()
 
-    def test_stops_no_longer_carry_load_control(self):
-        assert mt.STOP_KEYS == ("facility", "window", "poc", "phone", "notes",
-                                "special")
+    def test_there_are_no_stops_left_to_carry_anything(self):
+        """**One card per delivery, 2026-09-15.** The STOP block, its parser and
+        its renderer left the template with the concept: *"Nothing about it binds
+        them together ... the only binding item is the shipper."* Stop data an
+        older record stored is not deleted and not rewritten -- it simply has
+        nothing here to be entered through."""
+        for gone in ("STOP_FIELDS", "STOP_KEYS", "render_stop_block",
+                     "parse_stops", "additional_stops", "stop_label"):
+            assert not hasattr(mt, gone), "%s is still on the template" % gone
 
     def test_the_published_template_is_the_one_page(self, client):
         published = fetch(client).get_json()
@@ -233,9 +257,10 @@ class TestThereIsOnlyOneRenderingOfTheFormForPeople:
         for field in mt.TEMPLATE:
             assert field.key in page, "%s is missing from New Mission" % field.key
 
-    def test_new_mission_renders_exactly_the_twenty_nine(self, client):
+    def test_new_mission_renders_exactly_the_thirty_one(self, client):
         """Through the real /intake route: one named control per template field,
-        in template order, and nothing else -- no Taken by, no removed field."""
+        in template order, and nothing else -- no Taken by, no removed field, and
+        no stop block."""
         import re
 
         page = client.get("/intake").get_data(as_text=True)

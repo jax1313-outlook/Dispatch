@@ -12,7 +12,13 @@
 <title>New Mission — Level 1 Transport</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='mission_brief.css') }}">
 
-<form class="brief" method="post" action="{{ url_for('joe_portal.mission_intake_create') }}">
+{# Which card this one is a second delivery for rides on the address, not on a
+   hidden box: the form's own controls are the Mission Template's fields and
+   nothing else, which is what keeps this the one rendering of the form. #}
+<form class="brief" method="post"
+      action="{% if group_from %}{{ url_for('joe_portal.mission_intake_create',
+                                            another_for=group_from) }}{%
+              else %}{{ url_for('joe_portal.mission_intake_create') }}{% endif %}">
 
   {# Every Booking screen reaches every other one. A screen whose only way out
      goes somewhere else is a screen he leaves with the browser's back button,
@@ -28,11 +34,19 @@
     <div class="brief-title">
       <span class="company">LEVEL 1 TRANSPORT</span>
       <h1>NEW MISSION</h1>
-      <span class="brief-load">Same record, whatever brought it in</span>
+      <span class="brief-load">{% if another_for %}Another delivery for {{ another_for }}{%
+        else %}Same record, whatever brought it in{% endif %}</span>
     </div>
     <nav class="brief-actions">
       <a class="btn" href="{{ url_for('joe_portal.candidate_queue') }}">&larr; LOADS</a>
+      {# CREATE CANDIDATE is first in the markup on purpose: the first submit
+         button is the one Enter presses, and Enter in a text box must never be
+         the button that opens a second form. #}
       <button class="btn primary" type="submit">CREATE CANDIDATE</button>
+      {# One card per delivery. Three pallets for three dealerships are typed in
+         one sitting: this makes the card and opens the next one with the shipper
+         and the pickup already in it. #}
+      <button class="btn" type="submit" name="another" value="1">ANOTHER DELIVERY FOR THIS SHIPPER</button>
     </nav>
   </header>
 
@@ -45,9 +59,9 @@
 
   {# "How it came in" is no longer asked (Mike, 2026-09-06), and neither is who
      took it: Taken by is deleted, and nothing records it (Owner ruling,
-     2026-09-15). The page is the Mission Template's twenty-nine fields and
-     nothing else. The Delivery section is the first stop; this page lists no
-     stop 1 and no stop numbering. #}
+     2026-09-15). The page is the Mission Template's fields and nothing else.
+     There are no stop blocks: one card is one delivery, and a second delivery
+     for the same shipper is a second card. #}
   {% for name, fields in sections %}
   <section class="card-section">
     <h2>{{ name }}</h2>

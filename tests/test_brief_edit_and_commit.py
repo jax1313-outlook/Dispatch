@@ -5,9 +5,10 @@ pickup contact, pickup hours, delivery appointment, customer contact, a rate
 that moved, notes from the negotiation -- all of it is discovered on the phone
 and none of it exists until somebody writes it down.
 
-So every field on the sheet is editable, including the per-stop ones: on a
-multi-stop run the dock phone and the party holding load control are exactly
-what the call is for.
+So every field on the sheet is editable. **There are no per-stop ones any more:**
+one card is one delivery (Owner ruling, 2026-09-15), so the dock phone the call
+produces belongs to this card's Delivery. A record written before that ruling
+keeps its stops and the sheet does not draw or write them.
 
 Then COMMIT. Not a status change -- the moment it is pressed capacity is taken,
 a calendar entry is held, and the mission enters the driver's workflow. That is
@@ -85,45 +86,38 @@ class TestEveryFieldIsEditable:
                 continue
             assert all(f["key"] for f in section["fields"]), section["title"]
 
-    def test_stop_fields_are_editable_too(self, client, mission):
-        """On a multi-stop run the dock phone is exactly what the call is for."""
+    def test_the_dock_phone_is_written_on_the_cards_own_delivery(self, client,
+                                                                 mission):
+        """One card is one delivery, so the number learned on the call has one
+        place to go."""
         client.post(f"/brief/mission/{mission}/save", data={
-            "stop:2:phone": "863-555-0114",
-            "stop:2:poc": "Dock 7 - K. Mills",
+            "delivery_phone": "863-555-0114",
+            "delivery_contact": "Dock 7 - K. Mills",
         })
-        stops = sandbox.get(mission)["stops"]
-        assert stops[1]["phone"] == "863-555-0114"
-        assert stops[1]["poc"] == "Dock 7 - K. Mills"
+        record = sandbox.get(mission)
+        assert record["delivery_phone"] == "863-555-0114"
+        assert record["delivery_contact"] == "Dock 7 - K. Mills"
 
-    def test_editing_one_stop_leaves_the_others_alone(self, client, mission):
+    def test_a_posted_stop_edit_is_not_written_anywhere(self, client, mission):
+        """**Stop editing is gone, and nothing stored is rewritten.** A stale
+        form or a hand-crafted post naming `stop:2:...` writes nothing, and the
+        stops this record already holds come back byte for byte."""
+        before = sandbox.get(mission)["stops"]
         client.post(f"/brief/mission/{mission}/save",
-                    data={"stop:2:phone": "863-555-0114"})
-        stops = sandbox.get(mission)["stops"]
-        assert stops[0].get("phone", "") == ""
-        assert stops[0]["facility"] == "Mayo Clinic"
-
-    def test_stop_load_control_is_no_longer_written(self, client, mission):
-        """Stop-level load control left the Mission Template in the one-page
-        layout, 2026-09-15. A posted value for it is not stored, and the save
-        adds no resolved block to a stop that never had one."""
-        client.post(f"/brief/mission/{mission}/save",
-                    data={"stop:2:control_name": "Gulf Coast Paper",
-                          "stop:2:control_role": "shipper",
-                          "stop:2:phone": "863-555-0114"})
-        stop = sandbox.get(mission)["stops"][1]
-        assert stop["phone"] == "863-555-0114"
-        assert "control_name" not in stop and "control_role" not in stop
-        assert "control" not in stop
+                    data={"stop:2:phone": "863-555-0114",
+                          "stop:2:poc": "Dock 7 - K. Mills",
+                          "stop:2:control_name": "Gulf Coast Paper"})
+        assert sandbox.get(mission)["stops"] == before
 
     def test_the_edit_screen_shows_an_input_for_every_editable_field(self, client,
-                                                                    mission):
+                                                                     mission):
         html = client.get(f"/brief/mission/{mission}?edit=1").get_data(as_text=True)
         card = brief.card_for(sandbox.get(mission))
         fields = [f for s in card["sections"] if s["editable"]
                   for f in s["fields"] if f["key"] and not f["locked"]]
         expected = sum(1 for f in fields if not f["choices"])
-        expected += sum(len(s["fields"]) for s in card["stops"])
         assert html.count('<input type="text"') == expected
+        assert 'name="stop:' not in html
         # The pick lists are picked on the brief as on New Mission.
         assert html.count("<select") == sum(1 for f in fields if f["choices"]) == 2
 

@@ -520,12 +520,14 @@ class TestLoadDiagramIsGone:
         assert record["pallet_positions"] == 6
 
 
-class TestTheStopSelector:
-    """The stop is a toggle, and delivery follows it.
+class TestAStoredStopStillReadsByItsNumber:
+    """**Stops are no longer entered** (one card per delivery, 2026-09-15), and
+    the screen offers no toggle. A record written before that ruling still holds
+    its stops, and `?stop=2` on an old link still resolves against them.
 
-    A multi-stop run is not one delivery seen three times. Each stop has its own
-    facility, appointment, contact and freight, and switching between them must
-    not cost the driver the rest of the mission.
+    That is what these hold: each stored stop keeps its own facility,
+    appointment, contact and access note, the pickup does not move with it, and
+    nothing stored is rewritten.
     """
 
     RECORD = {
@@ -546,9 +548,9 @@ class TestTheStopSelector:
         assert stops["total"] == 2
         assert stops["selectable"] is True
 
-    def test_a_single_stop_run_offers_no_toggle(self):
-        """Two buttons where there is one stop is a control that does nothing."""
+    def test_a_card_written_now_has_no_stop_list_to_read(self):
         assert cockpit.stops_for({"card_data": {}})["selectable"] is False
+        assert cockpit.stops_for({"card_data": {}})["label"] == ""
 
     def test_selecting_a_stop_changes_the_delivery_facility(self):
         """Stop 1 is the Delivery section (Owner ruling, 2026-09-15: "read stop 1
@@ -584,17 +586,20 @@ class TestTheStopSelector:
         assert cockpit.end_detail(self.RECORD, "delivery", 2)["stop_label"] == "2 of 2"
         assert cockpit.end_detail(self.RECORD, "delivery", 1)["stop_label"] == "1 of 2"
 
-    def test_each_stop_button_reads_k_of_n(self):
-        """Owner ruling, 2026-09-15: *"each card should be labeled  1 of _"*.
-        The stored "STOP 1" labels are neither read nor rewritten."""
+    def test_each_stored_stop_reads_k_of_n(self):
+        """The same "k of N" rule the card's group label uses
+        (`dispatch/shipper_group.label`). The stored "STOP 1" labels are neither
+        read nor rewritten."""
         assert [s["label"] for s in cockpit.stop_list(self.RECORD)] == ["1 of 2", "2 of 2"]
         assert self.RECORD["stops"][0]["label"] == "STOP 1"
 
 
-class TestTheStopSurvivesAModeChange:
-    """Switching a mode keeps the stop, and switching a stop keeps the mode.
+class TestTheModeIsHonouredOnTheWayIn:
+    """A link asking for a mode lands in that mode.
 
-    Losing either would move the driver twice for one press.
+    The stop half of this went with the stop selector (one card per delivery,
+    2026-09-15): there is no second delivery on the screen to switch to, so the
+    only control that writes a parameter is the mode.
     """
 
     @pytest.fixture()
@@ -606,24 +611,19 @@ class TestTheStopSurvivesAModeChange:
         with app.test_client() as c:
             yield c
 
-    def test_a_mode_and_a_stop_are_honoured_together(self, client):
-        """Asked for both, both are applied -- neither silently wins."""
+    def test_the_mode_asked_for_is_the_mode_shown(self, client):
+        """An old bookmark carrying `&stop=2` still opens, and still lands in
+        the mode it asked for."""
         html = client.get("/portal?view=PICKUP&stop=2",
                           follow_redirects=True).get_data(as_text=True)
         selected_mode = re.search(
             r'data-mode="([A-Z_]+)"[^>]*aria-selected="true"', html, re.S)
         assert selected_mode and selected_mode.group(1) == "PICKUP"
 
-        stops = cockpit.stops_for(_demo_record(), 2)
-        if stops["selectable"]:
-            selected_stop = re.search(
-                r'data-stop="(\d+)"[^>]*aria-selected="true"', html, re.S)
-            assert selected_stop and selected_stop.group(1) == "2"
-
-    def test_both_controls_write_their_own_parameter(self, client):
+    def test_the_mode_is_the_only_control_that_writes_a_parameter(self, client):
         html = client.get("/portal", follow_redirects=True).get_data(as_text=True)
         assert "go('view'" in html
-        assert "go('stop'" in html
+        assert "go('stop'" not in html
 
 
 class TestTheMissionLevelSections:
@@ -834,11 +834,15 @@ class TestCustomerIdentityLivesInOnePlace:
         assert "Customer" in keys
 
 
-class TestTheStopSelectorScales:
-    """Two stops is the demo. Five is a normal regional run, and the selector
-    has to hold that without the driver hunting for a stop.
+class TestAnOlderMultiStopRecordStillRenders:
+    """**Stops are gone as an entry concept, 2026-09-15** -- one card is one
+    delivery. Nothing written since carries a stop list, and the screen no longer
+    offers a stop selector.
 
-    The failure that matters is not ugliness -- it is a stop he cannot reach.
+    A record written *before* that ruling still holds its stops, and *"do not
+    delete or rewrite stored data"* means it still has to read. These are that
+    guarantee: the stored stops are listed, each keeps its own facility, and a
+    stale bookmark to stop 9 of a 5-stop run still lands somewhere sane.
     """
 
     def _record(self, count):
@@ -880,27 +884,15 @@ class TestTheStopSelectorScales:
         assert cockpit.stops_for(self._record(5), selected=99)["number"] == 5
         assert cockpit.stops_for(self._record(5), selected=0)["number"] == 1
 
-    def test_eight_stops_fit_on_one_row(self):
-        """Eight is the operator's stated maximum in a day, so eight is the
-        number that has to fit at a glance rather than wrap.
-
-        Measured on the running screen at 768px: eight buttons at 83.7px plus
-        seven 6px gaps is 712, inside the 721 control bar. The padding is what
-        buys that, so this pins the padding."""
+    def test_the_screen_no_longer_offers_a_stop_selector(self):
+        """The bar and its buttons left with the concept. What sits in the top
+        right now is the card's "1 of 3" group label, and nothing else."""
         css = open("portal/static/joe_portal.css", encoding="utf-8").read()
-        rule = css[css.index(".stop-btn {"):]
-        rule = rule[:rule.index("}")]
-        padding = int(rule.split("padding: 0 ")[1].split("px")[0])
-        assert padding <= 13, "eight stops no longer fit on one row"
-
-    def test_the_stop_bar_still_wraps_beyond_that(self):
-        """The safety net. A ninth stop drops to a second row rather than off
-        the right edge -- a driver should never scroll sideways to reach a
-        delivery, even on a run he says he will never take."""
-        css = open("portal/static/joe_portal.css", encoding="utf-8").read()
-        rule = css[css.index(".stop-bar {"):]
-        rule = rule[:rule.index("}")]
-        assert "flex-wrap: wrap" in rule
+        assert ".stop-btn {" not in css and ".stop-bar {" not in css
+        assert ".group-of {" in css
+        page = open("portal/templates/joe_portal.html", encoding="utf-8").read()
+        assert "stop-btn" not in page and "data-stop=" not in page
+        assert "stop-counter" not in page
 
 
 class TestSpecialInstructionsAreOnTheGlass:

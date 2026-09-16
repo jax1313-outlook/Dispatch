@@ -34,9 +34,7 @@ RUN = {
 
 
 def _record(**over):
-    extra = over.pop("extra_stops", None)
-    return mt.to_record(dict(RUN, **over), source=mt.SOURCE_JOE,
-                        extra_stops=extra)
+    return mt.to_record(dict(RUN, **over), source=mt.SOURCE_JOE)
 
 
 class TestTheTemplateAsksForThePick:
@@ -56,27 +54,26 @@ class TestTheTemplateAsksForThePick:
         assert "controlled_by" not in _record(controlled_by="")
 
     def test_no_stop_level_detail_is_written_any_more(self):
-        """A stop block carrying the old load control lines is read for its
-        stop and nothing else: those lines are no longer template fields."""
-        body = mt.render_stop_block(2, {
-            "facility": "Winn-Dixie Orlando", "window": "2026-09-02 17:00"})
-        body += "\n  Load control: Gulf Coast Paper\n  Their reference: GCP-88\n"
-        record = _record(extra_stops=mt.parse_stops(body))
-        assert record["stop_total"] == 2
-        assert record["stops"][1]["facility"] == "Winn-Dixie Orlando"
-        for stop in record["stops"]:
-            assert not any(key.startswith("control") for key in stop), stop
+        """There is no stop for it to be written on. **One card per delivery,
+        2026-09-15:** a record written now carries its own Delivery and no stop
+        list at all."""
+        record = _record()
+        assert "stops" not in record and "stop_total" not in record
         assert "load_control" not in record
         assert "load_control_varies" not in record
 
-    def test_three_stops_one_truck_is_still_one_record(self):
-        """Three companies, one run -- one Mission Record."""
-        blocks = [mt.render_stop_block(i, {"facility": f"Consignee {i}",
-                                           "window": f"1{i}:00"}) for i in (2, 3)]
-        record = _record(extra_stops=mt.parse_stops("\n".join(blocks)))
-        assert record["stop_total"] == 3
-        assert [s["facility"] for s in record["stops"]] == [
-            "Publix DC Lakeland", "Consignee 2", "Consignee 3"]
+    def test_three_deliveries_one_shipper_are_three_records(self):
+        """Three companies, one pickup -- three Mission Records, each whole.
+
+        Mike, 2026-09-15: *"rain stops one stop from completing so the driver
+        returns with one load still onboard. This is why each must stand alone
+        totally. the only binding item is the shipper."*
+        """
+        cards = [_record(delivery_location=f"Consignee {i}",
+                         delivery_window=f"1{i}:00") for i in (1, 2, 3)]
+        assert [c["delivery_location"] for c in cards] == [
+            "Consignee 1", "Consignee 2", "Consignee 3"]
+        assert len({c["load_number"] for c in cards}) == 3
 
 
 class TestAnOlderRecordsAuthorityStillReads:
