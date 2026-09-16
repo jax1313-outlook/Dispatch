@@ -175,10 +175,17 @@ class TestTheBookingSeam:
 
     def test_the_calendar_can_match_what_booking_now_writes(self):
         """The calendar groups by the first seven characters against a year and
-        month. This is the comparison that silently failed."""
+        month. This is the comparison that silently failed.
+
+        `_extract_window_start` reads the real clock, so the spoken day is a
+        month out from today -- a date said today never lands in a past month,
+        and never rolls into next year the way a fixed "September 15" did the
+        morning after the fifteenth."""
         from portal.routes.api import _extract_window_start
-        written = _extract_window_start("September 15")
-        assert written[:7] == "2026-09"
+        from datetime import timedelta
+        spoken_day = date.today() + timedelta(days=30)
+        written = _extract_window_start(f"{spoken_day:%B} {spoken_day.day}")
+        assert written[:7] == f"{spoken_day:%Y-%m}"
 
 
 class TestADictatedCityStillFindsItsLane:
