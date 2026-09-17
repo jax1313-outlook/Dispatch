@@ -35,12 +35,29 @@ class TestDeleteLoadService:
         assert result is True
         assert services.get_load(load["load_id"]) is None
 
-    def test_delete_cancelled_load(self):
+    def test_a_cancelled_load_is_never_deleted(self):
+        """**Batch 1, Lifecycle Authority, 2026-09-16.** `cancelled` was
+        deletable, and a started run can reach `cancelled` — so
+        `en_route_pickup -> cancelled -> delete` removed a run that had begun,
+        over the API, with no trace. The Owner's no-undo rule lived on the glass
+        and in the sandbox sweep and nowhere in the engine.
+
+        Cancelling now says how a run ended, not that it never was."""
         load = services.create_load(customer="Cancel Me")
         services.update_load(load["load_id"], status="cancelled")
-        result = services.delete_load(load["load_id"])
-        assert result is True
-        assert services.get_load(load["load_id"]) is None
+
+        with pytest.raises(ValueError, match="Cannot delete"):
+            services.delete_load(load["load_id"])
+
+        assert services.get_load(load["load_id"]) is not None
+
+    def test_a_load_with_work_recorded_against_it_is_never_deleted(self):
+        """Evidence is not deleted because a status was changed afterwards."""
+        load = services.create_load(customer="Worked")
+        services.add_milestone(load["load_id"], "checkpoint", note="fuel stop")
+
+        with pytest.raises(ValueError, match="work was recorded"):
+            services.delete_load(load["load_id"])
 
     def test_cannot_delete_dispatched_load(self):
         load = services.create_load(customer="Dispatched")
@@ -81,9 +98,10 @@ class TestDeleteLoadService:
     def test_error_message_lists_allowed_statuses(self):
         load = services.create_load(customer="Check Msg")
         services.update_load(load["load_id"], status="dispatched")
-        with pytest.raises(ValueError, match="cancelled") as exc_info:
+        with pytest.raises(ValueError, match="Cannot delete") as exc_info:
             services.delete_load(load["load_id"])
         assert "created" in str(exc_info.value)
+        assert "cancelled" not in str(exc_info.value)
 
 
 # ── API endpoint ─────────────────────────────────────────────────

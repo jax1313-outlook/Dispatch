@@ -60,14 +60,35 @@ class TestCheckStalledLoads:
         result = services.check_stalled_loads()
         assert len(result) == 0
 
-    def test_completed_load_not_stalled(self):
+    def test_a_completed_load_is_still_asked_to_be_filed(self):
+        """**Changed 2026-09-16, and it was a regression the audit caught.**
+
+        Before *"POD sent completes the load"*, a finished run sat in
+        `delivered`, where the 24-hour line asked someone to close it out. When
+        the POD started completing the load that prompt vanished with it —
+        `completed` had no threshold — and a finished mission could sit
+        unarchived for ever with nothing saying so. This test asserted that
+        silence was correct."""
         load = services.create_load(customer="Done Corp")
         for s in ["dispatched", "en_route_pickup", "at_pickup", "picked_up",
                    "in_transit", "at_delivery", "delivered", "completed"]:
             services.update_load(load["load_id"], status=s)
         _age_load(load["load_id"], 100)
+
         result = services.check_stalled_loads()
-        assert len(result) == 0
+
+        assert [r["load_id"] for r in result] == [load["load_id"]]
+
+    def test_a_freshly_completed_load_is_left_alone(self):
+        """72 hours, not 24: the packet is filed the moment the run completes,
+        so this is the reminder to archive, not a chase for paperwork."""
+        load = services.create_load(customer="Fresh Corp")
+        for s in ["dispatched", "en_route_pickup", "at_pickup", "picked_up",
+                   "in_transit", "at_delivery", "delivered", "completed"]:
+            services.update_load(load["load_id"], status=s)
+        _age_load(load["load_id"], 12)
+
+        assert services.check_stalled_loads() == []
 
     def test_cancelled_load_not_stalled(self):
         load = services.create_load(customer="Cancel Corp")

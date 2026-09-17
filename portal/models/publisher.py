@@ -251,7 +251,7 @@ def _writable_keys() -> set:
 #: Never writable, whoever asks. Identity and the commitment gate are not
 #: things a sentence in a cab may move.
 PROTECTED_KEYS = ("id", "load_number", "mission_number", "committed_at",
-                  "accepted_at", "created_at", "events", "card_data",
+                  "booked_at", "created_at", "events", "card_data",
                   "intake_source", "intake_taken_by", "rejected_at")
 
 

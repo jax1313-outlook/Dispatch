@@ -174,11 +174,31 @@ class TestTheDriverActionsAreOnTheCockpit:
                                  "fuel_file": (io.BytesIO(b"\x89PNG\r\n\x1a\nfake"), "r.png")})
         assert "That load is not yours." in resp.get_data(as_text=True)
 
-    def test_a_driver_cannot_act_on_a_finished_load(self, client):
+    def test_a_driver_cannot_act_on_an_archived_load(self, client):
+        """**Changed 2026-09-16.** `completed` was in this set, so the moment a
+        driver sent his POD and finished the run his own cockpit told him
+        *"This mission has no open load yet. Operations opens it with Book
+        Load."* — false, at the exact moment the work was done, and pointing at
+        a door that is not his.
+
+        A completed run stays readable. Nothing can be advanced from it:
+        `NEXT_STEP` has no `completed` key and the transition gate refuses
+        anything posted anyway."""
+        record_id = mission(status="completed")
+        services.archive_load(record_id)
+        as_driver(client)
+
+        client.post(f"/portal/mission/{record_id}/exception", data={"exception_type": "delay"})
+
+        assert services.get_load_bundle(record_id)["exceptions"] == []
+
+    def test_a_finished_run_is_still_the_drivers_to_read(self, client):
         record_id = mission(status="completed")
         as_driver(client)
-        client.post(f"/portal/mission/{record_id}/exception", data={"exception_type": "delay"})
-        assert services.get_load_bundle(record_id)["exceptions"] == []
+
+        page = client.get(f"/portal/mission/{record_id}").get_data(as_text=True)
+
+        assert "no open load yet" not in page
 
 
 class TestArriveIsOneTap:

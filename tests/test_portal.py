@@ -580,23 +580,43 @@ class TestArchiveCandidate:
         assert sandbox.get(entry["id"]) is None
         assert arc_model.get_section("load") == []
 
-    def test_pass_on_a_committed_load_still_creates_archive_record(self, client, sample_load_good):
-        from portal.models import archive as arc_model
+    def _committed(self, client, sample_load_good):
+        """A committed mission. COMMIT is the only thing that commits one
+        (Owner's authoritative ruling, 2026-09-16); these used to call
+        `sandbox.mark_accepted` — BOOK — and rely on it satisfying the gate."""
+        from dispatch import commitment
         from portal.models import sandbox
-        entry = _create_dispatch_entry(client, sample_load_good)
-        sandbox.mark_accepted(entry["id"], 1)
-        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
-        records = arc_model.get_section("load")
-        assert len(records) >= 1
-        assert records[0]["source_id"] == entry["id"]
 
-    def test_pass_on_a_committed_load_adds_archived_note(self, client, sample_load_good):
-        from portal.models import sandbox
         entry = _create_dispatch_entry(client, sample_load_good)
-        sandbox.mark_accepted(entry["id"], 1)
+        data = sandbox._load()
+        data[entry["id"]].update(
+            commitment.commit(data[entry["id"]], when="2026-09-16T12:00:00Z"))
+        sandbox._save(data)
+        return entry
+
+    def test_pass_on_a_committed_load_is_refused(self, client, sample_load_good):
+        """It used to refuse the discard and then **fall through**, writing an
+        Archive record for freight that was still on the truck. A refusal that
+        keeps going is not a refusal."""
+        from portal.models import archive as arc_model
+
+        entry = self._committed(client, sample_load_good)
+
+        answer = client.post("/api/action",
+                             json={"sandbox_id": entry["id"], "action": "pass"})
+
+        assert answer.status_code == 409
+        assert arc_model.get_section("load") == []
+
+    def test_pass_on_a_committed_load_writes_nothing(self, client, sample_load_good):
+        from portal.models import sandbox
+
+        entry = self._committed(client, sample_load_good)
+        before = sandbox.get(entry["id"])
+
         client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
-        updated = sandbox.get(entry["id"])
-        assert "Archived" in updated["notes"]
+
+        assert sandbox.get(entry["id"]) == before
 
     def test_archive_page_shows_passed(self, client, sample_load_good):
         entry = _create_dispatch_entry(client, sample_load_good)
@@ -972,12 +992,16 @@ class TestArchiveAllSections:
         assert record["record_data"]["source_type"] == "dispatch"
 
     def test_archive_table_shows_columns(self, client, sample_load_good):
-        from portal.models import sandbox
+        """Archived directly, because the act that used to produce this row was
+        PASS falling through its own refusal on a committed load — which is now
+        a 409 that writes nothing (Owner's ruling, 2026-09-16)."""
+        from portal.models import archive as arc_model
+
         entry = _create_dispatch_entry(client, sample_load_good)
-        sandbox.mark_accepted(entry["id"], 1)
-        client.post("/api/action", json={"sandbox_id": entry["id"], "action": "pass"})
-        resp = client.get("/archive")
-        html = resp.data.decode("utf-8")
+        arc_model.archive_from_sandbox(dict(entry, status="PASS"))
+
+        html = client.get("/archive").data.decode("utf-8")
+
         assert "Title" in html
         assert "Decision" in html
         assert "Archived" in html

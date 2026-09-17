@@ -54,7 +54,18 @@ DRIVER_COCKPIT_ENDPOINTS = frozenset({
 })
 
 #: A load in one of these is finished; a driver sign-in cannot act on it.
-_CLOSED_LOAD_STATUSES = ("archived", "cancelled", "completed")
+#: Loads a driver's screen will not open. **`completed` is not one of them.**
+#:
+#: It was, until the regression audit of 2026-09-16. The consequence: the moment
+#: a driver sent his POD and finished the run, his own cockpit told him *"This
+#: mission has no open load yet. Operations opens it with Book Load."* -- a
+#: false statement on the glass at the exact moment the work was done, pointing
+#: him at a door that does not belong to him.
+#:
+#: A completed run is still his run and still readable. Nothing can be advanced
+#: from it: `NEXT_STEP` has no `completed` key, so no step is offered, and the
+#: transition gate refuses anything posted anyway.
+_CLOSED_LOAD_STATUSES = ("archived", "cancelled")
 
 #: The next thing to record, by load status. ARRIVE records both arrivals --
 #: it stamps the time and GPS, sends the notice and records the milestone -- so
@@ -275,7 +286,10 @@ def portal_home():
               if str(r.get("status", "")).lower() not in ("completed", "archived")]
     chosen = (active or missions)
     if chosen:
-        newest = sorted(chosen, key=lambda r: r.get("accepted_at", ""))[-1]
+        # The commitment timestamp, which is the one thing that says a mission
+        # is Dispatch's to run. It read `accepted_at` until 2026-09-16, when
+        # that field stopped meaning committed.
+        newest = sorted(chosen, key=lambda r: r.get("committed_at", ""))[-1]
         # Carry the requested mode through the redirect. Without this a link or
         # bookmark to /portal?view=DELIVERY silently lands in CURRENT -- the
         # driver presses a saved shortcut and gets a different screen than the
@@ -901,6 +915,32 @@ def mission_commit(record_id: str):
     if not stored.get("mission_number"):
         stored["mission_number"] = mission_svc.next_mission_number(
             mission_svc.assigned_mission_numbers(data))
+
+    # **Every committed mission has a load number.** It is the tracing number:
+    # the closeout files a load's POD, invoice and closing documents in a folder
+    # named by it -- *"same system used by FedEx/ UPS and others"* -- and it is
+    # what a customer quotes back on the phone.
+    #
+    # A load typed on the New Mission screen gets one at intake. **A load
+    # captured by voice, paste or an alert never did**, and COMMIT did not
+    # either, so a completed captured run filed its closing packet in a folder
+    # called `no-load-number`. Found 2026-09-16 by a test that pressed the POD
+    # button instead of calling the builder.
+    #
+    # Supplied numbers are untouched; one is generated only when nobody else
+    # numbered the work (`dispatch/load_number.py`), because *"a number we
+    # tidied up is a number that no longer matches theirs on an invoice."*
+    if not stored.get("load_number"):
+        from dispatch import load_number as ln
+
+        card = stored.get("card_data") or {}
+        assigned = ln.assign(card.get("load_id") or "",
+                             existing=[str(r.get("load_number") or "")
+                                       for r in data.values()
+                                       if isinstance(r, dict)])
+        stored["load_number"] = assigned["load_number"]
+        stored["load_number_origin"] = assigned["origin"]
+
     stored.setdefault("events", []).append(
         {"action": "committed", "timestamp": now})
 
@@ -1219,34 +1259,45 @@ def _act_on_load(record_id: str, act):
 def cockpit_milestone(record_id: str):
     from portal import driver_actions
 
-    event = request.form.get("milestone_event", "")
     answer = _act_on_load(record_id, lambda: driver_actions.step_milestone(
-        record_id, event, _cockpit_actor()))
-    # **POD sent completes the load and triggers the closing packet** (Owner,
-    # 2026-09-16). Assembled, not sent: putting a document in front of a broker
-    # is a separate act and his.
-    if event == "pod_received":
-        _build_closing_packet(record_id)
+        record_id, request.form.get("milestone_event", ""), _cockpit_actor()))
+    _build_closing_packet(record_id)
     return answer
 
 
 def _build_closing_packet(record_id: str) -> dict | None:
-    """File the closed load's documents under its load number.
+    """File a **completed** load's documents under its load number.
+
+    **Keyed on what happened, not on which button was pressed.** An earlier
+    version fired on the `pod_received` event without looking at the result, so
+    a refused transition still produced a packet -- and passed `delivered=True`
+    unconditionally, printing "Delivered" on a customer-facing document for a
+    load that never delivered. Found by the regression audit, 2026-09-16. The
+    load row is the authority on whether the run finished; this reads it.
+
+    **Built once.** A load that already has a packet is left alone, so pressing
+    a milestone again does not rewrite documents that may already have gone out.
 
     **It never costs the run.** A driver who has delivered his freight and sent
     his POD has finished, whether or not a Word template was reachable. What
     went wrong is flashed and recorded; the completion stands either way.
     """
     from dispatch import closing_packet, clock
+    from dispatch import services as dispatch_svc
 
+    load = dispatch_svc.get_load(record_id)
+    if not load or load.get("status") != "completed":
+        return None
     record = sandbox.get(record_id)
-    if not record:
+    if not record or record.get("closing_packet"):
         return None
     try:
         report = closing_packet.build(
             record,
             today=clock.home_date().isoformat(),
             driver_name=str(session.get("driver_name") or ""),
+            # The load row says `completed`, which it reaches only through
+            # delivery. Read, not assumed.
             delivered=True)
     except Exception as exc:  # noqa: BLE001 - a packet is never worth a 500 in a cab
         flash("The closing packet could not be built: %s" % exc)
@@ -1273,10 +1324,13 @@ def _build_closing_packet(record_id: str) -> dict | None:
 
 @joe_bp.route("/portal/mission/<path:record_id>/pod", methods=["POST"])
 def cockpit_pod(record_id: str):
+    """The POD goes up, the run completes, the packet is filed. One press."""
     from portal import driver_actions
 
-    return _act_on_load(record_id, lambda: driver_actions.upload_pod(
+    answer = _act_on_load(record_id, lambda: driver_actions.upload_pod(
         record_id, request.files.get("pod_file"), _cockpit_actor()))
+    _build_closing_packet(record_id)
+    return answer
 
 
 @joe_bp.route("/portal/mission/<path:record_id>/photos", methods=["POST"])

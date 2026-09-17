@@ -94,9 +94,27 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
     "dispatched": {"en_route_pickup", "cancelled"},
     "en_route_pickup": {"at_pickup", "cancelled"},
     "at_pickup": {"picked_up", "cancelled"},
-    "picked_up": {"in_transit"},
-    "in_transit": {"at_delivery"},
-    "at_delivery": {"delivered"},
+    # **A started run can be cancelled from any point, and is never deleted.**
+    # Owner ruling, 2026-09-16, Batch 1: *"Yes, but it is recorded and never
+    # deleted."*
+    #
+    # Freight falls through. A broker pulls a load, a shipper has nothing on the
+    # dock, a receiver closes. Refusing to express that would not stop it
+    # happening -- it would push it into a status change nobody could make
+    # honestly. Three states had no exit at all until now, so a load already on
+    # the trailer had nowhere to go but forward.
+    #
+    # What does **not** follow from cancelling: the run still happened. Its
+    # milestones stand, the record stays, `delete_load` refuses it for ever, and
+    # it reaches the Archive as `cancelled` rather than vanishing.
+    "picked_up": {"in_transit", "cancelled"},
+    "in_transit": {"at_delivery", "cancelled"},
+    "at_delivery": {"delivered", "cancelled"},
+    # `delivered -> archived` stays, on the Owner's ruling of 2026-09-16: some
+    # loads genuinely end without a POD coming back, and forcing completion
+    # would strand them. The regression audit proposed removing it and called
+    # three tests stale for asserting it; **he kept it, so those tests are
+    # correct and were left alone.**
     "delivered": {"completed", "archived"},
     "completed": {"archived"},
     "archived": set(),
@@ -273,10 +291,29 @@ def update_load(load_id: str, **fields) -> dict | None:
     return result
 
 
-_DELETABLE_STATUSES = {"created", "cancelled"}
+#: **A load that has never been worked.** Anything else is a run that happened.
+#:
+#: `cancelled` was in this set until 2026-09-16, and a started run can reach
+#: `cancelled` — so `en_route_pickup -> cancelled -> delete` removed a run that
+#: had begun, over the API, with no trace. The Owner's rule was written on the
+#: glass and in the sandbox sweep and **never in the lifecycle authority, which
+#: is the only thing that decides**: *"once the action button is pressed the
+#: deterministic flow has begun … the flow path is moving toward completion."*
+#:
+#: BATCH 1, LIFECYCLE AUTHORITY: *"Move irreversible protections into lifecycle
+#: authority. The glass is not authoritative. The absence of a visible button
+#: does not constitute lifecycle protection."*
+_DELETABLE_STATUSES = {"created"}
 
 
 def delete_load(load_id: str) -> bool:
+    """Delete a load that was never worked. **A run that happened is kept.**
+
+    Two gates, and the second is the one that matters: a load may be deleted
+    only from `created`, **and only if nothing was ever recorded against it.**
+    A milestone is evidence that something happened, and evidence is not
+    deleted because a status was changed afterwards.
+    """
     load = store.get_load(load_id)
     if not load:
         raise ValueError(f"Load not found: {load_id}")
@@ -284,6 +321,11 @@ def delete_load(load_id: str) -> bool:
         raise ValueError(
             f"Cannot delete load in status '{load['status']}'. "
             f"Only loads in {sorted(_DELETABLE_STATUSES)} can be deleted."
+        )
+    if store.list_milestones(load_id):
+        raise ValueError(
+            "Cannot delete this load: work was recorded against it. "
+            "A run that happened is kept."
         )
     return store.delete_load(load_id)
 
@@ -346,34 +388,26 @@ def _validate_equipment_assignment(equipment_id: str) -> None:
 
 
 def _try_auto_dispatch(load_id: str) -> None:
-    load = store.get_load(load_id)
-    if not load or load["status"] != "created":
-        return
-    if not load.get("driver_id") or not load.get("equipment_id"):
-        return
-    store.update_load(load_id, status="dispatched")
-    # C3: previous state is "created" by the guard above, not a re-read.
-    _record_status_change(
-        load_id, "created", "dispatched", operation="auto-dispatch",
-    )
-    ms = MilestoneEvent(
-        load_id=load_id,
-        event_type="dispatched",
-        source="system",
-        note="Auto-dispatched: driver and equipment assigned",
-        event_time=_utc_now(),
-    )
-    store.create_milestone(ms)
-    vis = LoadVisibilityRecord(
-        load_id=load_id,
-        current_status="dispatched",
-        last_milestone="dispatched",
-        next_expected_milestone="en_route_pickup",
-    )
-    store.upsert_visibility(vis)
-    updated = store.get_load(load_id)
-    if updated:
-        _notify_safe(lambda: notifications.notify_dispatched(updated))
+    """**Does nothing. Assigning a truck is not starting a run.**
+
+    Until 2026-09-16 this advanced a `created` load to `dispatched` the moment a
+    driver and equipment were both assigned — wrote the status, recorded a
+    milestone, stamped visibility, and mailed a dispatched notification, all
+    from a data-entry action at a desk.
+
+    Two doctrines it broke, both the Owner's and both from the same day:
+
+    - **START RUN is the activation, and it is the driver's.** *"That action
+      changes reality."* On the cockpit, `not_started` is `status == "created"`,
+      so a self-dispatched load **never rendered the START RUN control at all**
+      — the driver got the retired two-step button instead, and the one act
+      quietly reverted to the flow it replaced.
+    - A communication went out from an act nobody framed as one.
+
+    Kept as a named no-op rather than deleted so the two call sites read
+    truthfully — `assign_driver` and `assign_equipment` assign, and stop.
+    """
+    return None
 
 
 def record_route_risk_event(
@@ -1487,6 +1521,18 @@ _STALL_THRESHOLDS_HOURS: dict[str, int] = {
     "in_transit": 48,
     "at_delivery": 4,
     "delivered": 24,
+    # **A finished run still has to be filed.** Until the regression audit of
+    # 2026-09-16 there was no entry here for `completed`, and it did not matter:
+    # a POD-sent load stayed in `delivered`, where the 24-hour line above asked
+    # someone to close it out. When the POD started completing the load
+    # (*"POD sent completes the load and triggers the closing packet"*) that
+    # prompt vanished with it, and a completed load could sit unarchived for
+    # ever with nothing saying so.
+    #
+    # Longer than delivered on purpose: the packet is filed the moment the run
+    # completes, so this is not chasing paperwork -- it is the reminder that the
+    # mission has not yet reached the Archive.
+    "completed": 72,
 }
 
 

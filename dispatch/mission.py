@@ -320,9 +320,19 @@ def accept_load(record_id: str, sandbox_module, dispatch_services,
     record = entries.get(record_id)
     if not record:
         raise MissionError("no such record: %s" % record_id)
-    if record.get("accepted_at"):
+    # Booked once. **And never on a committed mission** -- BOOK used to be
+    # offered on one and would mint it a fresh Mission Number, against
+    # *"assigned once at ACCEPT LOAD and never reissued to that record."*
+    # Found by the regression audit, 2026-09-16.
+    if record.get("booked_at"):
         raise MissionError(
-            "Mission %s was already accepted" % record.get("mission_number"))
+            "Mission %s was already booked" % record.get("mission_number"))
+    from dispatch import commitment
+
+    if commitment.is_committed(record):
+        raise MissionError(
+            "Mission %s is committed. Dispatch is already running it."
+            % record.get("mission_number"))
 
     number = next_mission_number(assigned_mission_numbers(entries))
 

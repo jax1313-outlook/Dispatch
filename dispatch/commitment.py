@@ -52,11 +52,27 @@ COMMITTED = "COMMITTED"
 PHASE_BOOKING = "BOOKING"
 PHASE_DISPATCH = "DISPATCH"
 
-#: The commitment timestamp, and the older name for the same fact. Read both,
-#: write the new one -- a record committed last month is still committed, and
-#: renaming a field is not a reason to lose that.
+#: **The commitment timestamp. The only one.**
+#:
+#: `accepted_at` used to be read here as a legacy name for the same fact, and
+#: that alias was the hole: **BOOK wrote `accepted_at`**, so pressing *Book
+#: Load* made `is_committed()` true everywhere -- the card left LOADS, took the
+#: day on the Booking board, and the brief printed "Committed" -- with none of
+#: COMMIT's consequences. Two doors, one gate, and only one of them did the
+#: work. Found by the regression audit, 2026-09-16.
+#:
+#: **Owner's authoritative ruling, 2026-09-16:**
+#:
+#:     Dispatch contains no operational legacy data requiring backward
+#:     compatibility. Do not preserve accepted_at as a commitment compatibility
+#:     field ... COMMIT becomes the sole authoritative commitment operation.
+#:
+#:     One commitment operation. One commitment determination.
+#:     One commitment state. One commitment authority.
+#:
+#: So there is no shim. BOOK records `booked_at`, which is its own fact and
+#: opens nothing; `committed_at` is written by COMMIT and by nothing else.
 COMMITTED_FIELD = "committed_at"
-LEGACY_FIELD = "accepted_at"
 
 #: **AWARDED is doctrine and is not built.** The operator named it as the
 #: missing middle state: the broker has said the load is his, and rate
@@ -68,13 +84,11 @@ AWARDED = "AWARDED"
 
 
 def committed_at(record: dict) -> str:
-    """When this mission was committed, or empty while it is still a candidate."""
-    record = record or {}
-    for field in (COMMITTED_FIELD, LEGACY_FIELD):
-        value = str(record.get(field) or "").strip()
-        if value:
-            return value
-    return ""
+    """When this mission was committed, or empty while it is still a candidate.
+
+    **One determination.** It reads the field COMMIT writes, and nothing else.
+    """
+    return str((record or {}).get(COMMITTED_FIELD) or "").strip()
 
 
 def is_committed(record: dict) -> bool:

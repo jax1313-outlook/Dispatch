@@ -218,25 +218,39 @@ def set_inquiry_draft(sandbox_id: str, draft: dict) -> dict:
 
 
 
+#: What BOOK records. **It is not the commitment gate.**
+#:
+#: This wrote `accepted_at` until 2026-09-16, and `commitment.is_committed()`
+#: read that field -- so pressing *Book Load* committed the record everywhere
+#: that asks, without a calendar hold, without portal access and without
+#: COMMIT. Owner's authoritative ruling: *"BOOK must not write accepted_at.
+#: BOOK must not create committed state. BOOK must not satisfy is_committed().
+#: COMMIT becomes the sole authoritative commitment operation."*
+BOOKED_FIELD = "booked_at"
+
+
 def mark_accepted(sandbox_id: str, mission_number: int) -> dict:
-    """ACCEPT LOAD, recorded on the record itself.
+    """BOOK, recorded on the record itself. **This does not commit it.**
 
     The record does not move, and it is not copied. It gains an internal
-    Mission Number and a commitment timestamp, and its purpose becomes
-    MISSION. Everything already attached to it - research, negotiation
-    history, scoring, intelligence, documents - stays attached, because it
-    never went anywhere.
+    Mission Number and a booking timestamp. Everything already attached to it -
+    research, negotiation history, scoring, intelligence, documents - stays
+    attached, because it never went anywhere.
+
+    **Committing is COMMIT's**, and only COMMIT's: `commitment.commit` writes
+    `committed_at`, holds the calendar, opens portal access and opens the
+    operational load row.
     """
     data = _load()
     entry = data.get(sandbox_id)
     if not entry:
         raise KeyError(sandbox_id)
-    if entry.get("accepted_at"):
+    if entry.get(BOOKED_FIELD):
         return entry
 
     now = _utc_now()
     entry["mission_number"] = int(mission_number)
-    entry["accepted_at"] = now
+    entry[BOOKED_FIELD] = now
     # The record's operational identity is itself. Kept as a field because
     # _sync_booked_entries() and the brief view read it, and because it makes
     # the doctrine visible in the data: a record whose engine_load_id equals

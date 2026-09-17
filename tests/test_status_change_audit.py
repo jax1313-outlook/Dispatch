@@ -189,19 +189,28 @@ class TestMilestonePath:
 # ── the two paths the brief did not name ───────────────────────────────
 
 
-class TestAutoDispatchPath:
-    def test_auto_dispatch_is_audited(self, load):
+class TestAssignmentDoesNotStartTheRun:
+    """**Batch 1, Lifecycle Authority, 2026-09-16.** Assigning a driver and a
+    truck used to advance a `created` load to `dispatched` on its own — writing
+    the status, recording a milestone and mailing a notification, all from a
+    data-entry action at a desk.
+
+    Two doctrines, both his: **START RUN is the activation and it is the
+    driver's**, and no communication goes out from an act nobody framed as one.
+    The cockpit reads `not_started` as `status == "created"`, so a
+    self-dispatched load never rendered the START RUN control at all.
+    """
+
+    def test_assignment_writes_no_status_and_no_audit_event(self, load):
         load_id = load["load_id"]
         driver = dispatch_svc.create_driver(name="Auto Driver")
         equip = dispatch_svc.create_equipment(unit_number="AUTO-1")
+
         dispatch_svc.assign_driver(load_id, driver["driver_id"])
         dispatch_svc.assign_equipment(load_id, equip["equipment_id"])
 
-        assert dispatch_svc.get_load(load_id)["status"] == "dispatched"
-        events = status_events(load_id)
-        assert len(events) == 1
-        assert "from created to dispatched" in events[0]["message"]
-        assert "via auto-dispatch" in events[0]["message"]
+        assert dispatch_svc.get_load(load_id)["status"] == "created"
+        assert status_events(load_id) == []
 
     def test_assignment_without_both_writes_no_event(self, load):
         """No status change, so no audit event."""

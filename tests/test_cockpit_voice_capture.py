@@ -201,9 +201,32 @@ class TestExpiredCardsAreCleared:
     def test_a_committed_card_past_pickup_is_never_cleared(self, client):
         as_driver(client)
         old = say(client, "Tampa to Miami 900 pickup 2020-01-02").get_json()["loads"][0]
-        sandbox.mark_accepted(old["card_id"], 1)
+        # COMMIT, which is the only thing that commits (Owner's authoritative
+        # ruling, 2026-09-16). This used to call `sandbox.mark_accepted` -- BOOK
+        # -- and rely on it satisfying the gate.
+        data_store = sandbox._load()
+        data_store[old["card_id"]].update(
+            commitment.commit(data_store[old["card_id"]], when="2026-09-16T12:00:00Z"))
+        sandbox._save(data_store)
         assert commitment.is_committed(sandbox.get(old["card_id"]))
+
         data = say(client, "Orlando to Atlanta 1400").get_json()
+
+        assert data["cleared_expired"] == 0
+        assert sandbox.get(old["card_id"]) is not None
+
+    def test_a_booked_card_past_pickup_is_also_never_cleared(self, client):
+        """BOOK does not commit — but it opens the load under the record's own
+        id, and `is_protected` refuses to clear a record that has one. The
+        protection survived the commitment change; it just no longer rests on
+        the gate."""
+        as_driver(client)
+        old = say(client, "Tampa to Miami 900 pickup 2020-01-02").get_json()["loads"][0]
+        sandbox.mark_accepted(old["card_id"], 1)
+        assert commitment.is_committed(sandbox.get(old["card_id"])) is False
+
+        data = say(client, "Orlando to Atlanta 1400").get_json()
+
         assert data["cleared_expired"] == 0
         assert sandbox.get(old["card_id"]) is not None
 

@@ -45,9 +45,17 @@ class TestStatusTransitionValidation:
     def test_in_transit_to_at_delivery(self):
         services.validate_status_transition("in_transit", "at_delivery")
 
-    def test_in_transit_to_cancelled_rejected(self):
-        with pytest.raises(ValueError, match="Invalid status transition"):
-            services.validate_status_transition("in_transit", "cancelled")
+    def test_a_started_run_can_be_cancelled(self):
+        """**Owner ruling, 2026-09-16, Batch 1:** *"Yes, but it is recorded and
+        never deleted."* Freight falls through — a broker pulls a load, a
+        shipper has nothing on the dock. `picked_up`, `in_transit` and
+        `at_delivery` had no exit at all, so a load already on the trailer had
+        nowhere to go but forward.
+
+        What does not follow: `delete_load` refuses a cancelled load for ever
+        (`tests/test_lifecycle_authority.py`)."""
+        for started in ("picked_up", "in_transit", "at_delivery"):
+            services.validate_status_transition(started, "cancelled")
 
     def test_delivered_to_completed(self):
         services.validate_status_transition("delivered", "completed")
@@ -99,39 +107,44 @@ class TestUpdateLoadTransitionGuard:
 # ── Auto-dispatch ───────────────────────────────────────────────────
 
 
-class TestAutoDispatch:
+class TestAssignmentDoesNotStartTheRun:
+    """**Batch 1, Lifecycle Authority, 2026-09-16.** Assigning a driver and a
+    truck used to advance a `created` load to `dispatched` on its own.
+
+    It broke two of his rulings at once: **START RUN is the activation and it
+    is the driver's** -- the cockpit reads `not_started` as
+    `status == "created"`, so a self-dispatched load never rendered the START
+    RUN control at all and the driver got the retired two-step button -- and a
+    communication went out from an act nobody framed as one.
+    """
+
     def _make_driver(self):
         return services.create_driver(name="Auto Driver")
 
     def _make_equipment(self):
         return services.create_equipment(unit_number="AD-100")
 
-    def test_auto_dispatch_on_driver_then_equipment(self):
+    def test_driver_then_equipment_leaves_the_load_ready(self):
         drv = self._make_driver()
         eqp = self._make_equipment()
         load = services.create_load(customer="Acme")
-        assert load["status"] == "created"
 
         services.assign_driver(load["load_id"], drv["driver_id"])
-        mid = store.get_load(load["load_id"])
-        assert mid["status"] == "created"
-
         result = services.assign_equipment(load["load_id"], eqp["equipment_id"])
-        assert result["status"] == "dispatched"
 
-    def test_auto_dispatch_on_equipment_then_driver(self):
+        assert result["status"] == "created"
+
+    def test_equipment_then_driver_leaves_the_load_ready(self):
         drv = self._make_driver()
         eqp = self._make_equipment()
         load = services.create_load(customer="Acme")
 
         services.assign_equipment(load["load_id"], eqp["equipment_id"])
-        mid = store.get_load(load["load_id"])
-        assert mid["status"] == "created"
-
         result = services.assign_driver(load["load_id"], drv["driver_id"])
-        assert result["status"] == "dispatched"
 
-    def test_auto_dispatch_creates_milestone(self):
+        assert result["status"] == "created"
+
+    def test_assignment_records_no_milestone(self):
         drv = self._make_driver()
         eqp = self._make_equipment()
         load = services.create_load(customer="Acme")
@@ -139,11 +152,7 @@ class TestAutoDispatch:
         services.assign_driver(load["load_id"], drv["driver_id"])
         services.assign_equipment(load["load_id"], eqp["equipment_id"])
 
-        milestones = services.get_timeline(load["load_id"])
-        dispatched = [m for m in milestones if m["event_type"] == "dispatched"]
-        assert len(dispatched) == 1
-        assert dispatched[0]["source"] == "system"
-        assert "Auto-dispatched" in dispatched[0]["note"]
+        assert services.get_timeline(load["load_id"]) == []
 
     def test_auto_dispatch_both_at_create_time(self):
         drv = self._make_driver()
@@ -179,7 +188,9 @@ class TestAutoDispatch:
         result = store.get_load(load["load_id"])
         assert result["status"] == "created"
 
-    def test_auto_dispatch_updates_visibility(self):
+    def test_assignment_does_not_move_visibility(self):
+        """Visibility follows the Mission Record. Nothing happened, so nothing
+        to report."""
         drv = self._make_driver()
         eqp = self._make_equipment()
         load = services.create_load(customer="Acme")
@@ -187,9 +198,7 @@ class TestAutoDispatch:
         services.assign_equipment(load["load_id"], eqp["equipment_id"])
 
         vis = services.get_visibility(load["load_id"])
-        assert vis["current_status"] == "dispatched"
-        assert vis["last_milestone"] == "dispatched"
-        assert vis["next_expected_milestone"] == "en_route_pickup"
+        assert vis["current_status"] == "created"
 
 
 # ── Dispatch notification ───────────────────────────────────────────

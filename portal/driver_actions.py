@@ -73,7 +73,25 @@ def upload_pod(load_id: str, upload, actor: str) -> tuple[str, str]:
             file_data=data, original_filename=upload.filename)
     except ValueError as exc:
         return str(exc), ERROR
-    return "POD uploaded.", SUCCESS
+
+    # **Sending the POD is what completes the load.** Owner ruling, 2026-09-16:
+    # *"POD sent completes the load and triggers the closing packet."*
+    #
+    # This used to attach the file and stop. The milestone lived on a different
+    # control -- the manual milestone drawer -- so a driver who uploaded his
+    # signed POD had, in his own words, sent it, and Dispatch silently
+    # disagreed: the load stayed `delivered` and the cockpit went on asking for
+    # the POD he had just sent. Found by the regression audit, 2026-09-16.
+    #
+    # The transition is still gated. Uploading a POD on a load that has not
+    # reached `delivered` records the evidence and is refused the advance, said
+    # plainly, exactly as any other out-of-order milestone is.
+    said, category = step_milestone(load_id, "pod_received", actor)
+    if category == ERROR:
+        return "POD uploaded, but the load did not advance: %s" % said, WARNING
+    if category == WARNING:
+        return "POD uploaded. %s" % said, WARNING
+    return "POD uploaded. The run is complete.", SUCCESS
 
 
 def upload_mission_photos(load_id: str, photo_type: str, uploads, actor: str, *,

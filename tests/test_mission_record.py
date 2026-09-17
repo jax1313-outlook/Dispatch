@@ -94,10 +94,27 @@ class TestOneRecord:
         assert after["score"] == 91
         assert after["events"], "the record's history did not survive"
 
-    def test_purpose_changes_but_the_record_does_not(self, client, mission_record):
+    def test_purpose_changes_at_commit_and_the_record_does_not(self, client,
+                                                               mission_record):
+        """**Owner's authoritative ruling, 2026-09-16:** BOOK does not commit,
+        so it does not change the record's purpose either. *"One commitment
+        operation. One commitment determination. One commitment state."*
+
+        It is still one record throughout — BOOK and COMMIT both write on the
+        record SWEEP found, and neither copies it anywhere."""
+        from dispatch import commitment
+
         record_id = mission_record["id"]
         assert mission_svc.purpose_of(sandbox.get(record_id)) == "OPPORTUNITY"
+
         client.post("/api/action", json={"sandbox_id": record_id, "action": "book"})
+        assert mission_svc.purpose_of(sandbox.get(record_id)) == "OPPORTUNITY"
+
+        data = sandbox._load()
+        data[record_id].update(commitment.commit(data[record_id],
+                                                 when="2026-09-16T12:00:00Z"))
+        sandbox._save(data)
+
         assert mission_svc.purpose_of(sandbox.get(record_id)) == "MISSION"
 
     def test_a_second_commitment_is_refused(self, client, mission_record):

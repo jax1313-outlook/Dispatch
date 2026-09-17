@@ -48,14 +48,21 @@ class TestTheGateHasAName:
     def test_a_candidate_belongs_to_booking(self):
         assert commitment.phase_of(_record()) == commitment.PHASE_BOOKING
 
-    def test_records_committed_before_the_rename_are_still_committed(self):
-        """The gate has been in the data since the beginning as accepted_at.
-        Renaming a field is not a reason to lose a commitment."""
-        record = _record(legacy=True)
-        assert commitment.is_committed(record) is True
-        assert commitment.committed_at(record) == "2026-08-15T10:00:00Z"
+    def test_accepted_at_is_not_a_commitment(self):
+        """**Owner's authoritative ruling, 2026-09-16:** *"Dispatch contains no
+        operational legacy data requiring backward compatibility. Do not
+        preserve accepted_at as a commitment compatibility field … Do not retain
+        is_committed() logic that treats accepted_at as a commitment event."*
 
-    def test_the_new_name_wins_when_both_are_present(self):
+        The alias was the hole. **BOOK wrote `accepted_at`**, so pressing *Book
+        Load* satisfied the gate everywhere that asks it, with none of COMMIT's
+        consequences — no calendar hold, no portal access, no operational load
+        row. Found by the regression audit."""
+        record = _record(legacy=True)
+        assert commitment.is_committed(record) is False
+        assert commitment.committed_at(record) == ""
+
+    def test_the_committed_field_is_the_only_one_read(self):
         record = _record(committed=True, legacy=True)
         assert commitment.committed_at(record) == "2026-09-01T10:00:00Z"
 
@@ -84,8 +91,10 @@ class TestPurposeReadsTheGate:
     def test_a_committed_record_is_a_mission(self):
         assert mission.purpose_of(_record(committed=True)) == mission.PURPOSE_MISSION
 
-    def test_the_legacy_field_still_resolves(self):
-        assert mission.is_mission(_record(legacy=True)) is True
+    def test_a_record_carrying_only_accepted_at_is_not_a_mission(self):
+        """One commitment state. A booked card is an Opportunity Card until
+        COMMIT, whatever else is written on it."""
+        assert mission.is_mission(_record(legacy=True)) is False
 
 
 class TestBookingRespectsTheGate:

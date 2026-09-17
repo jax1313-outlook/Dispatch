@@ -2260,3 +2260,52 @@ EN ROUTE PICKUP                   after -- a display again, tracking the load
 **There is no pause in the flow**, and `tests/test_start_run.py::TestOnceStartedTheFlowKeepsGoing` holds it: a run that spans two days is normal freight.
 
 ---
+
+## 2026-09-16 — RECONCILIATION BATCH 1: lifecycle authority
+
+**PR:** (this change)
+**Capability:** `dispatch/services.py` (`_DELETABLE_STATUSES`, `delete_load`, `_try_auto_dispatch`, `_VALID_TRANSITIONS`), `tests/test_lifecycle_authority.py` (new), `tests/test_status_change_audit.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"Move irreversible protections into lifecycle authority. **The glass is not authoritative. The absence of a visible button does not constitute lifecycle protection.**"* and the primary rule: *"Each consequential business act shall have one authoritative operation. Every screen, API route, helper, and test representing that act must call the same authoritative operation."*
+
+**A run that happened is kept.** `delete_load` accepted `cancelled`, and a started run could reach `cancelled` — so `en_route_pickup → cancelled → delete` removed a run that had begun, over the API, with no trace. The no-undo rule existed on the glass (a test grepping the HTML for the absence of a button) and in the sandbox sweep, and **nowhere in the engine**. Now: deletable only from `created`, **and only when no milestone was ever recorded**. Evidence is not deleted because a status was changed afterwards.
+
+**Assigning a truck is not starting a run.** `_try_auto_dispatch` advanced a `created` load to `dispatched` the moment a driver and equipment were both assigned — status, milestone, visibility and a mailed notification, all from data entry at a desk. It broke two of his rulings at once: START RUN is the activation and it is the driver's (`not_started` is `status == "created"`, so a self-dispatched load **never rendered the START RUN control at all** and the driver got the retired two-step button), and a communication went out from an act nobody framed as one. Now a named no-op, so the two call sites read truthfully: they assign, and stop.
+
+**A started run can be cancelled, from any point.** Asked whether cancellation should survive, he ruled: *"Yes, but it is recorded and never deleted."* Freight falls through — a broker pulls a load, a shipper has nothing on the dock. `picked_up`, `in_transit` and `at_delivery` had **no exit at all**, so a load already on the trailer had nowhere to go but forward. Cancelling now says how a run ended, not that it never was: the milestones stand, the record stays, deletion is refused for ever, and it reaches the Archive as `cancelled`.
+
+**`delivered → archived` stays, against the audit's recommendation.** He ruled: *"some loads genuinely end without a POD coming back, and forcing completion would strand them."* **The three tests the audit called stale for asserting this are correct**, and were left alone. Recorded because the audit was wrong on that point and the record should say so.
+
+**Order.** The POD path was corrected before this batch, on his instruction, and he confirmed it stands: *"The POD work already completed is accepted as an early correction to the primary driver path. Do not undo it, repeat it, or move it merely to satisfy the written batch sequence."* It is reverified at Batch 3 against these corrections.
+
+---
+
+## 2026-09-16 — RECONCILIATION BATCH 2: one commitment authority
+
+**PR:** (this change)
+**Capability:** `dispatch/commitment.py`, `dispatch/mission.py`, `portal/models/sandbox.py` (`BOOKED_FIELD`, `mark_accepted`), `portal/routes/api.py` (PASS), `portal/routes/joe_portal.py` (COMMIT assigns the load number), `portal/models/publisher.py`, `tests/test_commitment_authority.py` (new) and six existing test files.
+**Approved by:** Mike (owner). **AUTHORITATIVE RULING, verbatim:**
+
+> *"Dispatch contains no operational legacy data requiring backward compatibility. Do not preserve accepted_at as a commitment compatibility field. Do not retain accepted_at-based commitment inference. Do not retain is_committed() logic that treats accepted_at as a commitment event. **BOOK must not write accepted_at. BOOK must not create committed state. BOOK must not satisfy is_committed(). COMMIT becomes the sole authoritative commitment operation.** ... Remove ambiguity rather than preserving it.*
+>
+> *One commitment operation. One commitment determination. One commitment state. One commitment authority.*
+>
+> *No compatibility shim is required because there is no business history to preserve."*
+
+**The defect.** `commitment.committed_at()` read `accepted_at` as a legacy alias for `committed_at` — **and BOOK wrote `accepted_at`**. So pressing *Book Load* made `is_committed()` true everywhere that asks the gate: the card left LOADS, took the day on the Booking board, and the brief printed *"Committed. Dispatch is running this one."* — with **none of COMMIT's consequences**: no calendar hold, no portal access, no operational load row. Two doors, one gate, and only one of them did the work.
+
+**An engineer proposed a compatibility shim** — keep reading the alias for historical records, write a new field going forward — because existing records could not be told apart. The Owner removed the ambiguity instead. There was no history to protect, and the shim would have preserved the confusion under a new name.
+
+**Built.** `LEGACY_FIELD` is gone; `committed_at()` reads one field. `mark_accepted` writes **`booked_at`**, which commits nothing. BOOK is **refused on a committed mission**, so it can no longer mint a second Mission Number against *"assigned once at ACCEPT LOAD and never reissued to that record."*
+
+**PASS stops at its own refusal.** It refused the discard of a committed record and then **fell through** — setting the status to `PASS` and writing an Archive record for freight still on the truck. It now returns **409 and writes nothing at all**: the record is byte-identical afterwards and no Archive row appears, held by test because he named it as a thing not to expect.
+
+**COMMIT assigns the load number** — the 49th finding, raised by a test that pressed the POD button instead of calling the packet builder. A load typed on New Mission got a number at intake; **a load captured by voice, paste or alert never did**, and COMMIT did not either, so a completed captured run filed its POD and invoice in a folder called `no-load-number`. A supplied number is kept exactly; one is generated only when nobody else numbered the work.
+
+**Two `accepted_at` uses were deliberately left alone.** `portal/models/library.py` and `reconciliation/` use the name for a **different fact** — an accepted candidate's timestamp. Renaming those would have been following a word rather than a meaning.
+
+**Seven tests corrected, and every one was on his own predicted list** — four assumed `accepted_at` meant committed or BOOK performed COMMIT, three assumed PASS continues after refusing. None of the failures he named as *not* expected occurred: no runtime exception, no import problem, no unrelated route failure, no reissued Mission Number, no missing COMMIT consequence.
+
+**Recorded, because a protection changed its reason.** `test_a_committed_card_past_pickup_is_never_cleared` still holds — but a **booked** card is now protected from the expired-card sweep by `is_protected` reading `engine_load_id`, not by the commitment gate. Split into two tests so both facts are stated and neither stands in for the other.
+
+---

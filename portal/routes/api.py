@@ -110,6 +110,14 @@ def card_action():
             passed = dict(entry, status="PASS")
             return jsonify({"status": "ok", "entry": passed, "discarded": True,
                             "note": outcome["note"]})
+        # **Refused, and that is the end of it.** The guard used to fall through
+        # to the lines below, which set the committed mission's status to PASS
+        # and wrote an Archive record for freight that was still on the truck.
+        # A refusal that keeps going is not a refusal. Found by the regression
+        # audit, 2026-09-16; the `/reject` route on the Loads screen always did
+        # this correctly and only this door was broken.
+        return jsonify({"status": "refused", "entry": entry, "discarded": False,
+                        "note": outcome["note"]}), 409
 
     updated = sandbox.update_status(sandbox_id, new_status)
 
