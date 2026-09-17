@@ -246,3 +246,29 @@ dd textarea {
 }
 .ops-nav a:hover { color: var(--key); background: #f4f8ff; }
 .ops-nav a.on { color: #fff; background: var(--ink); }
+
+/* Booking's warnings. BOOKING CONFLICT PREVENTION DOCTRINE, 2026-09-16:
+   "Display warning only. Do not block. Do not reserve capacity. Do not reject
+   commitment. Human authority remains final."
+
+   Pale red, black text, as ruled. No modal, no buttons, no response required.
+   One appearance for all three types -- they are types, not severities, and
+   three colours would rank his freight for him. */
+.conflicts { margin: 10px 0 0; }
+.conflict {
+    background: #fdeaea;
+    color: #111;
+    border-left: 4px solid #c62828;
+    padding: 8px 12px;
+    margin: 0 0 6px;
+    font-size: 14px;
+    line-height: 1.45;
+}
+.conflict-level {
+    display: inline-block;
+    margin-right: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 12px;
+}

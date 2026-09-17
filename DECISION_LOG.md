@@ -2461,3 +2461,79 @@ and, on why it matters: *"No pay without the paperwork."*
 **A POD is one document.** Two at once is a mistake worth catching, not two PODs.
 
 ---
+
+## 2026-09-17 — RECONCILIATION BATCH 7: capacity truth, and the three conflict types built
+
+**PR:** (this change)
+**Capability:** `dispatch/conflicts.py` (new), `dispatch/booking.py` (`held_count`, `held_and_taken` removed), `portal/routes/joe_portal.py` (`_conflicts_for`, `mission_brief`), `portal/templates/booking.html`, `portal/templates/mission_brief.html`, `portal/static/mission_brief.css`, `tests/test_booking_conflicts.py` (new), `tests/test_booking_board.py`.
+**Approved by:** Mike (owner). **BOOKING CONFLICT PREVENTION DOCTRINE, verbatim:**
+
+> **LEVEL 1 · Position Conflict** — *"Truck physically unlikely to be where the next commitment requires."*
+> **LEVEL 2 · Time Conflict** — *"Two commitments overlap or create an impossible sequence."*
+> **LEVEL 3 · HOS Awareness** — *"Route duration and commitments suggest an unusually long duty day."*
+>
+> **RULE** — *"Display warning only. Do not block. Do not reserve capacity. Do not reject commitment. Human authority remains final."*
+
+and, settling Level 3 on 2026-09-16: *"this is an advisory warning base on prior day destination and the beginning time for the proposed next start. if less than 12 hours a warning should go out. example: return back to Jacksonville at 11pm and next proposed load is 4am there is not enough time for 10hr break"*
+
+**The board drew one rule and the screen named another.** `WEEK_PATTERN` was opened to seven OPEN days when the doctrine landed — *"Every day begins OPEN"* — and the Booking screen went on printing **"Mon–Wed and Sat sellable · Thu–Fri held for expedited · Sun closed"** underneath it, with a headline figure counting *"held"* days and an unsold figure qualified *"Mon–Wed only"*. So the screen told him Thursday was not inventory on a build where it was, and offered a number that could only ever be zero.
+
+**`held_count` and `held_and_taken` are removed, not corrected.** `day_state()` returns `BOOKED` or `pattern_for()`, and `pattern_for()` is `OPEN` for every weekday — the two were unreachable by construction. `HELD`, `MAINTENANCE` and `CLOSED` stay as vocabulary for a day Outlook or a future ruling says is not sellable; nothing counts them until something can produce one.
+
+**Three warnings were doctrine and none of them existed.** All three are now computed from facts already stored:
+
+| level | reads |
+|---|---|
+| Position | miles from where the last commitment leaves the truck to where this one starts, **and the basis is always said** |
+| Time | two `span_of()` day-sets that intersect |
+| HOS | the hours between a delivery already agreed and the pickup being agreed now |
+
+**Level 3 computes no drive time.** An engineer read *"route duration"* as something to calculate from a route, which `load_assessment.py:225` forbids outright — *"this system does not need to track drive times for nay reason."* The Owner meant the gap between **two times already typed on two records**. Twelve hours rather than ten because the break is ten and fuelling, paperwork, a shower and getting to the shipper are not part of it. Held by a test that greps the module for `drive_time`.
+
+**They are types, not severities.** One appearance for all three — pale red, black text, no modal, no buttons, no response required — because nothing in the doctrine asks for a ranking and inventing one would be an engineer grading his freight. Held by a test that the module contains no notion of severity.
+
+**Half the tests prove it does nothing.** A warning that quietly held a day would be worse than no warning: the record is byte-identical after a check, no day is reserved, COMMIT is untouched, and an uncommitted card still takes no capacity. *"Human authority remains final."*
+
+**Left for him, not decided here.** `/calendar` is a third month view of load days, alongside Booking's MONTH and the driver's calendar. It stores no day-state, so it breaks no scheduling rule — whether three month views should exist is a tab-walk question and his to answer.
+
+---
+
+## 2026-09-17 — RECONCILIATION BATCH 9: visible language
+
+**PR:** `8925d32` (recorded late; the work shipped with Batches 5, 6 and 8 and this entry was written during Batch 10's audit of the record itself).
+**Capability:** `portal/templates/candidates.html`, `portal/templates/dispatch_detail.html`, `portal/templates/load_readonly_detail.html`, `portal/routes/joe_portal.py`, `tests/test_lane_history.py`, `tests/test_one_driver_cockpit.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"CAN BATCH 9 BE DONE AT SAME TIME?"* — authorising it alongside Batch 7, under the standing reconciliation mission.
+
+**REJECT asked him to confirm one thing and did another.** The dialog read *"Leave this one? It stays on record."* Ruling D12, 2026-09-14: *"program only processes committed loads. due to the life span of only hours to minuties it makes no sense to keep any uncommitted load information."* An uncommitted candidate is discarded, card and capture together — **and every card on that screen is uncommitted**, because a committed one leaves it. It now says what happens: *"Reject this one? The card and the capture are discarded."*
+
+**"Lane History" is "Previous Runs".** *"there is no lane use in dispatch."* The section is useful — what this run has been worth between these two points before — so the word went and the section stayed. **The engine still calls it `lane_history`**: Batch 9 is visible language, and renaming the store and service functions is wider than the ruling asked. Recorded rather than done quietly, so he can say if the internals should follow.
+
+**The cockpit pointed a driver at a dead button.** *"This mission has no open load yet. Operations opens it with Book Load."* Since Batch 2, BOOK books the day and **COMMIT** opens the operational load, so the line named a control that had stopped opening anything. It now says the mission has not been committed yet.
+
+---
+
+## 2026-09-17 — RECONCILIATION BATCH 10: the whole run, pressed
+
+**PR:** (this change)
+**Capability:** `tests/test_the_whole_run.py` (new), `DISPATCH_RECONCILIATION_DISPOSITION_REGISTER.md` (new), `dispatch/services.py` (`_open_visibility`, `create_load`, `create_load_with_id`, `update_visibility_notes`), and the Batch 9 entry above, written during this batch.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"push batch 7 and start batch 10"* — closing the mission opened on 2026-09-16.
+
+**One mission, capture to retention, through the controls a person presses.** Twenty-four checks, and **no engine function called directly to build a precondition.** From `CLAUDE.md` §7: *"A test that builds its own precondition proves the logic and says nothing about whether the application can reach it."* Every regression these ten batches found was reachable and unreached — a POD button that filed nothing, an ARRIVE that mailed before the gate, an Advance button that retired a load into no record — and each had passing unit tests beside it.
+
+**Half of it proves the negatives.** A ruling that only says what happens is half a ruling: ARRIVE tells nobody on an uncommitted mission, BOOK does not commit, the Advance button cannot archive, a started run cannot be deleted, the old attach routes are gone, Archive refuses a file nobody reviewed.
+
+**And the walk found what nine batches had not.** `create_load` gives a new load its Mission Visibility record; **`create_load_with_id` did not — and that is the path COMMIT uses.** So every mission committed through the Mission Brief had **no visibility record at all** until the driver's first milestone: the customer view had nothing to show for a committed load that had not started, and a note Operations wrote before the truck rolled went to a row that did not exist and was **silently lost**. One act, two functions, one missing the consequence — the same shape as every defect in this mission, found on the last day of it by the only kind of test that could.
+
+`store.update_visibility_notes` writes to an existing row and does nothing at all when there is none. It goes through the one writer now, so a note is never quietly dropped.
+
+**The register does not reproduce the "48 findings".** That list was produced by five read-only agents in one working session and **was never written to the repository**. Reconstructing a numbered enumeration from memory would produce a document that looks authoritative and can be checked against nothing. `DISPATCH_RECONCILIATION_DISPOSITION_REGISTER.md` records what the batches **disposed of**, every line checkable against the code, the tests and the `DECISION_LOG` entry named beside it.
+
+**Fifteen engine-to-portal imports, pinned rather than removed.** `dispatch/` reaches into `portal/` in nine modules — data directories, the sandbox, the publisher, the conflict model. One is at module level (`dispatch/audit.py`); the rest are deferred inside functions, which is why the plug-in separation tests still pass. **Whether the boundary forbids this is architecture the Owner has not ruled on**, and deleting fifteen imports to satisfy an engineer's reading would be writing doctrine. A test pins the count at 15: it cannot grow without somebody reading the docstring and going to him.
+
+**Batch 9 had shipped with no entry in this log.** Found by auditing the record itself, and written above.
+
+**The completion gate is unchanged and is not met.** *"nothing is finished until a real load runs on Mike's laptop."* Two missions have already failed on that gate; nothing here claims to have passed it.
+
+---

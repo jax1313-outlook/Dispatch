@@ -81,6 +81,23 @@
     {% endif %}
   </div>
 
+  {# **Booking's warnings. Display only.** BOOKING CONFLICT PREVENTION
+     DOCTRINE, 2026-09-16: "Display warning only. Do not block. Do not reserve
+     capacity. Do not reject commitment. Human authority remains final."
+
+     So: no modal, no buttons, no response required, and COMMIT sits above
+     untouched. They are types, not severities -- one appearance for all three,
+     because nothing in the doctrine asks for a ranking and inventing one would
+     be grading his freight. #}
+  {% if conflicts %}
+    <div class="conflicts">
+      {% for warning in conflicts %}
+        <p class="conflict"><span class="conflict-level">{{ warning.level }}</span>
+          {{ warning.line }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
   {% if record.calendar_hold and not record.calendar_hold.held %}
     {# Committed, and Outlook did not take the appointment. Said plainly, with
        what to do about it -- the mission is committed either way. #}

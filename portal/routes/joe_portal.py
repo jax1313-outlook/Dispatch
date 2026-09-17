@@ -826,10 +826,30 @@ def mission_brief(record_id: str):
         card=brief_view.card_for(merged),
         editing=request.args.get("edit") == "1",
         gate=commitment.describe(merged),
+        # **What Booking has to say, and nothing more.** BOOKING CONFLICT
+        # PREVENTION DOCTRINE, 2026-09-16: "Display warning only. Do not block.
+        # Do not reserve capacity. Do not reject commitment. Human authority
+        # remains final." It is read at the brief because that is where he is
+        # standing when he decides to COMMIT.
+        conflicts=_conflicts_for(merged),
         # "1 of 3" in the corner, and nothing else shared. A card that stands
         # alone carries no label at all.
         group=_shipper_group(record),
     )
+
+
+def _conflicts_for(record: dict) -> list:
+    """Booking's warnings about this commitment. Never fatal to the screen.
+
+    A brief that will not render because a mileage provider was unreachable is
+    worse than a brief with one warning missing.
+    """
+    from dispatch import conflicts
+
+    try:
+        return conflicts.check(record, sandbox.get_all())
+    except Exception:  # noqa: BLE001 - a warning is never worth a 500
+        return []
 
 
 def _shipper_group(record: dict) -> dict:

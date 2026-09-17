@@ -183,13 +183,25 @@ def create_load(
         notes=notes,
     )
     result = store.create_load(load)
-    vis = LoadVisibilityRecord(
-        load_id=load.load_id,
-        current_status="created",
-        next_expected_milestone="dispatched",
-    )
-    store.upsert_visibility(vis)
+    _open_visibility(load.load_id)
     return result
+
+
+def _open_visibility(load_id: str) -> None:
+    """Give a new load its Mission Visibility record.
+
+    **BATCH 10.** `create_load` did this and `create_load_with_id` did not --
+    and `create_load_with_id` is the path COMMIT uses, so **every mission
+    committed through the Mission Brief had no visibility record at all** until
+    the driver's first milestone. The customer view had nothing to show for a
+    committed load that had not started, and a note Operations wrote before the
+    truck rolled was written to a row that did not exist and silently lost.
+
+    One act, two functions, one of them missing the consequence -- the same
+    shape as every defect these batches found.
+    """
+    refresh_visibility(load_id, current_status="created",
+                       next_expected_milestone="dispatched")
 
 
 def get_load(load_id: str) -> dict | None:
@@ -713,7 +725,11 @@ def update_visibility_notes(
         fields["internal_note"] = internal_note
     if not fields:
         return store.get_visibility(load_id)
-    return store.update_visibility_notes(load_id, **fields)
+    # **Through the one writer.** `store.update_visibility_notes` writes to an
+    # existing row and does nothing at all when there is none -- so a note
+    # written before the load had a visibility record vanished without a word,
+    # which is the 70 MPH test failing at a desk.
+    return refresh_visibility(load_id, **fields)
 
 
 def _get_upload_dir() -> Path:
@@ -1925,7 +1941,10 @@ def create_load_with_id(load_id: str, customer: str = "", **fields) -> dict:
     if not str(load_id or "").strip():
         raise ValueError("create_load_with_id requires the record's own id")
     load = Load(load_id=str(load_id), customer=customer, **fields)
-    return store.create_load(load)
+    result = store.create_load(load)
+    # The same consequence as create_load's. See `_open_visibility`.
+    _open_visibility(load.load_id)
+    return result
 
 def get_load_bundle(load_id: str) -> dict | None:
     load = store.get_load(load_id)

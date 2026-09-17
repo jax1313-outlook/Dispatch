@@ -112,10 +112,14 @@ class TestAnEmptyDayIsUnsoldInventory:
         assert all(d["planned"] == booking.OPEN for d in book["unsold"])
         assert book["unsold_count"] == book["sellable_count"] == 14
 
-    def test_a_booked_sellable_day_is_not_marked_as_expedited(self):
+    def test_a_booked_day_carries_no_expedited_marker(self):
+        """`held_and_taken` is gone (BATCH 7). Nothing produces HELD --
+        `day_state()` returns BOOKED or `pattern_for()`, which is OPEN for all
+        seven days -- so it could only ever be False, under a label describing
+        a week model the doctrine abolished."""
         day = _board({"a": _record(pickup=MONDAY.isoformat())})["board"][0]
         assert day["state"] == booking.BOOKED
-        assert day["held_and_taken"] is False
+        assert "held_and_taken" not in day
 
 
 class TestWhatIsBooked:
@@ -220,13 +224,19 @@ class TestTheScreen:
     def test_it_renders(self, client):
         html = client.get("/booking").get_data(as_text=True)
         assert "BOOKING" in html
-        assert "held for expedited" in html
+        # **The legend used to say "held for expedited"** long after
+        # WEEK_PATTERN was opened to seven OPEN days, so the board drew one
+        # rule and the footer named another. BATCH 7.
+        assert "held for expedited" not in html
+        assert "Every day open" in html
 
     def test_the_headline_is_unsold_sellable_days(self, client):
         """Not revenue, not miles. Those are the days he can still sell, and
         they expire worthless."""
         html = client.get("/booking").get_data(as_text=True)
-        assert "unsold" in html and "these expire" in html
+        assert "unsold" in html and "expire" in html
+        # Not "Mon-Wed only": every day is sellable now.
+        assert "Mon" not in html.split('class="headline"')[1].split("</section>")[0]
 
     def test_a_quiet_calendar_is_explained_in_his_words(self, client):
         from portal import joe_voice

@@ -322,11 +322,14 @@ def build(records=None, calendar=None, *, today=None, weeks=2) -> dict:
             # Shown to keep the week whole, never counted as sellable. A day
             # that has gone is not unsold inventory; it is just gone.
             "past": day < today,
-            # Held for expedited, and something got booked into it. Not a
-            # problem -- it is the position paying off -- but worth seeing.
-            "held_and_taken": state == BOOKED and pattern_for(day) == HELD,
         })
 
+    # **`held_count` and `held_and_taken` are gone.** Nothing produces HELD --
+    # `day_state()` returns BOOKED or `pattern_for()`, and `pattern_for()` is
+    # OPEN for all seven days since the BOOKING CONFLICT PREVENTION DOCTRINE.
+    # They could only ever be 0 and False, and the screen printed them as
+    # though the old week model were still in force. The states themselves stay
+    # as vocabulary; see WEEK_PATTERN.
     sellable = [d for d in board if d["planned"] in SELLABLE and not d["past"]]
     unsold = [d for d in sellable if d["state"] == OPEN]
     booked = [d for d in board if d["state"] == BOOKED and not d["past"]]
@@ -344,8 +347,6 @@ def build(records=None, calendar=None, *, today=None, weeks=2) -> dict:
         "unsold_count": len(unsold),
         "sellable_count": len(sellable),
         "booked_count": len(booked),
-        "held_count": len([d for d in board if d["state"] == HELD
-                           and not d["past"]]),
         "depth": depth_of([d for d in board if not d["past"]]),
         "calendar_status": (calendar or {}).get("status", "UNAVAILABLE"),
     }

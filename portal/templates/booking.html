@@ -47,13 +47,17 @@
   </div>
   <div class="figure {{ 'warn' if book.unsold_count else '' }}">
     <span class="figure-value">{{ book.unsold_count }} unsold</span>
-    <span class="figure-note">of {{ book.sellable_count }} sellable days.
-      Mon&ndash;Wed only &mdash; these expire.</span>
+    {# **Every day is sellable.** BOOKING CONFLICT PREVENTION DOCTRINE,
+       2026-09-16: "Every day begins OPEN." This used to read "Mon-Wed only",
+       which was the old week model -- and it had stopped being true the day
+       WEEK_PATTERN was opened, so the screen was telling him Thursday was not
+       inventory when it was. #}
+    <span class="figure-note">of {{ book.sellable_count }} days ahead.
+      Unsold days expire.</span>
   </div>
-  <div class="figure">
-    <span class="figure-value">{{ book.held_count }} held</span>
-    <span class="figure-note">Thu&ndash;Fri, for expedited. Empty on purpose.</span>
-  </div>
+  {# The "held" figure is gone. Nothing produces HELD any more -- day_state()
+     returns BOOKED or OPEN -- so it could only ever read zero, under a label
+     describing a rule the engine no longer has. #}
 </section>
 
 {% for week in book.weeks %}
@@ -69,11 +73,7 @@
     <div class="day-state">
       <span class="state-label">{{ day.label }}</span>
       {% if day.sub %}<span class="state-sub">{{ day.sub }}</span>{% endif %}
-      {# Held for expedited and something got booked into it. Not a problem --
-         it is the position paying off -- but worth seeing. #}
-      {% if day.held_and_taken %}
-        <span class="state-sub">Expedited taken</span>
-      {% endif %}
+
     </div>
 
     {% for load in day.loads %}
@@ -112,13 +112,18 @@
 {% endfor %}
 
 <footer class="book-foot">
-  {# Saturday opened on 2026-09-10, Mike's ruling: "just leave it open not
-     committed so I can close or take a run." It used to read "Sat maintenance",
-     which both named a parked feature and reserved a day he would rather decide
-     on when it arrives. It is sellable now, so the legend says so. #}
+  {# **The week model is abolished, and the legend said otherwise.** It read
+     "Mon-Wed and Sat sellable / Thu-Fri held for expedited / Sun closed" long
+     after WEEK_PATTERN was opened to seven OPEN days, so the board was drawing
+     one rule and the footer was naming another.
+
+     BOOKING CONFLICT PREVENTION DOCTRINE, 2026-09-16: "Dispatch does not
+     decide: when Mike works, when Mike rests, when Mike performs maintenance,
+     when Mike reserves capacity, which days are closed. Human authority
+     remains final." Outlook is the scheduling authority and the board reads
+     it, so a day he blocks there is a day the board sees. #}
   <span class="week-model">
-    Mon&ndash;Wed and Sat sellable &middot; Thu&ndash;Fri held for expedited
-    &middot; Sun closed
+    Every day open &middot; a day you block in Outlook shows here
   </span>
   {# Said plainly, in his words. The board is still correct about freight when
      the calendar is quiet -- it just cannot show personal commitments, and
