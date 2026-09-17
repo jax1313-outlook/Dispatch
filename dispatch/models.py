@@ -396,6 +396,13 @@ class RetentionArchive:
     legal_hold_note: str = ""
     final_payment_at: str | None = None
     dispute_resolved_at: str | None = None
+    #: The tracing number the closing packet was filed under, and the folder it
+    #: was filed in. *"a folder inside of Library according to that number for
+    #: retervial from Archive. that is the tracing number."* -- Mike Zachary,
+    #: 2026-09-15. Held here because an Archive that cannot reach the packet is
+    #: a filing system with no retrieval end (BATCH 3, point 9).
+    load_number: str = ""
+    packet_location: str = ""
 
     def __post_init__(self) -> None:
         from dispatch.retention import validate_class

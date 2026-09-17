@@ -58,6 +58,36 @@ RECORD = {"card_data": {"load_id": "ROC-2026-884471"},
           "load_number": "ROC-2026-884471"}
 
 
+#: What has to have happened before each end of the run can be arrived at.
+#: A delivery arrival is only legal once the truck has actually left the
+#: shipper, which is the gate doing its job.
+_ROAD = {
+    "PICKUP": ("en_route_pickup",),
+    "DELIVERY": ("en_route_pickup", "arrived_pickup", "loaded", "departed_pickup"),
+}
+
+
+def start_the_run(client, record_id: str, *, to: str = "PICKUP") -> None:
+    """Walk a mission to where an arrival at `to` can legally happen.
+
+    **Owner ruling, 2026-09-17:** *"gate refuses, no notice goes."* Before it,
+    pressing ARRIVE on a bare record mailed a customer regardless, so these
+    tests could build a sandbox entry and press the button. They now have to
+    put a run on the road first -- through COMMIT and the milestone route, the
+    authoritative operations, not by writing status fields.
+    """
+    with client.session_transaction() as s:
+        s["user_id"] = "mike"
+    assert client.post("/brief/mission/%s/commit" % record_id).status_code in (200, 302)
+    with client.session_transaction() as s:
+        s.pop("user_id", None)
+        s["driver_open"] = True
+        s["role"] = "Driver"
+    for event in _ROAD[to]:
+        client.post("/portal/mission/%s/milestone" % record_id,
+                    data={"milestone_event": event})
+
+
 class TestTheVettingPeriod:
     """**Zero since Mike's ruling of 2026-09-06.** Nothing is composed in the
     notice -- the wording is fixed and the variable parts are machine-filled
@@ -274,6 +304,7 @@ class TestArriveUsesTheModeHeIsLookingAt:
     @pytest.fixture(autouse=True)
     def _isolate(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path))
+        monkeypatch.setenv("DISPATCH_DB_PATH", str(tmp_path / "dispatch.db"))
         yield
 
     @pytest.fixture()
@@ -307,6 +338,8 @@ class TestArriveUsesTheModeHeIsLookingAt:
         monkeypatch.setattr(joe_portal, "_mail_connector", lambda: mail)
         monkeypatch.setattr(joe_portal, "_notice_recipients",
                             lambda record: ["someone@example.test"])
+        # A delivery arrival is only legal once the truck has left the shipper.
+        start_the_run(client, mission, to="DELIVERY")
         client.post(f"/portal/mission/{mission}/arrive", data={"view": "DELIVERY"})
         assert "DELIVERY" in mail.sent[0]["subject"]
 
@@ -318,6 +351,7 @@ class TestArriveUsesTheModeHeIsLookingAt:
         monkeypatch.setattr(joe_portal, "_mail_connector", lambda: mail)
         monkeypatch.setattr(joe_portal, "_notice_recipients",
                             lambda record: ["someone@example.test"])
+        start_the_run(client, mission, to="PICKUP")
         client.post(f"/portal/mission/{mission}/arrive", data={"view": "PICKUP"})
         assert "PICKUP" in mail.sent[0]["subject"]
 
@@ -356,6 +390,7 @@ class TestASuccessfulNoticeClearsAStaleFailure:
     @pytest.fixture(autouse=True)
     def _isolate(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PORTAL_DATA_DIR", str(tmp_path))
+        monkeypatch.setenv("DISPATCH_DB_PATH", str(tmp_path / "dispatch.db"))
         yield
 
     def _delivery(self, **record):
@@ -419,6 +454,9 @@ class TestASuccessfulNoticeClearsAStaleFailure:
         app = create_app()
         app.config["TESTING"] = True
         with app.test_client() as client:
+            # A notice only exists on a run that is running. See
+            # `start_the_run`; the stale error is what this test is about.
+            start_the_run(client, entry["id"], to="DELIVERY")
             client.post(f"/portal/mission/{entry['id']}/arrive",
                         data={"view": "DELIVERY"})
 

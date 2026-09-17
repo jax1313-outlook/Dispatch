@@ -527,6 +527,27 @@ def generate_pod(load_id):
 
 # ── Retention Archive ─────────────────────────────────────────────────
 
+def filing_of(load_id: str) -> dict:
+    """The tracing number a mission's closing packet was filed under, and where.
+
+    **Read from the packet report, not from the request body** (BATCH 3, point
+    9). These are facts about what was filed, so a caller must not be able to
+    state them -- an archive whose retrieval path came from whoever posted the
+    request is not a retrieval path. Every archive route reads them here, so
+    none can forget them.
+
+    Empty when there is no packet. A load that ended without one -- and the
+    Owner ruled on 2026-09-16 that some genuinely do, *"some loads genuinely
+    end without a POD coming back"* -- archives with nothing to point at rather
+    than with a path to a folder that was never written.
+    """
+    from portal.models import sandbox
+
+    report = (sandbox.get(load_id) or {}).get("closing_packet") or {}
+    return {"load_number": str(report.get("load_number") or ""),
+            "packet_location": str(report.get("folder") or "")}
+
+
 @dispatch_bp.route("/loads/<load_id>/archive", methods=["POST"])
 def archive_load(load_id):
     body = request.get_json(silent=True) or {}
@@ -536,6 +557,7 @@ def archive_load(load_id):
             retention_class=body.get("retention_class") or "normal_commercial",
             legal_hold=bool(body.get("legal_hold")),
             legal_hold_note=body.get("legal_hold_note") or "",
+            **filing_of(load_id),
         )
     except ValueError as e:
         status = 404 if "not found" in str(e).lower() else 409

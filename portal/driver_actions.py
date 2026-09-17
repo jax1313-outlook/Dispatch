@@ -30,8 +30,9 @@ def _utc_today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def step_milestone(load_id: str, milestone_event: str, actor: str) -> tuple[str, str]:
-    """Record one milestone.
+def record_milestone(load_id: str, milestone_event: str,
+                     actor: str) -> tuple[str, str, bool]:
+    """Record one milestone, and say plainly whether the load actually advanced.
 
     add_milestone() does NOT raise when the transition gate refuses -- it records
     the milestone, leaves the status alone, and hands the refusal back under
@@ -39,20 +40,32 @@ def step_milestone(load_id: str, milestone_event: str, actor: str) -> tuple[str,
     earlier driver build swallowed that, so a refused step looked exactly like a
     successful one from the cab. ValueError means the load vanished between the
     ownership check and the write, not a refusal.
+
+    **The third value is the gate's verdict**, not a reading of the message.
+    ARRIVE has to know it before deciding whether an arrival notice may go to a
+    customer, and a caller that has to match on wording to find that out is a
+    caller that will eventually match wrong. Owner ruling, 2026-09-17: *"gate
+    refuses, no notice goes."*
     """
     milestone_event = (milestone_event or "").strip()
     if not milestone_event:
-        return "No milestone was selected.", ERROR
+        return "No milestone was selected.", ERROR, False
     try:
         result = dispatch_svc.add_milestone(
             load_id, event_type=milestone_event, source="driver", entered_by=f"driver:{actor}")
     except ValueError as exc:
-        return str(exc), ERROR
+        return str(exc), ERROR, False
     refusal = result.get("status_transition_refused")
     if refusal:
         return (f"Recorded, but the load stays in {refusal['from_status'].replace('_', ' ')}: "
-                f"{refusal['reason']}"), WARNING
-    return f"{milestone_event.replace('_', ' ').title()} recorded.", SUCCESS
+                f"{refusal['reason']}"), WARNING, False
+    return f"{milestone_event.replace('_', ' ').title()} recorded.", SUCCESS, True
+
+
+def step_milestone(load_id: str, milestone_event: str, actor: str) -> tuple[str, str]:
+    """`record_milestone` for the callers that only need what to say."""
+    said, category, _accepted = record_milestone(load_id, milestone_event, actor)
+    return said, category
 
 
 def upload_pod(load_id: str, upload, actor: str) -> tuple[str, str]:

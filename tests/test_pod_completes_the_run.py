@@ -79,10 +79,17 @@ def delivered(client):
         "delivery_date": "2026-09-21 14:00",
     })
     rid = record["id"]
-    data = sandbox._load()
-    data[rid].update(commitment.commit(dict(data[rid]), when="2026-09-20T12:00:00Z"))
-    sandbox._save(data)
-    joe_portal._open_operational_load(rid, sandbox.get(rid))
+    # **Committed through the route**, not by writing the field: COMMIT is the
+    # sole authoritative commitment operation and it is what assigns the load
+    # number (Batch 2, 2026-09-16). A fixture that commits by hand skips that
+    # and files the packet under "no-load-number".
+    with client.session_transaction() as s:
+        s["user_id"] = "mike"
+    answer = client.post("/brief/mission/%s/commit" % rid)
+    assert answer.status_code in (200, 302), answer.status_code
+    with client.session_transaction() as s:
+        s.pop("user_id", None)
+    assert commitment.is_committed(sandbox.get(rid))
 
     for event in ("en_route_pickup", "arrived_pickup", "loaded",
                   "departed_pickup", "arrived_delivery", "delivered"):
@@ -139,22 +146,19 @@ class TestSendingThePodEndsTheRun:
         assert list(folder.glob("*.docx"))
         assert folder.name == (report["load_number"] or "no-load-number")
 
-    @pytest.mark.xfail(reason="Finding, 2026-09-16: a captured load never gets a "
-                              "load number, so its packet files under "
-                              "'no-load-number'. The tracing number is the "
-                              "whole filing system. Owner's to rule: assign at "
-                              "COMMIT.", strict=True)
     def test_a_captured_load_is_filed_under_a_real_number(self, client, delivered):
-        """**Found by this file, not by the audit.** A load typed on the New
-        Mission screen gets a number from `mission_template.to_record`. A load
-        captured by voice, paste or alert goes through `from_capture`, which
-        assigns none, and COMMIT does not either -- so a completed captured run
-        files its POD, invoice and closing documents in a folder called
-        `no-load-number`.
+        """**Found by this file, not by the audit**, and closed by Batch 2.
 
-        Against the filing ruling of 2026-09-15: *"a folder inside of Library
-        according to that number for retervial from Archive. **that is the
-        tracing number.** same system used by FedEx/ UPS and others."*"""
+        A load typed on the New Mission screen got its number from
+        `mission_template.to_record`. A load captured by voice, paste or alert
+        goes through `from_capture`, which assigns none -- and COMMIT did not
+        either, so a completed captured run filed its POD, invoice and closing
+        documents in a folder called `no-load-number`. COMMIT now assigns the
+        number, which is why the fixture above commits through the route.
+
+        The filing ruling of 2026-09-15: *"a folder inside of Library according
+        to that number for retervial from Archive. **that is the tracing
+        number.** same system used by FedEx/ UPS and others."*"""
         _send_pod(client, delivered)
 
         assert sandbox.get(delivered)["closing_packet"]["load_number"]
@@ -228,6 +232,62 @@ class TestTheRunEndsWithoutLying:
         page = client.get("/portal/mission/%s" % delivered).get_data(as_text=True)
 
         assert "COMPLETED" in page
+
+    def test_the_pod_reaches_the_archive_through_the_evidence_index(self, client,
+                                                                    delivered):
+        """Half of the Owner's point 9. The POD is retrievable from the
+        retention record; the closing packet is not — see below."""
+        from dispatch import services as dispatch_svc
+
+        _send_pod(client, delivered)
+
+        retention = dispatch_svc.archive_load(delivered)
+
+        assert retention["evidence_index"], "the POD follows the record"
+
+    def test_the_closing_packet_is_reachable_from_the_archive(self, client, delivered):
+        """*"a folder inside of Library according to that number for retervial
+        from Archive. that is the tracing number."*
+
+        Built at the filing end and missing at the retrieval end -- BATCH 3's
+        point 9, raised as a strict xfail and closed in BATCH 5.
+
+        **Through the archive route**, because that is where the filing is read
+        from: the engine cannot look it up for itself and an `archive_load()`
+        called directly would prove nothing about whether a person pressing
+        Archive gets a retrievable record."""
+        _send_pod(client, delivered)
+        packet = sandbox.get(delivered)["closing_packet"]
+
+        answer = client.post("/api/dispatch/loads/%s/archive" % delivered)
+
+        assert answer.status_code == 201, answer.get_data(as_text=True)
+        retention = answer.get_json()["retention"]
+        assert retention["packet_location"] == packet["folder"]
+        assert retention["load_number"] == packet["load_number"]
+
+    def test_the_archive_reaches_real_documents(self, client, delivered):
+        """The path is only worth holding if something is at the end of it."""
+        from pathlib import Path
+
+        _send_pod(client, delivered)
+
+        answer = client.post("/api/dispatch/loads/%s/archive" % delivered)
+
+        folder = Path(answer.get_json()["retention"]["packet_location"])
+        assert folder.is_dir() and list(folder.glob("*.docx"))
+
+    def test_a_load_with_no_packet_points_at_nothing(self, client, delivered):
+        """*"some loads genuinely end without a POD coming back."* Such a load
+        archives holding no path, rather than a path to a folder that was never
+        written."""
+        client.post("/portal/mission/%s/milestone" % delivered,
+                    data={"milestone_event": "delivered"})
+
+        answer = client.post("/api/dispatch/loads/%s/archive" % delivered)
+
+        assert answer.status_code == 201
+        assert answer.get_json()["retention"]["packet_location"] == ""
 
     def test_a_completed_load_is_still_asked_to_be_filed(self):
         """It used to fall silent: `delivered` had a 24-hour stall line and

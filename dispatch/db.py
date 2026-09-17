@@ -133,7 +133,11 @@ CREATE TABLE IF NOT EXISTS retention (
     legal_hold        INTEGER NOT NULL DEFAULT 0,
     legal_hold_note   TEXT NOT NULL DEFAULT '',
     final_payment_at  TEXT,
-    dispute_resolved_at TEXT
+    dispute_resolved_at TEXT,
+    -- The tracing number, and where the closing packet was filed under it.
+    -- See the note beside these two in _apply_migrations().
+    load_number       TEXT NOT NULL DEFAULT '',
+    packet_location   TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS rate_confirmations (
@@ -573,11 +577,26 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     # existing record becomes normal_commercial with no legal hold -- exactly
     # what it was treated as before -- and dispatch/retention.py says when that
     # rule may not apply.
+    #
+    # `load_number` and `packet_location` close BATCH 3's point 9 (Mike
+    # Zachary, 2026-09-17, "agreed do it"). The Archive held an evidence index
+    # and an archive_location and **neither the tracing number nor the path to
+    # the closing packet**, so a packet correctly filed under the load number
+    # could not be reached from the record that is supposed to retrieve it --
+    # against "a folder inside of Library according to that number for
+    # retervial from Archive. that is the tracing number."
+    #
+    # The engine cannot look either fact up for itself: `loads` has no load
+    # number (its `load_id` is the mission id) and the packet report lives in
+    # the portal's sandbox, which `dispatch/` may not import. They are handed
+    # in by the side that knows them, the way retention_class already is.
     for column in ("retention_class TEXT NOT NULL DEFAULT 'normal_commercial'",
                    "legal_hold INTEGER NOT NULL DEFAULT 0",
                    "legal_hold_note TEXT NOT NULL DEFAULT ''",
                    "final_payment_at TEXT",
-                   "dispute_resolved_at TEXT"):
+                   "dispute_resolved_at TEXT",
+                   "load_number TEXT NOT NULL DEFAULT ''",
+                   "packet_location TEXT NOT NULL DEFAULT ''"):
         try:
             conn.execute("ALTER TABLE retention ADD COLUMN %s" % column)
         except sqlite3.OperationalError:

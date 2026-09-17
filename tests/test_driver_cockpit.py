@@ -410,7 +410,11 @@ class TestTheArrivalNotice:
         # Owner ruling, 2026-09-15: "yes remove the load diagram line". The
         # notice stopped promising a document that left with Load Arrangement.
         assert not any("load diagram" in f for f in follows)
-        assert any("securement" in f for f in follows)
+        # **Owner ruling, 2026-09-17:** *"true from all Template emails. Photos
+        # will be available on the upcoming website through the Customer
+        # Screen."* This used to require "securement" -- a photo line, promising
+        # an email attachment that was never going to arrive in an email.
+        assert not any("photo" in f for f in follows)
 
     def test_stop_one_is_read_from_delivery(self):
         """Owner ruling, 2026-09-15: "read stop 1 from delivery". The brief edits

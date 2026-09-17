@@ -1062,12 +1062,25 @@ def mission_brief_save(record_id: str):
 def portal_arrive(record_id: str):
     """The documented arrival event, and the notice that comes from it.
 
-    The one outbound act that does not wait for a human -- an arrival notice is
-    worth nothing if it is not contemporaneous. The first four are drafted for
-    review; after that the template has been read four times and goes on its
-    own. See `dispatch/arrival.py`.
+    **The arrival is recorded first, and the notice follows it.** An arrival
+    notice does not wait for a human -- it is worth nothing if it is not
+    contemporaneous, and the operator settled that on 2026-09-06: *"no need to
+    review at all, it is template format."* But not waiting for a human is not
+    the same as not waiting for the gate. This route used to mail the customer
+    **before** it looked at the load at all, so a mission that was never
+    committed -- no load, no run, no START RUN -- would still put *"Truck
+    arrived on site SAFELY"* in front of a broker under Level 1 Transport's
+    name. Owner ruling, 2026-09-17: *"gate refuses, no notice goes."*
+
+    So the order is: stamp the arrival, record the milestone, and send only on
+    a verdict of accepted. See `dispatch/arrival.py` for what sending means.
+
+    **The stamp is kept either way**, because the truck was where the driver
+    says it was and that is his evidence. What a refusal withholds is the
+    outbound claim, not the record.
     """
     from dispatch import arrival
+    from portal import driver_actions
 
     record = sandbox.get(record_id)
     if not record:
@@ -1089,6 +1102,31 @@ def portal_arrive(record_id: str):
         stored["%s_gps" % ("delivery" if mode == cockpit.MODE_DELIVERY
                            else "pickup")] = fix
 
+    # One tap, not two (Mike Zachary, 2026-09-14, one Driver Cockpit): ARRIVE
+    # records the arrival milestone as well. It now runs **first**, because its
+    # verdict is what decides whether a customer hears anything.
+    said = ""
+    if _operational_load(record_id):
+        event = "arrived_delivery" if mode == cockpit.MODE_DELIVERY else "arrived_pickup"
+        said, _category, accepted = driver_actions.record_milestone(
+            record_id, event, _cockpit_actor())
+    else:
+        # No open load means no run, and a notice asserting an arrival on a run
+        # that has not started is a false statement to a customer. There is no
+        # gate to pass because there is nothing to pass it.
+        accepted = False
+        said = ("This mission has no open load, so nothing went out. "
+                "Press START RUN first.")
+
+    if not accepted:
+        stored["arrival_notice_refused"] = said
+        data[record_id] = stored
+        sandbox._save(data)
+        return jsonify({"ok": False, "sent": False, "drafted": False,
+                        "recipients": [], "note": said,
+                        "arrived_at": stored["arrived_at"]})
+
+    stored.pop("arrival_notice_refused", None)
     merged = dict(stored)
     merged["numbers"] = mission_svc.display_numbers(merged)
     notice = cockpit.arrival_notice_for(merged, mode)
@@ -1113,16 +1151,7 @@ def portal_arrive(record_id: str):
     data[record_id] = stored
     sandbox._save(data)
 
-    # One tap, not two (Mike Zachary, 2026-09-14, one Driver Cockpit): when the
-    # mission has an open load, ARRIVE also records the arrival milestone, and
-    # says what the load made of it.
-    note = outcome.get("note", "")
-    if _operational_load(record_id):
-        from portal import driver_actions
-
-        event = "arrived_delivery" if mode == cockpit.MODE_DELIVERY else "arrived_pickup"
-        said, _category = driver_actions.step_milestone(record_id, event, _cockpit_actor())
-        note = (note + " " + said).strip()
+    note = (outcome.get("note", "") + " " + said).strip()
 
     return jsonify({"ok": bool(outcome.get("ok")),
                     "sent": bool(outcome.get("sent")),

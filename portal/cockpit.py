@@ -475,11 +475,22 @@ DELIVERY_ARTIFACTS = (
 #: The Load Diagram came out on the Owner's ruling, 2026-09-15: *"yes remove the
 #: load diagram line"*. It left the cockpit with Load Arrangement, so the notice
 #: stopped promising a customer a document nobody can produce.
+#: What the customer is promised will follow. **Documents only.**
+#:
+#: **Owner ruling, 2026-09-17:** *"true from all Template emails. Photos will
+#: be available on the upcoming website through the Customer Screen. Notice of
+#: photos and locations will be part of narative of email templates."*
+#:
+#: The photo lines are struck rather than renamed. They listed "Load Securement
+#: Photos" and "Delivery Photos" -- names from no vocabulary in the system,
+#: against the one-vocabulary rule, and promising a customer an email
+#: attachment that was never going to arrive in an email. Photos reach the
+#: customer through the Customer Screen once the website exists; the narrative
+#: line that points them there is written when there is somewhere to point.
 ARRIVAL_NOTICE_FOLLOWS = {
-    "PICKUP": ("Bill of Lading (BOL)", "Packing List",
-               "Load Securement Photos"),
+    "PICKUP": ("Bill of Lading (BOL)", "Packing List"),
     "DELIVERY": ("Signed POD / Signed BOL", "Packing List (if included)",
-                 "Delivery Photos", "Invoice"),
+                 "Invoice"),
 }
 
 #: Every arrival notice is blind-copied here, so the office holds the evidence
@@ -804,7 +815,11 @@ def arrival_notice_for(record: dict, mode: str) -> dict:
                           f"of {phase.lower()} activities:"),
         "follows": ARRIVAL_NOTICE_FOLLOWS[phase],
         "bcc": ARRIVAL_NOTICE_BCC,
-        "sent": bool(record.get("arrived_at")),
+        # Whether the notice went, not whether the truck arrived. Those were the
+        # same fact only while every arrival mailed; now that a refused arrival
+        # sends nothing, `arrived_at` would claim a notice that was deliberately
+        # withheld.
+        "sent": bool(record.get("arrival_notice_sent_at")),
         # What the driver reads about delivery of this notice. The precise
         # system condition stays available to engineering under `transmission`;
         # `delivery` is what reaches the glass, in his language and with what
@@ -861,6 +876,16 @@ def _notice_delivery(record: dict) -> dict:
     if not record.get("arrived_at"):
         return {"sent": False, "line": "Arrival notice goes out when you press ARRIVE.",
                 "instead": ""}
+
+    # Held back on purpose, which is a different fact from a failure and has a
+    # different answer. The run had not reached this arrival, so no customer was
+    # told one had happened (Owner, 2026-09-17: *"gate refuses, no notice
+    # goes."*). Saying "I couldn't send it" here would send him looking for a
+    # mail problem that does not exist.
+    refused = str(record.get("arrival_notice_refused") or "").strip()
+    if refused:
+        return {"sent": False, "line": "No arrival notice went out.",
+                "instead": refused}
 
     # Arrived, and nothing was produced. Treated as not sent, always: the
     # absence of proof is the only safe reading, because a driver who believes

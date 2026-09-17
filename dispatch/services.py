@@ -923,7 +923,22 @@ def sanitize_payload_for_role(payload: dict, role: str) -> dict:
 
 
 def archive_load(load_id: str, *, retention_class: str = "normal_commercial", legal_hold: bool = False,
-                 legal_hold_note: str = "") -> dict:
+                 legal_hold_note: str = "", load_number: str = "",
+                 packet_location: str = "") -> dict:
+    """Retire a finished load into retention.
+
+    **`load_number` and `packet_location` are the retrieval end of the filing
+    system** (BATCH 3, point 9; Mike Zachary, 2026-09-17). The record used to
+    carry an evidence index and an archive location and neither of these, so a
+    closing packet filed correctly under the tracing number could not be found
+    from the Archive that exists to find it.
+
+    They are parameters rather than lookups because the engine cannot know
+    either: `loads` has no load number -- its `load_id` is the mission id --
+    and the packet report lives in the portal's sandbox, which `dispatch/` may
+    not import. The side that knows hands them over, as it already does for
+    `retention_class`.
+    """
     load = store.get_load(load_id)
     if not load:
         raise ValueError(f"Load not found: {load_id}")
@@ -959,6 +974,8 @@ def archive_load(load_id: str, *, retention_class: str = "normal_commercial", le
         retention_class=retention_class,
         legal_hold=legal_hold,
         legal_hold_note=legal_hold_note,
+        load_number=str(load_number or ""),
+        packet_location=str(packet_location or ""),
     )
     result = store.create_retention(ret)
 

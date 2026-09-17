@@ -515,14 +515,16 @@ def create_retention(ret: RetentionArchive) -> dict:
                (archive_id, load_id, final_status, pod_package_id,
                 evidence_index, financial_summary, archive_location,
                 retention_status, archived_at, retention_class, legal_hold,
-                legal_hold_note, final_payment_at, dispute_resolved_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                legal_hold_note, final_payment_at, dispute_resolved_at,
+                load_number, packet_location)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (ret.archive_id, ret.load_id, ret.final_status,
              ret.pod_package_id, json.dumps(ret.evidence_index),
              json.dumps(ret.financial_summary),
              ret.archive_location, ret.retention_status, ret.archived_at,
              ret.retention_class, int(bool(ret.legal_hold)), ret.legal_hold_note,
-             ret.final_payment_at, ret.dispute_resolved_at),
+             ret.final_payment_at, ret.dispute_resolved_at,
+             ret.load_number, ret.packet_location),
         )
     return ret.to_dict()
 

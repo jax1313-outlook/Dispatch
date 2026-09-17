@@ -2309,3 +2309,76 @@ EN ROUTE PICKUP                   after -- a display again, tracking the load
 **Recorded, because a protection changed its reason.** `test_a_committed_card_past_pickup_is_never_cleared` still holds — but a **booked** card is now protected from the expired-card sweep by `is_protected` reading `engine_load_id`, not by the commitment gate. Split into two tests so both facts are stated and neither stands in for the other.
 
 ---
+
+## 2026-09-17 — RECONCILIATION BATCH 3: the POD correction verified on the live path
+
+**PR:** (this change)
+**Capability:** verification only — `tests/test_pod_completes_the_run.py`. No engine or route changed in this batch; the correction itself landed in `6b05a34` as the early POD fix the Owner accepted out of sequence.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"The POD work already completed is accepted as an early correction to the primary driver path. Do not undo it, repeat it, or move it merely to satisfy the written batch sequence."* — followed by the ten closure points, *"run batch 3 verification"*, and on the result: *"agreed, close batch 3 and fix point 9 in batch 5."*
+
+**Verified, and verified the only way that counts.** Every point was pressed through the driver's own HTTP route, carrying the CSRF token a browser carries. Nothing called the packet builder directly. That distinction is the whole reason this batch exists: `tests/test_closing_packet.py` calls `build()` and passed throughout the period the driver's button was a dead end.
+
+**Nine of ten points measurable, eight passing.** The visible POD control attaches to the right Mission Record; `pod_received` is reached through the authorized operation; the load moves `delivered → completed` **before** the packet is built; the packet prints the record's actual delivery state; a refused transition builds no packet and makes no customer document claiming delivery; the screen stops asking for the POD; the completed record stays visible for closeout instead of telling a finished driver his load was never opened; the POD and the packet remain retrievable. Point 10 — route-level tests — is satisfied by this file's existence.
+
+**Point 9 fails and is deferred to Batch 5, by ruling.** The retention record carries `archive_location` and an `evidence_index` that reaches the POD, and **neither the load number nor the packet path**. So the closing packet, correctly filed under the tracing number at `Closing Packets/<load number>/`, cannot be reached from the Archive that is supposed to retrieve it. Against *"a folder inside of Library according to that number for retervial from Archive. that is the tracing number."* Held by a strict `xfail` naming Batch 5, so the day it is fixed the test says so rather than sitting silent.
+
+**A finding closed and its test turned the right way up.** `test_a_captured_load_is_filed_under_a_real_number` was written as a strict `xfail` before Batch 2 made COMMIT assign the number. It kept failing only because the fixture committed by writing the field instead of pressing COMMIT — the exact habit the primary rule forbids. The fixture now commits through `/brief/mission/<id>/commit`, the number is assigned, and the test asserts the fact positively.
+
+**Two unattended outbound acts, observed.** The verification run left `dispatch-delivered-*.eml` and `dispatch-archive-*.eml` in an Outbox without any operator framing them as messages. Recorded here as confirmation, not as a fix — it is Batch 4's subject.
+
+---
+
+## 2026-09-17 — RECONCILIATION BATCH 4: communication side effects
+
+**PR:** (this change)
+**Capability:** `portal/routes/joe_portal.py` (`portal_arrive`), `portal/driver_actions.py` (`record_milestone`, `step_milestone`), `portal/cockpit.py` (`ARRIVAL_NOTICE_FOLLOWS`, `arrival_notice_for`, `_notice_delivery`), `tests/test_arrive_waits_for_the_gate.py` (new), `tests/test_arrival_notice.py`, `tests/test_driver_cockpit.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"yes notice must go out, email must be sent"* — for an arrival the gate accepts — and, for one it refuses: *"gate refuses, no notice goes."* On the photo lines: *"true from all Template emails. Photos will be available on the upcoming website through the Customer Screen. Notice of photos and locations will be part of narative of email templates. delete the photo lines."*
+
+**ARRIVE mailed the customer before anything checked the load.** `arrival.deliver()` ran at the top of the route and the milestone — the gate — ran afterwards, its verdict discarded. So a mission that had never been committed, with no load, no run and nobody having pressed START RUN, would still put *"Truck arrived on site SAFELY"* in front of a broker under Level 1 Transport's name. The doctrine above it was right and is kept: an arrival notice does not wait for a human, because *"no need to review at all, it is template format"* and a notice that is not contemporaneous is worth nothing. **Not waiting for a human is not the same as not waiting for the gate.**
+
+**The order is now: stamp, record, then send.** On a refusal nothing outbound happens at all. On acceptance the notice goes immediately — no queue, no review step.
+
+**The arrival stamp survives a refusal.** The truck was where the driver says it was and that is his evidence. What a refusal withholds is the claim to a customer, not the record.
+
+**A refusal is not a mail failure, and the cockpit no longer says it is.** `_notice_delivery` had three real states and one catch-all that read *"I couldn't send the arrival notice myself"* — which would have sent him hunting an Outlook problem that does not exist. A withheld notice now says so, and says what to press.
+
+**`notice["sent"]` read `arrived_at`.** Arriving and sending were the same fact only while every arrival mailed. It reads `arrival_notice_sent_at` now. The glass already required both flags, so nothing on screen was wrong; the field itself was.
+
+**The gate's verdict is returned, not inferred from wording.** `record_milestone` hands back whether the load actually advanced; `step_milestone` keeps its two-value shape for the callers that only need what to say. A caller that has to match on a message string to learn whether a customer may be told is a caller that will eventually match wrong.
+
+**The photo lines are struck, not renamed.** The notice promised *"Load Securement Photos"* and *"Delivery Photos"* — names from no vocabulary in the system, against the one-vocabulary rule, and promising a customer an email attachment that was never going to arrive in an email. Documents only now. The narrative line pointing at the Customer Screen is written when the website exists to point at; nothing here invents a destination.
+
+**A finding corrected, not carried.** The audit listed *"three unattended outbound acts"* — `notify_delivered`, `notify_pod_generated`, `notify_archived`. All three address `reviewer_address()`: they go to Ops, not to a customer. They are internal notices and were classified wrong. No change made, and the misclassification is recorded rather than silently dropped.
+
+**A contact ruling, raised here and carried forward.** `opportunity_card.from_capture` normalises to a shape holding no email at all, so a captured mission reaches ARRIVE with no address and is told *"There is no contact address for this one, so nothing went out."* It was put to the Owner as an email question, which was the wrong question — an engineer looking at an email path and mistaking it for the whole of contact. **His ruling, verbatim:**
+
+> *"you are assuming there is no phone contact and the only contact is email. as long as there is phone contact number listed it should be a live card. if both are missing this would create an ALERT to be flashed at time of capture. this would be an oversight situation that must be corrected."*
+
+So a card is live on **either** contact, the check belongs at **capture**, not at ARRIVE, and a card with neither is an oversight to be flashed and corrected at the moment it is taken down — not discovered at a dock. Not built in this batch; recorded against the capture path.
+
+**Four tests corrected.** Three pressed ARRIVE on a bare sandbox entry and asserted mail went out; they now put a run on the road through COMMIT and the milestone route first — including walking to `departed_pickup` before a *delivery* arrival, because the gate refuses one from the shipper's yard. The fourth required the notice to promise "securement", which his ruling struck.
+
+---
+
+## 2026-09-17 — RECONCILIATION BATCH 5: the Archive reaches the packet (point 9)
+
+**PR:** (this change)
+**Capability:** `dispatch/db.py` (`retention` schema and migration), `dispatch/models.py` (`RetentionArchive`), `dispatch/store.py` (`create_retention`), `dispatch/services.py` (`archive_load`), `portal/routes/dispatch_api.py` (`filing_of`, archive route), `tests/test_pod_completes_the_run.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"agreed, close batch 3 and fix point 9 in batch 5"*, and on the schema change it requires: *"agreed do it."*
+
+**A filing system with no retrieval end.** The closing packet was built correctly and filed under the tracing number at `Closing Packets/<load number>/`. The retention record held an `archive_location` of `retention/<load_id>` and an evidence index, and **neither the load number nor the packet path** — so nothing in the Archive could reach the folder the Archive exists to reach. Against *"a folder inside of Library according to that number for retervial from Archive. **that is the tracing number.** same system used by FedEx/ UPS and others."* Raised as a strict `xfail` at the end of Batch 3 and closed here.
+
+**Two columns, by the established mechanism.** `load_number` and `packet_location` on `retention`, added through the same idempotent guarded `ALTER TABLE` that carried `retention_class` and `legal_hold` on 2026-09-13. Additive, defaulting empty, no existing row rewritten and no operational data touched. Declared in `_SCHEMA` as well, so a fresh database and a migrated one end up identical — the drift `schema_drift()` exists to catch.
+
+**They are handed in, because the engine cannot know them.** `loads` carries no load number — its `load_id` **is** the mission id — and the packet report lives in the portal's sandbox, which `dispatch/` may not import. So `archive_load` takes them as parameters, as it already does `retention_class`.
+
+**And the caller cannot state them.** `filing_of()` reads the packet report and nothing else. A retrieval path supplied by whoever posted the request is not a retrieval path, so the request body has no say: every archive route reads the same helper and none can forget it. `archive_load` remains the only operation in the build that writes a retention record.
+
+**A load with no packet points at nothing.** Empty strings, not a path to a folder that was never written — because the Owner ruled on 2026-09-16 that *"some loads genuinely end without a POD coming back, and forcing completion would strand them."*
+
+**Verified through the archive route.** An `archive_load()` called directly would prove the function stores what it is given and say nothing about whether a person pressing Archive gets a retrievable record — the same mistake that let the POD dead end survive. Three tests: the record carries the filing, the path reaches real documents, and a packet-less load holds nothing.
+
+---
