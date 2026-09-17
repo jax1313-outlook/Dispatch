@@ -2537,3 +2537,22 @@ and, settling Level 3 on 2026-09-16: *"this is an advisory warning base on prior
 **The completion gate is unchanged and is not met.** *"nothing is finished until a real load runs on Mike's laptop."* Two missions have already failed on that gate; nothing here claims to have passed it.
 
 ---
+
+## 2026-09-17 — The one-copy check was not slow. Its test was measuring the machine.
+
+**PR:** (this change)
+**Capability:** `tests/test_one_copy_check.py` (`test_it_is_fast`). **No product code changed.**
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"fix the one copy check speed"*
+
+**Reported to him as a real defect, and it was not one.** `test_it_is_fast` failed at 8.9s against its own 5s budget, and it was put to him as *"your one-copy startup check takes ~9 seconds"* — **on the strength of a failing test, without measuring the check.** Measured afterwards across all seven real search roots on his machine: **0.166s.**
+
+**What was actually slow.** `_search_roots` always adds `C:\`, `D:\`, the home folder and the running copy's three parents. Under pytest those parents are the temp root, which accumulates **every previous run's tree** — 3.7s of the 8.9 was scanning the litter of twenty earlier pytest runs, and it grew with every run anyone made.
+
+So the test failed for reasons unrelated to the code and got worse the more the suite was used. Its own docstring names the disease — *"A startup check the operator dreads is a check they will disable"* — and it had caught it: a test that fails randomly is a test that gets deleted.
+
+**Fixed by pinning the roots to the tree the test builds.** It measures the scan algorithm over 21 installs, deterministically, on any machine: 8.9s to under 0.1s. A second assertion holds that it still finds all twenty, because a fast check that looks at nothing would pass a timing line.
+
+**Nothing in `dispatch_launcher/copies.py` was touched.** *"do not over computer it"* — optimising a 0.166s check would have been changing working code to satisfy a broken measurement.
+
+---

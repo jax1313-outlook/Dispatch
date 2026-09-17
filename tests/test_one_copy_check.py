@@ -100,14 +100,37 @@ class TestItNeverHarms:
         monkeypatch.setattr(copies.os, "scandir", explode)
         assert copies.find_copies(tmp_path) == []
 
-    def test_it_is_fast(self, tmp_path):
-        """A startup check the operator dreads is a check they will disable."""
+    def test_it_is_fast(self, tmp_path, monkeypatch):
+        """A startup check the operator dreads is a check they will disable.
+
+        **This test measured the machine, not the check.** `_search_roots`
+        always adds `C:\\`, `D:\\`, the home folder and the running copy's three
+        parents -- and under pytest those parents are the temp root, which
+        accumulates every previous run's tree. On 2026-09-17 it took 8.9s
+        against its own 5s budget: 3.7s of that was scanning the litter of
+        twenty earlier pytest runs, and **it grew with every run anyone made.**
+        The check itself took 0.166s on the same machine, measured across all
+        seven real roots.
+
+        A test that fails for reasons unrelated to the code, and gets slower the
+        more it is used, is a test that gets deleted -- which is the disease its
+        own docstring names, pointed at itself.
+
+        So the roots are pinned to the tree this test built. It now measures the
+        scan algorithm over 21 installs, deterministically, on any machine.
+        """
         running = make_install(tmp_path, "running")
         for i in range(20):
             make_install(tmp_path, f"copy{i}")
+        monkeypatch.setattr(copies, "_search_roots", lambda _running: [tmp_path])
+
         start = time.time()
-        copies.find_copies(running)
+        found = copies.find_copies(running)
+
         assert time.time() - start < 5.0
+        # And it still found them: a fast check that looks at nothing would
+        # pass the line above.
+        assert len(found) == 20
 
 
 class TestTheMessage:
