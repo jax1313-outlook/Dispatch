@@ -299,3 +299,23 @@ def install_anthropic(monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     return _install
+
+
+def close_the_file(load_id: str, *, by: str = "test", note: str = "") -> None:
+    """Perform the Operations closeout review, so a test can reach the Archive.
+
+    **AUTHORITATIVE RULING, Mike Zachary, 2026-09-17:** *"Driver completes the
+    mission. Operations closes the file. Archive performs retention."* Archive
+    refuses a file nobody reviewed, so a test that archives must do the middle
+    act -- through `close_file`, the authoritative operation, never by writing
+    `closed_out_at` by hand.
+
+    Tolerant of a file already closed: a test may call this twice while walking
+    a load, and a second review is refused by design.
+    """
+    from dispatch import closeout
+
+    try:
+        closeout.close_file(load_id, by=by, note=note)
+    except ValueError:
+        pass

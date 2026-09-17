@@ -40,6 +40,8 @@ def delivered(client, customer="Retention Co"):
 
 def archived(client, **body):
     load = delivered(client)
+    # Operations closes the file before Archive retains it (2026-09-17).
+    client.post(f"/api/dispatch/loads/{load['load_id']}/closeout", json={"closed_out_by": "operations"})
     resp = client.post(f"/api/dispatch/loads/{load['load_id']}/archive", json=body)
     assert resp.status_code == 201, resp.get_json()
     return load, resp.get_json()["retention"]
@@ -108,6 +110,8 @@ class TestArchiveRecord:
 
     def test_archiving_with_an_unknown_class_is_refused(self, client):
         load = delivered(client)
+        # Operations closes the file before Archive retains it (2026-09-17).
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout", json={"closed_out_by": "operations"})
         resp = client.post(f"/api/dispatch/loads/{load['load_id']}/archive", json={"retention_class": "forever"})
         assert resp.status_code in (400, 409) and "retention class" in resp.get_json()["error"]
         assert services.get_retention(load["load_id"]) is None

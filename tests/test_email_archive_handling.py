@@ -106,6 +106,8 @@ class TestArchiveCustody:
         load = _delivered_load_with_client(client)
         _end_load_draft_submit(client, load["load_id"])
 
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout",
+                    json={"closed_out_by": "operations"})
         resp = client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
         assert resp.status_code == 201
         packet = completion_packet.get_packet(load["load_id"])
@@ -117,6 +119,8 @@ class TestArchiveCustody:
         load = _delivered_load_with_client(client)
         client.post(f"/api/dispatch/loads/{load['load_id']}/end-load")  # ROUTED, no cluster
 
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout",
+                    json={"closed_out_by": "operations"})
         resp = client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
         assert resp.status_code == 201
         packet = completion_packet.get_packet(load["load_id"])
@@ -125,6 +129,8 @@ class TestArchiveCustody:
 
     def test_archive_load_without_any_completion_packet_still_works(self, client):
         load = _delivered_load_with_client(client)
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout",
+                    json={"closed_out_by": "operations"})
         resp = client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
         assert resp.status_code == 201
 
@@ -156,6 +162,8 @@ class TestArchiveHandlingPage:
     def test_page_shows_custody_after_archive(self, client):
         load = _delivered_load_with_client(client)
         _end_load_draft_submit(client, load["load_id"])
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout",
+                    json={"closed_out_by": "operations"})
         client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
         resp = client.get(f"/dispatch/{load['load_id']}")
         assert b"Archive has taken custody" in resp.data

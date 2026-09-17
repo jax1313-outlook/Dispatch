@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS loads (
     source          TEXT NOT NULL DEFAULT '',
     notes           TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+    updated_at      TEXT NOT NULL,
+    closed_out_at   TEXT NOT NULL DEFAULT '',
+    closed_out_by   TEXT NOT NULL DEFAULT '',
+    closeout_note   TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_loads_source ON loads(source);
@@ -134,8 +137,6 @@ CREATE TABLE IF NOT EXISTS retention (
     legal_hold_note   TEXT NOT NULL DEFAULT '',
     final_payment_at  TEXT,
     dispute_resolved_at TEXT,
-    -- The tracing number, and where the closing packet was filed under it.
-    -- See the note beside these two in _apply_migrations().
     load_number       TEXT NOT NULL DEFAULT '',
     packet_location   TEXT NOT NULL DEFAULT ''
 );
@@ -551,6 +552,22 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
                    "has_temp_control INTEGER NOT NULL DEFAULT 0"):
         try:
             conn.execute("ALTER TABLE equipment ADD COLUMN %s" % column)
+        except sqlite3.OperationalError:
+            pass
+    # The Operations closeout review (Mike Zachary, 2026-09-17, AUTHORITATIVE
+    # RULING): "Driver completes the mission. Operations closes the file.
+    # Archive performs retention."
+    #
+    # The act recorded here is **"I reviewed this file"**, not "every artifact
+    # exists" -- a mechanical artifact gate would permanently strand the loads
+    # he refused to strand on 2026-09-16 ("some loads genuinely end without a
+    # POD coming back"). Operations may close a file despite missing artifacts;
+    # `closeout_note` is where the reason goes.
+    for column in ("closed_out_at TEXT NOT NULL DEFAULT ''",
+                   "closed_out_by TEXT NOT NULL DEFAULT ''",
+                   "closeout_note TEXT NOT NULL DEFAULT ''"):
+        try:
+            conn.execute("ALTER TABLE loads ADD COLUMN %s" % column)
         except sqlite3.OperationalError:
             pass
     try:

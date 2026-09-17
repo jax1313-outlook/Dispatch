@@ -823,6 +823,32 @@ def library():
     )
 
 
+@pages_bp.route("/closeout")
+def closeout_queue():
+    """Finished missions waiting on the Operations review.
+
+    **Mike Zachary, 2026-09-17:** *"Driver completes the mission. Operations
+    closes the file. Archive performs retention."* Without this screen the
+    middle act had nowhere to happen: a run ended, the packet filed itself, and
+    the mission sat `completed` with nothing anywhere saying it was waiting on
+    anyone.
+
+    The queue **shows** present artifacts, missing artifacts and what the
+    closing packet did. It does not judge: *"The act being recorded is 'I
+    reviewed this file.' not 'Every artifact exists.'"*
+    """
+    from dispatch import closeout
+    from dispatch import services as dispatch_svc
+
+    files = closeout.queue(dispatch_svc.list_loads(), sandbox.get_all())
+    return render_template(
+        "closeout.html",
+        files=files,
+        waiting=[f for f in files if not f["closed_out"]],
+        reviewed=[f for f in files if f["closed_out"]],
+    )
+
+
 @pages_bp.route("/archive")
 def archive_view():
     from cin_lite import archive as cin_archive

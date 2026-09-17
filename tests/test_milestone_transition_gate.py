@@ -31,6 +31,7 @@ from dispatch import services as dispatch_svc
 from dispatch import store as dispatch_store
 from dispatch.db import set_db_path
 from dispatch.models import LOAD_STATUSES, MILESTONE_TYPES
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -96,6 +97,8 @@ class TestLadderStillWorks:
     def test_archive_still_reachable_after_a_full_walk(self, load):
         load_id = load["load_id"]
         _walk(load_id, *FULL_LADDER)
+        # Operations closes the file first (2026-09-17).
+        close_the_file(load_id, by="operations")
         dispatch_svc.archive_load(load_id)
         assert dispatch_svc.get_load(load_id)["status"] == "archived"
 

@@ -10,7 +10,8 @@ import csv
 import io
 from datetime import datetime
 
-from flask import Blueprint, Response, jsonify, render_template, request, send_file, url_for
+from flask import (Blueprint, Response, jsonify, render_template, request,
+                   send_file, session, url_for)
 
 from dispatch import notifications, services
 from dispatch.models import (
@@ -546,6 +547,31 @@ def filing_of(load_id: str) -> dict:
     report = (sandbox.get(load_id) or {}).get("closing_packet") or {}
     return {"load_number": str(report.get("load_number") or ""),
             "packet_location": str(report.get("folder") or "")}
+
+
+@dispatch_bp.route("/loads/<load_id>/closeout", methods=["POST"])
+def close_out_load(load_id):
+    """Record the Operations review. **The middle act of three.**
+
+    *"Driver completes the mission. Operations closes the file. Archive
+    performs retention."* -- Mike Zachary, 2026-09-17.
+
+    What is recorded is that a person looked, with their name, the time, and a
+    note for anything outstanding they accepted. It is **not** a claim that
+    every artifact arrived: *"Operations may ... close the file despite missing
+    artifacts."*
+    """
+    from dispatch import closeout
+
+    body = request.get_json(silent=True) or {}
+    who = str(body.get("closed_out_by") or session.get("user_id") or "").strip()
+    try:
+        load = closeout.close_file(load_id, by=who,
+                                   note=str(body.get("note") or ""))
+    except ValueError as e:
+        status = 404 if "not found" in str(e).lower() else 409
+        return jsonify({"error": str(e)}), status
+    return jsonify({"status": "ok", "load": load}), 200
 
 
 @dispatch_bp.route("/loads/<load_id>/archive", methods=["POST"])

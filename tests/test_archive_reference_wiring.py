@@ -58,6 +58,8 @@ class TestArchivePageCrossReferences:
     def test_archived_load_with_cluster_shows_document_count(self, client):
         load = _delivered_load_with_client(client)
         _end_load_draft_submit(client, load["load_id"])
+        # Operations closes the file before Archive retains it (2026-09-17).
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout", json={"closed_out_by": "operations"})
         client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
 
         resp = client.get("/archive")
@@ -66,6 +68,8 @@ class TestArchivePageCrossReferences:
 
     def test_archived_load_without_cluster_shows_dash(self, client):
         load = _delivered_load_with_client(client)
+        # Operations closes the file before Archive retains it (2026-09-17).
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout", json={"closed_out_by": "operations"})
         client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
 
         resp = client.get("/archive")
@@ -75,6 +79,8 @@ class TestArchivePageCrossReferences:
 
     def test_archived_load_has_a_working_stakeholder_link_button(self, client):
         load = _delivered_load_with_client(client)
+        # Operations closes the file before Archive retains it (2026-09-17).
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout", json={"closed_out_by": "operations"})
         client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
 
         resp = client.get("/archive")
@@ -91,6 +97,8 @@ class TestArchivePageCrossReferences:
 
     def test_stakeholder_link_from_archive_page_actually_works(self, client):
         load = _delivered_load_with_client(client)
+        # Operations closes the file before Archive retains it (2026-09-17).
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout", json={"closed_out_by": "operations"})
         client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
         token = notifications.make_stakeholder_token(load["load_id"])
 
@@ -101,6 +109,8 @@ class TestArchivePageCrossReferences:
 class TestStakeholderArchiveCopy:
     def test_archived_load_shows_permanent_record_copy(self, client):
         load = _delivered_load_with_client(client)
+        # Operations closes the file before Archive retains it (2026-09-17).
+        client.post(f"/api/dispatch/loads/{load['load_id']}/closeout", json={"closed_out_by": "operations"})
         client.post(f"/api/dispatch/loads/{load['load_id']}/archive")
         token = notifications.make_stakeholder_token(load["load_id"])
 

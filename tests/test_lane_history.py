@@ -146,7 +146,11 @@ class TestLaneHistoryTemplate:
         )
         resp = client.get(f"/dispatch/{l2['load_id']}")
         html = resp.data.decode()
-        assert "Lane History" in html
+        # **"there is no lane use in dispatch"** -- Mike Zachary. The heading
+        # is "Previous Runs" (BATCH 9); the section and the data are unchanged,
+        # and the engine still calls it lane_history internally.
+        assert "Previous Runs" in html
+        assert "Lane History" not in html
         assert "Template Old" in html
 
     def test_no_lane_history_section_when_empty(self, client):
@@ -155,4 +159,4 @@ class TestLaneHistoryTemplate:
         )
         resp = client.get(f"/dispatch/{load['load_id']}")
         html = resp.data.decode()
-        assert "Lane History" not in html
+        assert "Previous Runs" not in html

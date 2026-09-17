@@ -20,6 +20,7 @@ import pytest
 from dispatch import commitment, services
 from dispatch.db import set_db_path
 from portal.models import sandbox
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -142,7 +143,12 @@ class TestTheDriverActionsAreOnTheCockpit:
         record_id = mission(with_load=False)
         as_driver(client)
         client.post(f"/portal/mission/{record_id}/milestone", data={"milestone_event": "dispatched"})
-        assert "no open load yet" in page(client, record_id)
+        # **Points at COMMIT, not Book Load** (BATCH 9). BOOK books the day;
+        # COMMIT opens the operational load, so the old line named a button
+        # that had stopped opening anything.
+        said = page(client, record_id)
+        assert "has not been committed yet" in said
+        assert "Book Load" not in said
 
     def test_an_exception_is_logged_against_the_load(self, client):
         record_id = mission()
@@ -153,8 +159,11 @@ class TestTheDriverActionsAreOnTheCockpit:
     def test_a_pod_photo_joins_the_evidence(self, client):
         record_id = mission(status="dispatched")
         as_driver(client)
-        client.post(f"/portal/mission/{record_id}/pod", content_type="multipart/form-data",
-                    data={"pod_file": (io.BytesIO(b"\x89PNG\r\n\x1a\nfake"), "pod.png")})
+        # One attachment path (BATCH 8): the Mission Record, and what the
+        # document is. Was `/pod`.
+        client.post(f"/portal/mission/{record_id}/attach", content_type="multipart/form-data",
+                    data={"classification": "pod",
+                          "artifact": (io.BytesIO(b"\x89PNG\r\n\x1a\nfake"), "pod.png")})
         kinds = [e["evidence_type"] for e in services.get_load_bundle(record_id)["evidence"]]
         assert kinds == ["pod"]
 
@@ -185,6 +194,8 @@ class TestTheDriverActionsAreOnTheCockpit:
         `NEXT_STEP` has no `completed` key and the transition gate refuses
         anything posted anyway."""
         record_id = mission(status="completed")
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(record_id, by="operations")
         services.archive_load(record_id)
         as_driver(client)
 

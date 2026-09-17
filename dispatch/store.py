@@ -182,6 +182,26 @@ def update_load(load_id: str, **fields) -> dict | None:
     return get_load(load_id)
 
 
+def record_closeout(load_id: str, *, at: str, by: str, note: str = "") -> dict | None:
+    """Write the Operations closeout review onto the load.
+
+    **Its own write, deliberately.** `update_load` whitelists the fields a
+    general edit may touch and these are not on it, so no ordinary save can
+    forge a review -- and `dispatch/closeout.py::close_file` is the only caller
+    (Mike Zachary, 2026-09-17: the recorded act is *"I reviewed this file"*).
+    """
+    if not get_load(load_id):
+        return None
+    from dispatch.models import _utc_now
+
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE loads SET closed_out_at=?, closed_out_by=?, closeout_note=?, "
+            "updated_at=? WHERE load_id=?",
+            (at, by, note, _utc_now(), load_id))
+    return get_load(load_id)
+
+
 def delete_load(load_id: str) -> bool:
     _CHILD_TABLES = [
         "visibility", "milestones", "evidence", "exceptions",

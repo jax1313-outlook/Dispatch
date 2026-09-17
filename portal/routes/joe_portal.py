@@ -45,8 +45,9 @@ DRIVER_COCKPIT_ENDPOINTS = frozenset({
     "joe_portal.portal_arrive",
     "joe_portal.portal_mark_artifact",
     "joe_portal.cockpit_milestone",
-    "joe_portal.cockpit_pod",
-    "joe_portal.cockpit_photos",
+    # One attachment path (2026-09-16): "Mission Record -> Attach Artifact.
+    # Everything else is classification." Was cockpit_pod + cockpit_photos.
+    "joe_portal.cockpit_attach",
     "joe_portal.cockpit_exception",
     "joe_portal.cockpit_fuel_receipt",
     # Log a load by voice (2026-09-15). Capture only; see portal/voice_capture.py.
@@ -57,10 +58,11 @@ DRIVER_COCKPIT_ENDPOINTS = frozenset({
 #: Loads a driver's screen will not open. **`completed` is not one of them.**
 #:
 #: It was, until the regression audit of 2026-09-16. The consequence: the moment
-#: a driver sent his POD and finished the run, his own cockpit told him *"This
-#: mission has no open load yet. Operations opens it with Book Load."* -- a
-#: false statement on the glass at the exact moment the work was done, pointing
-#: him at a door that does not belong to him.
+#: a driver sent his POD and finished the run, his own cockpit told him the
+#: mission had no open load and to wait on Operations -- a false statement on
+#: the glass at the exact moment the work was done, pointing him at a door that
+#: does not belong to him. (It named *Book Load*, which by then no longer
+#: opened a load either; corrected in BATCH 9.)
 #:
 #: A completed run is still his run and still readable. Nothing can be advanced
 #: from it: `NEXT_STEP` has no `completed` key, so no step is offered, and the
@@ -182,7 +184,12 @@ def _driver_panel(record_id: str) -> dict:
         "not_started": bool(load) and status == "created",
         "next_label": label,
         "next_event": event,
-        "closed_note": ("This mission has no open load yet. Operations opens it with Book Load."
+        # **COMMIT, not Book Load.** BOOK books the day; COMMIT is what opens
+        # the operational load (BATCH 2, 2026-09-16: "One commitment operation.
+        # One commitment determination. One commitment state. One commitment
+        # authority."). The line pointed a driver at a button that stopped
+        # opening anything the day BOOK was separated from COMMIT.
+        "closed_note": ("This mission has not been committed yet. Operations commits it."
                         if record_id and not load else ""),
         "milestones": ALL_MILESTONES,
         "exceptions": driver_actions.exception_choices(),
@@ -1277,7 +1284,7 @@ def _act_on_load(record_id: str, act):
     if not sandbox.get(record_id):
         return redirect(url_for("joe_portal.portal_home"))
     if not _operational_load(record_id):
-        flash("This mission has no open load yet. Operations opens it with Book Load.", "error")
+        flash("This mission has not been committed yet. Operations commits it.", "error")
         return _back_to_cockpit(record_id)
     message, category = act()
     flash(message, category)
@@ -1295,80 +1302,47 @@ def cockpit_milestone(record_id: str):
 
 
 def _build_closing_packet(record_id: str) -> dict | None:
-    """File a **completed** load's documents under its load number.
+    """Moved to `portal/artifact_intake.py`. Kept as the cockpit's name for it.
 
-    **Keyed on what happened, not on which button was pressed.** An earlier
-    version fired on the `pod_received` event without looking at the result, so
-    a refused transition still produced a packet -- and passed `delivered=True`
-    unconditionally, printing "Delivered" on a customer-facing document for a
-    load that never delivered. Found by the regression audit, 2026-09-16. The
-    load row is the authority on whether the run finished; this reads it.
-
-    **Built once.** A load that already has a packet is left alone, so pressing
-    a milestone again does not rewrite documents that may already have gone out.
-
-    **It never costs the run.** A driver who has delivered his freight and sent
-    his POD has finished, whether or not a Word template was reachable. What
-    went wrong is flashed and recorded; the completion stands either way.
+    It used to live here, which is why the **parked Driver Portal's own POD
+    route completed a run and filed nothing** -- the packet was a consequence
+    of one route rather than of the act. BATCH 8.
     """
-    from dispatch import closing_packet, clock
-    from dispatch import services as dispatch_svc
+    from portal import artifact_intake
 
-    load = dispatch_svc.get_load(record_id)
-    if not load or load.get("status") != "completed":
-        return None
-    record = sandbox.get(record_id)
-    if not record or record.get("closing_packet"):
-        return None
-    try:
-        report = closing_packet.build(
-            record,
-            today=clock.home_date().isoformat(),
-            driver_name=str(session.get("driver_name") or ""),
-            # The load row says `completed`, which it reaches only through
-            # delivery. Read, not assumed.
-            delivered=True)
-    except Exception as exc:  # noqa: BLE001 - a packet is never worth a 500 in a cab
-        flash("The closing packet could not be built: %s" % exc)
-        return None
-
-    if report["ok"]:
-        flash("Closing packet filed under %s: %d document%s."
-              % (report["load_number"] or "no load number",
-                 len(report["documents"]),
-                 "" if len(report["documents"]) == 1 else "s"))
-    else:
-        flash("Closing packet: %s" % (report["note"] or "some documents failed."))
-
-    data = sandbox._load()
-    stored = data.get(record_id)
-    if stored is not None:
-        # What was produced and what is still unanswered, kept with the record
-        # so the packet can be read back without rebuilding it.
-        stored["closing_packet"] = report
-        data[record_id] = stored
-        sandbox._save(data)
-    return report
+    return artifact_intake.build_closing_packet(record_id)
 
 
-@joe_bp.route("/portal/mission/<path:record_id>/pod", methods=["POST"])
-def cockpit_pod(record_id: str):
-    """The POD goes up, the run completes, the packet is filed. One press."""
-    from portal import driver_actions
+@joe_bp.route("/portal/mission/<path:record_id>/attach", methods=["POST"])
+def cockpit_attach(record_id: str):
+    """**Mission Record -> Attach Artifact. The one path.**
 
-    answer = _act_on_load(record_id, lambda: driver_actions.upload_pod(
-        record_id, request.files.get("pod_file"), _cockpit_actor()))
+    MISSION ARTIFACT ATTACHMENT RULE, Mike Zachary, 2026-09-16: *"The answer
+    should always be: Mission Record -> Attach Artifact. Everything else is
+    classification."*
+
+    This replaces `cockpit_pod` and `cockpit_photos`. There were three attach
+    routes with three handlers, and **no way to attach a Bill of Lading at
+    all** -- the controlling freight document had no door. Now one route takes
+    a file and what the file is; `portal/artifact_intake.py` owns what each
+    classification means.
+
+    The closing packet still follows a POD: it is keyed on the load reaching
+    `completed`, so it fires for the classification that finishes the run and
+    for no other.
+    """
+    from portal import artifact_intake
+
+    uploads = request.files.getlist("artifact") or request.files.getlist("photos")
+    if not uploads and request.files.get("pod_file"):
+        uploads = [request.files["pod_file"]]
+
+    answer = _act_on_load(record_id, lambda: artifact_intake.attach(
+        record_id, request.form.get("classification", ""), uploads,
+        _cockpit_actor(), mail_connector=_mail_connector,
+        url_root=request.url_root))
     _build_closing_packet(record_id)
     return answer
-
-
-@joe_bp.route("/portal/mission/<path:record_id>/photos", methods=["POST"])
-def cockpit_photos(record_id: str):
-    from portal import driver_actions
-
-    return _act_on_load(record_id, lambda: driver_actions.upload_mission_photos(
-        record_id, request.form.get("photo_type", "securement_photo"), request.files.getlist("photos"),
-        _cockpit_actor(), mail_connector=_mail_connector, url_root=request.url_root))
 
 
 @joe_bp.route("/portal/mission/<path:record_id>/exception", methods=["POST"])

@@ -170,12 +170,17 @@
           COMMIT
         </button>
       </form>
-      {# Recorded, never deleted. The same broker rings back with the same lane,
-         and what he offered last time is the useful thing to have. #}
+      {# **The confirm used to say "It stays on record." It does not.**
+         Owner ruling D12, 2026-09-14: "program only processes committed loads.
+         due to the life span of only hours to minuties it makes no sense to
+         keep any uncommitted load information." An uncommitted candidate is
+         discarded, card and capture together -- and every card on this screen
+         is uncommitted, because a committed one leaves it. So the button asked
+         him to confirm one thing and did another. #}
       <form method="post" action="{{ url_for('joe_portal.mission_reject',
                                              record_id=row.id) }}">
         <button class="btn reject" type="submit"
-                onclick="return confirm('Leave this one? It stays on record.');">
+                onclick="return confirm('Reject this one? The card and the capture are discarded.');">
           REJECT
         </button>
       </form>

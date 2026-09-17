@@ -11,6 +11,7 @@ from dispatch import services as dispatch_svc
 from dispatch import notifications, store
 from dispatch.db import set_db_path
 from dispatch.models import RetentionArchive
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -224,6 +225,8 @@ class TestArchiveFinancialSummary:
         dispatch_svc.add_expense(
             load_with_rate["load_id"], category="fuel", amount=150.0
         )
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(load_with_rate["load_id"], by="operations")
         ret = dispatch_svc.archive_load(load_with_rate["load_id"])
         fin = ret["financial_summary"]
         assert fin["revenue"] == 1200.0
@@ -232,6 +235,8 @@ class TestArchiveFinancialSummary:
 
     def test_archive_includes_settlement_info(self, load_with_settlement):
         self._deliver_load(load_with_settlement["load_id"])
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(load_with_settlement["load_id"], by="operations")
         ret = dispatch_svc.archive_load(load_with_settlement["load_id"])
         fin = ret["financial_summary"]
         assert fin["settlement_status"] == "invoiced"
@@ -239,6 +244,8 @@ class TestArchiveFinancialSummary:
 
     def test_archive_financials_zeroes_without_rate(self, load):
         self._deliver_load(load["load_id"])
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(load["load_id"], by="operations")
         ret = dispatch_svc.archive_load(load["load_id"])
         fin = ret["financial_summary"]
         assert fin["revenue"] == 0.0
@@ -249,6 +256,8 @@ class TestArchiveFinancialSummary:
         dispatch_svc.add_expense(
             load_with_rate["load_id"], category="tolls", amount=25.0
         )
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(load_with_rate["load_id"], by="operations")
         dispatch_svc.archive_load(load_with_rate["load_id"])
         ret = store.get_retention_by_load(load_with_rate["load_id"])
         assert ret["financial_summary"]["revenue"] == 1200.0

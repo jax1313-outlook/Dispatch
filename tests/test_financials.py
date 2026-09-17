@@ -13,6 +13,7 @@ from dispatch.models import (
     Expense,
     RateConfirmation,
 )
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -517,5 +518,7 @@ class TestFinancialsInArchive:
             dispatch_svc.add_milestone(lid, _evt)
         dispatch_svc.add_milestone(lid, "delivered", location="Savannah, GA")
 
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(lid, by="operations")
         ret = dispatch_svc.archive_load(lid)
         assert ret["final_status"] == "delivered"

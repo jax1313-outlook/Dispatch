@@ -23,6 +23,7 @@ import pytest
 
 from dispatch import services as dispatch_svc
 from dispatch.db import set_db_path
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -75,6 +76,10 @@ class TestCancelledCanArchive:
         load_id = load["load_id"]
         dispatch_svc.update_load(load_id, status="cancelled")
         assert dispatch_svc.get_load(load_id)["status"] == "cancelled"
+
+        # Operations closes the file first (2026-09-17).
+
+        close_the_file(load_id, by="operations")
 
         ret = dispatch_svc.archive_load(load_id)
 
@@ -129,6 +134,10 @@ class TestArchiveStillWorksFromAllowedStatuses:
         _deliver(load_id)
         assert dispatch_svc.get_load(load_id)["status"] == "delivered"
 
+        # Operations closes the file first (2026-09-17).
+
+        close_the_file(load_id, by="operations")
+
         ret = dispatch_svc.archive_load(load_id)
 
         assert ret["load_id"] == load_id
@@ -139,6 +148,10 @@ class TestArchiveStillWorksFromAllowedStatuses:
         load_id = load["load_id"]
         _complete(load_id)
         assert dispatch_svc.get_load(load_id)["status"] == "completed"
+
+        # Operations closes the file first (2026-09-17).
+
+        close_the_file(load_id, by="operations")
 
         ret = dispatch_svc.archive_load(load_id)
 

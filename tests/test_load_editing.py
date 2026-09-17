@@ -6,6 +6,7 @@ import pytest
 
 from dispatch import services
 from dispatch.db import set_db_path
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -108,10 +109,13 @@ class TestLoadEditAPI:
 class TestStatusTransitions:
     def test_full_lifecycle(self, client, sample_load):
         load_id = sample_load["load_id"]
+        # `archived` is not on this list any more. Retiring a load is
+        # archive_load()'s act -- a PATCH that wrote the word filed no
+        # retention record, and the engine refuses it now (BATCH 5).
         sequence = [
             "dispatched", "en_route_pickup", "at_pickup",
             "picked_up", "in_transit", "at_delivery",
-            "delivered", "completed", "archived",
+            "delivered", "completed",
         ]
         for status in sequence:
             resp = client.patch(
@@ -119,6 +123,10 @@ class TestStatusTransitions:
                 json={"status": status},
             )
             assert resp.get_json()["load"]["status"] == status
+
+        close_the_file(load_id, by="operations")
+        services.archive_load(load_id)
+        assert services.get_load(load_id)["status"] == "archived"
 
     def test_cancel_from_created(self, client, sample_load):
         resp = client.patch(
@@ -180,8 +188,13 @@ class TestDetailPageEdit:
     def test_no_advance_for_archived(self, client, sample_load):
         load_id = sample_load["load_id"]
         for s in ["dispatched", "en_route_pickup", "at_pickup", "picked_up",
-                   "in_transit", "at_delivery", "delivered", "completed", "archived"]:
+                   "in_transit", "at_delivery", "delivered", "completed"]:
             services.update_load(load_id, status=s)
+        # **Archived is reached by archiving, not by writing the word.** A
+        # status write files no retention record (BATCH 5), so this loop used
+        # to produce a load the application itself can never produce.
+        close_the_file(load_id, by="operations")
+        services.archive_load(load_id)
         resp = client.get(f"/dispatch/{load_id}")
         html = resp.data.decode()
         assert "Advance:" not in html

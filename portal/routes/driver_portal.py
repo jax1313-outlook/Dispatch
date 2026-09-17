@@ -304,7 +304,14 @@ def driver_upload_pod(load_id: str):
         return redirect(url_for("driver_portal.driver_login"))
     if not _verify_driver_load(load_id, driver_id):
         return redirect(url_for("driver_portal.driver_home"))
-    return _tell_driver(*driver_actions.upload_pod(load_id, request.files.get("pod_file"), driver_id))
+    # **Through the one attachment path** (2026-09-16: "Mission Record ->
+    # Attach Artifact. Everything else is classification."). This screen is
+    # parked, but a parked door that behaves differently is still a second
+    # answer -- and this one completed a run without filing the packet.
+    from portal import artifact_intake
+
+    return _tell_driver(*artifact_intake.attach(
+        load_id, "pod", [request.files.get("pod_file")], driver_id))
 
 
 @driver_portal_bp.route("/loads/<load_id>/mission-photos", methods=["POST"])

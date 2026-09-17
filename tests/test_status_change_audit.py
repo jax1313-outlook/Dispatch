@@ -33,6 +33,7 @@ import pytest
 from dispatch import services as dispatch_svc
 from dispatch import store as dispatch_store
 from dispatch.db import set_db_path
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -226,6 +227,10 @@ class TestArchivePath:
         _walk(load_id, *LADDER)
         before = len(status_events(load_id))
 
+        # Operations closes the file first (2026-09-17).
+
+        close_the_file(load_id, by="operations")
+
         dispatch_svc.archive_load(load_id)
 
         events = status_events(load_id)
@@ -338,6 +343,8 @@ class TestNoDuplicates:
     def test_archive_is_not_audited_twice(self, load):
         load_id = load["load_id"]
         _walk(load_id, *LADDER)
+        # Operations closes the file first (2026-09-17).
+        close_the_file(load_id, by="operations")
         dispatch_svc.archive_load(load_id)
         before = len(status_events(load_id))
         with pytest.raises(ValueError, match="already archived"):

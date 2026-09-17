@@ -20,6 +20,7 @@ import pytest
 from dispatch import services
 from dispatch.db import set_db_path
 from portal.models import driver_pin_registry as pin_registry
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -266,6 +267,7 @@ class TestDriverPortalRoutes:
             "in_transit", "at_delivery", "delivered",
         ):
             services.update_load(load["load_id"], status=status)
+        close_the_file(load["load_id"], by="operations")
         services.archive_load(load["load_id"])
         client.post("/driver/login", data={"phone": driver["phone"], "pin": "1234"})
         resp = client.get("/driver/home")

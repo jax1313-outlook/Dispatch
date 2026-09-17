@@ -70,6 +70,11 @@
             <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Load Search</a></li>
             <li><a href="{{ url_for('pages.dispatch') }}" class="{% if request.endpoint == 'pages.dispatch' %}active{% endif %}">Dispatch</a></li>
             <li><a href="{{ url_for('pages.load_calendar') }}" class="{% if request.endpoint == 'pages.load_calendar' %}active{% endif %}">Calendar</a></li>
+            {# On the nav because it is work waiting on a person. "Operations
+               closes the file" (2026-09-17) needed somewhere to happen: before
+               this, a finished mission sat `completed` with nothing saying it
+               was waiting on anyone. #}
+            <li><a href="{{ url_for('pages.closeout_queue') }}" class="{% if request.endpoint == 'pages.closeout_queue' %}active{% endif %}">Closeout</a></li>
             <li><a href="{{ url_for('pages.ifta') }}" class="{% if request.endpoint == 'pages.ifta' %}active{% endif %}">IFTA</a></li>
             <li><a href="{{ url_for('pages.email_templates') }}" class="{% if request.endpoint == 'pages.email_templates' %}active{% endif %}">Email Templates</a></li>
             {# Settings, not Registration. Settings is where the fleet roster

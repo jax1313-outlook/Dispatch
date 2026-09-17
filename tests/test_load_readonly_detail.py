@@ -12,6 +12,7 @@ import pytest
 
 from dispatch import services
 from dispatch.db import set_db_path
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -84,6 +85,8 @@ class TestLoadReadonlyDetailRenders:
             "in_transit", "at_delivery", "delivered",
         ):
             services.update_load(load["load_id"], status=status)
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(load["load_id"], by="operations")
         services.archive_load(load["load_id"])
         resp = client.get(f"/search/loads/{load['load_id']}")
         html = resp.data.decode("utf-8")

@@ -498,30 +498,45 @@
     <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
   </header>
   <div class="drawer-body drawer-actions">
-    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_pod', record_id=record.id) }}">
+    {# **One path, four classifications.** "The answer should always be:
+       Mission Record -> Attach Artifact. Everything else is classification."
+       (2026-09-16). Every tile posts to the same route with what the document
+       is; separate tiles stay because a driver at a dock taps one thing rather
+       than working a dropdown. #}
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_attach', record_id=record.id) }}">
       {{ keep_place() }}
+      <input type="hidden" name="classification" value="bol">
+      <label class="action">
+        <span class="action-name">SIGNED BOL</span>
+        <span class="action-sub">The controlling freight document</span>
+        <input class="file-pick" type="file" name="artifact" accept="image/*,application/pdf" capture="environment" onchange="this.form.submit()">
+      </label>
+    </form>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_attach', record_id=record.id) }}">
+      {{ keep_place() }}
+      <input type="hidden" name="classification" value="pod">
       <label class="action">
         <span class="action-name">POD PHOTO</span>
         <span class="action-sub">Signed proof of delivery</span>
-        <input class="file-pick" type="file" name="pod_file" accept="image/*,application/pdf" capture="environment" onchange="this.form.submit()">
+        <input class="file-pick" type="file" name="artifact" accept="image/*,application/pdf" capture="environment" onchange="this.form.submit()">
       </label>
     </form>
-    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_photos', record_id=record.id) }}">
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_attach', record_id=record.id) }}">
       {{ keep_place() }}
-      <input type="hidden" name="photo_type" value="securement_photo">
+      <input type="hidden" name="classification" value="securement_photo">
       <label class="action">
         <span class="action-name">LOAD SECUREMENT PHOTOS</span>
         <span class="action-sub">The customer is sent a Customer Alert</span>
-        <input class="file-pick" type="file" name="photos" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
+        <input class="file-pick" type="file" name="artifact" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
       </label>
     </form>
-    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_photos', record_id=record.id) }}">
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_attach', record_id=record.id) }}">
       {{ keep_place() }}
-      <input type="hidden" name="photo_type" value="freight_condition_photo">
+      <input type="hidden" name="classification" value="freight_condition_photo">
       <label class="action">
         <span class="action-name">FREIGHT CONDITION PHOTOS</span>
         <span class="action-sub">The customer is sent a Customer Alert</span>
-        <input class="file-pick" type="file" name="photos" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
+        <input class="file-pick" type="file" name="artifact" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
       </label>
     </form>
   </div>

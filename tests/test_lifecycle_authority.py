@@ -24,6 +24,7 @@ import pytest
 from dispatch import services as dispatch_svc
 from dispatch import store as dispatch_store
 from dispatch.db import set_db_path
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -129,6 +130,7 @@ class TestAStartedRunCanBeCancelled:
         dispatch_svc.add_milestone(load_id, "en_route_pickup")
         dispatch_svc.update_load(load_id, status="cancelled")
 
+        close_the_file(load_id, by="operations")
         dispatch_svc.archive_load(load_id)
 
         assert dispatch_svc.get_load(load_id)["status"] == "archived"

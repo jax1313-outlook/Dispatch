@@ -266,7 +266,30 @@ def _record_status_change(
     ))
 
 
+#: Statuses no general-purpose write may set, and the operation that owns each.
+#:
+#: **BATCH 5, and the primary rule:** *"Each consequential business act shall
+#: have one authoritative operation."* Retiring a load reached `archived` three
+#: ways -- the Advance button (`PATCH /loads/<id>`), the batch-status control,
+#: and `POST /loads/<id>/archive`. **Only the third filed anything.** The other
+#: two ran through `update_load`, which validated the transition and wrote the
+#: status, so a load could be retired with no retention record, no evidence
+#: index, no `archived_at` and no path to its closing packet: gone from every
+#: active list, with nothing anywhere saying it had been archived.
+#:
+#: `archive_load` writes the status through `store.update_load`, below this
+#: guard, because it is the operation that owns the act.
+_OWNED_STATUSES = {
+    "archived": "archive_load() -- retiring a load files a retention record, "
+                "and a status written on its own files nothing",
+}
+
+
 def update_load(load_id: str, **fields) -> dict | None:
+    target = str(fields.get("status") or "")
+    if target in _OWNED_STATUSES:
+        raise ValueError(
+            "Cannot set status to %s here. Use %s" % (target, _OWNED_STATUSES[target]))
     if "driver_id" in fields and fields["driver_id"]:
         _validate_driver_assignment(fields["driver_id"])
     if "equipment_id" in fields and fields["equipment_id"]:
@@ -288,6 +311,13 @@ def update_load(load_id: str, **fields) -> dict | None:
         _record_status_change(
             load_id, old_status, fields["status"], operation="load update",
         )
+        # **BATCH 6: the customer was told the old story.** Every other way a
+        # load changes status refreshes Mission Visibility; this one wrote the
+        # `loads` row and left the visibility record where it was. So a status
+        # advanced from the Dispatch screen showed the new state to the office
+        # and the previous one to the customer, indefinitely, with the two
+        # disagreeing and nothing saying which was true.
+        refresh_visibility(load_id, current_status=fields["status"])
     return result
 
 
@@ -474,6 +504,45 @@ def get_mission_visibility(load_id: str) -> dict:
     }
 
 
+#: Visibility fields that belong to a person, not to the run.
+#:
+#: Somebody wrote them on purpose, for a customer or for the office, and no
+#: automatic event has any business discarding them.
+_WRITTEN_BY_HAND = ("customer_note", "internal_note")
+
+
+def refresh_visibility(load_id: str, **changes) -> dict | None:
+    """Update the Mission Visibility record, **keeping everything not changed.**
+
+    **BATCH 6.** Four places built a `LoadVisibilityRecord` from scratch and
+    wrote it over the old one. Two remembered to carry `customer_note` and
+    `internal_note` across; **two did not** -- so a note Operations wrote for a
+    customer survived until the driver tapped his next milestone, and then
+    vanished with no trace and nobody told. Archiving dropped them again, along
+    with `next_expected_milestone`.
+
+    The bug was never in any one of the four. It was that one act had four
+    hand-written copies, and a field added to the record reached whichever of
+    them somebody remembered. The primary rule: *"Each consequential business
+    act shall have one authoritative operation."*
+
+    So this reads what is there and changes only what it was asked to change.
+    A caller that says nothing about the notes keeps the notes.
+    """
+    existing = store.get_visibility(load_id) or {}
+    merged = {
+        "load_id": load_id,
+        "current_status": existing.get("current_status") or "created",
+        "last_milestone": existing.get("last_milestone"),
+        "next_expected_milestone": existing.get("next_expected_milestone"),
+        "exception_flag": bool(existing.get("exception_flag")),
+    }
+    for field in _WRITTEN_BY_HAND:
+        merged[field] = existing.get(field) or ""
+    merged.update({k: v for k, v in changes.items() if k in merged})
+    return store.upsert_visibility(LoadVisibilityRecord(**merged))
+
+
 def _raise_transition_refusal_card(load_id: str, current: str, target: str, reason: str) -> None:
     """Surface a refused status transition as a Conflict Notice.
 
@@ -592,14 +661,13 @@ def add_milestone(
 
     has_open = bool(store.list_exceptions(load_id=load_id, status="open"))
 
-    vis = LoadVisibilityRecord(
-        load_id=load_id,
+    refresh_visibility(
+        load_id,
         current_status=effective_status,
         last_milestone=event_type,
         next_expected_milestone=_MILESTONE_NEXT.get(event_type),
         exception_flag=has_open,
     )
-    store.upsert_visibility(vis)
 
     # Only notify on a delivery the load actually reached. Announcing a
     # delivery for a load whose transition was just refused would report a
@@ -766,16 +834,7 @@ def open_exception(
 
     vis = store.get_visibility(load_id)
     if vis:
-        updated = LoadVisibilityRecord(
-            load_id=load_id,
-            current_status=vis["current_status"],
-            last_milestone=vis.get("last_milestone"),
-            next_expected_milestone=vis.get("next_expected_milestone"),
-            exception_flag=True,
-            customer_note=vis.get("customer_note", ""),
-            internal_note=vis.get("internal_note", ""),
-        )
-        store.upsert_visibility(updated)
+        refresh_visibility(load_id, exception_flag=True)
 
     if severity in ("high", "critical"):
         _notify_safe(lambda: notifications.notify_exception(load, result))
@@ -800,16 +859,7 @@ def resolve_exception(
     open_remaining = store.list_exceptions(load_id=load_id, status="open")
     vis = store.get_visibility(load_id)
     if vis:
-        updated = LoadVisibilityRecord(
-            load_id=load_id,
-            current_status=vis["current_status"],
-            last_milestone=vis.get("last_milestone"),
-            next_expected_milestone=vis.get("next_expected_milestone"),
-            exception_flag=bool(open_remaining),
-            customer_note=vis.get("customer_note", ""),
-            internal_note=vis.get("internal_note", ""),
-        )
-        store.upsert_visibility(updated)
+        refresh_visibility(load_id, exception_flag=bool(open_remaining))
 
     return exc
 
@@ -947,7 +997,23 @@ def archive_load(load_id: str, *, retention_class: str = "normal_commercial", le
     if existing:
         raise ValueError(f"Load {load_id} is already archived")
 
+    # **The run first, then the review.** A load still on the road is told it
+    # is still on the road; being sent to review a file whose mission has not
+    # finished would be true and useless.
     validate_status_transition(load["status"], "archived")
+
+    # **Operations closes the file before Archive retains it** (Mike Zachary,
+    # 2026-09-17). A reviewed-closeout gate, not a mechanical artifact gate:
+    # this asks only whether a person looked, never whether every artifact
+    # arrived -- Operations *may* close a file despite missing artifacts, and a
+    # checklist here would permanently strand the POD-less loads his ruling of
+    # 2026-09-16 exists to protect.
+    from dispatch import closeout
+
+    if not closeout.is_closed_out(load):
+        raise ValueError(
+            "This file has not been closed out. Operations reviews it first, "
+            "then Archive retains it.")
 
     all_ev = store.list_evidence(load_id)
     evidence_ids = [e["evidence_id"] for e in all_ev]
@@ -991,13 +1057,9 @@ def archive_load(load_id: str, *, retention_class: str = "normal_commercial", le
         )
     vis = store.get_visibility(load_id)
     if vis:
-        updated = LoadVisibilityRecord(
-            load_id=load_id,
-            current_status="archived",
-            last_milestone=vis.get("last_milestone"),
-            exception_flag=bool(vis.get("exception_flag")),
-        )
-        store.upsert_visibility(updated)
+        # Retention does not erase what a person wrote. This dropped
+        # customer_note, internal_note and next_expected_milestone.
+        refresh_visibility(load_id, current_status="archived")
 
     _notify_safe(lambda: notifications.notify_archived(load, result))
 

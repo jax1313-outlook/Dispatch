@@ -12,6 +12,7 @@ import pytest
 
 from dispatch import notifications, services
 from dispatch.db import set_db_path
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -202,6 +203,8 @@ class TestStakeholderViewExcludesInternalContent:
             "in_transit", "at_delivery", "delivered",
         ):
             services.update_load(load["load_id"], status=status)
+        # Operations closes the file before Archive retains it (2026-09-17).
+        close_the_file(load["load_id"], by="operations")
         services.archive_load(load["load_id"])
         retention = services.build_stakeholder_view(load["load_id"])["retention"]
         assert "archive_location" not in retention

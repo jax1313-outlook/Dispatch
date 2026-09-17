@@ -444,7 +444,9 @@ class TestDriverPortalNothingFailsQuietly:
         resp = client.post(
             f"/driver/loads/{load['load_id']}/pod", data={}, follow_redirects=True
         )
-        assert "No photo or file was attached." in resp.data.decode("utf-8")
+        # The refusal names what was expected (BATCH 8): every tile posts to
+        # the one attachment path, so "no file" alone would not say which.
+        assert "No signed pod was attached." in resp.data.decode("utf-8")
 
     def test_successful_pod_confirms_to_the_driver(self, client, driver, load, monkeypatch, tmp_path):
         monkeypatch.setenv("PORTAL_UPLOAD_DIR", str(tmp_path / "uploads"))

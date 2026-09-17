@@ -104,9 +104,22 @@ def _status(record_id: str) -> str:
     return str((dispatch_svc.get_load(record_id) or {}).get("status") or "")
 
 
+def _close_the_file(client, record_id: str):
+    """The Operations review, between the driver finishing and the Archive.
+
+    **Mike Zachary, 2026-09-17:** *"Driver completes the mission. Operations
+    closes the file. Archive performs retention."* Archive refuses a file
+    nobody reviewed, so nothing here reaches retention without it."""
+    return client.post("/api/dispatch/loads/%s/closeout" % record_id,
+                       json={"closed_out_by": "operations"})
+
+
 def _send_pod(client, record_id: str, name: str = "pod.pdf"):
-    return client.post("/portal/mission/%s/pod" % record_id,
-                       data={"pod_file": (io.BytesIO(b"%PDF-1.4 signed"), name)},
+    # **One attachment path** (BATCH 8): Mission Record -> Attach Artifact,
+    # with what the document is. Was `/pod`.
+    return client.post("/portal/mission/%s/attach" % record_id,
+                       data={"classification": "pod",
+                             "artifact": (io.BytesIO(b"%PDF-1.4 signed"), name)},
                        content_type="multipart/form-data")
 
 
@@ -241,6 +254,7 @@ class TestTheRunEndsWithoutLying:
 
         _send_pod(client, delivered)
 
+        _close_the_file(client, delivered)
         retention = dispatch_svc.archive_load(delivered)
 
         assert retention["evidence_index"], "the POD follows the record"
@@ -259,6 +273,7 @@ class TestTheRunEndsWithoutLying:
         _send_pod(client, delivered)
         packet = sandbox.get(delivered)["closing_packet"]
 
+        _close_the_file(client, delivered)
         answer = client.post("/api/dispatch/loads/%s/archive" % delivered)
 
         assert answer.status_code == 201, answer.get_data(as_text=True)
@@ -272,6 +287,7 @@ class TestTheRunEndsWithoutLying:
 
         _send_pod(client, delivered)
 
+        _close_the_file(client, delivered)
         answer = client.post("/api/dispatch/loads/%s/archive" % delivered)
 
         folder = Path(answer.get_json()["retention"]["packet_location"])
@@ -284,6 +300,7 @@ class TestTheRunEndsWithoutLying:
         client.post("/portal/mission/%s/milestone" % delivered,
                     data={"milestone_event": "delivered"})
 
+        _close_the_file(client, delivered)
         answer = client.post("/api/dispatch/loads/%s/archive" % delivered)
 
         assert answer.status_code == 201

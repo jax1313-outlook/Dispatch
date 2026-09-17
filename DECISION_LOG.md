@@ -2382,3 +2382,82 @@ So a card is live on **either** contact, the check belongs at **capture**, not a
 **Verified through the archive route.** An `archive_load()` called directly would prove the function stores what it is given and say nothing about whether a person pressing Archive gets a retrievable record — the same mistake that let the POD dead end survive. Three tests: the record carries the filing, the path reaches real documents, and a packet-less load holds nothing.
 
 ---
+
+## 2026-09-17 — RECONCILIATION BATCH 5: Operations closes the file
+
+**PR:** (this change)
+**Capability:** `dispatch/closeout.py` (new), `dispatch/db.py` (`loads` schema and migration), `dispatch/store.py` (`record_closeout`), `dispatch/services.py` (`_OWNED_STATUSES`, `update_load`, `archive_load`), `portal/routes/dispatch_api.py` (`/closeout`), `portal/routes/pages.py` (`/closeout`), `portal/templates/closeout.html` (new), `portal/templates/base.html`, `portal/templates/dispatch_detail.html`, `tests/test_closeout_authority.py` (new), `tests/conftest.py` and six existing test files.
+**Approved by:** Mike (owner). **AUTHORITATIVE RULING, verbatim:**
+
+> *"The Archive gate is a reviewed-closeout gate, not a mechanical artifact gate. Completed missions enter a closeout queue. The queue displays: Present artifacts / Missing artifacts / Closing packet status / Other closeout information. Operations performs the review. Operations may: 1. Obtain missing artifacts. 2. Record explanatory notes. 3. Close the file despite missing artifacts.*
+>
+> ***The act being recorded is: "I reviewed this file." not: "Every artifact exists."***
+>
+> *Archive eligibility therefore depends upon: Mission completion / Operations closeout review / Recorded closeout act — not: Automatic checklist satisfaction. Record: closed_out_at, closed_out_by, and a note capability for exceptions.*
+>
+> *Driver completes the mission. Operations closes the file. Archive performs retention."*
+
+And, on where it happens: *"closeout is mine at a desk."* And on what must not exist: *"Do not create a driver-facing Archive action. Do not automatically Archive completed missions."*
+
+**Three doors to one act, and two of them filed nothing.** `archived` was reachable by the Advance button (`PATCH /loads/<id>`), by the batch-status control, and by `POST /loads/<id>/archive`. Only the third created a retention record. The other two ran through `update_load`, which validated the transition and wrote the status — so a load could be retired with **no retention record, no evidence index, no `archived_at` and no path to its closing packet**: gone from every active list, with nothing anywhere saying it had been archived. The batch control did it by the handful.
+
+**Closed in the engine, then on the glass.** `_OWNED_STATUSES` refuses `archived` from any general write and names the operation that owns the act; the Advance row stops offering a door the engine will not open. *"The glass is not authoritative. The absence of a visible button does not constitute lifecycle protection."* — so the button came off second, not first.
+
+**The gate is the review, not a checklist.** An engineer's instinct here is to require the artifacts. That would have **permanently stranded the loads he refused to strand on 2026-09-16** — *"some loads genuinely end without a POD coming back, and forcing completion would strand them"* — unfinished before, unarchivable after. It was put to him as exactly that choice and he ruled for the review. `closeout.review()` reports and decides nothing; `close_file()` is the act; `is_closed_out()` is the one question Archive asks.
+
+**A file with nothing on it can still be closed**, and the note says why. Held by test, because it is the whole ruling.
+
+**Reviewed once, by a named person.** A closeout that can be overwritten is not a record of who looked, so a second review is refused. `record_closeout` is its own write: `update_load` whitelists the fields a general edit may touch and these are not on it, so no ordinary save can forge a review.
+
+**The middle act needed somewhere to happen.** Before `/closeout` a finished mission sat `completed` with nothing on any screen saying it was waiting on anyone. The queue is on the Operations nav because it is work waiting on a person, and it prints present artifacts, missing artifacts and what the closing packet did — including the placeholders the templates could not fill, which is what a reviewer would otherwise learn from the customer.
+
+**The BOL is listed and cannot yet be satisfied.** It is the controlling freight document (*"Federal BOL = controlling freight document"*) and **there is still no route to upload one** — BATCH 8. It is shown rather than hidden, for the same reason the brief shows empty fields: a missing artifact nobody can see is one nobody chases. It blocks nothing.
+
+**Twenty-one tests corrected**, every one of them archiving without the middle act. They now perform the review through `close_file` or the `/closeout` route — never by writing `closed_out_at` by hand. `delivered_load` still means delivered; a new `closed_out_load` names the reviewed state rather than quietly widening the old fixture, and `_deliver_load` was left alone because delivering and reviewing are two acts by two people.
+
+---
+
+## 2026-09-17 — RECONCILIATION BATCH 6: Mission Visibility keeps what a person wrote
+
+**PR:** (this change)
+**Capability:** `dispatch/services.py` (`refresh_visibility` (new), `add_milestone`, `update_load`, `open_exception`, `resolve_exception`, `archive_load`), `tests/test_mission_visibility_survives.py` (new), `tests/test_status_change_audit.py`, `tests/test_milestone_transition_gate.py`, `tests/test_status_transition_gate.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"push batch 5 and start batch 6"* — under the standing primary rule: *"Each consequential business act shall have one authoritative operation. Every screen, API route, helper, and test representing that act must call the same authoritative operation."*
+
+**A note written for a customer survived until the driver tapped anything.** Four places built a `LoadVisibilityRecord` from scratch and wrote it over the old one. The two exception paths carried `customer_note` and `internal_note` across; **`add_milestone` and `archive_load` did not.** So Operations could write *"driver is two hours behind, receiver has been called"*, and the next milestone erased it — no trace, nobody told, and the customer reading a note that had silently ceased to exist. Archiving dropped them again, and `next_expected_milestone` with them.
+
+**The defect was never in any one of the four.** It was that one act had four hand-written copies, so a field added to the record reached whichever of them somebody remembered. Four careful copies would have been the same bug waiting. `refresh_visibility()` reads what is there and changes only what it was asked to change: **a caller that says nothing about the notes keeps the notes.** Held by a test that counts the writers rather than trusting the four to stay correct.
+
+**The customer was also told the old story.** `update_load` wrote the `loads` row and never touched visibility at all — every other route to a status change refreshed it. A status advanced from the Dispatch screen showed the new state to the office and the previous one to the customer, indefinitely, with the two disagreeing and nothing saying which was true.
+
+**The run is checked before the review.** `archive_load` asked about closeout first, so a load still on the road was told to go and review its file. Reordered: it is told it is still on the road, which is the thing it can act on.
+
+**Thirteen more tests reached the Archive without the middle act**, in three files the Batch 5 sweep had not caught. They perform the review now — **except the refusal tests, which must not.** The first pass added the review to those too; it did nothing (the file is not closeable from `created`) but it said something untrue about what the test was doing, and it was removed.
+
+---
+
+## 2026-09-17 — RECONCILIATION BATCH 8: one attachment path
+
+**PR:** (this change)
+**Capability:** `portal/artifact_intake.py` (new), `portal/routes/joe_portal.py` (`cockpit_attach` replacing `cockpit_pod` and `cockpit_photos`, `DRIVER_COCKPIT_ENDPOINTS`), `portal/routes/driver_portal.py`, `portal/templates/joe_portal.html`, `tests/test_artifact_intake.py` (new), `tests/test_pod_completes_the_run.py`, `tests/test_one_driver_cockpit.py`, `tests/test_driver_portal.py`.
+**Approved by:** Mike (owner). **MISSION ARTIFACT ATTACHMENT RULE, verbatim:**
+
+> *"The answer should always be: Mission Record → Attach Artifact. Everything else is classification."*
+
+and, on why it matters: *"No pay without the paperwork."*
+
+**Three doors and one shrug.** `cockpit_pod` and `cockpit_photos` (twice) each had their own handler, refusals and consequences — and **nothing anywhere could attach a Bill of Lading.** The controlling freight document (*"Federal BOL = controlling freight document"*, PUBLISHER TEST RULING REVISION 3) had no door on any screen. Asked where a document goes, the build had three answers for some documents and none for the one that governs the freight.
+
+**One route, one operation, five classifications.** `portal/artifact_intake.py` owns what each classification *means*, because the consequence is the meaning: a POD finishes the run and files the packet; photos reach Mission Visibility and the customer is told; a BOL and a loose document are filed and **nothing goes out** — a Bill of Lading is evidence, not an announcement, and telling a customer is a different act with a different owner.
+
+**The cockpit still shows separate tiles.** A label on a button is a classification, not a second path: a driver at a dock with gloves on taps one thing rather than working a dropdown. Every tile posts to the same route, held by a test that reads the drawer.
+
+**The old routes are gone, not redirected.** A second door that still opens is still a second answer.
+
+**The closing packet moved to the act.** It was built by the cockpit's handler — so the parked Driver Portal's own POD route **completed a run and filed nothing**: the same dead end the regression audit found, surviving on the other screen because the consequence belonged to a route instead of to what happened. It now lives in `artifact_intake` beside the classification that triggers it, and the parked screen attaches through the one path like everything else.
+
+**A refusal names what was expected.** "No file was attached" is true of every tile and tells a driver who tapped the wrong one nothing; it says "No signed bol was attached."
+
+**A POD is one document.** Two at once is a mistake worth catching, not two PODs.
+
+---

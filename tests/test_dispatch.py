@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from dispatch import db, models, notifications, services, store
+from tests.conftest import close_the_file
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -60,6 +61,20 @@ def delivered_load(dispatched_load):
     services.add_milestone(load_id, "arrived_delivery")
     services.add_milestone(load_id, "delivered", location="Savannah, GA")
     return dispatched_load
+
+
+@pytest.fixture
+def closed_out_load(delivered_load):
+    """A delivered load whose file Operations has reviewed.
+
+    **AUTHORITATIVE RULING, Mike Zachary, 2026-09-17:** *"Driver completes the
+    mission. Operations closes the file. Archive performs retention."* Archive
+    refuses a file nobody reviewed, so every test that archives starts here
+    rather than from `delivered_load` -- which still means exactly what its
+    name says, and is what the refusal tests need.
+    """
+    close_the_file(delivered_load["load_id"])
+    return delivered_load
 
 
 # ── Model tests ───────────────────────────────────────────────────────
@@ -474,8 +489,8 @@ class TestServices:
         pods = services.list_pods(load_id)
         assert len(pods) == 1
 
-    def test_archive_load(self, delivered_load):
-        load_id = delivered_load["load_id"]
+    def test_archive_load(self, closed_out_load):
+        load_id = closed_out_load["load_id"]
         services.attach_evidence(load_id, evidence_type="pod", description="POD")
         services.generate_pod(load_id)
         ret = services.archive_load(load_id)
@@ -492,13 +507,13 @@ class TestServices:
         with pytest.raises(ValueError, match="Load not found"):
             services.archive_load("NONEXISTENT")
 
-    def test_archive_load_already_archived(self, delivered_load):
+    def test_archive_load_already_archived(self, closed_out_load):
         # D1: archiving now validates the status transition, so this must
         # start from a status that is actually allowed to reach "archived"
         # (sample_load sits at "created", which is not).
-        services.archive_load(delivered_load["load_id"])
+        services.archive_load(closed_out_load["load_id"])
         with pytest.raises(ValueError, match="already archived"):
-            services.archive_load(delivered_load["load_id"])
+            services.archive_load(closed_out_load["load_id"])
 
     def test_get_load_bundle(self, sample_load):
         load_id = sample_load["load_id"]
@@ -515,18 +530,18 @@ class TestServices:
     def test_get_load_bundle_not_found(self):
         assert services.get_load_bundle("NONEXISTENT") is None
 
-    def test_retention_list(self, delivered_load):
+    def test_retention_list(self, closed_out_load):
         # D1: same reason as test_archive_load_already_archived above --
         # needs a status archive_load is actually allowed to reach "archived" from.
-        services.archive_load(delivered_load["load_id"])
+        services.archive_load(closed_out_load["load_id"])
         retentions = services.list_retentions()
         assert len(retentions) == 1
 
-    def test_get_retention(self, delivered_load):
-        services.archive_load(delivered_load["load_id"])
-        ret = services.get_retention(delivered_load["load_id"])
+    def test_get_retention(self, closed_out_load):
+        services.archive_load(closed_out_load["load_id"])
+        ret = services.get_retention(closed_out_load["load_id"])
         assert ret is not None
-        assert ret["load_id"] == delivered_load["load_id"]
+        assert ret["load_id"] == closed_out_load["load_id"]
 
 
 # ── Full workflow test ────────────────────────────────────────────────
@@ -573,6 +588,10 @@ class TestFullWorkflow:
 
         services.add_milestone(load_id, "completed", location="Savannah, GA")
 
+        # Operations closes the file. The driver finished at `completed`; the
+        # Archive does not open until somebody has reviewed it (2026-09-17).
+        close_the_file(load_id, by="operations")
+
         ret = services.archive_load(load_id)
         assert ret["archive_id"].startswith("RET-")
         assert ret["pod_package_id"] == pod["pod_id"]
@@ -615,6 +634,18 @@ class TestDispatchAPI:
                      "departed_pickup", "arrived_delivery", "delivered"):
             client.post(f"/api/dispatch/loads/{load_id}/milestones",
                         json={"event_type": evt})
+
+    def _close_the_file(self, client, load_id):
+        """The Operations review, through its own route.
+
+        *"Driver completes the mission. Operations closes the file. Archive
+        performs retention."* (2026-09-17). Archive refuses a file nobody
+        reviewed, so the middle act is done here rather than folded into
+        `_deliver_load` -- delivering and reviewing are two acts by two people,
+        and a helper that did both would hide the one being tested.
+        """
+        return client.post(f"/api/dispatch/loads/{load_id}/closeout",
+                           json={"closed_out_by": "operations"})
 
     def test_create_load(self, client):
         resp = self._create_load(client)
@@ -861,6 +892,7 @@ class TestDispatchAPI:
         # must reach a status that is actually allowed to reach "archived"
         # ("created" is not) before archiving.
         self._deliver_load(client, load_id)
+        self._close_the_file(client, load_id)
         resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
         assert resp.status_code == 201
         load = client.get(f"/api/dispatch/loads/{load_id}").get_json()["load"]
@@ -873,6 +905,7 @@ class TestDispatchAPI:
     def test_archive_load_already_archived(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
         self._deliver_load(client, load_id)
+        self._close_the_file(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
         assert resp.status_code == 409
@@ -880,6 +913,7 @@ class TestDispatchAPI:
     def test_list_retentions(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
         self._deliver_load(client, load_id)
+        self._close_the_file(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.get("/api/dispatch/retention")
         assert resp.status_code == 200
@@ -888,6 +922,7 @@ class TestDispatchAPI:
     def test_get_retention(self, client):
         load_id = self._create_load(client).get_json()["load"]["load_id"]
         self._deliver_load(client, load_id)
+        self._close_the_file(client, load_id)
         client.post(f"/api/dispatch/loads/{load_id}/archive")
         resp = client.get(f"/api/dispatch/retention/{load_id}")
         assert resp.status_code == 200
@@ -1016,7 +1051,9 @@ class TestDispatchEndToEnd:
         timeline = client.get(f"/api/dispatch/loads/{load_id}/milestones").get_json()
         assert any(m["event_type"] == "pod_received" for m in timeline["milestones"])
 
-        # 8. Archive load
+        # 8. Operations closes the file, then Archive retains it
+        client.post(f"/api/dispatch/loads/{load_id}/closeout",
+                    json={"closed_out_by": "operations"})
         resp = client.post(f"/api/dispatch/loads/{load_id}/archive")
         assert resp.status_code == 201
         ret = resp.get_json()["retention"]
@@ -1153,9 +1190,9 @@ class TestNotificationIntegration:
                      if "POD" in c[0][1]["Subject"]]
             assert len(calls) == 1
 
-    def test_archive_triggers_notification(self, delivered_load):
+    def test_archive_triggers_notification(self, closed_out_load):
         with patch("dispatch.notifications._send_or_write", return_value="mock") as mock_send:
-            services.archive_load(delivered_load["load_id"])
+            services.archive_load(closed_out_load["load_id"])
             calls = [c for c in mock_send.call_args_list
                      if "Archived" in c[0][1]["Subject"]]
             assert len(calls) == 1

@@ -12,6 +12,7 @@ import pytest
 
 from dispatch import acquisition, services
 from dispatch.db import set_db_path
+from tests.conftest import close_the_file
 
 
 @pytest.fixture(autouse=True)
@@ -168,6 +169,7 @@ class TestNotifyFailureDoesNotFailTheOperation:
 
         monkeypatch.setattr(notifications, "notify_archived", _boom)
 
+        close_the_file(load["load_id"], by="operations")
         result = services.archive_load(load["load_id"])  # must not raise
         assert result is not None
 

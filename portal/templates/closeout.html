@@ -1,0 +1,137 @@
+{# Closeout: the middle act.
+
+   "Driver completes the mission. Operations closes the file. Archive performs
+   retention." -- Mike Zachary, 2026-09-17.
+
+   The screen SHOWS and does not judge. Missing artifacts are printed plainly
+   and block nothing, because the act being recorded is "I reviewed this file",
+   not "every artifact exists". A file with gaps can be closed; the note is
+   where the reason goes. #}
+{% extends "base.html" %}
+{% block title %}Closeout{% endblock %}
+{% block page_title %}Closeout{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 16px;color:#666;">
+    The driver finished. Operations closes the file, then Archive retains it.
+</p>
+
+<div class="brief-section">
+    <h3>Waiting on review{% if waiting %} ({{ waiting|length }}){% endif %}</h3>
+
+    {% if not waiting %}
+    <p class="empty-state-sm">No finished missions are waiting. Nothing to review.</p>
+    {% else %}
+    {% for f in waiting %}
+    <div class="closeout-file" style="border:1px solid #d9dde3;border-radius:6px;padding:14px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;">
+            <strong>
+                <a href="{{ url_for('pages.dispatch_detail', load_id=f.load_id) }}">
+                    {{ f.packet.load_number or f.load_id }}</a>
+            </strong>
+            <span class="status-tag dispatch-{{ f.status }}">{{ f.status|replace('_', ' ') }}</span>
+        </div>
+
+        <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:10px;font-size:13px;">
+            <div>
+                <strong>Present</strong>
+                {% if f.present %}
+                <ul style="margin:4px 0 0 16px;padding:0;">
+                    {% for a in f.present %}
+                    <li>{{ a.label }}{% if a.count > 1 %} ({{ a.count }}){% endif %}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div style="color:#999;">Nothing on file.</div>
+                {% endif %}
+            </div>
+
+            <div>
+                {# Printed, never hidden. A missing artifact nobody can see is a
+                   missing artifact nobody chases. #}
+                <strong>Missing</strong>
+                {% if f.missing %}
+                <ul style="margin:4px 0 0 16px;padding:0;">
+                    {% for a in f.missing %}<li>{{ a.label }}</li>{% endfor %}
+                </ul>
+                {% else %}
+                <div style="color:#999;">Nothing outstanding.</div>
+                {% endif %}
+            </div>
+
+            <div>
+                <strong>Closing packet</strong>
+                <div style="margin-top:4px;">
+                    {% if not f.packet.built %}
+                    Not built.
+                    {% elif f.packet.ok %}
+                    {{ f.packet.documents }} document{{ '' if f.packet.documents == 1 else 's' }}
+                    filed under {{ f.packet.load_number or 'no load number' }}.
+                    {% else %}
+                    {{ f.packet.note or 'Some documents failed.' }}
+                    {% endif %}
+                    {% if f.packet.unanswered %}
+                    <div style="margin-top:4px;">
+                        Unanswered on the documents: {{ f.packet.unanswered|join(', ') }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="note-{{ f.load_id }}" placeholder="Note (why anything above is outstanding)"
+                   style="flex:1;min-width:220px;padding:6px 8px;">
+            <button class="btn btn-sm btn-success" onclick="closeFile('{{ f.load_id }}')">
+                Close the file
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<div class="brief-section">
+    <h3>Reviewed, awaiting Archive{% if reviewed %} ({{ reviewed|length }}){% endif %}</h3>
+    {# They stay listed until they are archived: the review is done, the
+       retention is not, and both are work someone can see. #}
+    {% if not reviewed %}
+    <p class="empty-state-sm">None.</p>
+    {% else %}
+    <table class="data-table">
+        <thead><tr><th>Mission</th><th>Closed</th><th>By</th><th>Note</th><th></th></tr></thead>
+        <tbody>
+        {% for f in reviewed %}
+        <tr>
+            <td><a href="{{ url_for('pages.dispatch_detail', load_id=f.load_id) }}">
+                {{ f.packet.load_number or f.load_id }}</a></td>
+            <td>{{ f.closed_out_at[:16] }}</td>
+            <td>{{ f.closed_out_by }}</td>
+            <td>{{ f.note or '—' }}</td>
+            <td><button class="btn btn-sm" onclick="archiveFile('{{ f.load_id }}')">Archive</button></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+<script>
+function closeFile(loadId) {
+    var note = (document.getElementById('note-' + loadId) || {}).value || '';
+    apiPost('/api/dispatch/loads/' + loadId + '/closeout', {note: note}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+
+function archiveFile(loadId) {
+    // Archived is terminal. Asked once, plainly, because nothing undoes it.
+    if (!confirm('Archive this mission? Retention is permanent.')) return;
+    apiPost('/api/dispatch/loads/' + loadId + '/archive', {}).then(function(r) {
+        if (r.error) { alert(r.error); return; }
+        location.reload();
+    });
+}
+</script>
+{% endblock %}
