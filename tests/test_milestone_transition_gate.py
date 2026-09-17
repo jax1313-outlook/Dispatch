@@ -360,11 +360,19 @@ class TestExhaustiveMatrix:
         assert checked == len(LOAD_STATUSES) * (len(MILESTONE_TYPES) - 1)
 
     def test_refused_pair_count_is_stable(self):
-        """90 of 121 pairs are refused; 31 accepted.
+        """The enumerated blast radius. If this number moves, the transition
+        table or the milestone map moved, and that is a governed change needing
+        its own approval.
 
-        This is the enumerated blast radius reported to Mike with M1's
-        approval. If it changes, the transition table or the milestone map
-        changed, and that is a governed change needing its own approval.
+        **It moved once, on 2026-09-16, under two rulings of his:**
+
+        *"same act. Two terms for same act."* -- a `created` load may now go
+        straight to `en_route_pickup`, so START RUN is one press rather than two.
+
+        *"POD sent completes the load and triggers the closing packet."* --
+        `pod_received` maps to `completed` instead of back to `delivered`, which
+        is what gave the run an end. It used to leave the cockpit asking for a
+        POD after the POD had been sent.
         """
         from dispatch.services import _MILESTONE_TO_STATUS
 
@@ -378,4 +386,4 @@ class TestExhaustiveMatrix:
                     dispatch_svc.validate_status_transition(status, target)
                 except ValueError:
                     refused += 1
-        assert refused == 90
+        assert refused == 89

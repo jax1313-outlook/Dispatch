@@ -1,0 +1,119 @@
+From: dispatch@dispatch.local
+To: reviewer@dispatch.local
+Subject: [DISPATCH] Delivered =?utf-8?b?4oCU?= Penske
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============7074300446564579646=="
+
+--===============7074300446564579646==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+================================================================
+DISPATCH — Load Delivered
+================================================================
+Load ID   : SBX-DISPATCH-STATE-1
+Customer  : Penske
+Status    : delivered
+Pickup    : Jacksonville, FL
+Delivery  : Savannah, GA
+Driver    : 
+
+Event: delivered
+
+Respond via the HTML email or the portal.
+================================================================
+
+--===============7074300446564579646==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<div style=3D"font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0=
+ auto;color:#333;">
+    <div style=3D"background:#2e7d32;color:#fff;padding:16px 24px;">
+        <h1 style=3D"margin:0;font-size:20px;">DISPATCH =E2=80=94 Load Delive=
+red</h1>
+    </div>
+
+    <div style=3D"padding:20px 24px;border:1px solid #ddd;border-top:none;">
+        <table style=3D"width:100%;border-collapse:collapse;margin-bottom:16p=
+x;">
+            <tr><td style=3D"padding:6px 0;color:#666;width:120px;">Load ID</=
+td>
+                <td style=3D"padding:6px 0;font-weight:600;"><code>SBX-DISPAT=
+CH-STATE-1</code></td></tr>
+            <tr><td style=3D"padding:6px 0;color:#666;">Customer</td>
+                <td style=3D"padding:6px 0;">Penske</td></tr>
+            <tr><td style=3D"padding:6px 0;color:#666;">Status</td>
+                <td style=3D"padding:6px 0;font-weight:600;">delivered</td></=
+tr>
+            <tr><td style=3D"padding:6px 0;color:#666;">Pickup</td>
+                <td style=3D"padding:6px 0;">Jacksonville, FL</td></tr>
+            <tr><td style=3D"padding:6px 0;color:#666;">Delivery</td>
+                <td style=3D"padding:6px 0;">Savannah, GA</td></tr>
+            <tr><td style=3D"padding:6px 0;color:#666;">Driver</td>
+                <td style=3D"padding:6px 0;"></td></tr>
+        </table>
+
+        <div style=3D"background:#e8f5e9;border-left:4px solid #2e7d32;paddin=
+g:12px 16px;margin-bottom:16px;">
+    <strong>Load Delivered</strong><br>
+    Location: Not specified<br>
+    Time: 2026-09-16T23:56:55Z
+</div>
+<p style=3D"color:#666;font-size:13px;">
+    Next steps: attach evidence, generate POD, or acknowledge delivery.
+</p>
+
+        <div style=3D"margin-top:24px;">
+            <h2 style=3D"font-size:16px;margin-bottom:12px;border-bottom:2px =
+solid #2e7d32;padding-bottom:8px;">
+                Select Action
+            </h2>
+            <table style=3D"width:100%;border-collapse:collapse;">
+                <tr><td style=3D"padding:8px 12px;"><a href=3D"http://127.0.0=
+.1:8080/api/dispatch/decision/SBX-DISPATCH-STATE-1/acknowledge?token=3Ddt1.ey=
+JlIjoiMjAyNi0wOS0zMFQyMzo1Njo1NVoiLCJpIjoiMjAyNi0wOS0xNlQyMzo1Njo1NVoiLCJuIjo=
+iQ1draHlVaWlBZ3ciLCJvIjoiU0JYLURJU1BBVENILVNUQVRFLTE6YWNrbm93bGVkZ2UiLCJwIjoi=
+bG9hZF9kZWNpc2lvbiIsInQiOiJUT0stRjhCNDZCRTc2NUMzIn0.ccc33dfb2e2b2e3bbbb417cf8=
+ef9945f11a70046ebb259163c2c9a144cbef3f8" style=3D"display:inline-block;paddin=
+g:8px 20px;background:#2e7d32;color:#fff;text-decoration:none;border-radius:4=
+px;font-weight:600;font-size:14px;">Acknowledge</a> <span style=3D"background=
+:#fff3e0;color:#e65100;padding:2px 6px;border-radius:3px;font-size:11px;">REC=
+OMMENDED</span></td></tr>
+<tr><td style=3D"padding:8px 12px;"><a href=3D"http://127.0.0.1:8080/api/disp=
+atch/decision/SBX-DISPATCH-STATE-1/flag_review?token=3Ddt1.eyJlIjoiMjAyNi0wOS=
+0zMFQyMzo1Njo1NVoiLCJpIjoiMjAyNi0wOS0xNlQyMzo1Njo1NVoiLCJuIjoiWnQzSXlIUzdBVkU=
+iLCJvIjoiU0JYLURJU1BBVENILVNUQVRFLTE6ZmxhZ19yZXZpZXciLCJwIjoibG9hZF9kZWNpc2lv=
+biIsInQiOiJUT0stMTNDQThBNUUwRjFBIn0.0b5d3b1a0e53227e32ec659f9334c7b99f1479f14=
+f97435b80dbe8b8965ae601" style=3D"display:inline-block;padding:8px 20px;backg=
+round:#e65100;color:#fff;text-decoration:none;border-radius:4px;font-weight:6=
+00;font-size:14px;">Flag for Review</a></td></tr>
+<tr><td style=3D"padding:8px 12px;"><a href=3D"http://127.0.0.1:8080/api/disp=
+atch/decision/SBX-DISPATCH-STATE-1/escalate?token=3Ddt1.eyJlIjoiMjAyNi0wOS0zM=
+FQyMzo1Njo1NVoiLCJpIjoiMjAyNi0wOS0xNlQyMzo1Njo1NVoiLCJuIjoiRS1VZU5XOTk1cTgiLC=
+JvIjoiU0JYLURJU1BBVENILVNUQVRFLTE6ZXNjYWxhdGUiLCJwIjoibG9hZF9kZWNpc2lvbiIsInQ=
+iOiJUT0stNjM2MjM3QTEwNUYyIn0.cc895aaaef12057e8bf9401f32a8ef3e27effaa9ae6280f7=
+4111619bffeebab9" style=3D"display:inline-block;padding:8px 20px;background:#=
+c62828;color:#fff;text-decoration:none;border-radius:4px;font-weight:600;font=
+-size:14px;">Escalate</a></td></tr>
+<tr><td style=3D"padding:8px 12px;"><a href=3D"http://127.0.0.1:8080/api/disp=
+atch/decision/SBX-DISPATCH-STATE-1/request_info?token=3Ddt1.eyJlIjoiMjAyNi0wO=
+S0zMFQyMzo1Njo1NloiLCJpIjoiMjAyNi0wOS0xNlQyMzo1Njo1NloiLCJuIjoiVzkxcG5ldFBrc0=
+0iLCJvIjoiU0JYLURJU1BBVENILVNUQVRFLTE6cmVxdWVzdF9pbmZvIiwicCI6ImxvYWRfZGVjaXN=
+pb24iLCJ0IjoiVE9LLUFCNjFENEFFMDdENSJ9.ad0b92a8ac39a8110f5219c9d3e14df5d620554=
+c2f78485cd7f0df8923acdccb" style=3D"display:inline-block;padding:8px 20px;bac=
+kground:#6a1b9a;color:#fff;text-decoration:none;border-radius:4px;font-weight=
+:600;font-size:14px;">Request More Info</a></td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div style=3D"padding:12px 24px;font-size:11px;color:#999;border:1px soli=
+d #ddd;border-top:none;">
+        DISPATCH &mdash; Load ID: SBX-DISPATCH-STATE-1
+    </div>
+</div>
+
+--===============7074300446564579646==--

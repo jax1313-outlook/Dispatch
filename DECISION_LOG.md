@@ -2209,3 +2209,54 @@ He is right, and his own card doctrine is why. *"rain stops one stop from comple
 **Not built yet.** This entry records the ruling and the name. The trigger, the status area and the chip's wording are the next piece of work.
 
 ---
+
+## 2026-09-16 — START RUN built, and two terms collapse into one act
+
+**PR:** (this change)
+**Capability:** `portal/routes/joe_portal.py` (`START_RUN`, `READY`, `START_RUN_EVENT`, `NEXT_STEP`, `ALL_MILESTONES`, `_driver_panel`), `portal/templates/joe_portal.html`, `portal/static/joe_portal.css`, `dispatch/services.py` (`_VALID_TRANSITIONS`), `tests/test_start_run.py` (new).
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"build START RUN"*, then, asked whether `dispatched` was a state he would ever act on or a step the system needed and he did not: *"same act. Two terms for same act. the build is fine."*
+
+**The blue area was lying.** It rendered `STATUS: {{ mode_label }}` — announcing *which half of the screen you were looking at* as though it were your status. That is why PICKUP and DELIVERY felt like execution controls: `cockpit.normalise_mode()` is pure and has never written anything, but the screen was calling a view a state. The chip now shows the run, and PICKUP/DELIVERY are plainly what they always were.
+
+```
+STATUS: READY   [ START RUN ]     before -- the only control in that area
+EN ROUTE PICKUP                   after -- a display again, tracking the load
+```
+
+**One press, one act.** START RUN used to be going to record `dispatched`, leaving a second button — ON MY WAY TO PICKUP — that told nobody anything the first had not. He ruled them the same act, so the press records `en_route_pickup` directly and `_VALID_TRANSITIONS` learned that a `created` load may go straight to the road. **`dispatched` is kept, not deleted:** a load already sitting in it still advances, and nothing stored is rewritten.
+
+`ALL_MILESTONES` carries **one** entry where it carried two — *"a list offering both asks him to choose between two words for one thing."*
+
+**Offered in one place on the glass.** The Mission Actions column no longer repeats it. The manual milestone drawer still lists **Start run**, for a run he forgot to start before he rolled, and that is behind a drawer rather than on the glass.
+
+**No OFF, and a test says so.** No STOP RUN, END RUN, CANCEL RUN or UNSTART anywhere. *"That action changes reality."* It sends an arrival notice to a broker and that cannot be un-sent; pause, cancel and done are three different things and none of them is this button.
+
+**A correction on the record.** An engineer told him the first milestone already meant *on my way to pickup* — that `dispatched -> en_route_pickup`. It did not. `_MILESTONE_NEXT` maps a milestone to the **next expected milestone**, not to a resulting status, and recording `dispatched` left the load in `dispatched`. The claim was wrong; walking a load through the routes is what showed it.
+
+**Open, and his:** the status area now reads `EN ROUTE PICKUP` after the press — the load's real status, and system wording on a driver's glass. Left as it is rather than renamed by an engineer.
+
+---
+
+## 2026-09-16 — POD sent completes the load and builds the closing packet
+
+**PR:** (this change)
+**Capability:** `dispatch/closing_packet.py` (new), `dispatch/services.py` (`_MILESTONE_TO_STATUS`), `portal/routes/joe_portal.py` (`cockpit_milestone`, `_build_closing_packet`), `portal/models/sandbox.py` (`run_hold_sweep`), `tests/test_closing_packet.py` (new), `tests/test_start_run.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"POD sent completes the load and triggers the closing packet"*, and *"once the action button is pressed the deterministic flow has begun even if the truck stops over night the flow path is moving toward completion"*.
+
+**The run had no end.** `_MILESTONE_TO_STATUS` mapped `pod_received` back to **`delivered`**, so recording the POD advanced nothing: the cockpit went on asking for a POD after it had been sent, for ever. Found by walking every milestone one at a time and reading what the blue area said at each — the chain dead-ended at delivery. It now goes to `completed` and the next-step prompt goes quiet.
+
+**The packet.** `dispatch/closing_packet.py` fills his templates from the shelf and copies the fixed company documents in beside them, into **one folder named by the load number** — the 2026-09-15 filing ruling: *"that is the tracing number. same system used by FedEx/ UPS and others."* The number is used exactly as given; only characters a file system cannot hold are replaced, because *"a number we tidied up is a number that no longer matches theirs on an invoice."*
+
+**`D:\Memory` is read and never written.** Output lands under `DISPATCH_PACKET_ROOT`, or `Closing Packets` beneath the operations root.
+
+**It assembles; it does not send.** Putting a document in front of a broker is a separate act and the Owner's. It does not invoice either — the invoice *document* is produced because it is a document; the number, dates and terms stay visible for the accounting software.
+
+**It never costs the run.** A shelf that is not configured is reported in plain words and the completed load stands. A driver who has delivered his freight and sent his POD has finished, whether or not a Word template was reachable.
+
+**The overnight ruling exposed a real vulnerability, not just a clarification.** `sandbox.run_hold_sweep` **deleted** any entry whose three-hour HOLD clock had expired, with no check on whether the load was committed. A run started Tuesday, truck stopped overnight, swept Wednesday morning — the record gone with the freight still on the trailer. It now refuses to touch a committed or opened load (`opportunity_card.is_protected`, the same guard `discard` already applied). A candidate nobody committed to still sweeps, which is what that clock has always been for.
+
+**There is no pause in the flow**, and `tests/test_start_run.py::TestOnceStartedTheFlowKeepsGoing` holds it: a run that spans two days is normal freight.
+
+---

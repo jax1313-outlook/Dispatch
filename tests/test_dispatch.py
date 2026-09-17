@@ -1021,7 +1021,11 @@ class TestDispatchEndToEnd:
         assert resp.status_code == 201
         ret = resp.get_json()["retention"]
         assert ret["load_id"] == load_id
-        assert ret["final_status"] == "delivered"
+        # `completed`, not `delivered`: the POD milestone advances the load
+        # (Owner, 2026-09-16, "POD sent completes the load and triggers the
+        # closing packet"). It used to map back to `delivered`, so a run that
+        # had sent its POD was archived as though it had not.
+        assert ret["final_status"] == "completed"
         assert len(ret["evidence_index"]) == 2
 
         # Load status updated to archived

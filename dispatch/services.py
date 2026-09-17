@@ -68,12 +68,29 @@ _MILESTONE_TO_STATUS = {
     "checkpoint": None,
     "arrived_delivery": "at_delivery",
     "delivered": "delivered",
-    "pod_received": "delivered",
+    # **POD sent completes the load. Owner ruling, 2026-09-16:** *"POD sent
+    # completes the load and triggers the closing packet."*
+    #
+    # It used to map back to `delivered`, so recording the POD advanced nothing:
+    # the cockpit kept asking for the POD after it had been sent, and a run had
+    # no end. Found by walking the milestones one at a time and reading what the
+    # screen said at each -- the chain dead-ended at delivery.
+    "pod_received": "completed",
     "completed": "completed",
 }
 
 _VALID_TRANSITIONS: dict[str, set[str]] = {
-    "created": {"dispatched", "cancelled"},
+    # **START RUN goes straight to the road. Owner ruling, 2026-09-16:** asked
+    # whether `dispatched` was a state he would ever act on, or a step the
+    # system needed and he did not -- *"same act. Two terms for same act."*
+    #
+    # A driver who has started his run is on his way to the pickup. Making him
+    # press START RUN and then ON MY WAY TO PICKUP is two taps for one act, and
+    # the second one tells nobody anything the first did not.
+    #
+    # `dispatched` is kept, not deleted: loads already sitting in it still
+    # advance, and nothing stored has to be rewritten.
+    "created": {"dispatched", "en_route_pickup", "cancelled"},
     "dispatched": {"en_route_pickup", "cancelled"},
     "en_route_pickup": {"at_pickup", "cancelled"},
     "at_pickup": {"picked_up", "cancelled"},

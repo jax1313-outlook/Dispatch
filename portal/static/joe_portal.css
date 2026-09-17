@@ -73,6 +73,21 @@
     padding: 6px 12px; border-radius: 5px;
 }
 
+/* START RUN. The one act on this screen, and the only control in the status
+   area (Owner ruling, 2026-09-16). Sized for a gloved thumb at a dock, and
+   deliberately unlike the mode buttons beside it: those are views and this
+   changes reality. There is no matching STOP -- an arrival notice cannot be
+   un-sent. */
+.run-start { display: flex; align-items: center; gap: 10px; }
+.run-btn {
+    font-size: 1rem; font-weight: 800; letter-spacing: 0.08em;
+    color: #06121f; background: #fbbf24; border: 2px solid #fcd34d;
+    padding: 12px 22px; border-radius: 6px; cursor: pointer;
+    min-height: 48px;
+}
+.run-btn:active { background: #f59e0b; }
+.run-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
 /* Modes on the right, and the left of the bar left empty -- the stop toggle
    that used to sit there is gone with stops themselves (one card per delivery,
    2026-09-15). The spacer keeps the modes where the driver's thumb expects

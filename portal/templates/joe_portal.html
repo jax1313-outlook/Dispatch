@@ -59,7 +59,28 @@
       {% if group.label %}
         <div class="group-of">{{ group.label }}</div>
       {% endif %}
-      <div class="status-chip">STATUS: {{ mode_label }}</div>
+      {# **The blue area says what the run is doing, and holds the one act.**
+         It used to render `STATUS: {{ mode_label }}` -- announcing which half
+         of the screen you were looking at as though it were your status. That
+         is why PICKUP and DELIVERY felt like execution controls: the screen was
+         calling a view a state. They never wrote anything and still do not.
+
+         Owner ruling, 2026-09-16: START RUN is the one deliberate act, per
+         load, and it lives here. Before it, READY. After it, where the load
+         actually is. A one-way gate -- there is no OFF, because an arrival
+         notice cannot be un-sent. #}
+      {% if driver.not_started %}
+        <form class="run-start" method="post"
+              action="{{ url_for('joe_portal.cockpit_milestone', record_id=record.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="view" value="{{ requested_view }}">
+          <input type="hidden" name="milestone_event" value="{{ driver.next_event }}">
+          <div class="status-chip">STATUS: READY</div>
+          <button class="run-btn" type="submit">START RUN</button>
+        </form>
+      {% elif driver.run_state %}
+        <div class="status-chip">{{ driver.run_state }}</div>
+      {% endif %}
     </div>
   </div>
 
@@ -195,7 +216,10 @@
 
   {# NEXT STEP. One tap for the milestone the load is waiting on. Arrivals point
      at ARRIVE, which records the milestone as well as sending the notice. #}
-  {% if driver.load_open and driver.next_event %}
+  {# Not while the run is unstarted: START RUN lives in the status area and is
+     offered in one place only. Two buttons for one act is two things to decide
+     between at a dock. #}
+  {% if driver.load_open and driver.next_event and not driver.not_started %}
     {% if driver.next_event == 'arrive' %}
     <button class="action" type="button" data-trigger="arrive">
       <span class="action-name">NEXT: {{ driver.next_label }}</span>

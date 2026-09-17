@@ -59,8 +59,41 @@ _CLOSED_LOAD_STATUSES = ("archived", "cancelled", "completed")
 #: The next thing to record, by load status. ARRIVE records both arrivals --
 #: it stamps the time and GPS, sends the notice and records the milestone -- so
 #: an arrival is pointed at ARRIVE rather than offered as a second button.
+#: **The one act, and its name. Owner ruling, 2026-09-16: `START RUN`.**
+#:
+#: His own word. He calls the job a run and always has -- *"there are no runs
+#: for Monday. There are runs scheduled and on the calendar"*, and from
+#: 2026-09-10, *"just leave it open not committed so I can close or take a
+#: run."* He never said "start mission" except reading it off this screen.
+#:
+#: **Per load, not per day.** Thinking it through he reached for a day-level
+#: press and reversed himself: *"No, I think I'm incorrect. I think it is an
+#: activation for that load. Should there be a second load, then I would have to
+#: activate it for that specific load also."* His card doctrine is why -- *"rain
+#: stops one stop from completing so the driver returns with one load still
+#: onboard ... Nothing about it binds them together."* A day-level press would
+#: bind three cards and leave one started that never earned it.
+#:
+#: **A one-way gate, not a switch.** It sends an arrival notice to a broker and
+#: that cannot be un-sent: *"That action changes reality."* There is no OFF --
+#: pause, cancel and done are three different things, and *done* is where the
+#: workflow arrives rather than a control.
+START_RUN = "START RUN"
+
+#: The state the status area shows before the run has begun. Not a milestone --
+#: a load sitting `created` is ready and nothing more.
+READY = "READY"
+
+#: The event START RUN records. **One act, one press (Owner, 2026-09-16:** *"same
+#: act. Two terms for same act."*). It used to record `dispatched` and leave him
+#: a second button, ON MY WAY TO PICKUP, that told nobody anything the first had
+#: not. A driver who has started his run is on his way to the pickup.
+START_RUN_EVENT = "en_route_pickup"
+
 NEXT_STEP = {
-    "created": ("START MISSION", "dispatched"),
+    "created": (START_RUN, START_RUN_EVENT),
+    # Kept for a load already sitting in `dispatched` from before the two were
+    # merged. Nothing puts a load there now.
     "dispatched": ("ON MY WAY TO PICKUP", "en_route_pickup"),
     "en_route_pickup": ("ARRIVE AT PICKUP", "arrive"),
     "at_pickup": ("LOADED", "loaded"),
@@ -73,8 +106,14 @@ NEXT_STEP = {
 #: Every milestone a driver may record by hand, in run order, for the one that
 #: was missed. Labels are what he reads; values are what Dispatch stores.
 ALL_MILESTONES = [
-    ("Start mission", "dispatched"),
-    ("On my way to pickup", "en_route_pickup"),
+    # Named for the act, not the system. The screen offers this one as START RUN
+    # in the status area; here it is the same event, reachable for a run he
+    # forgot to start before he rolled.
+    #
+    # **One entry, not two.** "Start run" and "On my way to pickup" were the
+    # same act under two names (Owner, 2026-09-16), and a list offering both
+    # asks him to choose between two words for one thing.
+    ("Start run", START_RUN_EVENT),
     ("Arrived at pickup", "arrived_pickup"),
     ("Loaded", "loaded"),
     ("Rolling to delivery", "departed_pickup"),
@@ -117,11 +156,19 @@ def _driver_panel(record_id: str) -> dict:
     status = str((load or {}).get("status") or "")
     label, event = NEXT_STEP.get(status, ("", ""))
     trucks = dispatch_svc.list_equipment(status="active")
+    # **What the blue area says.** Before the run it says READY and carries the
+    # one act; after it, it reports where the load actually is. A load with no
+    # row yet has no run state at all, and says nothing rather than guessing.
+    run_state = READY if status == "created" else status.replace("_", " ").upper()
     return {
         "signed_in_as_driver": _driver_signed_in() and not session.get("user_id"),
         "load_open": bool(load),
         "load_id": (load or {}).get("load_id", ""),
         "status_label": status.replace("_", " ").upper(),
+        "run_state": run_state if load else "",
+        # The run has not begun. This is the only moment START RUN is offered,
+        # and it is offered in one place.
+        "not_started": bool(load) and status == "created",
         "next_label": label,
         "next_event": event,
         "closed_note": ("This mission has no open load yet. Operations opens it with Book Load."
@@ -1172,8 +1219,56 @@ def _act_on_load(record_id: str, act):
 def cockpit_milestone(record_id: str):
     from portal import driver_actions
 
-    return _act_on_load(record_id, lambda: driver_actions.step_milestone(
-        record_id, request.form.get("milestone_event", ""), _cockpit_actor()))
+    event = request.form.get("milestone_event", "")
+    answer = _act_on_load(record_id, lambda: driver_actions.step_milestone(
+        record_id, event, _cockpit_actor()))
+    # **POD sent completes the load and triggers the closing packet** (Owner,
+    # 2026-09-16). Assembled, not sent: putting a document in front of a broker
+    # is a separate act and his.
+    if event == "pod_received":
+        _build_closing_packet(record_id)
+    return answer
+
+
+def _build_closing_packet(record_id: str) -> dict | None:
+    """File the closed load's documents under its load number.
+
+    **It never costs the run.** A driver who has delivered his freight and sent
+    his POD has finished, whether or not a Word template was reachable. What
+    went wrong is flashed and recorded; the completion stands either way.
+    """
+    from dispatch import closing_packet, clock
+
+    record = sandbox.get(record_id)
+    if not record:
+        return None
+    try:
+        report = closing_packet.build(
+            record,
+            today=clock.home_date().isoformat(),
+            driver_name=str(session.get("driver_name") or ""),
+            delivered=True)
+    except Exception as exc:  # noqa: BLE001 - a packet is never worth a 500 in a cab
+        flash("The closing packet could not be built: %s" % exc)
+        return None
+
+    if report["ok"]:
+        flash("Closing packet filed under %s: %d document%s."
+              % (report["load_number"] or "no load number",
+                 len(report["documents"]),
+                 "" if len(report["documents"]) == 1 else "s"))
+    else:
+        flash("Closing packet: %s" % (report["note"] or "some documents failed."))
+
+    data = sandbox._load()
+    stored = data.get(record_id)
+    if stored is not None:
+        # What was produced and what is still unanswered, kept with the record
+        # so the packet can be read back without rebuilding it.
+        stored["closing_packet"] = report
+        data[record_id] = stored
+        sandbox._save(data)
+    return report
 
 
 @joe_bp.route("/portal/mission/<path:record_id>/pod", methods=["POST"])

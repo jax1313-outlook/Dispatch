@@ -114,10 +114,15 @@ class TestTheDriverActionsAreOnTheCockpit:
         record_id = mission()
         as_driver(client)
         html = page(client, record_id)
-        for name in ("NEXT: START MISSION", "UPLOAD DOCUMENTS - PHOTOS", "DETENTION - REPORT A PROBLEM",
+        for name in ("UPLOAD DOCUMENTS - PHOTOS", "DETENTION - REPORT A PROBLEM",
                      "FUEL RECEIPT", "ALL MILESTONES", "LOAD SECUREMENT PHOTOS", "POD PHOTO"):
             assert name in html
         assert "DRIVER COCKPIT" in html  # the same screen, not a new one
+        # START RUN is the one act and it lives in the status area, not in this
+        # column (Owner ruling, 2026-09-16). Two buttons for one act is two
+        # things to decide between at a dock.
+        assert "NEXT: START RUN" not in html
+        assert "START RUN" in html
 
     def test_the_next_step_records_the_milestone(self, client):
         record_id = mission()

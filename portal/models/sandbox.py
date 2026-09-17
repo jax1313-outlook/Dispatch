@@ -325,6 +325,29 @@ def start_hold(sandbox_id: str, now: datetime | None = None) -> dict:
     return entry
 
 
+def _is_protected(entry: dict) -> bool:
+    """A record the sweep may never delete: committed, or already a load.
+
+    **Owner, 2026-09-16:** *"once the action button is pressed the deterministic
+    flow has begun even if the truck stops over night the flow path is moving
+    toward completion."* A run that spans two days is normal freight, and a
+    sweep that deleted it overnight would take a load the truck is carrying. The
+    HOLD clock governs a **candidate** nobody committed to; past COMMIT it has
+    no business here.
+
+    **The same test `opportunity_card.is_protected` applies, written out rather
+    than imported.** This module sits under the connector boundary, which forbids
+    reaching `dispatch.services` even transitively -- and `opportunity_card`
+    reaches it for the fleet. Importing the twin broke the boundary the moment it
+    was added. `tests/test_start_run.py` holds the two in agreement.
+    """
+    from dispatch import commitment
+
+    entry = entry or {}
+    return bool(commitment.is_committed(entry) or entry.get("engine_load_id")
+                or entry.get("operational_load"))
+
+
 def run_hold_sweep(source_type: str = SANDBOX_SOURCE_FREIGHT, now: datetime | None = None) -> list[str]:
     """Delete (not archive) every entry, IN THE GIVEN PROGRAM ONLY, whose
     HOLD clock has expired.
@@ -345,6 +368,7 @@ def run_hold_sweep(source_type: str = SANDBOX_SOURCE_FREIGHT, now: datetime | No
         if entry.get("source_type") == source_type
         and entry.get("hold_expires_at")
         and now_dt >= _parse_utc(entry["hold_expires_at"])
+        and not _is_protected(entry)
     ]
     for sid in expired_ids:
         del data[sid]

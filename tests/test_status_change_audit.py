@@ -294,13 +294,17 @@ class TestNoDuplicates:
 
     @pytest.mark.parametrize("first,second", [
         ("departed_pickup", "in_transit"),   # both -> in_transit
-        ("delivered", "pod_received"),       # both -> delivered
     ])
     def test_sibling_milestone_on_same_status_adds_no_event(self, load, first, second):
         """Several milestone types map to a status the load already holds.
 
         Recording "changed from in_transit to in_transit" would be a false
         statement in the audit log on a routine, correct operation.
+
+        **`delivered` and `pod_received` were a pair here until 2026-09-16.**
+        They are not siblings any more: *"POD sent completes the load and
+        triggers the closing packet."* The POD now advances the load, and the
+        audit log should say so.
         """
         load_id = load["load_id"]
         upto = LADDER[:LADDER.index(first) + 1] if first in LADDER else ()
@@ -308,6 +312,19 @@ class TestNoDuplicates:
         before = len(status_events(load_id))
         dispatch_svc.add_milestone(load_id, second)
         assert len(status_events(load_id)) == before
+
+    def test_the_pod_advances_the_load_and_is_audited(self, load):
+        """**Owner ruling, 2026-09-16.** It used to map back to `delivered`, so
+        recording the POD advanced nothing and the cockpit went on asking for a
+        POD after it had been sent."""
+        load_id = load["load_id"]
+        _walk(load_id, *LADDER[:LADDER.index("delivered") + 1])
+        before = len(status_events(load_id))
+
+        dispatch_svc.add_milestone(load_id, "pod_received")
+
+        assert dispatch_svc.get_load(load_id)["status"] == "completed"
+        assert len(status_events(load_id)) == before + 1
 
     def test_archive_is_not_audited_twice(self, load):
         load_id = load["load_id"]
@@ -380,10 +397,18 @@ class TestBoundariesHeld:
         assert dispatch_store.get_load(load_id)["status"] == "delivered"
         assert status_events(load_id) == []
 
-    def test_transition_matrix_untouched(self):
+    def test_the_transition_matrix_holds(self):
+        """**One change, 2026-09-16:** a `created` load may go straight to
+        `en_route_pickup`. Asked whether `dispatched` was a state he would ever
+        act on or a step the system needed and he did not, the Owner answered
+        *"same act. Two terms for same act."* -- so START RUN puts the truck on
+        the road in one press. `dispatched` is kept, not deleted: a load already
+        sitting in it still advances."""
         from dispatch.services import _VALID_TRANSITIONS
 
-        assert _VALID_TRANSITIONS["created"] == {"dispatched", "cancelled"}
+        assert _VALID_TRANSITIONS["created"] == {"dispatched", "en_route_pickup",
+                                                 "cancelled"}
+        assert _VALID_TRANSITIONS["dispatched"] == {"en_route_pickup", "cancelled"}
         assert _VALID_TRANSITIONS["delivered"] == {"completed", "archived"}
         assert _VALID_TRANSITIONS["archived"] == set()
 

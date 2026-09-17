@@ -54,18 +54,21 @@ class TestBatchStatusAPI:
     def test_batch_update_partial_failure(self, client):
         load1 = services.create_load(customer="Batch C1")
         load2 = services.create_load(customer="Batch C2")
-        # load2 is already dispatched, so created->dispatched won't apply;
-        # but in_transit requires intermediate steps from dispatched
-        services.update_load(load2["load_id"], status="dispatched")
+        # This used to move both to en_route_pickup, and relied on
+        # created -> en_route_pickup being refused. It is legal now: START RUN
+        # puts the truck on the road in one press (Owner, 2026-09-16, "same act.
+        # Two terms for same act"). So the pair here is one that is still a jump:
+        # load1 sits in created, load2 is already on the road.
+        services.update_load(load2["load_id"], status="en_route_pickup")
         resp = client.post(
             "/api/dispatch/loads/batch-status",
             json={
                 "load_ids": [load1["load_id"], load2["load_id"]],
-                "status": "en_route_pickup",
+                "status": "at_pickup",
             },
         )
         data = resp.get_json()
-        # load1 is created -> en_route_pickup (invalid), load2 is dispatched -> en_route_pickup (valid)
+        # load1 is created -> at_pickup (invalid), load2 is en_route_pickup -> at_pickup (valid)
         assert data["updated"] == 1
         assert len(data["errors"]) == 1
         assert load1["load_id"] in data["errors"][0]
