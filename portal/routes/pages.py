@@ -312,10 +312,15 @@ def email_templates():
 
 @pages_bp.route("/calendar")
 def load_calendar():
+    from dispatch import clock
     from dispatch import services as dispatch_svc
-    from datetime import date
 
-    today = date.today()
+    # **The home terminal's day, not the machine's.** Ruling of 2026-09-08:
+    # every calendar date comes from `clock.home_today()`, read against the
+    # declared home zone. These four defaults were still taking it from the OS
+    # clock -- and the quarter is exactly where it bites, which is why
+    # `clock.home_quarter()` was written and then never called from anywhere.
+    today = clock.home_date()
     try:
         year = int(request.args.get("year", today.year))
         month = int(request.args.get("month", today.month))
@@ -342,14 +347,20 @@ def load_calendar():
 @pages_bp.route("/ifta")
 def ifta():
     from dispatch import services as dispatch_svc
+    from dispatch import clock
     from dispatch.models import IFTA_JURISDICTIONS
-    from datetime import date
 
-    today = date.today()
+    # **The home terminal's day, not the machine's.** Ruling of 2026-09-08:
+    # every calendar date comes from `clock.home_today()`, read against the
+    # declared home zone. These four defaults were still taking it from the OS
+    # clock -- and the quarter is exactly where it bites, which is why
+    # `clock.home_quarter()` was written and then never called from anywhere.
+    today = clock.home_date()
+    home_year, home_q = clock.home_quarter(today)
     view_mode = request.args.get("view", "quarter")
     try:
-        year = int(request.args.get("year", today.year))
-        quarter = int(request.args.get("quarter", (today.month - 1) // 3 + 1))
+        year = int(request.args.get("year", home_year))
+        quarter = int(request.args.get("quarter", home_q))
         month = int(request.args.get("month", today.month))
     except (ValueError, TypeError):
         year = today.year
@@ -391,13 +402,18 @@ def ifta():
 
 @pages_bp.route("/ifta/review")
 def ifta_review():
+    from dispatch import clock
     from dispatch import services as dispatch_svc
-    from datetime import date
 
-    today = date.today()
+    # **The home terminal's day, not the machine's.** Ruling of 2026-09-08:
+    # every calendar date comes from `clock.home_today()`, read against the
+    # declared home zone. These four defaults were still taking it from the OS
+    # clock -- and the quarter is exactly where it bites, which is why
+    # `clock.home_quarter()` was written and then never called from anywhere.
+    home_year, home_q = clock.home_quarter()
     try:
-        year = int(request.args.get("year", today.year))
-        quarter = int(request.args.get("quarter", (today.month - 1) // 3 + 1))
+        year = int(request.args.get("year", home_year))
+        quarter = int(request.args.get("quarter", home_q))
     except (ValueError, TypeError):
         year = today.year
         quarter = (today.month - 1) // 3 + 1

@@ -143,10 +143,21 @@ class TestItTellsTheTruthAboutWhatIsMissing:
         assert report["ok"] is False
         assert "DISPATCH_MEMORY_ROOT" in report["note"]
 
-    def test_delivered_is_carried_through(self, shelf, tmp_path):
+    def test_a_struck_placeholder_is_left_standing_and_reported(self, shelf, tmp_path):
+        """**`{{delivery_status}}` is struck.** Owner ruling, 2026-09-17:
+        *"delete delivery_status and pod_status, they are software created
+        too."*
+
+        This used to assert the document printed "Delivered". Nothing prints it
+        now -- the placeholder stays visible, which is rule 7, and the report
+        says *why* it will never be filled so the remedy is to revise the
+        template rather than hunt a missing fact."""
         out = tmp_path / "out"
 
-        closing_packet.build(RECORD, shelf=shelf, out_dir=out, delivered=True)
+        report = closing_packet.build(RECORD, shelf=shelf, out_dir=out)
 
         with zipfile.ZipFile(str(out / "02_POD_Cover_Sheet.docx")) as z:
-            assert "Delivered" in z.read("word/document.xml").decode("utf-8")
+            body = z.read("word/document.xml").decode("utf-8")
+        assert "Delivered" not in body
+        assert "{{delivery_status}}" in body
+        assert "delivery_status" in report["removed"]

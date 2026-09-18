@@ -76,10 +76,23 @@ ATTACHED_FROM_CHECKLIST = {
 #: duplicate evidence concepts. Does not represent a distinct workflow
 #: milestone."* The loaded vehicle photographed at the shipper already carries
 #: what the freight looked like.
+#: `shipper_signature_status` -- struck 2026-09-17: *"notice the Status is not
+#: used and is software created. shipper_signature is used. just as the
+#: receiver_signature."* The signature is evidence and belongs; a field
+#: describing whether the evidence exists is software talking about itself.
+#: `delivery_status` and `pod_status` -- struck 2026-09-17: *"delete
+#: delivery_status and pod_status, they are software created too."* Same test
+#: as `pickup_on_time_status` before them. Dispatch stores the Delivered
+#: milestone and the POD itself; a word printed about either is software
+#: talking about what it already holds. When the delivery is in question the
+#: answer is the POD, not a status line.
 REMOVED_FIELDS = frozenset({
     "receiver_title",
     "pickup_on_time_status",
     "freight_condition_photos_attached",
+    "shipper_signature_status",
+    "delivery_status",
+    "pod_status",
 })
 
 #: **Real, and already preserved inside the controlling document. REVISION 3.**
@@ -94,7 +107,24 @@ REMOVED_FIELDS = frozenset({
 #: removed field means fix the template. One of these means the answer exists --
 #: go and get the POD. Reporting them in one list would send a man to delete
 #: something he actually needs.
-EVIDENCE_IN_POD = frozenset({"receiver_name", "receiver_signature"})
+#: **Which document holds each.** Owner ruling, 2026-09-17: *"shipper_signature
+#: should be classified as evidence - yes"* -- and *"shipper_signature is used.
+#: just as the receiver_signature."*
+#:
+#: The remedy is the whole reason this list exists, so it has to name the right
+#: document. A receiver signs at the delivery end and that signature is on the
+#: POD. **A shipper signs at the pickup end, and that is the BOL** -- the
+#: controlling freight document (*"Federal BOL = controlling freight
+#: document"*). Sending a man to the POD for a shipper's signature would be a
+#: remedy that fails at the filing cabinet.
+EVIDENCE_IN_THE_DOCUMENT = {
+    "receiver_name": "the signed POD",
+    "receiver_signature": "the signed POD",
+    "shipper_signature": "the signed BOL",
+}
+
+#: The names alone, for a membership test.
+EVIDENCE_IN_POD = frozenset(EVIDENCE_IN_THE_DOCUMENT)
 
 #: Everything Publisher will never fill, for whichever of the two reasons.
 NEVER_FILLED = REMOVED_FIELDS | EVIDENCE_IN_POD
@@ -148,24 +178,19 @@ def _attachment_values(record: dict) -> dict:
             for placeholder, line in ATTACHED_FROM_CHECKLIST.items()}
 
 
-def values_for(record: dict, *, today: str = "", driver_name: str = "",
-               delivered: bool = False) -> dict:
+def values_for(record: dict, *, today: str = "", driver_name: str = "") -> dict:
     """The placeholder values this Mission Record can answer for.
 
     Only keys with a real value are returned. `today` is the date the document
-    is being produced on, for `{{date}}`; `driver_name` is who ran the load;
-    `delivered` is whether the Delivered milestone has been recorded. All three
-    are passed in rather than read from a clock, a settings file or the
+    is being produced on, for `{{date}}`; `driver_name` is who ran the load.
+    Both are passed in rather than read from a clock, a settings file or the
     database, so this stays pure and a rehearsal produces the same document
     twice.
 
-    **`delivered` is a parameter because the milestone is not on this record.**
-    It goes to the load row through `dispatch.services.add_milestone`; the
-    sandbox record never learns of it. An earlier version of this module read a
-    `delivered_at` field that **nothing has ever written**, so `{{delivery_status}}`
-    would have stayed blank on every real run while looking wired -- found by
-    walking a load end to end through the routes on 2026-09-16, not by reading
-    the code. The caller holds the load row; the caller answers.
+    **`delivered` was a third parameter and is gone**, with the only placeholder
+    that read it. Owner ruling, 2026-09-17: *"delete delivery_status and
+    pod_status, they are software created too."* Keeping a parameter nothing
+    reads would be the same untruth in a signature.
     """
     record = dict(record or {})
     card = dict(record.get("card_data") or {})
@@ -210,7 +235,15 @@ def values_for(record: dict, *, today: str = "", driver_name: str = "",
         # Facts of the mission, agreed on the call -- not accounting's working.
         "rate": fact("rate"),
         "amount": fact("amount"),
-        "delivery_notes": fact("delivery_notes"),
+        # **`delivery_notes` is not here, and that is deliberate.** Owner
+        # ruling, 2026-09-17: *"all place holders should be on a document that
+        # is real and in the template library. Otherwise they should be deleted
+        # because the documents are not real. we should only deal in reality."*
+        # No template of his asks for `{{delivery_notes}}`. The **field** is
+        # real -- collected at intake, shown in the cockpit, spoken to Joe --
+        # but a value produced for a placeholder nothing asks for is wiring to
+        # a document that does not exist. `{{pickup_notes}}` stays: the Pickup
+        # Confirmation asks for it.
         "pickup_notes": fact("pickup_notes"),
         # Who ran it. The same man prepares the packet, so one answer serves
         # both -- and neither is invented here: the caller supplies it.
@@ -221,11 +254,10 @@ def values_for(record: dict, *, today: str = "", driver_name: str = "",
         # Confirmation and nowhere else, and answering it with a delivery fix on
         # some future template would be quietly wrong.
         "gps_location_link": _maps_link(record.get("pickup_gps")),
-        # Delivered when the milestone says so, not when a folder looked full.
-        "delivery_status": "Delivered" if delivered else "",
-        "pod_status": ("Received" if "proof of delivery document" in
-                       {str(a).strip().lower()
-                        for a in (record.get("artifacts_held") or [])} else ""),
+        # **No `delivery_status`, no `pod_status`.** Struck 2026-09-17 -- see
+        # REMOVED_FIELDS. Both were software describing a fact rather than
+        # being one: the Delivered milestone and the POD on the record are the
+        # facts, and they are already authoritative.
     }
     values.update(_attachment_values(record))
     return {key: value for key, value in values.items() if value}

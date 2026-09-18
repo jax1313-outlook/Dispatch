@@ -142,7 +142,14 @@
     {% endif %}
 
     <section class="brief-section">
-        <h3>Position / Drive-Time Assessment <small style="font-weight:400;">(estimated — Dispatch is not an ELD)</small></h3>
+        {# **"Drive-Time" named a value this section no longer shows.** The
+           drive-time line was parked on the Owner's ruling of 2026-09-15 --
+           "this system does not need to track drive times for nay reason" --
+           and the line went while the heading kept its name. The five rows
+           below are all position and risk. The ELD disclaimer went with it:
+           it was there because a drive-time figure could be mistaken for
+           hours of service, and there is no such figure here. #}
+        <h3>Position Assessment <small style="font-weight:400;">(estimated)</small></h3>
         <div class="brief-fields">
             <div><strong>Position Impact:</strong> {{ entry.position_impact or 'Unknown' }}</div>
             <div><strong>Return Home Required:</strong> {{ entry.return_home_required or 'Unknown' }}</div>

@@ -68,7 +68,11 @@ ACCOUNTING_FIELDS = frozenset({
 #:
 #:   removed       the Owner struck it. Revise the template.
 #:   in_the_pod    real, and already inside the controlling document.
-#:                 *"When delivery proof is needed: Retrieve POD."*
+#:                 *"When delivery proof is needed: Retrieve POD."* Since
+#:                 2026-09-17 this also covers `shipper_signature`, which is
+#:                 on the **BOL**, not the POD -- `EVIDENCE_IN_THE_DOCUMENT`
+#:                 says which for each, because a remedy naming the wrong
+#:                 document fails at the filing cabinet.
 #:
 #: Reporting them as one list would send a man to delete a placeholder whose
 #: answer he actually needs.
@@ -189,8 +193,10 @@ def fill(template: str | Path, values: dict, out_path: str | Path) -> dict:
                         software's to answer, never Dispatch's
         removed         those of `left_visible` the Owner has struck. Not gaps:
                         the template needs revising
-        in_the_pod      those already preserved inside the signed POD. Not gaps
-                        either: retrieve the POD
+        in_the_pod      those already preserved inside the controlling
+                        document -- the POD at the delivery end, the BOL at the
+                        pickup end. Not gaps either: retrieve the document
+                        `publisher_values.EVIDENCE_IN_THE_DOCUMENT` names
         unused          values handed in that this template never asked for
         split_runs      placeholders Word broke across runs: they will NOT match,
                         and this is the structured validation failure rule 7 asks

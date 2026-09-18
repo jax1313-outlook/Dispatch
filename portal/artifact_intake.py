@@ -165,10 +165,7 @@ def build_closing_packet(record_id: str) -> dict | None:
         report = closing_packet.build(
             record,
             today=clock.home_date().isoformat(),
-            driver_name=str(session.get("driver_name") or ""),
-            # The load row says `completed`, which it reaches only through
-            # delivery. Read, not assumed.
-            delivered=True)
+            driver_name=str(session.get("driver_name") or ""))
     except Exception as exc:  # noqa: BLE001 - a packet is never worth a 500 in a cab
         flash("The closing packet could not be built: %s" % exc)
         return None

@@ -1648,8 +1648,14 @@ def broker_detail(broker_name):
 
 @dispatch_bp.route("/calendar", methods=["GET"])
 def load_calendar_api():
-    from datetime import date
-    today = date.today()
+    from dispatch import clock
+
+    # **The home terminal's day, not the machine's.** Ruling of 2026-09-08:
+    # every calendar date comes from `clock.home_today()`, read against the
+    # declared home zone. These four defaults were still taking it from the OS
+    # clock -- and the quarter is exactly where it bites, which is why
+    # `clock.home_quarter()` was written and then never called from anywhere.
+    today = clock.home_date()
     try:
         year = int(request.args.get("year", today.year))
         month = int(request.args.get("month", today.month))

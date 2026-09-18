@@ -124,9 +124,9 @@
         'dispatched': ['en_route_pickup', 'cancelled'],
         'en_route_pickup': ['at_pickup', 'cancelled'],
         'at_pickup': ['picked_up', 'cancelled'],
-        'picked_up': ['in_transit'],
-        'in_transit': ['at_delivery'],
-        'at_delivery': ['delivered'],
+        'picked_up': ['in_transit', 'cancelled'],
+        'in_transit': ['at_delivery', 'cancelled'],
+        'at_delivery': ['delivered', 'cancelled'],
         'delivered': ['completed'],
     } %}
     {% set next_statuses = transitions.get(load.status, []) %}
@@ -993,6 +993,10 @@
 </div>
 
 <script>
+// What the load is right now, so a control can say what its own consequence
+// will be rather than asking one question for every situation.
+var CURRENT_STATUS = {{ load.status|tojson }};
+
 function toggleEl(id) {
     var el = document.getElementById(id);
     el.style.display = el.style.display === 'none' ? '' : 'none';
@@ -1399,7 +1403,23 @@ function deleteDetention(detentionId) {
 
 function advanceLoadStatus(loadId, newStatus) {
     var label = newStatus.replace(/_/g, ' ');
-    if (newStatus === 'cancelled' && !confirm('Cancel this load?')) return;
+    // **A run that has begun is a different thing to cancel.** The Owner ruled
+    // on 2026-09-16 that a started run can be cancelled -- "Yes, but it is
+    // recorded and never deleted" -- because freight falls through: a broker
+    // pulls a load, a shipper has nothing on the dock. The engine has allowed
+    // it from picked_up, in_transit and at_delivery since Batch 1; this row
+    // did not offer it, so the case he was ruling on had no door.
+    //
+    // The words differ because the consequence differs: an unstarted load is
+    // called off, a started one ends early and the record of it stands.
+    if (newStatus === 'cancelled') {
+        var started = ['picked_up', 'in_transit', 'at_delivery'].indexOf(
+            CURRENT_STATUS) !== -1;
+        var ask = started
+            ? 'End this run early? The milestones stay and the record is kept for ever.'
+            : 'Cancel this load?';
+        if (!confirm(ask)) return;
+    }
     fetch('/api/dispatch/loads/' + loadId, {
         method: 'PATCH',
         headers: {'Content-Type': 'application/json'},

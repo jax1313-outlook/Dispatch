@@ -2556,3 +2556,39 @@ So the test failed for reasons unrelated to the code and got worse the more the 
 **Nothing in `dispatch_launcher/copies.py` was touched.** *"do not over computer it"* — optimising a 0.166s check would have been changing working code to satisfy a broken measurement.
 
 ---
+
+## 2026-09-17 — DOCUMENT DOCTRINE: everyone gets everything, and the paper has a moment
+
+**PR:** (doctrine; the build it governs is not yet made)
+**Capability:** `D:\Library\Templates\Document List.docx` is the authority on what each template is. Affects `dispatch/closing_packet.py`, `dispatch/publisher_values.py`, `portal/cockpit.py`, and the Customer Screen when it exists.
+**Approved by:** Mike (owner). Verbatim, across several messages:
+
+> *"everyone gets everything. my experince has taught me let other discard what they do not need. I send it all at pickup and delivery. That is why the scanned documents are placed on to the Customer Screen in a folder. **The minute you try to guess you are wrong.**"*
+
+**Dispatch does not curate distribution.** It is the same rule as the empty fields on the brief, pointed outward: the sender does not decide what the reader needs. A packet trimmed to what an engineer thought was relevant is a packet missing the one page somebody wanted, and nobody finds out until it matters.
+
+**What each document actually is**, from his Document List — and two of them are not what the code treats them as:
+
+| document | what it is |
+|---|---|
+| Arrival Notice | **an email template**, auto-sent at ARRIVE at both ends. Date, time, GPS. It establishes **detention** — the loading clock at pickup, the unloading clock at delivery. **No such template exists**: the wording lives in `portal/cockpit.py`. |
+| 05 Pickup Confirmation | **Proof of Pickup.** Level 1's own form, **signed by loading staff**, scanned before departure, alongside the packing list, SDS, non-hazmat declaration and USDA forms. |
+| 03 Delivery Confirmation | **Proof of Delivery.** Signed and scanned. *"POD for some shippers is BOL. for Level 1 POD is a document that is signed in addition to BOL. This is a legal receipt of goods for Florida lien laws and UCC1 filing if needed."* |
+| 01 Invoice | *"a accounting document used to 'Inform' the Consignee, the broker and the shipper of the legal payment due. It is included with the Closing Packet."* |
+| Closing Packet | the cover Thank You letter, **all signed documents**, POD and BOL, everything acquired at pickup, and the Invoice — *"All scanned documents will be emailed to all parties to the Load process."* |
+
+**The POD is a legal instrument, and the code does not know it.** `EVIDENCE_TYPES` holds `bol` and `pod` as two labels of equal weight. For Level 1 the POD is a separate signed receipt of goods that a Florida lien or a UCC-1 filing would rest on. Recorded; not yet built.
+
+**A form for a dock, generated after the run.** 03 and 05 are printed, carried in on a clipboard and signed by a person. `closing_packet.build()` fills them when the load reaches `completed` — after the POD has already come back. They can never have served their purpose. **The paper has a moment, and the code missed it.**
+
+**The corrected flow, in his words.** *"the truck is parked and stored at a location miles away. The driver begins ELD, pre-trip inspection, fuels along the way. at some point the activation of pickup is done and Publisher creates load documents and ques for printing upon arrival at pickup location. Driver prints, clipboards them and enters."*
+
+So: **generation at activation, printing at arrival.** The driver is not stood at a dock waiting for a document to be produced.
+
+**The closing send is the Operations act**, and *"not before all documents are scanned and uploaded."* It goes to the factor and the customer together, and it triggers Archive with a **30-day initial hold** — a resend window, not a retention class: *"often documents are lost and require to be resent on request."*
+
+**Held against him, deliberately.** His closeout ruling of the same day stands: *"Operations may ... close the file despite missing artifacts."* The two reconcile because they are two acts — a send needs the paper it is sending; a review can close a file with a gap and a note. A load whose POD never came back is still closed, and nothing is sent that would claim otherwise.
+
+**Not built, and listed so it is not lost:** the Arrival Notice as a real template; 03 and 05 generated at activation and printed from the cockpit; both out of the generated packet, with the scanned copies going in instead; the attached flags reading uploads rather than checklist ticks; the Customer Screen folder of scanned documents.
+
+---

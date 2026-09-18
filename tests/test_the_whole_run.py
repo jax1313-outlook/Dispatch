@@ -371,15 +371,25 @@ class TestTheRecordTellsTheTruthAfterwards:
         assert "COMPLETED" in page
         assert "Book Load" not in page
 
-    def test_the_closing_document_says_delivered(self, run):
-        """BATCH 3. It printed "Delivered" unconditionally, including for a
-        load that never delivered."""
+    def test_the_closing_document_prints_no_word_about_the_delivery(self, run):
+        """BATCH 3 made the packet print "Delivered" only when the load row
+        said so -- it had printed it unconditionally, including for a load that
+        never delivered.
+
+        **The Owner then struck the placeholder entirely** (2026-09-17): *"delete
+        delivery_status and pod_status, they are software created too."* The
+        safeguard is not weakened, it is unnecessary: there is no longer a
+        status line to get wrong. The milestone is the fact."""
         _walk_to_delivered(run)
         run.attached("pod", "pod.pdf")
 
-        out = Path(run.record["closing_packet"]["documents"][0]["output"])
+        report = run.record["closing_packet"]
+        out = Path(report["documents"][0]["output"])
         with zipfile.ZipFile(str(out)) as z:
-            assert "Delivered" in z.read("word/document.xml").decode("utf-8")
+            body = z.read("word/document.xml").decode("utf-8")
+        assert "Delivered" not in body
+        assert "delivery_status" in report["removed"]
+        assert _status(run.id) == "completed"
 
     def test_the_closeout_records_who_looked(self, run):
         """BATCH 5. The act recorded is *"I reviewed this file."*"""

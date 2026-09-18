@@ -348,7 +348,10 @@ class TestWhatDispatchAlreadyKnows:
         assert values["pod_attached"] == pv.HELD
         assert values["signed_bol_attached"] == pv.HELD
         assert values["final_condition_photos_attached"] == pv.NOT_HELD
-        assert values["pod_status"] == "Received"
+        # `pod_status` was struck on 2026-09-17: *"delete delivery_status and
+        # pod_status, they are software created too."* The tick is the fact;
+        # a word printed about the tick is software describing itself.
+        assert "pod_status" not in values
 
     def test_no_two_placeholders_read_the_same_tick(self):
         """Answering two questions from one answer invents the second. This is
@@ -405,17 +408,28 @@ class TestWhatDispatchAlreadyKnows:
 
         assert values["pod_attached"] == pv.NOT_HELD
 
-    def test_delivered_is_the_milestone_not_a_full_looking_folder(self):
-        """**And the milestone is not on this record.** It goes to the load row
-        through `services.add_milestone`; the sandbox record never learns of it.
-        An earlier version read a `delivered_at` field nothing has ever written,
-        so this would have stayed blank on every real run while looking wired.
-        Found by walking a load end to end through the routes, not by reading
-        the code -- which is the only way that class of bug is ever found."""
+    def test_the_delivery_is_the_milestone_and_nothing_prints_a_word_about_it(self):
+        """**Struck, and the parameter with it.** Owner ruling, 2026-09-17:
+        *"delete delivery_status and pod_status, they are software created
+        too."*
+
+        The history is worth keeping because it is the same lesson twice. The
+        placeholder first read a `delivered_at` field **nothing has ever
+        written**, so it stayed blank on every real run while looking wired --
+        found by walking a load through the routes, not by reading the code. It
+        was then wired to a `delivered` parameter, which worked. The Owner
+        struck the whole idea: the Delivered milestone is the fact, and a word
+        printed about it is software describing what it already holds.
+
+        `values_for` no longer takes `delivered` at all. A parameter nothing
+        reads is the same untruth in a signature."""
+        import inspect
+
         assert "delivery_status" not in pv.values_for(self.BASE)
         assert "delivery_status" not in pv.values_for(
             dict(self.BASE, delivered_at="2026-09-16T14:22:00Z"))
-        assert pv.values_for(self.BASE, delivered=True)["delivery_status"] == "Delivered"
+        assert "delivered" not in inspect.signature(pv.values_for).parameters
+        assert {"delivery_status", "pod_status"} <= pv.REMOVED_FIELDS
 
     #: Every placeholder in the Owner's templates that Dispatch could
     #: conceivably answer from what it already holds. Written down rather than
@@ -493,7 +507,7 @@ class TestRevisionThree:
 
     def test_nothing_publisher_will_never_fill_is_ever_answered(self):
         values = pv.values_for(dict(self.RECORD, artifacts_held=[],
-                                    delivered_at="2026-09-16T14:22:00Z"), delivered=True,
+                                    delivered_at="2026-09-16T14:22:00Z"),
                                driver_name="M. Zachary")
 
         assert not (set(values) & pv.NEVER_FILLED)
@@ -524,7 +538,25 @@ class TestRevisionThree:
         """*"The POD image/PDF already preserves printed receiver name and
         receiver signature. No duplicate tracking field is required. When
         delivery proof is needed: Retrieve POD."*"""
-        assert pv.EVIDENCE_IN_POD == {"receiver_name", "receiver_signature"}
+        assert pv.EVIDENCE_IN_POD == {"receiver_name", "receiver_signature",
+                                      "shipper_signature"}
+
+    def test_each_one_names_the_document_that_holds_it(self):
+        """**The remedy is the point of this list.** Owner ruling, 2026-09-17:
+        *"shipper_signature should be classified as evidence."* A receiver signs
+        at the delivery end and that is the POD; a shipper signs at the pickup
+        end and that is the BOL. A report that sent a man to the POD for a
+        shipper's signature would be a remedy that fails at the filing
+        cabinet."""
+        assert pv.EVIDENCE_IN_THE_DOCUMENT["receiver_signature"] == "the signed POD"
+        assert pv.EVIDENCE_IN_THE_DOCUMENT["shipper_signature"] == "the signed BOL"
+
+    def test_the_status_twin_is_struck_not_kept(self):
+        """*"notice the Status is not used and is software created."* The
+        signature is evidence; a field describing whether the evidence exists
+        is software talking about itself."""
+        assert "shipper_signature_status" in pv.REMOVED_FIELDS
+        assert "shipper_signature_status" not in pv.EVIDENCE_IN_POD
 
     def test_on_time_is_never_calculated(self):
         """*"Derived interpretation ... The underlying facts remain

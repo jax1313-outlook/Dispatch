@@ -113,7 +113,7 @@ def company_documents_in(shelf: Path) -> list:
 
 
 def build(record: dict, *, shelf: Path | None = None, out_dir: Path | None = None,
-          today: str = "", driver_name: str = "", delivered: bool = True) -> dict:
+          today: str = "", driver_name: str = "") -> dict:
     """Fill his templates for one load and file them under its load number.
 
     Returns `{"load_number", "folder", "documents", "copied", "missing",
@@ -142,8 +142,7 @@ def build(record: dict, *, shelf: Path | None = None, out_dir: Path | None = Non
                           "to the folder holding Templates and Company Library.")
         return report
 
-    values = pv.values_for(record, today=today, driver_name=driver_name,
-                           delivered=delivered)
+    values = pv.values_for(record, today=today, driver_name=driver_name)
 
     for template in templates_in(shelf):
         out = folder / template.name.replace(" 1.docx", ".docx")

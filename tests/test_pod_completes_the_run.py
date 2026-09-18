@@ -176,14 +176,28 @@ class TestSendingThePodEndsTheRun:
 
         assert sandbox.get(delivered)["closing_packet"]["load_number"]
 
-    def test_the_document_says_delivered(self, client, delivered):
+    def test_the_document_prints_no_word_about_the_delivery(self, client, delivered):
+        """**`{{delivery_status}}` is struck**, so the document no longer
+        prints a word about the delivery. Owner ruling, 2026-09-17: *"delete
+        delivery_status and pod_status, they are software created too."*
+
+        What this now holds is the rule that replaced it: a placeholder nothing
+        will ever fill **stays visible** and is reported as struck, so the
+        remedy is to revise the template rather than hunt a fact that was never
+        missing. The Delivered milestone on the load row is the authority, and
+        this test reads it there."""
         from pathlib import Path
 
         _send_pod(client, delivered)
 
-        out = Path(sandbox.get(delivered)["closing_packet"]["documents"][0]["output"])
+        report = sandbox.get(delivered)["closing_packet"]
+        out = Path(report["documents"][0]["output"])
         with zipfile.ZipFile(str(out)) as z:
-            assert "Delivered" in z.read("word/document.xml").decode("utf-8")
+            body = z.read("word/document.xml").decode("utf-8")
+        assert "Delivered" not in body
+        assert "{{delivery_status}}" in body
+        assert "delivery_status" in report["removed"]
+        assert _status(delivered) == "completed", "the milestone is the authority"
 
 
 class TestItIsKeyedOnWhatHappened:
