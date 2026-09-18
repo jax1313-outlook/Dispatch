@@ -86,7 +86,8 @@ class TestDriversLandInTheCockpit:
     def test_nobody_signed_in_is_sent_to_sign_in(self, client):
         assert client.get("/portal").status_code == 302
 
-    @pytest.mark.parametrize("path", ["/booking", "/intake", "/loads", "/home"])
+    # `/booking` is not on this list: the board was deleted on 2026-09-17.
+    @pytest.mark.parametrize("path", ["/intake", "/loads", "/home"])
     def test_a_driver_sign_in_opens_nothing_else(self, client, path):
         as_driver(client)
         resp = client.get(path)
@@ -115,8 +116,13 @@ class TestTheDriverActionsAreOnTheCockpit:
         record_id = mission()
         as_driver(client)
         html = page(client, record_id)
+        # **His three photo names**, corrected 2026-09-17: the tiles carried the
+        # old two-name list, so "LOAD SECUREMENT PHOTOS" was here and a Loaded
+        # Vehicle photo could not be uploaded at all.
         for name in ("UPLOAD DOCUMENTS - PHOTOS", "DETENTION - REPORT A PROBLEM",
-                     "FUEL RECEIPT", "ALL MILESTONES", "LOAD SECUREMENT PHOTOS", "POD PHOTO"):
+                     "FUEL RECEIPT", "ALL MILESTONES", "POD PHOTO",
+                     "PHOTOS - LOADED VEHICLE", "PHOTOS - MID-ROUTE SECUREMENT",
+                     "PHOTOS - FINAL CONDITION"):
             assert name in html
         assert "DRIVER COCKPIT" in html  # the same screen, not a new one
         # START RUN is the one act and it lives in the status area, not in this

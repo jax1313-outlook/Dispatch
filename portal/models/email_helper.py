@@ -139,11 +139,25 @@ def _closeout_summary_lines(closeout_data: dict | None) -> list[str]:
     else:
         lines.append("POD: not yet generated")
 
+    # **His three photo names, read from the one place that holds them.**
+    # PUBLISHER HARDENING RULING, 2026-09-16: *"Publisher, Cockpit, Mission
+    # Record, and Placeholder Registry must use the same three names."*
+    #
+    # These were spelled out here as "Load securement photo" and "Freight
+    # condition photo" -- the old two-name list. When the vocabulary was
+    # corrected on 2026-09-17 nothing matched any more, so a closeout summary
+    # would have quietly stopped counting photographs: no error, no missing
+    # line anybody would notice, just a number that silently became zero.
+    #
+    # Read from `CUSTOMER_FACING_PHOTO_TYPES` so a fourth name, or a renamed
+    # one, cannot leave this behind again.
+    from dispatch.models import CUSTOMER_FACING_PHOTO_TYPES
+
     photos = closeout_data.get("mission_photos") or []
-    for label in ("Load securement photo", "Freight condition photo"):
+    for label in CUSTOMER_FACING_PHOTO_TYPES.values():
         count = sum(1 for p in photos if p.get("label") == label)
         if count:
-            lines.append(f"{label}s: {count} on file")
+            lines.append(f"{label}: {count} on file")
 
     return lines
 

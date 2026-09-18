@@ -310,38 +310,14 @@ def email_templates():
     )
 
 
-@pages_bp.route("/calendar")
-def load_calendar():
-    from dispatch import clock
-    from dispatch import services as dispatch_svc
-
-    # **The home terminal's day, not the machine's.** Ruling of 2026-09-08:
-    # every calendar date comes from `clock.home_today()`, read against the
-    # declared home zone. These four defaults were still taking it from the OS
-    # clock -- and the quarter is exactly where it bites, which is why
-    # `clock.home_quarter()` was written and then never called from anywhere.
-    today = clock.home_date()
-    try:
-        year = int(request.args.get("year", today.year))
-        month = int(request.args.get("month", today.month))
-    except (ValueError, TypeError):
-        year, month = today.year, today.month
-    if month < 1:
-        month, year = 12, year - 1
-    elif month > 12:
-        month, year = 1, year + 1
-
-    cal_data = dispatch_svc.get_load_calendar(year, month)
-    prev_month = month - 1 if month > 1 else 12
-    prev_year = year if month > 1 else year - 1
-    next_month = month + 1 if month < 12 else 1
-    next_year = year if month < 12 else year + 1
-    return render_template(
-        "calendar.html",
-        cal=cal_data,
-        prev_year=prev_year, prev_month=prev_month,
-        next_year=next_year, next_month=next_month,
-    )
+# **`/calendar` is deleted.** Owner ruling, 2026-09-17, looking at his Outlook
+# month: *"why not just mimick outlook one month at a time. it is already
+# created. why reinvent the wheel."* It was a third month-shaped screen beside
+# Booking's board and the driver's calendar, redrawing what Outlook already
+# draws -- and Outlook is written to at COMMIT, so it has the appointments.
+#
+# *"outlook is a book on a table."* The calendar records what was settled; it
+# is not a place decisions are made. `/api/dispatch/calendar` is gone with it.
 
 
 @pages_bp.route("/ifta")

@@ -18,7 +18,6 @@
      which is not navigation. #}
   <nav class="ops-nav">
     <a class="on" href="{{ url_for('joe_portal.candidate_queue') }}">LOADS</a>
-    <a href="{{ url_for('joe_portal.booking_board') }}">BOOKING</a>
     <a href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
     <a href="{{ url_for('pages.home') }}">DISPATCH</a>
   </nav>
@@ -30,7 +29,6 @@
       <span class="brief-load">{{ rows|length }} waiting on a decision</span>
     </div>
     <nav class="brief-actions">
-      <a class="btn" href="{{ url_for('joe_portal.booking_board') }}">Booking</a>
       <a class="btn primary" href="{{ url_for('joe_portal.mission_intake') }}">NEW MISSION</a>
     </nav>
   </header>

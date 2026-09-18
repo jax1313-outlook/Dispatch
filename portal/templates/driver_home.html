@@ -187,7 +187,7 @@
 
             <form method="POST" action="{{ url_for('driver_portal.driver_upload_mission_photos', load_id=active_card.load.load_id) }}" enctype="multipart/form-data" id="condition-form-{{ active_card.load.load_id }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="photo_type" value="freight_condition_photo">
+                <input type="hidden" name="photo_type" value="final_condition_photo">
                 <label class="file-label">
                     📦 FREIGHT CONDITION PHOTOS
                     <input type="file" name="photos" accept="image/*" capture="environment" multiple class="file-input" onchange="document.getElementById('condition-form-{{ active_card.load.load_id }}').submit()">

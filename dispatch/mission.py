@@ -297,8 +297,7 @@ def merge_record(opportunity: dict, bundle: dict | None) -> dict:
     record["purpose"] = purpose_of(record)
     record["numbers"] = display_numbers(record)
     for facet in ("milestones", "evidence", "exceptions", "pods", "detentions",
-                  "activities", "visibility", "financials", "settlement",
-                  "lane_history"):
+                  "activities", "visibility", "financials", "settlement"):
         record[facet] = bundle.get(facet)
     return record
 

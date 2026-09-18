@@ -101,18 +101,8 @@ class TestPaymentNotification:
         assert result
 
 
-class TestOverdueNotification:
-    def test_notify_overdue_returns_path(self, load):
-        settlement = {
-            "invoice_number": "INV-TEST005",
-            "invoice_amount": 800.0,
-            "due_date": "2026-07-01",
-        }
-        result = notifications.notify_payment_overdue(load, settlement)
-        assert result
-
-
-# ── Service Layer Integration ───────────────────────────────────────
+# Deleted with the feature, 2026-09-17: `notify_payment_overdue` is gone.
+# Dispatch does not chase payment.
 
 
 class TestSettlementNotificationTrigger:
@@ -139,78 +129,7 @@ class TestSettlementNotificationTrigger:
 # ── Aging Detection ─────────────────────────────────────────────────
 
 
-class TestAgingCheck:
-    def test_no_overdue_when_not_past_due(self, load_with_rate):
-        dispatch_svc.create_settlement(
-            load_with_rate["load_id"],
-            due_date="2099-12-31",
-        )
-        result = dispatch_svc.check_overdue_settlements()
-        assert result == []
-
-    def test_marks_past_due_as_overdue(self, load_with_rate):
-        dispatch_svc.create_settlement(
-            load_with_rate["load_id"],
-            due_date="2020-01-01",
-        )
-        result = dispatch_svc.check_overdue_settlements()
-        assert len(result) == 1
-        assert result[0]["payment_status"] == "overdue"
-
-    def test_aging_sends_overdue_notification(self, load_with_rate):
-        dispatch_svc.create_settlement(
-            load_with_rate["load_id"],
-            due_date="2020-01-01",
-        )
-        with mock.patch.object(notifications, "notify_payment_overdue") as m:
-            dispatch_svc.check_overdue_settlements()
-            m.assert_called_once()
-
-    def test_aging_skips_no_due_date(self, load_with_rate):
-        dispatch_svc.create_settlement(load_with_rate["load_id"], due_date="")
-        result = dispatch_svc.check_overdue_settlements()
-        assert result == []
-
-    def test_aging_skips_already_paid(self, load_with_rate):
-        dispatch_svc.create_settlement(
-            load_with_rate["load_id"],
-            due_date="2020-01-01",
-        )
-        dispatch_svc.record_payment(
-            load_with_rate["load_id"],
-            payment_amount=1200.0,
-        )
-        result = dispatch_svc.check_overdue_settlements()
-        assert result == []
-
-    def test_aging_idempotent(self, load_with_rate):
-        dispatch_svc.create_settlement(
-            load_with_rate["load_id"],
-            due_date="2020-01-01",
-        )
-        first = dispatch_svc.check_overdue_settlements()
-        assert len(first) == 1
-        second = dispatch_svc.check_overdue_settlements()
-        assert second == []
-
-    def test_aging_multiple_loads(self):
-        load1 = dispatch_svc.create_load(customer="A")
-        load2 = dispatch_svc.create_load(customer="B")
-        load3 = dispatch_svc.create_load(customer="C")
-        dispatch_svc.confirm_rate(load1["load_id"], rate_amount=500.0)
-        dispatch_svc.confirm_rate(load2["load_id"], rate_amount=600.0)
-        dispatch_svc.confirm_rate(load3["load_id"], rate_amount=700.0)
-        dispatch_svc.create_settlement(load1["load_id"], due_date="2020-01-01")
-        dispatch_svc.create_settlement(load2["load_id"], due_date="2099-12-31")
-        dispatch_svc.create_settlement(load3["load_id"], due_date="2020-06-15")
-        result = dispatch_svc.check_overdue_settlements()
-        assert len(result) == 2
-        overdue_ids = {r["load_id"] for r in result}
-        assert load1["load_id"] in overdue_ids
-        assert load3["load_id"] in overdue_ids
-
-
-# ── Archive Financial Summary ───────────────────────────────────────
+# Deleted with the feature, 2026-09-17: `check_overdue_settlements` is gone -- Dispatch does not age an invoice.
 
 
 class TestArchiveFinancialSummary:
@@ -278,32 +197,6 @@ class TestRetentionModelField:
 # ── Aging API ───────────────────────────────────────────────────────
 
 
-class TestAgingAPI:
-    @pytest.fixture()
-    def client(self):
-        from portal.app import create_app
-        app = create_app()
-        app.config["TESTING"] = True
-        with app.test_client() as c:
-            yield c
+# Deleted with the feature, 2026-09-17: the /settlements/aging route went with it.
 
-    def test_aging_endpoint(self, client, load_with_rate):
-        client.post(
-            f"/api/dispatch/loads/{load_with_rate['load_id']}/settlement",
-            json={"due_date": "2020-01-01"},
-        )
-        resp = client.post("/api/dispatch/settlements/aging")
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data["count"] == 1
-        assert data["newly_overdue"][0]["payment_status"] == "overdue"
 
-    def test_aging_endpoint_none_overdue(self, client, load_with_rate):
-        client.post(
-            f"/api/dispatch/loads/{load_with_rate['load_id']}/settlement",
-            json={"due_date": "2099-12-31"},
-        )
-        resp = client.post("/api/dispatch/settlements/aging")
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data["count"] == 0

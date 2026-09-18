@@ -120,10 +120,19 @@ class TestBillingPage:
         html = resp.data.decode()
         assert "Total Revenue" in html
 
-    def test_aging_check_button(self, client):
-        resp = client.get("/billing")
-        html = resp.data.decode()
-        assert "Run Aging Check" in html
+    def test_nothing_on_this_page_chases_payment(self, client):
+        """**The aging button is deleted.** Owner ruling, 2026-09-17: *"delete
+        the receivables code."* It scanned invoiced settlements, marked any past
+        its due date overdue, and mailed *"Follow up with the customer or
+        escalate for collection"* -- aging an invoice and chasing payment, two
+        of the four things his money boundary of 2026-09-16 forbids.
+
+        Billing is still where money is worked. Dispatch just does not pursue
+        it: *"All money issues are deferred to accounting software."*"""
+        html = client.get("/billing").data.decode()
+
+        assert "Run Aging Check" not in html
+        assert "Settlements" in html
 
     def test_filter_buttons_shown(self, client):
         resp = client.get("/billing")
@@ -150,9 +159,12 @@ class TestBillingNavLink:
         """Parked 2026-09-09, Mike's ruling that Profitability replaces it.
 
         Profitability replaces the reporting, not the workflow. Invoicing,
-        recording a payment, disputes, write-offs and the aging check all live
-        here and nowhere else, so this asserts the page still works rather than
-        only that the link is gone.
+        recording a payment, disputes and write-offs all live here and nowhere
+        else, so this asserts the page still works rather than only that the
+        link is gone.
+
+        **The aging check is no longer among them** (2026-09-17): Dispatch does
+        not age an invoice. Everything else on this page stands.
         """
         assert "/billing" not in client.get("/home").data.decode()
 
@@ -160,4 +172,4 @@ class TestBillingNavLink:
         assert resp.status_code == 200
         html = resp.data.decode()
         assert "Settlements" in html
-        assert "Run Aging Check" in html
+        assert "Run Aging Check" not in html

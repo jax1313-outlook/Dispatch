@@ -62,14 +62,12 @@
                kept them. Parking any of them is a ruling that has not been
                made. #}
             <li><a href="{{ url_for('joe_portal.candidate_queue') }}" class="{% if request.endpoint == 'joe_portal.candidate_queue' %}active{% endif %}">LOADS</a></li>
-            <li><a href="{{ url_for('joe_portal.booking_board') }}" class="{% if request.endpoint == 'joe_portal.booking_board' %}active{% endif %}">Booking</a></li>
             <li><a href="{{ url_for('joe_portal.mission_intake') }}" class="{% if request.endpoint == 'joe_portal.mission_intake' %}active{% endif %}">New Mission</a></li>
             <li><a href="{{ url_for('pages.alerts') }}" class="{% if request.endpoint == 'pages.alerts' %}active{% endif %}">Alerts</a></li>
             {# One Search link, not two. Labelled "Load Search" because that is
                the name decision D6 gave the capability. #}
             <li><a href="{{ url_for('pages.search') }}" class="{% if request.endpoint == 'pages.search' %}active{% endif %}">Load Search</a></li>
             <li><a href="{{ url_for('pages.dispatch') }}" class="{% if request.endpoint == 'pages.dispatch' %}active{% endif %}">Dispatch</a></li>
-            <li><a href="{{ url_for('pages.load_calendar') }}" class="{% if request.endpoint == 'pages.load_calendar' %}active{% endif %}">Calendar</a></li>
             {# On the nav because it is work waiting on a person. "Operations
                closes the file" (2026-09-17) needed somewhere to happen: before
                this, a finished mission sat `completed` with nothing saying it
@@ -91,8 +89,8 @@
                Sixteen parked, eight left. Two notes for whoever comes looking:
 
                There is no financial screen on this nav. Invoicing, payments,
-               disputes, write-offs and the aging check all still work at
-               /billing.
+               disputes and write-offs still work at /billing. The aging check
+               is gone -- Dispatch does not age an invoice (2026-09-17).
 
                Several parked pages are where Alerts sends you. Its cards link
                to /publisher, /conflicts, /pipeline, /queues and /library by
@@ -319,17 +317,8 @@
             });
     }
 
-    function runAgingCheck() {
-        apiPost('/api/dispatch/settlements/aging', {})
-            .then(data => {
-                if (data.error) { alert(data.error); return; }
-                var msg = data.count > 0
-                    ? data.count + ' settlement(s) marked overdue.'
-                    : 'No overdue settlements found.';
-                alert(msg);
-                if (data.count > 0) location.reload();
-            });
-    }
+    // `runAgingCheck` is deleted with the route it called (2026-09-17):
+    // "delete the receivables code." Dispatch does not age an invoice.
 
     (function initTableSort() {
         document.querySelectorAll('table.data-table').forEach(function(table) {

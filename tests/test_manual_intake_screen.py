@@ -316,9 +316,10 @@ class TestNoScreenIsADeadEnd:
     def _screens(self, client):
         _create(client)
         record_id = list(sandbox.get_all())[0]
+        # `/booking` is gone (2026-09-17): the board redrew what Outlook
+        # already shows. Three screens reach each other now, not four.
         return {
             "candidates": "/candidates",
-            "booking": "/booking",
             "intake": "/intake",
             "brief": "/brief/mission/%s" % record_id,
         }
@@ -327,7 +328,7 @@ class TestNoScreenIsADeadEnd:
         for name, url in self._screens(client).items():
             html = client.get(url).get_data(as_text=True)
             assert 'class="ops-nav"' in html, name
-            for target in ("/candidates", "/booking", "/intake"):
+            for target in ("/candidates", "/intake"):
                 assert target in html, "%s cannot reach %s" % (name, target)
 
     def test_the_brief_returns_to_the_listing_he_came_from(self, client):
@@ -350,14 +351,17 @@ class TestNoScreenIsADeadEnd:
         """Reachable from the rest of the portal, not only by typing a URL."""
         source = open("portal/templates/base.html", encoding="utf-8").read()
         for endpoint in ("joe_portal.candidate_queue",
-                         "joe_portal.booking_board",
                          "joe_portal.mission_intake"):
             assert endpoint in source, endpoint
 
     def test_the_strip_does_not_print(self, client):
         """The brief is carried to a phone call. Navigation on paper is noise."""
-        css = open("portal/static/booking.css", encoding="utf-8").read()
-        assert "@media print { .ops-nav { display: none; } }" in css
+        # **Moved, not lost.** The rule lived in `booking.css`, deleted with
+        # the board on 2026-09-17 -- and the strip is still on candidates,
+        # intake and the brief, so the rule moved to the stylesheet they load.
+        css = open("portal/static/mission_brief.css", encoding="utf-8").read()
+        printing = css[css.index("@media print {"):]
+        assert ".ops-nav { display: none; }" in printing
 
 
 class TestTheSourceSurvivesIntoTheLoadRecord:

@@ -1071,16 +1071,8 @@ def financial_dashboard():
     return jsonify({"status": "ok", **dashboard})
 
 
-# ── Aging Check ─────────────────────────────────────────────────────
-
-@dispatch_bp.route("/settlements/aging", methods=["POST"])
-def run_aging_check():
-    newly_overdue = services.check_overdue_settlements()
-    return jsonify({
-        "status": "ok",
-        "newly_overdue": newly_overdue,
-        "count": len(newly_overdue),
-    })
+# The aging-check route went with `check_overdue_settlements` (2026-09-17).
+# Dispatch does not age an invoice.
 
 
 # ── Drivers ─────────────────────────────────────────────────────────
@@ -1646,26 +1638,8 @@ def broker_detail(broker_name):
 # ── Load Calendar ───────────────────────────────────────────────────
 
 
-@dispatch_bp.route("/calendar", methods=["GET"])
-def load_calendar_api():
-    from dispatch import clock
-
-    # **The home terminal's day, not the machine's.** Ruling of 2026-09-08:
-    # every calendar date comes from `clock.home_today()`, read against the
-    # declared home zone. These four defaults were still taking it from the OS
-    # clock -- and the quarter is exactly where it bites, which is why
-    # `clock.home_quarter()` was written and then never called from anywhere.
-    today = clock.home_date()
-    try:
-        year = int(request.args.get("year", today.year))
-        month = int(request.args.get("month", today.month))
-    except (ValueError, TypeError):
-        year, month = today.year, today.month
-    data = services.get_load_calendar(year, month)
-    return jsonify(data)
-
-
-# ── Detention Tracking ─────────────────────────────────────────────
+# The calendar API went with the screen it served (2026-09-17). Outlook holds
+# the month; `dispatch.booking.month_of` still answers the driver's calendar.
 
 
 @dispatch_bp.route("/loads/<load_id>/detentions", methods=["GET"])

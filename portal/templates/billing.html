@@ -39,7 +39,6 @@
             <a href="?status={{ s }}" class="btn btn-sm {% if status_filter == s %}btn-primary{% endif %}">{{ s|replace('_', ' ')|title }}</a>
             {% endfor %}
         </div>
-        <button class="btn btn-sm btn-warning" onclick="runAgingCheck()" title="Scan invoiced settlements for overdue payments" style="margin-left:auto;">Run Aging Check</button>
     </div>
 
     <form method="get" action="{{ url_for('pages.billing') }}" style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">

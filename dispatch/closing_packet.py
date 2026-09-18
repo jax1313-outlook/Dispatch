@@ -57,6 +57,48 @@ LIBRARY_DIRNAME = "Company Library"
 #: His placeholder policy document is not a template to fill.
 _NOT_A_TEMPLATE = ("PLACEHOLDER_POLICY",)
 
+#: **The paper has a moment, and it is not the end of the run.**
+#:
+#: Two of his templates are forms a person signs at a dock. From his Document
+#: List (`D:\Library\Templates\Document List.docx`):
+#:
+#:     Pickup Confirmation - POP - this document is signed by shipping
+#:     personnel and may include a packing list, and other commodity related
+#:     documents ... These documents will be scanned before departure.
+#:
+#:     Delivery Confirmation - POD is signed and scanned ... This is a legal
+#:     receipt of goods for Florida lien laws and UCC1 filing if needed.
+#:
+#: And the workflow they belong to, in his words, 2026-09-17:
+#:
+#:     "the truck is parked and stored at a location miles away. The driver
+#:      begins ELD, pre-trip inspection, fuels along the way. at some point the
+#:      activation of pickup is done and Publisher creates load documents and
+#:      ques for printing upon arrival at pickup location. Driver prints,
+#:      clipboards them and enters."
+#:
+#: **Generation at activation, printing at arrival.** They were produced by
+#: `build()` when the load reached `completed` -- after the POD had already
+#: come back -- so a form meant for a dock could never have served its purpose.
+#:
+#: One document at each stop; his numbering, and his answer when asked:
+#: *"pickup set 05, delivery set 03"*.
+PHASE_SETS = {
+    "pickup": ("05",),
+    "delivery": ("03",),
+}
+
+#: What the closing packet still generates. The two dock forms are produced at
+#: their stops and reach the packet as the **scanned signed copies** the driver
+#: uploads -- a fresh blank at the end would be the wrong document entirely.
+#:
+#: `07` is the Detention Time **Policy**, an onboarding document. His Document
+#: List names what the Closing Packet holds -- the cover Thank You letter, all
+#: signed documents, POD and BOL, the documents acquired at pickup, and the
+#: Invoice -- and the policy is not among them. Confirmed 2026-09-17: *"yes,
+#: exclude 07"*.
+_NOT_IN_THE_CLOSING_PACKET = ("03", "05", "07")
+
 
 def memory_root() -> Path | None:
     """The Library shelf, if this node has one configured."""
@@ -91,14 +133,25 @@ def folder_for(load_number: str) -> Path:
     return packets_root() / safe
 
 
-def templates_in(shelf: Path) -> list:
-    """His fill-in templates, in his own numbered order, policy document aside."""
+def templates_in(shelf: Path, *, only=None, without=None) -> list:
+    """His fill-in templates, in his own numbered order, policy document aside.
+
+    `only` and `without` take the leading numbers of his filenames -- `("05",)`
+    -- because the number is how he refers to them and how the Document List
+    orders them. Neither is a default: a caller says which moment it is filling
+    for, and a caller that says nothing still gets everything, as it always did.
+    """
     folder = shelf / TEMPLATES_DIRNAME
     if not folder.is_dir():
         return []
-    return sorted(p for p in folder.glob("*.docx")
-                  if not any(mark in p.name.upper() for mark in _NOT_A_TEMPLATE)
-                  and not p.name.startswith("~$"))
+    found = sorted(p for p in folder.glob("*.docx")
+                   if not any(mark in p.name.upper() for mark in _NOT_A_TEMPLATE)
+                   and not p.name.startswith("~$"))
+    if only is not None:
+        found = [p for p in found if p.name[:2] in tuple(only)]
+    if without is not None:
+        found = [p for p in found if p.name[:2] not in tuple(without)]
+    return found
 
 
 def company_documents_in(shelf: Path) -> list:
@@ -113,7 +166,8 @@ def company_documents_in(shelf: Path) -> list:
 
 
 def build(record: dict, *, shelf: Path | None = None, out_dir: Path | None = None,
-          today: str = "", driver_name: str = "") -> dict:
+          today: str = "", driver_name: str = "", evidence=None,
+          only=None, without=None) -> dict:
     """Fill his templates for one load and file them under its load number.
 
     Returns `{"load_number", "folder", "documents", "copied", "missing",
@@ -134,6 +188,18 @@ def build(record: dict, *, shelf: Path | None = None, out_dir: Path | None = Non
               "copied": [], "missing": [], "accounting": [], "removed": [],
               "in_the_pod": [], "ok": True, "note": ""}
 
+    if only and shelf.is_dir() and not templates_in(shelf, only=only):
+        # **Only when a set was asked for.** A caller naming `05` and finding
+        # nothing has a real problem: the driver gets no form. A caller that
+        # named no set and finds an empty shelf is the ordinary unconfigured
+        # case, and it returned an empty report long before this guard existed
+        # -- turning that into a failure changed the answer for every caller
+        # that never asked for anything.
+        report["ok"] = False
+        report["note"] = ("No template on the shelf matches %s."
+                          % ", ".join(only))
+        return report
+
     if not shelf or not shelf.is_dir():
         # UNCONFIGURED, said plainly. Not an error in the run -- the freight is
         # delivered either way.
@@ -142,9 +208,15 @@ def build(record: dict, *, shelf: Path | None = None, out_dir: Path | None = Non
                           "to the folder holding Templates and Company Library.")
         return report
 
-    values = pv.values_for(record, today=today, driver_name=driver_name)
+    # **The uploaded files, not the driver's ticks.** The "is it attached"
+    # lines on his covers are answered from the evidence actually on the load
+    # (Owner, 2026-09-17: *"not before all documents are scanned and
+    # uploaded."*). The caller holds the load row; the caller answers -- the
+    # same reason `delivered` was once a parameter here.
+    values = pv.values_for(record, today=today, driver_name=driver_name,
+                           evidence=evidence)
 
-    for template in templates_in(shelf):
+    for template in templates_in(shelf, only=only, without=without):
         out = folder / template.name.replace(" 1.docx", ".docx")
         try:
             filled = tf.fill(template, values, out)

@@ -99,19 +99,9 @@ class TestCandidatesAppearAndNeverCount:
         assert wednesday["state"] == booking.OPEN
         assert book["unsold_count"] == book["sellable_count"]
 
-    def test_the_booking_screen_draws_the_chip(self, client, monkeypatch):
-        monkeypatch.setattr(clock, "home_date", lambda: MONDAY)
-        sandbox.create_entry(source_type="dispatch", source_id="CAND-1", title="Candidate",
-                             card_data={"origin": "Tampa, FL", "destination": "Miami, FL",
-                                        "pickup_window": "%s 08:00" % MONDAY.isoformat()})
-        html = client.get("/booking").get_data(as_text=True)
-        assert "candidate" in html and "Tampa, FL" in html
-
-
-class TestDeliveryTimingIsParked:
-    """Mike Zachary, 2026-09-15: "this system does not need to track drive times for nay
-    reason. it does not enter into the decision process." A card carries no delivery
-    timing and no timing warning, even for an appointment no truck could make."""
+    # `test_the_booking_screen_draws_the_chip` is deleted with the screen
+    # (2026-09-17). The chip was drawn on the Booking board; the calculation
+    # behind it is still tested above, and still feeds the driver's month.
 
     def test_no_card_carries_delivery_timing(self, client):
         client.post("/loads/paste", data={"pasted": (

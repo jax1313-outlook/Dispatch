@@ -21,9 +21,16 @@ carries its own consequence because the consequence is what the classification
     pod                       the run is finished (a POD completes the load and
                               triggers the closing packet, 2026-09-16)
     bol                       the controlling freight document, filed
+    loaded_vehicle_photo      the customer is told
     securement_photo          the customer is told
-    freight_condition_photo   the customer is told
+    final_condition_photo     the customer is told
     document                  filed, nothing announced
+
+**The three photo names are his**, and the same three everywhere: *"Publisher,
+Cockpit, Mission Record, and Placeholder Registry must use the same three
+names."* This module carried the old two-name list until 2026-09-17, so there
+was no way to upload a Loaded Vehicle photo at all, and the tile offering
+"Freight Condition" was a concept he had already struck.
 
 **A label on a button is a classification, not a second path.** The cockpit
 still shows separate tiles, because a driver at a dock with gloves on taps one
@@ -36,6 +43,8 @@ from __future__ import annotations
 
 from flask import flash, session
 
+from pathlib import Path
+
 from portal.driver_actions import ERROR, SUCCESS, WARNING
 from portal.models import sandbox
 
@@ -44,16 +53,22 @@ from portal.models import sandbox
 CLASSIFICATIONS = {
     "pod": {"label": "Signed POD", "many": False},
     "bol": {"label": "Signed BOL", "many": False},
-    "securement_photo": {"label": "Load securement photo", "many": True},
-    "freight_condition_photo": {"label": "Freight condition photo", "many": True},
+    "loaded_vehicle_photo": {"label": "Photos - Loaded Vehicle", "many": True},
+    "securement_photo": {"label": "Photos - Mid-Route Securement", "many": True},
+    "final_condition_photo": {"label": "Photos - Final Condition", "many": True},
     "document": {"label": "Document", "many": True},
 }
+
+#: The photo classifications, which share one consequence: the customer is told.
+PHOTO_CLASSIFICATIONS = ("loaded_vehicle_photo", "securement_photo",
+                         "final_condition_photo")
 
 
 def classifications():
     """For a screen that wants to offer them. Ordered as a run happens."""
     return [(k, CLASSIFICATIONS[k]["label"]) for k in
-            ("bol", "pod", "securement_photo", "freight_condition_photo", "document")]
+            ("bol", "pod", "loaded_vehicle_photo", "securement_photo",
+             "final_condition_photo", "document")]
 
 
 def attach(load_id: str, classification: str, uploads, actor: str, *,
@@ -89,7 +104,7 @@ def attach(load_id: str, classification: str, uploads, actor: str, *,
         # completed a run and filed nothing.
         build_closing_packet(load_id)
         return said
-    if classification in ("securement_photo", "freight_condition_photo"):
+    if classification in PHOTO_CLASSIFICATIONS:
         return driver_actions.upload_mission_photos(
             load_id, classification, uploads, actor,
             mail_connector=mail_connector, url_root=url_root)
@@ -162,10 +177,19 @@ def build_closing_packet(record_id: str) -> dict | None:
     if not record or record.get("closing_packet"):
         return None
     try:
+        bundle = dispatch_svc.get_load_bundle(record_id) or {}
         report = closing_packet.build(
             record,
             today=clock.home_date().isoformat(),
-            driver_name=str(session.get("driver_name") or ""))
+            driver_name=str(session.get("driver_name") or ""),
+            # What was actually scanned and uploaded, so the covers state what
+            # is in the packet rather than what somebody ticked at a dock.
+            evidence=bundle.get("evidence") or [],
+            # **Not the dock forms, and not the onboarding policy.** 05 and 03
+            # are produced at their stops and reach the packet as the scanned
+            # signed copies; generating fresh blanks here would put the wrong
+            # document in front of a factor. See `_NOT_IN_THE_CLOSING_PACKET`.
+            without=closing_packet._NOT_IN_THE_CLOSING_PACKET)
     except Exception as exc:  # noqa: BLE001 - a packet is never worth a 500 in a cab
         flash("The closing packet could not be built: %s" % exc)
         return None
@@ -187,3 +211,114 @@ def build_closing_packet(record_id: str) -> dict | None:
         data[record_id] = stored
         sandbox._save(data)
     return report
+
+
+# ---- The paper a driver carries in ---------------------------------------
+#
+# **Generation at activation, printing at arrival.** Owner, 2026-09-17:
+#
+#     "the truck is parked and stored at a location miles away. The driver
+#      begins ELD, pre-trip inspection, fuels along the way. at some point the
+#      activation of pickup is done and Publisher creates load documents and
+#      ques for printing upon arrival at pickup location. Driver prints,
+#      clipboards them and enters."
+#
+# So Dispatch's whole job is to have the email sitting there before he needs
+# it. There is no PRINT control and there should not be one: he prints in the
+# cab, from Outlook, to the printer in the truck. Asked how that works, he was
+# plain -- *"done it for years ... it can open emails with attachments and send
+# to a local API connected printer. no browser is used."*
+#
+# The two triggers are milestones that already exist:
+#
+#     en_route_pickup   START RUN            -> the pickup form
+#     departed_pickup   Rolling to delivery  -> the delivery form
+
+#: Which milestone hands which stop's paper to the driver.
+STOP_DOCUMENTS = {
+    "en_route_pickup": "pickup",
+    "departed_pickup": "delivery",
+}
+
+#: Where the driver's tablet reads its mail. The arrival notice already copies
+#: the office here, so it is the mailbox this build knows about -- but which
+#: mailbox the **tablet** opens is the Owner's to say, and this is the line to
+#: change when he does.
+DRIVER_MAILBOX = "Ops@l1truck.com"
+
+
+def prepare_stop_documents(record_id: str, milestone: str, *,
+                           mail_connector=None) -> dict | None:
+    """Fill the form for this stop and put it in front of the driver.
+
+    Returns the report, or None when this milestone is not one of the two that
+    carry paper.
+
+    **It never costs the run.** A driver who has started his run has started
+    it, whether or not a Word template was reachable or Outlook was open. What
+    went wrong is recorded on the mission; the milestone stands either way.
+    """
+    phase = STOP_DOCUMENTS.get(str(milestone or "").strip())
+    if not phase:
+        return None
+
+    from dispatch import closing_packet, clock
+
+    record = sandbox.get(record_id)
+    if not record:
+        return None
+
+    folder = closing_packet.folder_for(
+        record.get("load_number")
+        or (record.get("card_data") or {}).get("load_id") or "") / phase
+    try:
+        report = closing_packet.build(
+            record,
+            out_dir=folder,
+            today=clock.home_date().isoformat(),
+            driver_name=str(session.get("driver_name") or ""),
+            only=closing_packet.PHASE_SETS[phase])
+    except Exception as exc:  # noqa: BLE001 - paper is never worth a 500 in a cab
+        flash("The %s paperwork could not be prepared: %s" % (phase, exc))
+        return None
+
+    report["phase"] = phase
+    report["sent"] = _send_to_the_cab(record, phase, report,
+                                      mail_connector=mail_connector)
+
+    data = sandbox._load()
+    stored = data.get(record_id)
+    if stored is not None:
+        # Kept per stop, so the second does not overwrite the first and he can
+        # see what was prepared for each end of the run.
+        prepared = dict(stored.get("stop_documents") or {})
+        prepared[phase] = report
+        stored["stop_documents"] = prepared
+        data[record_id] = stored
+        sandbox._save(data)
+    return report
+
+
+def _send_to_the_cab(record: dict, phase: str, report: dict, *,
+                     mail_connector=None) -> bool:
+    """Email the filled form to the mailbox the tablet reads.
+
+    Attachments, not a body: *"Doc files in folders emails with attachments."*
+    He opens it in the cab, prints to the local printer, clipboards the paper.
+    """
+    documents = [d["output"] for d in report.get("documents") or []
+                 if d.get("output")]
+    if not documents or mail_connector is None:
+        return False
+
+    numbers = (record.get("numbers") or {})
+    label = str(numbers.get("load_label") or record.get("load_number") or "").strip()
+    subject = "%s paperwork%s" % (phase.title(), " - %s" % label if label else "")
+    body = ("Print these before you go in.\n\n"
+            + "\n".join("  - " + Path(d).name for d in documents))
+    try:
+        answer = mail_connector.send([DRIVER_MAILBOX], subject, body,
+                                     attachments=documents)
+    except Exception:  # noqa: BLE001 - a quiet mailbox must not cost the run
+        return False
+    return bool(answer.get("ok"))

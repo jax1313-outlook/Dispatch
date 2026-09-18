@@ -764,42 +764,21 @@ def mission_reject(record_id: str):
     return redirect(url_for("joe_portal.candidate_queue"))
 
 
-@joe_bp.route("/booking")
-def booking_board():
-    """The forward view of the truck: what is booked, held and still sellable.
-
-    Pattern plus commitments. Nothing about the week is stored -- see
-    `dispatch/booking.py` for why a stored day-state would be the second
-    calendar the scheduling doctrine forbids.
-    """
-    from dispatch import booking, scheduling
-
-    # The real Outlook, or nothing. Deliberately not `get_adapter()`: the
-    # demonstration adapter derives its entries from the mission records, and
-    # on a planning board that would draw invented appointments as real
-    # commitments. A board that is honestly empty is usable; one that is
-    # quietly wrong is not.
-    try:
-        calendar = scheduling.OutlookCalendarAdapter().upcoming(
-            max(booking.HORIZON_DAYS,
-                7 * max(1, min(6, int(request.args.get("weeks") or 2)))))
-    except Exception:  # noqa: BLE001 - a quiet calendar must not take the page down
-        calendar = {"status": "UNAVAILABLE", "entries": [], "blocker": ""}
-
-    # Two weeks is the operator's booking horizon; four is the same board with
-    # the month in view. Same code, different depth -- not a second screen.
-    try:
-        weeks = max(1, min(6, int(request.args.get("weeks") or 2)))
-    except (TypeError, ValueError):
-        weeks = 2
-
-    return render_template(
-        "booking.html",
-        weeks=weeks,
-        book=booking.build(sandbox.get_all(), calendar, weeks=weeks),
-        calendar_source=calendar.get("source", ""),
-        calendar_blocker=calendar.get("blocker", ""),
-    )
+# **The Booking board is deleted.** Owner ruling, 2026-09-17: *"i do not see
+# the need for booking at all. it is all right here. open days, sold capacity,
+# info."* -- looking at his Outlook calendar, which already shows every one of
+# them. Two screens drawing the same week are two screens that can disagree
+# with it, and *"outlook is a book on a table."*
+#
+# `dispatch/booking.py` stays. It answers questions -- the conflict warnings at
+# COMMIT, JOE's schedule-fit by voice, the driver's month, the card's closed-day
+# and stranded-gap lines. What went is the screen, not the arithmetic:
+#
+#     "The warnings are more like an assistant saying boss you have a conflict
+#      here. then decision is made. Then human negociation then commit. then
+#      calendar."
+#
+# The calendar is last and receives what was settled. It never advises.
 
 
 @joe_bp.route("/brief/mission/<path:record_id>")
@@ -1313,10 +1292,21 @@ def _act_on_load(record_id: str, act):
 
 @joe_bp.route("/portal/mission/<path:record_id>/milestone", methods=["POST"])
 def cockpit_milestone(record_id: str):
-    from portal import driver_actions
+    from portal import artifact_intake, driver_actions
 
+    event = request.form.get("milestone_event", "")
     answer = _act_on_load(record_id, lambda: driver_actions.step_milestone(
-        record_id, request.form.get("milestone_event", ""), _cockpit_actor()))
+        record_id, event, _cockpit_actor()))
+
+    # **The paper for the next stop, prepared while he drives.** Owner,
+    # 2026-09-17: *"at some point the activation of pickup is done and
+    # Publisher creates load documents and ques for printing upon arrival at
+    # pickup location."* START RUN prepares the pickup form; Rolling to
+    # delivery prepares the delivery form. He prints in the cab on arrival --
+    # which is why there is no PRINT control here and should not be one.
+    artifact_intake.prepare_stop_documents(record_id, event,
+                                           mail_connector=_mail_connector())
+
     _build_closing_packet(record_id)
     return answer
 

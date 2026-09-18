@@ -235,10 +235,15 @@ def _record_status_change(
 ) -> None:
     """Write the one audit event for an accepted status change.
 
-    Mission C3. Four service paths change a load's status -- update_load(),
+    Mission C3. Four service paths changed a load's status -- update_load(),
     add_milestone(), _try_auto_dispatch() and archive_load() -- and before C3
     only the first wrote a status_change activity. The other three moved a load
     between states leaving no audit trail at all.
+
+    **Three now.** `_try_auto_dispatch()` became a named no-op in BATCH 1
+    (2026-09-16): assigning a truck is not starting a run, so it no longer
+    moves a status and has nothing to audit. The C3 entry in the DECISION_LOG
+    still says four, corrected there on 2026-09-17.
 
     This is the narrowest point that can satisfy the audit requirement, and it
     has to live in the service layer rather than in store.update_load(): the
@@ -1535,30 +1540,21 @@ def get_chart_data() -> dict:
     }
 
 
-def check_overdue_settlements() -> list[dict]:
-    """Scan invoiced settlements and mark overdue if past due date.
-
-    Returns the list of settlements that were newly marked overdue.
-    """
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    invoiced = store.list_settlements(payment_status="invoiced")
-    newly_overdue = []
-
-    for stl in invoiced:
-        due = stl.get("due_date", "")
-        if not due or due >= now:
-            continue
-
-        updated = store.update_settlement(stl["load_id"], payment_status="overdue")
-        if updated:
-            load = store.get_load(stl["load_id"])
-            if load:
-                _notify_safe(lambda: notifications.notify_payment_overdue(load, updated))
-            newly_overdue.append(updated)
-
-    return newly_overdue
+# **The aging check is deleted.** Owner ruling, 2026-09-17: *"delete the
+# receivables code."*
+#
+# It scanned invoiced settlements, marked any past its due date `overdue`, and
+# mailed a notice reading *"This invoice is past due. Follow up with the
+# customer or escalate for collection."* That is aging an invoice and chasing
+# payment -- two of the four things his boundary of 2026-09-16 says Dispatch
+# does not do:
+#
+#     "Dispatch produces the closing packet and hands it off. It does not
+#      track receivables, chase payment, age an invoice, or talk to a factor."
+#
+# It predated the boundary by three weeks, which is why it survived it. The
+# closing packet still goes to the factor and the customer; what happens to the
+# money after that is the accounting software's.
 
 
 def dispute_settlement(
@@ -1973,7 +1969,6 @@ def get_load_bundle(load_id: str) -> dict | None:
         "activities": store.list_activities(load_id),
         "active_drivers": store.list_drivers(status="active"),
         "active_equipment": store.list_equipment(status="active"),
-        "lane_history": get_lane_history(load_id),
         "detentions": store.list_detentions(load_id=load_id),
     }
 
@@ -2155,21 +2150,10 @@ def build_stakeholder_view(load_id: str) -> dict | None:
     }
 
 
-def get_lane_history(load_id: str) -> list[dict]:
-    """Find past loads on the same origin-destination lane, with rate info."""
-    load = store.get_load(load_id)
-    if not load:
-        return []
-    history = store.get_lane_history(
-        load.get("pickup_location", ""),
-        load.get("delivery_location", ""),
-        exclude_load_id=load_id,
-    )
-    for h in history:
-        rate = store.get_rate_confirmation(h["load_id"])
-        h["rate_amount"] = rate["rate_amount"] if rate else None
-        h["revenue"] = rate["revenue"] if rate else None
-    return history
+# `get_lane_history` is deleted. Owner ruling, 2026-09-17: *"i have not
+# considered value to keeping history. Folders of passed loads seems enough. I
+# would delete it."* The closing packet filed under the tracing number is that
+# folder; this recomputed the same answer from the loads table.
 
 
 # ── Detention Tracking ──────────────────────────────────────────────
@@ -2348,34 +2332,14 @@ def get_broker_detail(broker_name: str) -> dict:
 # ── Load Calendar ───────────────────────────────────────────────────
 
 
-def get_load_calendar(year: int, month: int) -> dict:
-    from collections import defaultdict
-    import calendar
-
-    all_loads = store.list_loads()
-    pickup_by_day: dict[str, list[dict]] = defaultdict(list)
-    delivery_by_day: dict[str, list[dict]] = defaultdict(list)
-
-    month_prefix = f"{year:04d}-{month:02d}"
-    for ld in all_loads:
-        p = ld.get("pickup_datetime", "")
-        if p and p[:7] == month_prefix:
-            pickup_by_day[p[:10]].append(ld)
-        d = ld.get("delivery_datetime", "")
-        if d and d[:7] == month_prefix:
-            delivery_by_day[d[:10]].append(ld)
-
-    cal = calendar.Calendar(firstweekday=6)
-    weeks = cal.monthdayscalendar(year, month)
-
-    return {
-        "year": year,
-        "month": month,
-        "month_name": calendar.month_name[month],
-        "weeks": weeks,
-        "pickups": dict(pickup_by_day),
-        "deliveries": dict(delivery_by_day),
-    }
+# `get_load_calendar` is deleted. Its only two callers were the `/calendar`
+# page and `/api/dispatch/calendar`, both removed on 2026-09-17 -- *"why not
+# just mimick outlook one month at a time. it is already created. why reinvent
+# the wheel."* A month-builder with nothing to build a month for is baggage.
+#
+# The driver's calendar is unaffected: it reads `dispatch.booking.month_of`,
+# which answers a different question -- which days a mission occupies, not
+# which loads pick up on a date.
 
 
 def global_search(query: str) -> dict:

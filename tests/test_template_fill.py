@@ -339,18 +339,22 @@ class TestWhatDispatchAlreadyKnows:
         truck was there and be nothing of the kind."""
         assert "gps_location_link" not in pv.values_for(self.BASE)
 
-    def test_a_ticked_checklist_answers_the_attached_lines(self):
-        record = dict(self.BASE, artifacts_held=["Proof Of Delivery Document",
-                                                 "Bill of Lading (BOL)"])
+    def test_the_uploads_answer_the_attached_lines(self):
+        """**Not the driver's ticks.** Owner ruling, 2026-09-17: *"not before
+        all documents are scanned and uploaded."* A tick means *"I have it in
+        hand"* -- a man at a dock holding paper. It is not the scan, and a
+        Billing Package Cover quoting it could tell the **factor** a POD was
+        attached with no POD in the packet."""
+        record = dict(self.BASE, artifacts_held=["Invoice To Broker"])
+        uploaded = [{"evidence_type": "pod"}, {"evidence_type": "bol"}]
 
-        values = pv.values_for(record)
+        values = pv.values_for(record, evidence=uploaded)
 
         assert values["pod_attached"] == pv.HELD
         assert values["signed_bol_attached"] == pv.HELD
         assert values["final_condition_photos_attached"] == pv.NOT_HELD
         # `pod_status` was struck on 2026-09-17: *"delete delivery_status and
-        # pod_status, they are software created too."* The tick is the fact;
-        # a word printed about the tick is software describing itself.
+        # pod_status, they are software created too."*
         assert "pod_status" not in values
 
     def test_no_two_placeholders_read_the_same_tick(self):
@@ -362,12 +366,16 @@ class TestWhatDispatchAlreadyKnows:
     def test_the_three_photo_names_are_the_operators(self):
         """**PUBLISHER HARDENING RULING, 2026-09-16:** *"Publisher, Cockpit,
         Mission Record, and Placeholder Registry must use the same three
-        names."* The ticks are what the Mission Record stores, so these strings
-        are the vocabulary itself, not a label for it."""
-        record = dict(self.BASE, artifacts_held=[
-            "Photos - Loaded Vehicle", "Photos - Mid-Route Securement"])
+        names."*
 
-        values = pv.values_for(record)
+        They now are, everywhere: the evidence type a driver uploads under, the
+        cockpit tile he taps, the checklist line and the placeholder. Until
+        2026-09-17 the upload carried the old two-name list, so a Loaded Vehicle
+        photo could not be uploaded at all."""
+        uploaded = [{"evidence_type": "loaded_vehicle_photo"},
+                    {"evidence_type": "securement_photo"}]
+
+        values = pv.values_for(self.BASE, evidence=uploaded)
 
         assert values["loaded_vehicle_photos_attached"] == pv.HELD
         assert values["securement_photos_attached"] == pv.HELD
@@ -402,11 +410,22 @@ class TestWhatDispatchAlreadyKnows:
         assert "signed_bol_attached" not in values
         assert "pod_status" not in values
 
-    def test_an_empty_checklist_is_an_answer(self):
-        """He worked the list and ticked nothing. That is a fact."""
-        values = pv.values_for(dict(self.BASE, artifacts_held=[]))
+    def test_nothing_uploaded_is_an_answer(self):
+        """Somebody looked and there are no files. That is a fact, and the
+        document may say so."""
+        values = pv.values_for(self.BASE, evidence=[])
 
         assert values["pod_attached"] == pv.NOT_HELD
+
+    def test_silence_is_not_an_answer(self):
+        """**Nobody has said anything.** No evidence was supplied and the
+        checklist was never worked, so printing "No" against every line would
+        be a document asserting an absence nobody checked. The placeholders
+        stay visible instead, which is rule 7."""
+        values = pv.values_for(self.BASE)
+
+        assert "pod_attached" not in values
+        assert "invoice_attached" not in values
 
     def test_the_delivery_is_the_milestone_and_nothing_prints_a_word_about_it(self):
         """**Struck, and the parameter with it.** Owner ruling, 2026-09-17:

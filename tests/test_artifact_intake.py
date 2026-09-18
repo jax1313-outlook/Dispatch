@@ -142,7 +142,13 @@ class TestOnePath:
 
         assert "cockpit_pod" not in drawer
         assert "cockpit_photos" not in drawer
-        assert drawer.count("cockpit_attach") == 4
+        # Five tiles since 2026-09-17: BOL, POD, and his three photo moments.
+        # It was four, and the two photo tiles carried the wrong names.
+        assert drawer.count("cockpit_attach") == 5
+        for name in ("PHOTOS - LOADED VEHICLE", "PHOTOS - MID-ROUTE SECUREMENT",
+                     "PHOTOS - FINAL CONDITION"):
+            assert name in drawer, name
+        assert "FREIGHT CONDITION" not in drawer
 
     def test_the_old_routes_are_gone(self, client, running):
         """Not redirected -- gone. A second door that still opens is still a

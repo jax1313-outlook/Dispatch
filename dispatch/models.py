@@ -77,16 +77,31 @@ MILESTONE_TYPES = [
 
 MILESTONE_SOURCES = ["driver", "dispatcher", "system", "customer", "eld", "email"]
 
+#: **The three photo names are his, and they are the same three everywhere.**
+#: PUBLISHER HARDENING RULING, 2026-09-16: *"Publisher, Cockpit, Mission Record,
+#: and Placeholder Registry must use the same three names."*
+#:
+#:     PICKUP     Photos - Loaded Vehicle     loaded_vehicle_photo
+#:     EN ROUTE   Photos - Mid-Route Secure.  securement_photo
+#:     DELIVERY   Photos - Final Condition    final_condition_photo
+#:
+#: `freight_condition_photo` is gone. He struck the concept the same day --
+#: *"Not a separate operational event. Creates duplicate evidence concepts.
+#: Does not represent a distinct workflow milestone."* -- and it survived as an
+#: evidence type and a cockpit tile because the one attachment path (BATCH 8)
+#: carried the old two-name list forward instead of using his three. There was
+#: no way to upload a Loaded Vehicle photo at all.
 EVIDENCE_TYPES = ["bol", "pod", "photo", "screenshot", "message", "document", "other",
-                  "securement_photo", "freight_condition_photo"]
+                  "loaded_vehicle_photo", "securement_photo", "final_condition_photo"]
 
 #: Customer-facing Mission Visibility artifacts (playbook Section 4A; Mike Zachary,
 #: 2026-09-13): "A customer cannot see load securement. A customer can see evidence of load
 #: securement. The evidence is the value." Shown in the Mission Visibility View, sent as
 #: Customer Alerts, kept in Mission Record history and the final mission package.
 CUSTOMER_FACING_PHOTO_TYPES = {
-    "securement_photo": "Load securement photo",
-    "freight_condition_photo": "Freight condition photo",
+    "loaded_vehicle_photo": "Photos - Loaded Vehicle",
+    "securement_photo": "Photos - Mid-Route Securement",
+    "final_condition_photo": "Photos - Final Condition",
 }
 
 EXCEPTION_TYPES = [

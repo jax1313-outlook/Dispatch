@@ -556,7 +556,11 @@ class TestMissionEvidence:
         photos = services.customer_facing_photos(load["load_id"])
         assert [p["evidence_type"] for p in photos] == ["securement_photo", "securement_photo"]
         from portal.models.email_helper import _closeout_summary_lines
-        assert "Load securement photos: 2 on file" in _closeout_summary_lines(
+        # **His name, not a spelled-out variant.** The summary matched on
+        # "Load securement photo" until 2026-09-17; when the vocabulary was
+        # corrected nothing matched, and a closeout summary would have quietly
+        # stopped counting photographs. It reads CUSTOMER_FACING_PHOTO_TYPES now.
+        assert "Photos - Mid-Route Securement: 2 on file" in _closeout_summary_lines(
             {"load": {}, "mission_photos": photos})
 
         # Mission Record history.
@@ -570,7 +574,7 @@ class TestMissionEvidence:
         card = next(a for a in publisher.get_queue() if a["id"] == alert["flow"]["publisher"]["action_id"])
         assert (card["action_type"], card["status"], card["requested_for"]) == \
             ("Customer Mission Evidence Alert", "ARCHIVED", MIKE)
-        assert len(mail.sent) == 2 and "Load securement photo" in mail.sent[1]["subject"]
+        assert len(mail.sent) == 2 and             "Photos - Mid-Route Securement" in mail.sent[1]["subject"]
         assert "8842193" in mail.sent[1]["body"]
         # Frozen Customer Portal: the alert points to the mission record, not the portal.
         assert "/portal/login" not in mail.sent[1]["body"] and "Reply to this email" in mail.sent[1]["body"]
@@ -591,11 +595,28 @@ class TestMissionEvidence:
         assert photo["evidence_id"] not in client.get("/portal/mission").data.decode()
         assert client.get(f"/portal/loads/{load['load_id']}/evidence/{photo['evidence_id']}").status_code == 403
 
-    def test_freight_condition_photos_are_customer_facing_too(self, client, pins, mail):
+    def test_the_final_condition_photos_are_customer_facing_too(self, client, pins, mail):
+        """**"Freight Condition" is struck.** PUBLISHER HARDENING RULING,
+        2026-09-16: *"Not a separate operational event. Creates duplicate
+        evidence concepts. Does not represent a distinct workflow milestone."*
+
+        It survived as an evidence type and a cockpit tile until 2026-09-17,
+        because the one attachment path carried the old two-name list. The
+        third of his three names is **Photos - Final Condition**, taken at the
+        delivery end."""
         _, load = self.mission_with_open_load(client, pins)
-        self.upload(client, load["load_id"], photo_type="freight_condition_photo", count=1)
-        assert services.customer_facing_photos(load["load_id"])[0]["label"] == "Freight condition photo"
-        assert "Freight condition photo" in mail.sent[-1]["subject"]
+        self.upload(client, load["load_id"], photo_type="final_condition_photo", count=1)
+        assert services.customer_facing_photos(load["load_id"])[0]["label"] ==             "Photos - Final Condition"
+        assert "Photos - Final Condition" in mail.sent[-1]["subject"]
+
+    def test_the_struck_name_is_not_an_evidence_type(self):
+        """Nothing can upload one, because the concept is gone."""
+        from dispatch.models import CUSTOMER_FACING_PHOTO_TYPES, EVIDENCE_TYPES
+
+        assert "freight_condition_photo" not in EVIDENCE_TYPES
+        assert "freight_condition_photo" not in CUSTOMER_FACING_PHOTO_TYPES
+        assert set(CUSTOMER_FACING_PHOTO_TYPES) == {
+            "loaded_vehicle_photo", "securement_photo", "final_condition_photo"}
 
     def test_token_links_show_the_photos(self, client, pins, mail):
         _, load = self.mission_with_open_load(client, pins)

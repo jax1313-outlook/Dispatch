@@ -163,22 +163,62 @@ def _maps_link(coords: str) -> str:
     return "https://www.google.com/maps/search/?api=1&query=%s" % fix.replace(" ", "")
 
 
-def _attachment_values(record: dict) -> dict:
-    """The "is it in the packet" lines, from the driver's own checklist.
+#: **What proves each line: an uploaded file.** Owner ruling, 2026-09-17:
+#: *"not before all documents are scanned and uploaded."*
+#:
+#: These used to read the driver's checklist ticks. A tick means *"I have it in
+#: hand"* -- a man at a dock saying he is holding paper. It is not the scan. So
+#: a Billing Package Cover could go to the **factor** saying the POD was
+#: attached because somebody tapped a line, with no POD in the packet: a
+#: document asserting something nobody verified, sent to the party who pays.
+#:
+#: The checklist stays exactly as it is. It is the driver's reminder before he
+#: leaves a location -- *"the list are visual for the driver to remind what is
+#: needed before leaving location."* It is simply no longer what the document
+#: quotes.
+ATTACHED_FROM_EVIDENCE = {
+    "pod_attached": "pod",
+    "signed_bol_attached": "bol",
+    "loaded_vehicle_photos_attached": "loaded_vehicle_photo",
+    "securement_photos_attached": "securement_photo",
+    "final_condition_photos_attached": "final_condition_photo",
+}
 
-    **Silent until he has worked the list.** If `artifacts_held` was never
-    written, nobody has said what is in hand, and printing "No" against every
-    line would be a document asserting an absence nobody checked. The
-    placeholders stay visible instead, which is rule 7.
+#: `invoice_attached` has no upload to read. The invoice is a document
+#: **Publisher generates into the packet**, not one the driver scans, so there
+#: is no evidence item to count. It stays on the checklist and is named here so
+#: the difference is deliberate rather than an omission somebody repairs by
+#: guessing.
+ATTACHED_FROM_CHECKLIST_ONLY = ("invoice_attached",)
+
+
+def _attachment_values(record: dict, evidence=None) -> dict:
+    """The "is it in the packet" lines.
+
+    **Silent until somebody has said something.** If no evidence was supplied
+    and the checklist was never worked, nobody has stated what is in hand, and
+    printing "No" against every line would be a document asserting an absence
+    nobody checked. The placeholders stay visible instead, which is rule 7.
     """
-    if "artifacts_held" not in record:
-        return {}
-    held = {str(a).strip().lower() for a in (record.get("artifacts_held") or [])}
-    return {placeholder: (HELD if line.lower() in held else NOT_HELD)
-            for placeholder, line in ATTACHED_FROM_CHECKLIST.items()}
+    values = {}
+
+    if evidence is not None:
+        kinds = {str(item.get("evidence_type") or "").strip().lower()
+                 for item in evidence}
+        for placeholder, kind in ATTACHED_FROM_EVIDENCE.items():
+            values[placeholder] = HELD if kind in kinds else NOT_HELD
+
+    if "artifacts_held" in record:
+        held = {str(a).strip().lower() for a in (record.get("artifacts_held") or [])}
+        for placeholder in ATTACHED_FROM_CHECKLIST_ONLY:
+            line = ATTACHED_FROM_CHECKLIST[placeholder]
+            values[placeholder] = HELD if line.lower() in held else NOT_HELD
+
+    return values
 
 
-def values_for(record: dict, *, today: str = "", driver_name: str = "") -> dict:
+def values_for(record: dict, *, today: str = "", driver_name: str = "",
+               evidence=None) -> dict:
     """The placeholder values this Mission Record can answer for.
 
     Only keys with a real value are returned. `today` is the date the document
@@ -259,5 +299,5 @@ def values_for(record: dict, *, today: str = "", driver_name: str = "") -> dict:
         # being one: the Delivered milestone and the POD on the record are the
         # facts, and they are already authoritative.
     }
-    values.update(_attachment_values(record))
+    values.update(_attachment_values(record, evidence))
     return {key: value for key, value in values.items() if value}

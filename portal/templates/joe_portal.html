@@ -498,7 +498,7 @@
     <button class="drawer-close" data-close aria-label="Close drawer">CLOSE</button>
   </header>
   <div class="drawer-body drawer-actions">
-    {# **One path, four classifications.** "The answer should always be:
+    {# **One path, five classifications.** "The answer should always be:
        Mission Record -> Attach Artifact. Everything else is classification."
        (2026-09-16). Every tile posts to the same route with what the document
        is; separate tiles stay because a driver at a dock taps one thing rather
@@ -521,20 +521,38 @@
         <input class="file-pick" type="file" name="artifact" accept="image/*,application/pdf" capture="environment" onchange="this.form.submit()">
       </label>
     </form>
+    {# **His three photo names, and only his three.** PUBLISHER HARDENING
+       RULING, 2026-09-16: "Publisher, Cockpit, Mission Record, and Placeholder
+       Registry must use the same three names."
+
+       Until 2026-09-17 these tiles carried the old two-name list, so a driver
+       could not upload a Loaded Vehicle photo at all -- and the second tile
+       offered "Freight Condition", which he struck the same day as a duplicate
+       evidence concept. The checklist above had the right three all along; the
+       upload did not. #}
     <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_attach', record_id=record.id) }}">
       {{ keep_place() }}
-      <input type="hidden" name="classification" value="securement_photo">
+      <input type="hidden" name="classification" value="loaded_vehicle_photo">
       <label class="action">
-        <span class="action-name">LOAD SECUREMENT PHOTOS</span>
+        <span class="action-name">PHOTOS - LOADED VEHICLE</span>
         <span class="action-sub">The customer is sent a Customer Alert</span>
         <input class="file-pick" type="file" name="artifact" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
       </label>
     </form>
     <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_attach', record_id=record.id) }}">
       {{ keep_place() }}
-      <input type="hidden" name="classification" value="freight_condition_photo">
+      <input type="hidden" name="classification" value="securement_photo">
       <label class="action">
-        <span class="action-name">FREIGHT CONDITION PHOTOS</span>
+        <span class="action-name">PHOTOS - MID-ROUTE SECUREMENT</span>
+        <span class="action-sub">The customer is sent a Customer Alert</span>
+        <input class="file-pick" type="file" name="artifact" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
+      </label>
+    </form>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('joe_portal.cockpit_attach', record_id=record.id) }}">
+      {{ keep_place() }}
+      <input type="hidden" name="classification" value="final_condition_photo">
+      <label class="action">
+        <span class="action-name">PHOTOS - FINAL CONDITION</span>
         <span class="action-sub">The customer is sent a Customer Alert</span>
         <input class="file-pick" type="file" name="artifact" accept="image/*" capture="environment" multiple onchange="this.form.submit()">
       </label>

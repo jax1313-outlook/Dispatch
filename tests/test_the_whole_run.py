@@ -433,16 +433,18 @@ class TestTheDoctrineHoldsAcrossTheWhole:
         assert source.count("store.upsert_visibility(") == 1
 
     def test_the_engine_does_not_reach_further_into_the_portal(self):
-        """**A ratchet, not a rule.** The engine imports the portal in nine
-        modules -- for data directories, the sandbox, the publisher, the
-        conflict model. Whether that is allowed is an architectural question
+        """**A ratchet, not a rule.** The engine imports the portal in eight
+        modules, fifteen times -- for data directories, the sandbox, the
+        publisher, the conflict model. Whether that is allowed is an architectural question
         the Owner has not answered, and it is on his open list; an engineer
         deciding it by deleting fifteen imports would be writing doctrine.
 
         So this pins what exists. It cannot get worse without somebody reading
         this docstring and going to him for a ruling.
 
-        BATCH 10 found it. `dispatch/audit.py` is the only one at module level;
+        BATCH 10 found it, and said "nine modules" in its own log entry and
+        here -- corrected 2026-09-17. `dispatch/audit.py` is the only one at
+        module level;
         the rest are deferred inside functions, which is why nothing has broken
         yet -- an optional plug-in absent still imports."""
         import pathlib

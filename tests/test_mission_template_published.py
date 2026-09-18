@@ -275,7 +275,7 @@ class TestThereIsOnlyOneRenderingOfTheFormForPeople:
         for field in mt.TEMPLATE:
             assert field.key in page, "%s is missing from New Mission" % field.key
 
-    def test_new_mission_renders_exactly_the_thirty_one(self, client):
+    def test_new_mission_renders_exactly_the_published_fields(self, client):
         """Through the real /intake route: one named control per template field,
         in template order, and nothing else -- no Taken by, no removed field, and
         no stop block."""

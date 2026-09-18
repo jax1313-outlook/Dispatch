@@ -264,7 +264,7 @@ class TestWhoMayUseIt:
         assert resp.status_code == 302 and "/login" in resp.headers["Location"]
         assert opportunity.all_open() == []
 
-    @pytest.mark.parametrize("path", ["/booking", "/intake", "/loads"])
+    @pytest.mark.parametrize("path", ["/intake", "/loads"])
     def test_the_driver_still_reaches_no_operations_page(self, client, path):
         as_driver(client)
         resp = client.get(path)

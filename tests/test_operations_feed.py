@@ -220,7 +220,11 @@ class TestSettlementCards:
         load = services.create_load(customer="Overdue Settle Co")
         services.confirm_rate(load["load_id"], rate_amount=1000, distance_miles=300)
         services.create_settlement(load["load_id"], due_date="2020-01-01")
-        services.check_overdue_settlements()
+        # **Marked by a person, not by a clock.** `check_overdue_settlements`
+        # was deleted on 2026-09-17 -- *"delete the receivables code"* -- so
+        # nothing ages an invoice on its own. The card is unchanged: an overdue
+        # settlement is still decision-level when somebody says it is overdue.
+        services.update_settlement(load["load_id"], payment_status="overdue")
         feed = operations_feed.build_feed()
         cards = [c for c in feed["cards"] if c["source"] == "settlement"]
         assert len(cards) == 1

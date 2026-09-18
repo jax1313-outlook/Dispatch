@@ -132,6 +132,12 @@ dd input:focus { outline: 2px solid var(--key); outline-offset: 0; }
     body { background: #fff; padding: 0; font-size: 11.5pt; }
     .brief { max-width: none; border: none; padding: 0; }
     .brief-actions, .brief-gaps { display: none; }
+    /* The navigation strip does not print. It lived in booking.css, which was
+       deleted with the Booking board on 2026-09-17 -- and the strip is still on
+       candidates, intake and the brief, so the rule had to come with it. The
+       brief is carried to a phone call and written on; navigation on paper is
+       noise. */
+    .ops-nav { display: none; }
     .card-section { margin-bottom: 14px; }
     dd input { border: none; padding: 0; }
     dt.empty, dd.empty {

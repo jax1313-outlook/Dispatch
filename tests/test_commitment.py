@@ -146,28 +146,6 @@ class TestBookingRespectsTheGate:
                                    pickup=far))["depth"]["has_work"] is True
 
 
-class TestTheScreenShowsBoth:
-    """Asserted against the template and stylesheet rather than a rendered
-    board: what is in the store on the day the suite runs is not the thing
-    under test."""
+# Deleted with the feature, 2026-09-17: the Booking board is deleted -- "it is all right here" (Outlook).
 
-    def test_the_board_renders_candidates(self):
-        template = open("portal/templates/booking.html", encoding="utf-8").read()
-        assert "day.candidates" in template
-        assert "candidate.load_number" in template
 
-    def test_a_candidate_is_drawn_differently_from_a_booking(self):
-        """Drawn like a booking, it would tell him he has freight he has not
-        got."""
-        css = open("portal/static/booking.css", encoding="utf-8").read()
-        rule = css[css.index(".candidate {"):]
-        rule = rule[:rule.index("}")]
-        assert "dashed" in rule
-
-    def test_the_page_still_renders_with_both_kinds(self):
-        from portal.app import create_app
-
-        app = create_app()
-        app.config["TESTING"] = True
-        with app.test_client() as client:
-            assert client.get("/booking").status_code == 200

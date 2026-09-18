@@ -186,7 +186,12 @@ LOAD_CONTROL_CHOICES = lc.HELD_BY
 #: Cargo items; and separate Pallets and Pieces, merged into one field (*"cargo:
 #: 1) Description 2) Pieces / Pallets/ 3) Weight"*).
 #:
-#: **One card per delivery: thirty-one fields, 2026-09-15.** Consignee and BOL
+#: **One card per delivery: thirty-two fields.** Consignee and BOL
+#: number joined DELIVERY on 2026-09-15 when the card became one delivery (31),
+#: and `distance_miles` ("Miles") joined LOAD CONTROL the next day so a typed
+#: card could be scored (32). The count was wrong in four places until
+#: 2026-09-17 -- two log entries, this line, and a test named for it -- while
+#: the test itself asserted `len(TEMPLATE)` and passed throughout.
 #: number join the DELIVERY section, because the card is now one delivery and
 #: those are the two facts that make one delivery different from the next. Mike:
 #: *"each mission which becomes a load card at commit list the delivery ... the

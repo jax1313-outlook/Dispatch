@@ -131,23 +131,29 @@ answers down and hands them over.
 
 **The one-page layout, ruled 2026-09-15** (Owner: *"go ahead with the one page template"*),
 **extended to thirty-one fields on 2026-09-16** when one card per delivery gave DELIVERY its
-own Consignee and BOL number. Seven sections, in the operator's order. The New Mission screen
+own Consignee and BOL number, and to **thirty-two** later the same day when `distance_miles`
+("Miles") joined LOAD CONTROL so a typed card could be scored. Seven sections, in the operator's order. The New Mission screen
 and the Mission Brief are the same document and both render exactly this;
 `dispatch/mission_template.py` is the definition and `tests/test_mission_template_published.py`
 holds it to this list.
 
+**These are the labels as the screen shows them**, not descriptions of them. Owner ruling,
+2026-09-16: *"too busy and wordy ... more simple and direct in the field labels."* This block
+printed the pre-shortening wording -- "Customer / Shipper / Broker", "facility and address",
+"weight (lbs, total)" -- for a day after the labels were cut. A document describing a screen in
+words the screen does not use is a document that teaches the wrong vocabulary.
+
 ```
-IDENTITY           Load Number · Mission Number (assigned by Dispatch) ·
-                   Service Type (LTL / Courier)
-MISSION SOURCE     Customer / Shipper / Broker · their contact · their phone · their email
-LOAD CONTROL       Load control (Customer / Level 1) · rate · rate agreed with ·
-                   payment type · paid by · amount
-PICKUP             facility and address · appointment · contact · phone ·
-                   access instructions · SPECIAL INSTRUCTIONS
-DELIVERY           Consignee · BOL number · facility and address · appointment ·
-                   contact · phone · access instructions · SPECIAL INSTRUCTIONS
-CARGO              description · pieces / pallets · weight (lbs, total)
-NOTES              anything else that matters on this run
+IDENTITY           Load number · Mission number · Service
+MISSION SOURCE     Customer · Contact · Phone · Email
+LOAD CONTROL       Controlled by · Rate · Miles · Agreed with · Payment ·
+                   Paid by · Amount
+PICKUP             Facility · Appointment · Contact · Phone · Access ·
+                   Special instructions
+DELIVERY           Consignee · BOL · Facility · Appointment · Contact ·
+                   Phone · Access · Special instructions
+CARGO              Description · Pieces / Pallets · Weight
+NOTES              Notes
 ```
 
 Removed by that ruling: Status, Intake and Taken by from the brief; the separate "load number

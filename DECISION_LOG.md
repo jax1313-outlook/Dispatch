@@ -67,6 +67,9 @@ Each entry records the literal, verbatim approval text given for that specific c
 
 ## 2026-08-05 — Vision-assisted fuel-receipt pre-fill (Phase 6b)
 
+**SUPERSEDED in part, 2026-09-17.** Two statements in this entry are no longer true and were never marked: the module is `dispatch/connectors/receipt_vision.py`, not `cin_lite/agents/`; and `extraction_confidence` **is** persisted, which Phase 7 below depends on. The ruling itself — vision pre-fills, a person confirms — stands. See *CORRECTIONS TO THIS LOG*, 2026-09-17.
+
+
 **PR:** (this change)
 **Capability:** IFTA fuel-purchase intake (`cin_lite/agents/receipt_vision.py`, new), new route (`portal/routes/dispatch_api.py`), `/ifta` page fuel-purchase form (`portal/templates/ifta.html`)
 **Approved by:** Mike (owner)
@@ -1189,6 +1192,9 @@ IFTA is filed four times a year. Nothing needs to run continuously to produce a 
 
 ## 2026-09-08 — Dispatch publishes the Mission Card template. An eighth contract.
 
+**SUPERSEDED on the field count, 2026-09-17.** This entry says thirty-three. The template held 29, then 31, then **32**, and no entry was marked as it moved. The contract itself — one published template, one rendering, `/capture-sheet` gone — stands. See *CORRECTIONS TO THIS LOG*, 2026-09-17.
+
+
 **PR:** (this change)
 **Capability:** A new endpoint on the JOE contract layer — `GET /api/joe/mission-template` — plus `/capture-sheet`, a printable rendering of the same definition. `dispatch/opportunity.py` gains `ONTO_MISSION_CARD`, lifted out of `dictation_order()` so the mapping can be published rather than re-derived.
 **Class:** **3.** *"Add an endpoint beyond spec"* is named in `CLAUDE.md` as reserved to human command, and `test_contract_neutrality.py` refused the change until the specification was updated with this ruling attached.
@@ -1576,6 +1582,9 @@ Track D (`track/d-ifta-print`: dated tax rates, fuel receipt review, quarterly w
 ---
 
 ## 2026-09-15 — The Mission Template is one page: 29 fields
+
+**SUPERSEDED on the field count, 2026-09-17.** 29 became 31, then **32** when `distance_miles` ("Miles") joined LOAD CONTROL. The one-page layout and the field rulings in this entry stand. See *CORRECTIONS TO THIS LOG*, 2026-09-17.
+
 
 **PR:** (this change)
 **Capability:** `dispatch/mission_template.py` (`TEMPLATE`, `SERVICE_TYPES`, `STOP_FIELDS`, new keys `controlled_by`, `pieces_pallets`), `dispatch/load_control.py`, `dispatch/joe_update.py`, `dispatch/opportunity.py`, `dispatch/listing.py`, `portal/brief.py`, `portal/cockpit.py`, `portal/models/publisher.py`, `portal/routes/joe_portal.py`, `portal/templates/mission_brief.html`, `portal/templates/mission_intake.html`, `MISSION_INTAKE_ARCHITECTURE.md`.
@@ -2590,5 +2599,158 @@ So: **generation at activation, printing at arrival.** The driver is not stood a
 **Held against him, deliberately.** His closeout ruling of the same day stands: *"Operations may ... close the file despite missing artifacts."* The two reconcile because they are two acts — a send needs the paper it is sending; a review can close a file with a gap and a note. A load whose POD never came back is still closed, and nothing is sent that would claim otherwise.
 
 **Not built, and listed so it is not lost:** the Arrival Notice as a real template; 03 and 05 generated at activation and printed from the cockpit; both out of the generated packet, with the scanned copies going in instead; the attached flags reading uploads rather than checklist ticks; the Customer Screen folder of scanned documents.
+
+---
+
+## 2026-09-17 — The three photo names, and what the factor is told is attached
+
+**PR:** (this change)
+**Capability:** `dispatch/models.py` (`EVIDENCE_TYPES`, `CUSTOMER_FACING_PHOTO_TYPES`), `dispatch/publisher_values.py` (`ATTACHED_FROM_EVIDENCE`, `_attachment_values`, `values_for`), `dispatch/closing_packet.py`, `dispatch/closeout.py` (`ARTIFACTS`), `portal/artifact_intake.py`, `portal/templates/joe_portal.html`, `portal/templates/driver_home.html`, `tests/test_template_fill.py`, `tests/test_artifact_intake.py`.
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"fix the attached flags now"*, then *"go ahead with the vocabulary fix"* — under his standing PUBLISHER HARDENING RULING of 2026-09-16, *"Publisher, Cockpit, Mission Record, and Placeholder Registry must use the same three names"*, and his ruling of 2026-09-17, *"not before all documents are scanned and uploaded."*
+
+**I broke his vocabulary ruling in BATCH 8 and it went unnoticed for a day.** Building the one attachment path, I carried the **old two-name photo list** — `securement_photo`, `freight_condition_photo` — instead of his three. The consequences, all live until now:
+
+- **A Loaded Vehicle photo could not be uploaded at all.** The checklist asked for it, Publisher had a placeholder for it, and no control in the build produced one.
+- **"FREIGHT CONDITION PHOTOS" was still a tile**, on the cockpit and on the parked Driver Portal — a concept he struck the same day he named the three: *"Not a separate operational event. Creates duplicate evidence concepts."*
+- The checklist had the right three all along. The **upload** did not, which is why nothing caught it: the two vocabularies never met.
+
+`loaded_vehicle_photo`, `securement_photo` and `final_condition_photo` are now the evidence type, the classification, the cockpit tile, the checklist line and the placeholder — one name each, five places.
+
+**And the flags told the factor what a driver tapped, not what was in the packet.** `{{pod_attached}}` and the rest read `artifacts_held`, the checklist. His ruling on what a tick means, 2026-09-05: *"a tick means I have it in hand."* That is a man at a dock saying he is holding paper. **It is not the scan.**
+
+So a Billing Package Cover could go to the **factor** saying the POD was attached, on the strength of a tap, with no POD in the packet — a document asserting something nobody verified, sent to the party who pays. It was found by following his sentence *"not before all documents are scanned and uploaded"* to what the code actually read.
+
+They read the **uploaded evidence** now. `closing_packet.build` takes it and `artifact_intake` supplies it from the load's bundle — the caller holds the load row, the caller answers.
+
+**The checklist is untouched, and that is the point.** *"the list are visual for the driver to remind what is needed before leaving location."* It is his reminder, not the document's source. `invoice_attached` still reads it and is named in `ATTACHED_FROM_CHECKLIST_ONLY`, because the invoice is a document Publisher **generates** into the packet rather than one the driver scans — there is no upload to count, and the difference is written down rather than left for somebody to repair by guessing.
+
+**Silence is still silence.** With no evidence supplied and no checklist worked, nothing is printed: a document asserting an absence nobody checked is worse than a visible placeholder. Rule 7, unchanged, and now held by its own test.
+
+---
+
+## 2026-09-17 — Four deletions: the board, the calendar, the history, the chasing
+
+**PR:** (this change)
+**Capability:** `portal/routes/joe_portal.py` (`booking_board`), `portal/routes/pages.py` (`load_calendar`), `portal/routes/dispatch_api.py` (`/calendar`, `/settlements/aging`), `dispatch/services.py` (`get_lane_history`, `check_overdue_settlements`), `dispatch/store.py` (`get_lane_history`), `dispatch/mission.py`, `dispatch/notifications.py` (`notify_payment_overdue`), seven templates, two stylesheets, `tests/test_lane_history.py`.
+**Approved by:** Mike (owner). Verbatim, in order:
+
+> *"delete the receivables code, customer_address -intake field. Calendar why not just mimick outlook one month at a time. it is already created. why reinvent the wheel. lane_history - i have not considered value to keeping history. Folders of passed loads seems enough. I would delete it."*
+>
+> *"i do not see the need for booking at all. it is all right here. open days, sold capacity, info. this is not public it is Driver and Operations. Inside them only. not public. Operations is incharge of customer planning just like a human trucking company."*
+
+**Outlook is a book on a table.** His words, and they decide the shape:
+
+> *"the warnings are part of Operations portal at pre-commit not outlook. outlook is a book on a table. The warnings are more like an assistant saying boss you have a conflict here. then decision is made. Then human negociation then commit. then calendar."*
+
+**The calendar is last.** It receives what was settled between two people; it never participates in deciding. So a screen that redraws it is a second book that can disagree with the first, and **three of them existed** — `/booking`, `/calendar`, and the driver's month.
+
+**Deleted: the Booking board.** The route, the template, its stylesheet, five nav links. **`dispatch/booking.py` stays** and this is the distinction that matters: the board was a screen, the module answers questions. It still serves the three conflict warnings at COMMIT, **JOE's schedule-fit by voice**, the driver's month, and the card's closed-day and stranded-gap lines. Put to him directly — *"a voice answer isn't a screen that can disagree with Outlook"* — and he ruled *"i agree completely."*
+
+**Deleted: `/calendar` and `/api/dispatch/calendar`.** A third month-shaped screen. Outlook holds the month and is written to at COMMIT, so it has the appointments.
+
+**Deleted: Previous Runs.** *"Folders of passed loads seems enough."* The closing packet filed under the tracing number **is** that folder; this recomputed the same answer from the loads table and offered it as a second place to look.
+
+**Deleted: the aging check.** `check_overdue_settlements` scanned invoiced settlements, marked any past its due date `overdue`, and mailed *"This invoice is past due. Follow up with the customer or escalate for collection."* That is aging an invoice and chasing payment — two of the four things his boundary of 2026-09-16 forbids. **It predated the boundary by three weeks, which is why it survived it**: the ruling said do not add, and nobody read the code against it until the cradle-to-current audit did.
+
+**Four settlement notifications were left standing, deliberately.** `notify_invoice_created`, `notify_payment_received`, `notify_settlement_disputed`, `notify_settlement_written_off` fire on events rather than chasing anyone — no clock, no collection language. *"Does not track receivables"* could reasonably cover them, and they are named here so he can strike them rather than discover them missing.
+
+**A mistake of mine, recorded because the method was the problem.** The first pass at the two Previous Runs templates cut at the first `{% endif %}` after the loop — but the table rows contain nested ones, so it removed the wrong block and left orphaned HTML on two screens. Restored from git and redone against the real boundaries. A regex that counts braces is not a parser, and a template is not a text file.
+
+---
+
+## 2026-09-17 — CORRECTIONS TO THIS LOG, from the cradle-to-current audit
+
+**PR:** (this change)
+**Capability:** this file, and the stale prose beside live code. **No behaviour changed.**
+**Approved by:** Mike (owner)
+**Approval, verbatim:** *"a constitution with wrong numbers in it is a constitution that can be right about the wrong thing. that is unacceptable ... the constitution must be protected from being wrong."*
+
+**Nothing above this line has been edited.** His own standing rule governs how a wrong entry is repaired:
+
+> *"**Do not edit old decisions to hide their history.** If a decision has been superseded, mark it `SUPERSEDED` and cite the replacing ruling. A decision log that has been tidied is a decision log nobody can trust."*
+
+A log quietly corrected would read as though nobody ever miscounted, and then none of it could be trusted — including the parts that are right. So the entries stand as written and the corrections are recorded here, against the code as it is on 17 September 2026.
+
+Five read-only auditors read every entry from 2026-08-05 forward and checked each ruling against the code. Ten findings were **prose, not behaviour**. Each is named with what the entry says and what is true.
+
+### The Mission Card field count is wrong in four places
+
+| where | says | |
+|---|---|---|
+| 2026-09-08, *Dispatch publishes the Mission Card template* | thirty-three | **SUPERSEDED** |
+| 2026-09-15, *The Mission Template is one page* | 29 fields | **SUPERSEDED** |
+| `dispatch/mission_template.py` docstring | thirty-one | corrected in place |
+| `tests/test_mission_template_published.py` | named `..._thirty_one` | renamed |
+
+**`TEMPLATE` holds 32 `Field(...)` entries**, verified by count. The number moved legitimately — 29 → 31 → 32 as `distance_miles` ("Miles") joined LOAD CONTROL — and no entry was marked superseded as it moved. The **test asserted `len(TEMPLATE)` and passed throughout while its own name said thirty-one**, which is how a number can be wrong in four places and break nothing.
+
+### `dispatch/` reaches into `portal/` in eight modules, not nine
+
+The BATCH 10 entry and the docstring of `test_the_engine_does_not_reach_further_into_the_portal` both say *"nine modules"*. It is **8 files and 15 import lines** — `audit.py` (1, module level), `backup.py` (3), `backup_drives.py` (1), `node_health.py` (1), `readiness.py` (4), `scheduling.py` (1), `services.py` (2), `sweep.py` (2). **The pinned number 15 is correct** and the test is sound; my prose beside it was not. Mine to own: I wrote it.
+
+### The HOS entry overstates what was removed
+
+2026-09-08, *HOS comes from Motive*: *"No HOS engine, no duty-status table, no 14-hour clock in `capacity.py` or `scheduling.py`."*
+
+`dispatch/capacity.py:47` holds `DUTY_STATUSES`, and `:466-468` holds `drive_limit_hours: 11.0`, `duty_limit_hours: 14.0`, `cycle_limit_hours: 70.0`. **They are stored fields that nothing computes** — `set_hos_snapshot` requires an external `source` and `observed_at`, `scheduling.py` contains no HOS reference at all, and there is no Motive connector. **The prohibition on computing holds exactly.** The claim that the vocabulary was removed does not; it predated the ruling and was never removed.
+
+### Phase 6b is superseded on two points — **SUPERSEDED** by Phase 7, same day
+
+2026-08-05, *Vision-assisted fuel-receipt pre-fill*:
+
+- It names `cin_lite/agents/receipt_vision.py`. The module is `dispatch/connectors/receipt_vision.py` and has been since August.
+- It says `extraction_confidence` is *"a discardable form-fill hint, not persisted"*. It **is** persisted — `dispatch/models.py:911`, a guarded `ALTER TABLE` at `dispatch/db.py:578`, written from the route. Phase 7 (the Suspect Entries panel) **depends on the stored field**, so it was superseded within the same day and never marked.
+
+### Three more counts that moved
+
+- 2026-08-21, *C3 audit symmetry*: *"four call sites"* for `_record_status_change`. **Three**, since `_try_auto_dispatch` became a named no-op in BATCH 1. The helper's own docstring still says four.
+- 2026-08-23, *W0-3 packaging*: *"six `include` patterns"*. **Seven** — `dispatch_launcher*` was added. `pyproject.toml`'s own comment still says six.
+- 2026-08-25 (three entries): *"the fifteen acceptance items remain `UNVERIFIED`"*. **All fifteen are recorded `LIVE`** as of 2026-09-07, with pasted observations. Entry 22's *"Reset Session ... has still never been exercised"* is contradicted by item 14.
+
+### Two entries that were inaccurate when written
+
+- 2026-09-14, *One Driver Cockpit*: *"a driver sign-in now lands there."* It did not — `driver_portal._cockpit()` returned `joe_portal.portal_home`, Operations' front page. A later entry found and fixed it. **Correct today** (the calendar), and the earlier claim was never true.
+- 2026-08-25, *Five standing doctrines*: the Driver Portal Calendar as *"a Monday-through-Sunday visual capacity board."* It is a **month**, and is the driver's landing page.
+
+### Publisher answers two names an entry calls unanswerable
+
+2026-09-16, *The Owner revised his templates*, lists `pickup_notes` and `amount` as *"still unanswerable, and correctly so."* Both are filled — `publisher_values.py:212` and `:210`. `amount` also conflicts with the earlier *Publisher fills the Owner's Word templates* entry, which rules the C.O.D. amount filled.
+
+### And one this log got right that the audit got wrong
+
+Recorded because it cuts the other way. The regression audit proposed removing `delivered → archived` and called three tests stale for asserting it. **He refused**: *"some loads genuinely end without a POD coming back, and forcing completion would strand them."* The three tests are correct, were left alone, and remain so. The audit was wrong; the log is right.
+
+---
+
+## 2026-09-17 — DOCUMENT WORKFLOW: the paper has a moment, and the code missed it
+
+**PR:** (this change)
+**Capability:** `dispatch/closing_packet.py` (`PHASE_SETS`, `_NOT_IN_THE_CLOSING_PACKET`, `templates_in`, `build`), `portal/artifact_intake.py` (`prepare_stop_documents`, `STOP_DOCUMENTS`, `DRIVER_MAILBOX`), `portal/routes/joe_portal.py` (`cockpit_milestone`), `tests/test_stop_documents.py` (new), `tests/test_one_driver_cockpit.py`.
+**Approved by:** Mike (owner). Verbatim, across the conversation that specified it:
+
+> *"at some point the activation of pickup is done and Publisher creates load documents and ques for printing upon arrival at pickup location. Driver prints, clipboards them and enters."*
+>
+> *"Driver prints at both arrival for delivery and pickup. gives publisher plenty of time and outlook time to do their thing ... I built Dispatch to mimick the exact workflow."*
+>
+> *"pickup set 05, delivery set 03"*, and *"yes, exclude 07"*.
+
+**Two of his templates are forms a person signs at a dock, and they were generated after the run was over.** `closing_packet.build()` filled every template on the shelf when the load reached `completed` — which is after the POD has already come back. So the Pickup Confirmation and the Delivery Confirmation **could never once have served their purpose**: a form you need signed at a shipper, produced the moment the freight was already delivered.
+
+It is not that they were late. **They were produced at a moment that does not exist in his day.** There is no point in the workflow where a driver wants a Pickup Confirmation *made*. He wants it already sent.
+
+**Generation at activation, printing at arrival.** START RUN prepares the pickup form; Rolling to delivery prepares the delivery one. Both are milestones that already existed, so nothing new appears on the glass. The gap between the two is deliberate and his: *"gives publisher plenty of time and outlook time to do their thing."*
+
+**There is no PRINT control, and there should not be one.** An engineer's instinct here is a print view, and it was proposed — a `.docx` cannot sensibly be printed from a tablet browser. He answered from twenty years of doing it: *"done it for years ... it can open emails with attachments and send to a local API connected printer. no browser is used. Doc files in folders emails with attachments."* And the place is the cab, not the dock: *"inside the truck not on a loading dock, in the rain, with gloves."*
+
+So Dispatch's whole job is to have the mail sitting there before he arrives. It reaches `Ops@l1truck.com`, confirmed as the mailbox the tablet reads.
+
+**The closing packet goes from seven generated documents to four.** 03 and 05 are produced at their stops and reach the packet as the **scanned signed copies** the driver uploads — a fresh blank at the end would be the wrong document in front of a factor. 07 is the Detention Time **Policy**, onboarding, and his Document List does not name it among the packet's contents.
+
+**It never costs the run.** A driver who has started his run has started it, whether or not Outlook was open or a template was reachable. The milestone stands, the documents are still filed, and what failed is recorded. Held by two tests.
+
+**Found while building, and both were mine.** The cockpit tests still asserted *"LOAD SECUREMENT PHOTOS"* — the tile name the vocabulary fix corrected the same day — and still probed `/booking`, deleted an hour earlier. They were the two unexplained failures in the running suite.
+
+**Not built, and named so it is not lost:** the Arrival Notice is the one document his Document List calls an email template and **the only one with no template file** — its wording lives in `portal/cockpit.py`, so it is the one document he cannot edit in Word. The POD as a legal instrument distinct from the BOL, for Florida lien law and UCC-1, is still one evidence type among nine. And the 30-day resend window after the closing send needs a schema decision and has not been made.
 
 ---

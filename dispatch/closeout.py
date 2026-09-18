@@ -43,17 +43,22 @@ from dispatch.models import _utc_now
 #: types, not a requirement list** -- naming them here does not make them
 #: mandatory, and nothing in this module refuses an archive for a missing one.
 #:
-#: `bol` is shown and **cannot yet be satisfied**: the Bill of Lading is the
-#: controlling freight document (Owner, PUBLISHER TEST RULING REVISION 3,
-#: *"Federal BOL = controlling freight document"*) and there is still no route
-#: to upload one. That is BATCH 8's subject. It is listed rather than hidden
-#: because a missing artifact nobody can see is a missing artifact nobody
-#: chases -- the same reason the brief shows empty fields.
+#: **The three photo names are his**, and the same three the cockpit offers and
+#: Publisher fills: *"Publisher, Cockpit, Mission Record, and Placeholder
+#: Registry must use the same three names."* This list carried "Photographs"
+#: and "Load securement photos" until 2026-09-17, which were neither.
+#:
+#: Every line here can now be satisfied. The Bill of Lading -- the controlling
+#: freight document, *"Federal BOL = controlling freight document"* -- got its
+#: upload route in BATCH 8, and the Loaded Vehicle photo got one the same day
+#: the vocabulary was corrected.
 ARTIFACTS = (
     ("pod", "Signed POD"),
     ("bol", "Signed BOL"),
-    ("photo", "Photographs"),
-    ("securement_photo", "Load securement photos"),
+    # His three photo names, the same three the cockpit and Publisher use.
+    ("loaded_vehicle_photo", "Photos - Loaded Vehicle"),
+    ("securement_photo", "Photos - Mid-Route Securement"),
+    ("final_condition_photo", "Photos - Final Condition"),
     ("document", "Other documents"),
 )
 

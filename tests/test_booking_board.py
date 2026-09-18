@@ -197,54 +197,29 @@ class TestItIsHonestWhenTheCalendarIsQuiet:
                       {"status": "UNAVAILABLE", "entries": []})
         assert book["board"][0]["state"] == booking.BOOKED
 
-    def test_the_board_never_uses_the_demonstration_adapter(self):
-        """It derives entries from the mission records, which on a planning
-        board would draw invented appointments as real commitments."""
-        source = open("portal/routes/joe_portal.py", encoding="utf-8").read()
-        view = source[source.index("def booking_board"):]
-        view = view[:view.index("@joe_bp.route", 10)]
-        # Code only. The comment above the call explains why get_adapter() is
-        # not used, and a check that reads prose fails on its own explanation.
+    def test_no_caller_reads_the_calendar_through_the_demonstration_adapter(self):
+        """It derives entries from the mission records, so a planning answer
+        built on it would draw invented appointments as real commitments.
+
+        **Written against the Booking board, which is now deleted.** The
+        concern outlived it: `joe_api.schedule_fit` answers *"have I got room
+        Thursday"* out loud from the same builder, and a voice answer built on
+        invented appointments is worse than a screen showing them."""
+        source = open("portal/routes/joe_api.py", encoding="utf-8").read()
+        view = source[source.index("def schedule_fit"):]
+        view = view[:view.index("@joe_api.route", 10)]
+        # Code only. A check that reads prose fails on its own explanation.
         code = " ".join(line for line in view.splitlines()
                         if not line.strip().startswith("#"))
         assert "OutlookCalendarAdapter" in code
         assert "get_adapter()" not in code
 
 
-class TestTheScreen:
-    @pytest.fixture()
-    def client(self):
-        from portal.app import create_app
-
-        app = create_app()
-        app.config["TESTING"] = True
-        with app.test_client() as c:
-            yield c
-
-    def test_it_renders(self, client):
-        html = client.get("/booking").get_data(as_text=True)
-        assert "BOOKING" in html
-        # **The legend used to say "held for expedited"** long after
-        # WEEK_PATTERN was opened to seven OPEN days, so the board drew one
-        # rule and the footer named another. BATCH 7.
-        assert "held for expedited" not in html
-        assert "Every day open" in html
-
-    def test_the_headline_is_unsold_sellable_days(self, client):
-        """Not revenue, not miles. Those are the days he can still sell, and
-        they expire worthless."""
-        html = client.get("/booking").get_data(as_text=True)
-        assert "unsold" in html and "expire" in html
-        # Not "Mon-Wed only": every day is sellable now.
-        assert "Mon" not in html.split('class="headline"')[1].split("</section>")[0]
-
-    def test_a_quiet_calendar_is_explained_in_his_words(self, client):
-        from portal import joe_voice
-
-        html = client.get("/booking").get_data(as_text=True)
-        if "Appointments are not showing" in html:
-            note = html[html.index("Appointments are not showing"):]
-            assert joe_voice.is_driver_safe(note[:note.index("<")]) == []
+# **`TestTheScreen` is deleted with the screen.** Owner ruling, 2026-09-17:
+# *"i do not see the need for booking at all. it is all right here. open days,
+# sold capacity, info."* The `/booking` board is gone; `dispatch/booking.py`
+# stays and every other class in this file still tests it, because the conflict
+# warnings at COMMIT, JOE's schedule-fit and the driver's month all read it.
 
 
 class TestItRunsMondayToSunday:

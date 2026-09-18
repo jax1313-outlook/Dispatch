@@ -441,35 +441,8 @@ def notify_payment_received(load: dict, settlement: dict) -> str:
     return _send_or_write(f"dispatch-payment-{load['load_id']}", msg)
 
 
-def notify_payment_overdue(load: dict, settlement: dict) -> str:
-    """Send notification when a payment becomes overdue."""
-    esc = _html.escape
-    invoice_num = settlement.get("invoice_number", "")
-    invoice_amt = settlement.get("invoice_amount", 0)
-    due_date = settlement.get("due_date", "")
-
-    detail = f"""\
-<div style="background:#ffebee;border-left:4px solid #c62828;padding:12px 16px;margin-bottom:16px;">
-    <strong>Payment Overdue</strong><br>
-    Invoice #: <code>{esc(invoice_num)}</code><br>
-    Amount Due: <strong>${invoice_amt:,.2f}</strong><br>
-    Due Date: <strong style="color:#c62828;">{esc(due_date)}</strong>
-</div>
-<p style="color:#666;font-size:13px;">
-    This invoice is past due. Follow up with the customer or escalate for collection.
-</p>"""
-
-    text, html = _render_notification(
-        load,
-        event_type="payment_overdue",
-        headline="Payment Overdue",
-        detail_html=detail,
-        recommended="flag_review",
-    )
-
-    subject = f"[DISPATCH] OVERDUE — {load.get('customer', load['load_id'])}"
-    msg = _build([reviewer_address()], subject, text, html=html)
-    return _send_or_write(f"dispatch-overdue-{load['load_id']}", msg)
+# `notify_payment_overdue` is deleted with the aging check that called it
+# (2026-09-17). Dispatch does not chase payment.
 
 
 def notify_settlement_disputed(load: dict, settlement: dict, reason: str = "") -> str:

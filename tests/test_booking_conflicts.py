@@ -225,17 +225,23 @@ class TestTheWeekModelIsGone:
             day = date(2026, 9, 21) + __import__("datetime").timedelta(days=offset)
             assert booking.day_state(day, []) == booking.OPEN
 
-    def test_the_legend_no_longer_names_the_abolished_week(self):
-        page = open("portal/templates/booking.html", encoding="utf-8").read()
-        legend = page.split('class="week-model"')[1].split("</span>")[0]
+    def test_the_screen_that_printed_it_is_gone(self):
+        """**Stronger than the assertion it replaces.** These two tests read
+        `portal/templates/booking.html` to prove its legend no longer named the
+        abolished week -- "Mon-Wed and Sat sellable / Thu-Fri held for expedited
+        / Sun closed", printed under a board where every day was OPEN.
 
-        assert "held for expedited" not in legend
-        assert "Sun" not in legend
+        The Owner then deleted the board itself, 2026-09-17: *"i do not see the
+        need for booking at all. it is all right here. open days, sold
+        capacity, info."* A legend cannot misdescribe a screen that does not
+        exist, and `dispatch/booking.py` stays -- every other class in this
+        file still tests it."""
+        from pathlib import Path
 
-    def test_the_headline_no_longer_counts_held_days(self):
-        page = open("portal/templates/booking.html", encoding="utf-8").read()
-
-        assert "held_count" not in page
+        assert not Path("portal/templates/booking.html").exists()
+        assert not Path("portal/static/booking.css").exists()
+        source = open("portal/routes/joe_portal.py", encoding="utf-8").read()
+        assert "def booking_board" not in source
 
     def test_the_board_no_longer_carries_the_dead_counters(self):
         source = open("dispatch/booking.py", encoding="utf-8").read()
